@@ -252,9 +252,6 @@
 
 			  ;; r7rs
 			  exact inexact
-
-			  ;; hooboy...
-			  fix:+ fx+ flo:+ fl+ fix:* fx* flo:* fl* fix:- fx- flo:- fl- fix:/ fx/ flo:/ fl/
 			  ))
 		       h))
 
@@ -325,15 +322,11 @@
 
 	(definers '(define define* define-constant lambda lambda* curlet require load eval eval-string
 		    define-macro define-macro* define-bacro define-bacro* define-expansion
-		    definstrument define-animal define-envelope
-		    define-values define-module define-method
-		    define-syntax define-public define-inlinable define-integrable define^))
+		    definstrument define-animal define-envelope))
 
 	(open-definers '(define define* define-constant require load eval eval-string
 			 define-macro define-macro* define-bacro define-bacro* define-expansion
-			 definstrument define-animal define-envelope defgenerator
-			 define-values define-module define-method
-			 define-syntax define-public define-inlinable define-integrable define^))
+			 definstrument define-animal define-envelope defgenerator))
 
 	(cxars (hash-table 'car ()  'caar 'car  'cdar 'cdr
 			   'caaar 'caar  'cdaar 'cdar  'cddar 'cddr  'cadar 'cadr
@@ -1298,7 +1291,7 @@
 
     (define (get-side-effect v)
       (let ((ftype (var-ftype v)))
-	(or (not (memq ftype '(define define* lambda lambda* define-public)))
+	(or (not (memq ftype '(define define* lambda lambda*)))
 	    (let ((body (cddr (var-initial-value v)))
 		  (env (var-env v))
 		  (args (cons (var-name v) (args->proper-list (var-arglist v)))))
@@ -1921,16 +1914,6 @@
 			   (cons 0 max-arity))
 			  (else #f))))
 
-		 ((defmacro)
-		  (cond ((list? (caddr form))
-			 (let ((len (length (caddr form))))
-			   (if (negative? len)
-			       (cons (abs len) max-arity)
-			       (cons len len))))
-			((symbol? (caddr form))
-			 (cons 0 max-arity))
-			(else #f)))
-
 		 (else #f))))))
 
     (define (report-shadower caller head vtype v expr env)
@@ -1952,7 +1935,7 @@
 
       (let ((new (let ((old (hash-table-ref other-identifiers name))
 		       (allow-keys (and (pair? arglist)
-					(memq ftype '(define* define-macro* define-bacro* defmacro*))
+					(memq ftype '(define* define-macro* define-bacro*))
 					(eq? (last-ref arglist) :allow-other-keys)))
 		       (nv (and (pair? initial-value)
 				(lint-tree-memq 'values initial-value)
@@ -2003,7 +1986,7 @@
 	      (let ((fd (var-member f env)))
 		(and fd
 		     (memq (var-ftype fd) '(define-macro define-macro* define-expansion
-					    define-bacro define-bacro* defmacro defmacro* define-syntax))))))))
+					    define-bacro define-bacro* define-syntax))))))))
 
     (define (any-procedure? f v)
       (or (hash-table-ref built-in-functions f)
@@ -2035,7 +2018,7 @@
 			   (->lint-type (caddr c))))))
 	     ((define* lambda lambda* case-lambda) 'procedure?)
 	     ((dilambda) 'dilambda?)
-	     ((define-macro define-macro* define-bacro define-bacro* defmacro defmacro* define-expansion) 'macro?)
+	     ((define-macro define-macro* define-bacro define-bacro* define-expansion) 'macro?)
 	     ((:call/cc :call/exit) 'continuation?)
 	     (else #t))))
 
@@ -4815,42 +4798,6 @@
 
 
     ;; --------------------------------
-    (define undumb
-      (let ((dumb-ops '((fix:+ . +) (fx+ . +) (flo:+ . +) (fl+ . +)
-			(fix:* . *) (fx* . *) (flo:* . *) (fl* . *)
-			(fix:- . -) (fx- . -) (flo:- . -) (fl- . -)
-			(fix:/ . /) (fx/ . /) (flo:/ . /) (fl/ . /)
-			(fix:= . =) (fx= . =) (flo:= . =) (fl= . =)
-			(fix:< . <) (fx< . <) (flo:< . <) (fl< . <)
-			(fix:> . >) (fx> . >) (flo:> . >) (fl> . >)
-			(fix:<= . <=) (fx<= . <=) (flo:<= . <=) (fl<= . <=)
-			(fix:>= . >=) (fx>= . >=) (flo:>= . >=) (fl>= . >=)
-			(fxlogand . logand) (fxlogior . logior) (fxlogxor . logxor) (fxlognot . lognot)
-			(fxand . logand) (fxior . logior) (fxxor . logxor) (fxnot . lognot)
-			(fix:quotient . quotient) (fix:min . min) (fix:max . max) (fxquotient . quotient)
-			(flmax . max) (flmin . min)
-			(flo:abs . abs) (flabs . abs)
-			(flo:sin . sin) (flsin . sin)
-			(flo:cos . cos) (flcos . cos)
-			(flo:tan . tan) (fltan . tan)
-			(flo:asin . asin) (flasin . asin)
-			(flo:acos . acos) (flacos . acos)
-			(flo:atan . atan) (flatan . atan)
-			(flo:sqrt . sqrt) (flsqrt . sqrt)
-			(flo:exp . exp) (flexp . exp) (flexpt . expt)
-			(flo:log . log) (fllog . log)
-			(bignum+ . +) (bignum* . *) (bignum/ . /) (bignum- . -)
-			(bignum< . <) (bignum<= . <=) (bignum> . >) (bignum>= . >=) (bignum= . =)
-			(bignum-quotient . quotient) (bignum-negative? . negative?) (bignum-magnitude . magnitude)
-			(bignum-expt . expt) (bignum-zero? . zero?) (bignum-abs . abs) (bignum-remainder . remainder))))
-	(lambda (tree)
-	  (cond ((assq tree dumb-ops) => cdr)
-		((or (not (pair? tree))
-		     (memq (car tree) '(quote #_quote)))
-		 tree)
-		(else (cons (undumb (car tree))
-			    (undumb (cdr tree))))))))
-
     (define (splice-if func lst)
       (cond ;((null? lst) ())
 	    ((not (pair? lst)) lst)
@@ -5121,10 +5068,7 @@
 			    (or (horners-rule val)
 				;; not many cases here, oddly enough, Horner's rule gets most
 				(cons '+ val)))))))))
-	      (hash-table-set! h '+ num+)
-
-	      (define (dumb+ args form env) (if (var-member (car form) env) form (num+ (undumb args) #f env))) ; not (undone form) because num+ ignores arg2
-	      (for-each (lambda (f) (hash-table-set! h f dumb+)) '(fix:+ fx+ flo:+ fl+ bignum+)))
+	      (hash-table-set! h '+ num+))
 
 	    (let ()
 	      (define (num* args form env)
@@ -5390,10 +5334,7 @@
 					   (simplify-numerics expr env)))))
 
 				  (else (cons '* val))))))))))
-	      (hash-table-set! h '* num*)
-
-	      (define (dumb* args form env) (if (var-member (car form) env) form (num* (undumb args) form env)))
-	      (for-each (lambda (f) (hash-table-set! h f dumb*)) '(fix:* fx* flo:* fl* bignum*)))
+	      (hash-table-set! h '* num*))
 
 	    (let ()
 	      (define (num- args form env)
@@ -5592,11 +5533,7 @@
 						   (> (lint-tree-leaves form) (lint-tree-leaves new-form)))
 					       new-form
 					       form)))))))))))))
-	      (hash-table-set! h '- num-)
-
-	      (define (dumb- args form env) (if (var-member (car form) env) form (num- (undumb args) (undumb form) env)))
-	      (for-each (lambda (f) (hash-table-set! h f dumb-)) '(fix:- fx- flo:- fl- bignum-)))
-
+	      (hash-table-set! h '- num-))
 
 	    (let ()
 	      (define (num/ args form env)
@@ -5809,10 +5746,7 @@
 						      n                ; (/ x y x) -> (/ y)
 						      (cons 1 n))))    ; (/ x y x z) -> (/ 1 y z)
 				       (cons '/ (cons arg1 nargs)))))))))))
-	      (hash-table-set! h '/ num/)
-
-	      (define (dumb/ args form env) (if (var-member (car form) env) form (num/ (undumb args) (undumb form) env)))
-	      (for-each (lambda (f) (hash-table-set! h f dumb/)) '(fix:/ fx/ flo:/ fl/ bignum/)))
+	      (hash-table-set! h '/ num/))
 
 	    (let ()
 	      (define (numtrig args form env)
@@ -11159,28 +11093,6 @@
 	  (hash-special '-1+ sp-1-)
 	  (hash-special '1- sp-1-))
 
-	(let ()
-	  (define (sp-dumb-relop caller head form env)
-	    (if (not (var-member (car form) env))
-		(lint-format "perhaps ~A" caller
-			     (lists->string form
-					    (simplify-boolean (undumb form) env () ())))))
-	  (for-each (lambda (f)
-		      (hash-special f sp-dumb-relop))
-		    '(fix:= fx= flo:= fl= fix:< fx< flo:< fl< fix:> fx> flo:> fl> fix:<= fx<= flo:<= fl<= fix:>= fx>= flo:>= fl>=
-		      bignum= bignum< bignum<= bignum> bignum>= bignum-negative? bignum-zero?)))
-
-	(let ()
-	  (define (sp-dumb-fop caller head form env)
-	    (if (not (var-member (car form) env))
-		(lint-format "perhaps ~A" caller (lists->string form (undumb form)))))
-
-	  (for-each (lambda (f)
-		      (hash-special f sp-dumb-fop))
-		    '(flo:sin flsin flo:cos flcos flo:tan fltan flo:atan flatan flo:exp flexp flo:log fllog flo:sqrt flsqrt
-		      fxlogand fxlogior fxlogxor fxlognot
-		      bignum-expt bignum-quotient bignum-magnitude bignum-abs bignum-remainder)))
-
 
 	;; ---------------- push! pop! ----------------
 	(hash-special 'push!
@@ -11848,7 +11760,7 @@
 			  ;; also if var passed to macro -- what to do?
 
 			  ;; look for problematic macro expansion
-			  (when (memq (let-ref fdata 'ftype) '(define-macro define-macro* defmacro defmacro*))
+			  (when (memq (let-ref fdata 'ftype) '(define-macro define-macro*))
 
 			    (unless (list? (let-ref fdata 'macro-ops))
 			      (let ((syms (list () ())))
@@ -13908,8 +13820,7 @@
 			      (truncated-list->string prev-f)
 			      (truncated-list->string f))))
 
-	    ((set! define define* define-macro define-constant define-macro*
-		   defmacro defmacro* define-expansion define-bacro define-bacro*)
+	    ((set! define define* define-macro define-constant define-macro* define-expansion define-bacro define-bacro*)
 	     (cond ((not (and (pair? (cddr prev-f))                 ; (set! ((L 1) 2)) an error, but lint should keep going
 			      (or (and (equal? (caddr prev-f) f)    ; (begin ... (set! x (...)) (...))
 				       (not (side-effect? f env)))
@@ -14046,7 +13957,7 @@
 	      (let ((len (length body))
 		    (old-current-form lint-current-form)
 		    (old-mid-form lint-mid-form)
-		    (macdef (memq head '(defmacro defmacro* define-macro define-macro* define-bacro define-bacro*))))
+		    (macdef (memq head '(define-macro define-macro* define-bacro define-bacro*))))
 
 		(if (eq? head 'do) (set! len (+ len 1))) ; last form in do body is not returned
 		(do ((prev-f #f)
@@ -14189,9 +14100,7 @@
 			       (len>1? f))
 		      (if (and (pair? (cadr f))
 			       (memq (car f) '(define define* define-macro define-constant define-macro* define-expansion define-bacro define-bacro*)))
-			  (set-ref (caadr f) caller f env)
-			  (if (memq (car f) '(defmacro defmacro*))
-			      (set-ref (cadr f) caller f env))))))
+			  (set-ref (caadr f) caller f env)))))
 
 		(set! lint-mid-form old-mid-form)
 		(set! lint-current-form old-current-form)))
@@ -14523,7 +14432,6 @@
 				      (else             function-name)))
 			     (fargs ((case definer
 				       ((lambda lambda*)     cadr)
-				       ((defmacro defmacro*) caddr)
 				       (else                 cdadr))
 				     form)))
 			 (make-fvar fname definer fargs form env)))))
@@ -14533,17 +14441,13 @@
 		      ((lambda define-constant) #t)
 		      ((lambda*) (eq? (last-ref (cadr form)) :allow-other-keys))
 		      ((define*) (eq? (last-ref (cdadr form)) :allow-other-keys))
-		      ((defmacro defmacro*)
-		       (or (not (eq? definer 'defmacro*))
-			   (and (pair? (caddr form))
-				(eq? (last-ref (caddr form)) :allow-other-keys))))
 		      (else
 		       (or (not (memq definer '(define-macro* define-bacro*)))
 			   (eq? (last-ref (cdadr form)) :allow-other-keys))))))
 
 	(if (null? args)
 	    (begin
-	      (if (memq definer '(define* lambda* defmacro* define-macro* define-bacro*))
+	      (if (memq definer '(define* lambda* define-macro* define-bacro*))
 		  (lint-format "~A could be ~A"       ; (define* (f1) 32)
 			       function-name definer
 			       (symbol (substring (symbol->string definer) 0 (- (length (symbol->string definer)) 1)))))
@@ -14563,12 +14467,12 @@
 		(let ((args-as-vars
 		       (if (symbol? args)                            ; this is getting arg names to add to the environment
 			   (begin
-			     (if (memq definer '(define* lambda* defmacro* define-macro* define-bacro*))
+			     (if (memq definer '(define* lambda* define-macro* define-bacro*))
 				 (lint-format "~A could be ~A"       ; (lambda* args ...)
 					      function-name definer
 					      (symbol (substring (symbol->string definer) 0 (- (length (symbol->string definer)) 1)))))
 			     (list (make-lint-var args #f 'parameter)))
-			   (let ((star-definer (memq definer '(define* lambda* defmacro* define-macro* define-bacro* definstrument define*-public))))
+			   (let ((star-definer (memq definer '(define* lambda* define-macro* define-bacro* definstrument define*-public))))
 			     (map (lambda (arg)
 				    (if (symbol? arg)
 					(if (memq arg '(:rest :allow-other-keys))
@@ -15100,11 +15004,11 @@
 				(set! ok-funcs (cons (cons (caar p) (car p)) ok-funcs))))))))))))
 
 
-	;; ---------------- define and defmacro ----------------
+	;; ---------------- define ----------------
 	(let ()
 
 	  (define (check-define-macro caller form env)
-	    ;; used in define-walker and defmacro-walker
+	    ;; used in define-walker
 	    (let ((val (cddr form))
 		  (outer-name (caadr form))
 		  (outer-args (cdadr form)))
@@ -15410,9 +15314,7 @@
 		  (if (symbol? sym)
 		      (begin
 			(check-definee caller sym form env)
-			(if (memq head '(define define-constant define-envelope
-					 define-public define*-public defmacro-public define-inlinable
-					 define-integrable define^))
+			(if (memq head '(define define-constant define-envelope))
 			    (let ((len (length form)))
 			      (if (not (= len 3))  ;  (define a b c)
 				  (lint-format "~A has ~A value~A?"
@@ -15536,53 +15438,7 @@
 		      (hash-walker op define-walker))
 		    '(define define* define-constant
 		      define-macro define-macro* define-bacro define-bacro* define-expansion
-		      definstrument define-animal define-envelope        ; for clm
-		      define-public define*-public defmacro-public define-inlinable
-		      define-integrable define^))                   ; these give more informative names in Guile and scmutils (MIT-scheme))
-
-
-	  ;; -------- defmacro-walker --------
-	  (define (defmacro-walker caller form env)
-	    (if (or (< (length form) 4)
-		    (not (symbol? (cadr form))))
-		(begin
-		  (if (and (> (length form) 2)
-			   (pair? (cadr form))
-			   (symbol? (caadr form)))
-		      (lint-format "~A used where s7 uses define-~A: ~A?" caller (car form) (car form) (truncated-list->string form))
-		      (lint-format "~A declaration is messed up: ~A" caller (car form) (truncated-list->string form)))
-		  env)
-		(let ((sym (cadr form))
-		      (args (caddr form))
-		      (body (cdddr form))
-		      (head (car form)))
-		  (if (and (pair? args)
-			   (repeated-member? args env))                        ; (defmacro hi (a b a) a)
-		      (lint-format "~A parameter is repeated: ~A" caller head (truncated-list->string args))
-		      (lint-format "~A is deprecated; perhaps ~A" caller head  ; (defmacro hi (a b) `(+ ,a ,b))
-				   (truncated-lists->string form
-							    (cons (if (eq? head 'defmacro) 'define-macro 'define-macro*)
-								  (cons (cons sym
-									      (let no-key ((lst args)) ; remove :key and :optional
-										(if (not (pair? lst))
-										    lst
-										    (if (memq (car lst) '(:key :optional))
-											(no-key (cdr lst))
-											(cons (car lst)
-											      (no-key (cdr lst)))))))
-									body)))))
-		  (if (eq? head 'defmacro)
-		      (check-define-macro caller
-					  (cons 'define-macro
-						(cons (cons sym args)
-						      body))
-					  env))
-
-		  (lint-walk-function head sym args body form env)
-		  (cons (make-lint-var sym form head) env))))
-
-	  (hash-walker 'defmacro defmacro-walker)
-	  (hash-walker 'defmacro* defmacro-walker))
+		      definstrument define-animal define-envelope)))       ; for clm
 
 
 	;; ---------------- dilambda ----------------
@@ -19567,8 +19423,6 @@
 		curlet require load eval eval-string
 		define-macro define-macro* define-bacro define-bacro* define-expansion
 		definstrument define-animal define-envelope defgenerator
-		define-values define-module define-method
-		define-syntax define-public define-inlinable define-integrable define^
 		call/cc call-with-current-continuation)
 	     form))
 
@@ -23707,133 +23561,7 @@
 						(and (char=? lc #\!)
 						     (char=? c #\#)))
 					    #f)
-					 (set! lc c)))))))))
-	  (read-hooks
-	   ;; try to get past all the # and \ stuff in other Schemes
-	   ;;   main remaining problem: [] used as parentheses (Gauche and Chicken for example)
-	   (list (lambda (h)
-		   (let ((data (h 'data))
-			 (line (port-line-number)))
-		     (if (not (h 'type))
-			 (begin
-			   (out-format outport "~NCreader~A: unknown \\ usage: \\~C~%" lint-left-margin #\space (if (zero? line) "" (format #f "[~A]" line)) data)
-			   (set! (h 'result) data))
-			 (begin
-			   (out-format outport "~NCreader~A: unknown # object: #~A~%" lint-left-margin #\space (if (zero? line) "" (format #f "[~A]" line)) data)
-			   (set! (h 'result)
-				 (catch #t
-				   (lambda ()
-				     (case (data 0)
-				       ((#\;) (read) (values))
-
-				       ((#\T)
-					(and (string=? data "T")
-					     (out-format outport "#T should be #t~%")
-					     #t))
-
-				       ((#\F)
-					(and (string=? data "F")
-					     (out-format outport "#F should be #f~%")
-					     ''#f))
-
-				       ((#\X #\B #\O #\D)
-					(let ((num (string->number (substring data 1) (case (data 0) ((#\X) 16) ((#\O) 8) ((#\B) 2) ((#\D) 10)))))
-					  (if (number? num)
-					      (begin
-						(out-format outport "~NCuse #~A~A not #~A~%"
-							lint-left-margin #\space
-							(char-downcase (data 0)) (substring data 1) data)
-						num)
-					      (string->symbol data))))
-
-				       ((#\i)
-					(out-format outport "#i is used for int-vectors, not numbers.~%")
-					(cond ((string->number (substring data 1)) => exact->inexact) (else #f)))
-
-				       ((#\r)
-					(out-format outport "#r is used for float-vectors, not numbers.~%")
-					#f)
-
-				       ((#\l #\z)
-					(let ((num (string->number (substring data 1)))) ; Bigloo (also has #ex #lx #z and on and on)
-					  (if (number? num)
-					      (begin
-						(out-format outport "~NCjust omit this silly #~C!~%" lint-left-margin #\space (data 0))
-						num)
-					      (string->symbol data))))
-
-				       ((#\u) ; for Bigloo
-					(if (string=? data "unspecified")
-					    (out-format outport "~NCuse #<unspecified>, not #unspecified~%" lint-left-margin #\space))
-					;; #<unspecified> seems to hit the no-values check?
-					(string->symbol data))
-				       ;; Bigloo also seems to use #" for here-doc concatenation??
-
-				       ((#\v) ; r6rs byte-vectors?
-					(if (string=? data "vu8")
-					    (out-format outport "~NCuse #u, not #vu8~%" lint-left-margin #\space))
-					(string->symbol data))
-
-				       ((#\>) ; for Chicken, apparently #>...<# encloses in-place C code
-					(do ((last #\#)
-					     (c (read-char) (read-char)))
-					    ((and (char=? last #\<)
-						  (char=? c #\#))
-					     (values))
-					  (if (char=? c #\newline)
-					      (set! (port-line-number) (+ (port-line-number) 1)))
-					  (set! last c)))
-
-				       ((#\<) ; Chicken also, #<<EOF -> EOF
-					(if (string=? data "<undef>") ; #<undef> chibi et al
-					    #<undefined>
-					    (if (and (char=? (data 1) #\<)
-						     (> (length data) 2))
-						(do ((end (substring data 2))
-						     (c (read-line) (read-line)))
-						    ((string-position end c)
-						     (values)))
-						(string->symbol data))))
-
-				       ((#\\)
-					(cond ((assoc data '(("\\newline"   . #\newline)
-							     ("\\return"    . #\return)
-							     ("\\space"     . #\space)
-							     ("\\tab"       . #\tab)
-							     ("\\null"      . #\null)
-							     ("\\nul"       . #\null)
-							     ("\\linefeed"  . #\linefeed)
-							     ("\\alarm"     . #\alarm)
-							     ("\\esc"       . #\escape)
-							     ("\\escape"    . #\escape)
-							     ("\\rubout"    . #\delete)
-							     ("\\delete"    . #\delete)
-							     ("\\backspace" . #\backspace)
-							     ("\\page"      . #\xc)
-							     ("\\altmode"   . #\escape)
-							     ("\\bel"       . #\alarm) ; #\x07
-							     ("\\sub"       . #\x1a)
-							     ("\\soh"       . #\x01)
-
-							     ;; these are for Guile
-							     ("\\vt"        . #\xb)
-							     ("\\bs"        . #\backspace)
-							     ("\\cr"        . #\newline)
-							     ("\\sp"        . #\space)
-							     ("\\lf"        . #\linefeed)
-							     ("\\nl"        . #\null)
-							     ("\\ht"        . #\tab)
-							     ("\\ff"        . #\xc)
-							     ("\\np"        . #\xc))
-						      string-ci=?)
-					       => (lambda (c)
-						    (out-format outport "~NCperhaps use ~W instead~%" (+ lint-left-margin 4) #\space (cdr c))
-						    (cdr c)))
-					      (else
-					       (string->symbol (substring data 1)))))
-				       (else
-					(string->symbol data))))
-				   (lambda args #f))))))))))
+					 (set! lc c))))))))))
 
       (lambda* (file (outp *output-port*) (report-input #t))
 	(if (null? outp)
@@ -23871,8 +23599,6 @@
 	(set! *report-nested-if* (if (integer? *report-nested-if*) (max 3 *report-nested-if*) 4))
 	(set! *report-short-branch* (if (integer? *report-short-branch*) (max 0 *report-short-branch*) 12))
 	(set! *#readers* readers)
-	(unless (defined? 'lint-no-read-error)
-	  (set! (hook-functions *read-error-hook*) read-hooks))
 
 	;; preset list-tail and list-ref
 	(vector-set! fragments 10 (make-hash-table))
@@ -24107,5 +23833,3 @@
 	(display str p)))
     #f))
 |#
-
-;;; 54 896368, 53 874874, 52 871075, 54 889347

@@ -6397,6 +6397,7 @@ Perhaps these simple examples will clarify s7's way of handling the apostrophe.
 (equal? 'quote #_quote) -> #f
 (equal? '#f (quote #f)) -> #t
 </pre>
+<p>If you want the standard scheme approach, <code>(set! (*s7* 'symbol-quote?) #t)</code>.</p>
 </div>
 
 

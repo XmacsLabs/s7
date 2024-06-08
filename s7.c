@@ -3155,7 +3155,8 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 #else
   #define set_local(p)                 full_type(T_Sym(p)) &= ~(T_DONT_EVAL_ARGS | T_SYNTACTIC)
 #endif
-#define is_global(p)                   ((is_slot(global_slot(p))) && (symbol_id(p) == 0))
+#define is_global(p)                   (symbol_id(p) == 0)
+#define is_defined_global(p)           ((is_slot(global_slot(p))) && (symbol_id(p) == 0))
 /* or ((symbol_id(p) == 0) && (global_slot(p) != cur_sc->undefined)) but it's slower, both are slower than the T_GLOBAL bit from earlier */
 
 #define global_slot(p)                 T_Sld((T_Sym(p))->object.sym.global_slot)
@@ -4239,7 +4240,6 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_SAFE_CLOSURE_AGG, HOP_SAFE_CLOSURE_AGG, OP_SAFE_CLOSURE_3A, HOP_SAFE_CLOSURE_3A, OP_SAFE_CLOSURE_NA, HOP_SAFE_CLOSURE_NA,
       OP_SAFE_CLOSURE_3S, HOP_SAFE_CLOSURE_3S, OP_SAFE_CLOSURE_NS, HOP_SAFE_CLOSURE_NS, /* safe_closure_4s gained very little */
       OP_SAFE_CLOSURE_3S_A, HOP_SAFE_CLOSURE_3S_A,
-      /* ssa|saa|ns|na|3s|agg|3a|sc|ap|pa|pp_a ? thunk_o? op_closure_ns?  */
 
       OP_ANY_CLOSURE_3P, HOP_ANY_CLOSURE_3P, OP_ANY_CLOSURE_4P, HOP_ANY_CLOSURE_4P, OP_ANY_CLOSURE_NP, HOP_ANY_CLOSURE_NP,
       OP_ANY_CLOSURE_SYM, HOP_ANY_CLOSURE_SYM, OP_ANY_CLOSURE_A_SYM, HOP_ANY_CLOSURE_A_SYM,
@@ -5092,7 +5092,7 @@ static const char *checked_type_name(s7_scheme *sc, int32_t typ)
 #if REPORT_ROOTLET_REDEF
 static void set_local_1(s7_scheme *sc, s7_pointer symbol, const char *func, int32_t line)
 {
-  if (is_global(symbol))
+  if (is_defined_global(symbol))
     fprintf(stderr, "%s[%d]: %s%s%s in %s\n", func, line, bold_text, display(symbol), unbold_text, display_truncated(sc->cur_code));
   full_type(symbol) = (full_type(symbol) & ~(T_DONT_EVAL_ARGS | T_SYNTACTIC));
 }
@@ -8066,6 +8066,7 @@ static inline void remove_from_heap(s7_scheme *sc, s7_pointer x)
 {
   /* global functions are very rarely redefined, so we can remove the function body from the heap when it is defined */
   if (!in_heap(x)) return;
+  /* fprintf(stderr, "remove %s\n", display(x)); */
   if (is_pair(x))   /* all the compute time is here, might be faster to go down a level explicitly */
     {
       s7_pointer p = x;
@@ -10075,7 +10076,7 @@ static s7_pointer inlet_p_pp(s7_scheme *sc, s7_pointer symbol, s7_pointer value)
     symbol = keyword_symbol(symbol);
   if (is_constant_symbol(sc, symbol))
     wrong_type_error_nr(sc, sc->inlet_symbol, 1, symbol, a_non_constant_symbol_string);
-  if ((is_global(symbol)) &&
+  if ((is_defined_global(symbol)) &&
       (is_syntax_or_qq(global_value(symbol))))
     wrong_type_error_nr(sc, sc->inlet_symbol, 1, symbol, wrap_string(sc, "a non-syntactic symbol", 22));
 
@@ -10829,7 +10830,7 @@ s7_pointer s7_symbol_local_value(s7_scheme *sc, s7_pointer sym, s7_pointer let)
 
 
 /* -------------------------------- symbol->value -------------------------------- */
-#define lookup_global(Sc, Sym) ((is_global(Sym)) ? global_value(Sym) : lookup_checked(Sc, Sym))
+#define lookup_global(Sc, Sym) ((is_defined_global(Sym)) ? global_value(Sym) : lookup_checked(Sc, Sym))
 
 static s7_pointer s7_starlet(s7_scheme *sc, s7_int choice);
 
@@ -10865,7 +10866,7 @@ symbol sym in the given let: (let ((x 32)) (symbol->value 'x)) -> 32"
       if (local_let == sc->s7_starlet) return(s7_starlet(sc, s7_starlet_symbol_id(sym)));
       return(s7_symbol_local_value(sc, sym, local_let));
     }
-  if (is_global(sym))
+  if (is_defined_global(sym))
     return(global_value(sym));
   return(s7_symbol_value(sc, sym));
 }
@@ -10922,7 +10923,7 @@ static s7_pointer g_symbol_to_dynamic_value(s7_scheme *sc, s7_pointer args)
   if (!is_symbol(sym))
     return(method_or_bust(sc, sym, sc->symbol_to_dynamic_value_symbol, args, sc->type_names[T_SYMBOL], 1));
 
-  if (is_global(sym))
+  if (is_defined_global(sym))
     return(global_value(sym));
 
   if (let_id(sc->curlet) == symbol_id(sym))
@@ -11449,7 +11450,7 @@ Only the let is searched if ignore-globals is not #f."
 	return(sc->T);
       return((b == sc->T) ? sc->F : make_boolean(sc, is_slot(global_slot(sym))));
     }
-  return((is_global(sym)) ? sc->T : make_boolean(sc, is_slot(s7_slot(sc, sym))));
+  return((is_defined_global(sym)) ? sc->T : make_boolean(sc, is_slot(s7_slot(sc, sym))));
 }
 
 static s7_pointer g_is_defined_in_unlet(s7_scheme *sc, s7_pointer args) {return(make_boolean(sc, initial_value(car(args)) != sc->undefined));}
@@ -43332,7 +43333,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 		   *   but that is irrelevant at this point -- if c_function_is_ok, we're good to go.
 		   */
 		  ((op_has_hop(expr)) ||
-		   ((is_global(car(expr))) &&            /* (sort! x (lambda (car y) (car x)...))! */
+		   ((is_defined_global(car(expr))) &&            /* (sort! x (lambda (car y) (car x)...))! */
 		    (c_function_is_ok(sc, expr)))))
 		{
 		  int32_t orig_data = optimize_op(expr);
@@ -46469,7 +46470,7 @@ static s7_pointer g_documentation(s7_scheme *sc, s7_pointer args)
   if (is_symbol(p))
     {
       if ((symbol_has_help(p)) &&
-	  (is_global(p)))
+	  (is_defined_global(p)))
 	return(s7_make_string(sc, symbol_help(p)));
       p = s7_symbol_value(sc, p);
     }
@@ -54346,7 +54347,7 @@ static s7_pointer fx_q(s7_scheme *sc, s7_pointer arg)        {return(cadr(arg));
 static s7_pointer fx_unsafe_s(s7_scheme *sc, s7_pointer arg) {return(lookup_checked(sc, T_Sym(arg)));}
 
 static s7_pointer fx_s(s7_scheme *sc, s7_pointer arg) {return(lookup(sc, T_Sym(arg)));}
-static s7_pointer fx_g(s7_scheme *sc, s7_pointer arg) {return((is_global(arg)) ? global_value(arg) : lookup(sc, arg));}
+static s7_pointer fx_g(s7_scheme *sc, s7_pointer arg) {return((is_defined_global(arg)) ? global_value(arg) : lookup(sc, arg));}
 static s7_pointer fx_o(s7_scheme *sc, s7_pointer arg) {return(o_lookup(sc, T_Sym(arg), arg));}
 static s7_pointer fx_t(s7_scheme *sc, s7_pointer arg) {return(t_lookup(sc, T_Sym(arg), arg));}
 static s7_pointer fx_u(s7_scheme *sc, s7_pointer arg) {return(u_lookup(sc, T_Sym(arg), arg));}
@@ -57486,7 +57487,7 @@ static s7_p_dd_t s7_p_dd_function(s7_pointer f);
 static s7_p_pi_t s7_p_pi_function(s7_pointer f);
 static s7_p_ii_t s7_p_ii_function(s7_pointer f);
 
-#define is_unchanged_global(P) ((is_symbol(P)) && (is_global(P)) && (initial_value(P) == global_value(P)))
+#define is_unchanged_global(P) ((is_symbol(P)) && (is_defined_global(P)) && (initial_value(P) == global_value(P)))
 #define is_global_and_has_func(P, Func) ((is_unchanged_global(P)) && (Func(global_value(P)))) /* Func = s7_p_pp_function and friends */
 
 static bool fx_matches(s7_pointer symbol, const s7_pointer target_symbol) {return((symbol == target_symbol) && (is_unchanged_global(symbol)));}
@@ -57507,7 +57508,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 	      if (is_let(cur_env)) {if (s7_symbol_local_value(sc, arg, cur_env) == sc->else_symbol) return(fx_c);}
 	      else if ((is_pair(cur_env)) && (!direct_memq(arg, cur_env))) return(fx_c);
 	    }
-	  return((is_global(arg)) ? fx_g : ((checker(sc, arg, cur_env)) ? fx_s : fx_unsafe_s));
+	  return((is_defined_global(arg)) ? fx_g : ((checker(sc, arg, cur_env)) ? fx_s : fx_unsafe_s));
 	}
       return(fx_c);
     }
@@ -57598,9 +57599,9 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 		      if (f == imag_part_p_p) return(fx_imag_part_s);
 		      if (f == iterate_p_p)   return(fx_iterate_s);
 		      if (f == car_p_p)       return(fx_car_s); /* can happen if (define var-name car) etc */
-		      return((is_global(cadr(arg))) ? fx_c_g_direct : fx_c_s_direct);
+		      return((is_defined_global(cadr(arg))) ? fx_c_g_direct : fx_c_s_direct);
 		    }}}
-	  return((is_global(cadr(arg))) ? fx_c_g : fx_c_s);
+	  return((is_defined_global(cadr(arg))) ? fx_c_g : fx_c_s);
 
 	case HOP_SAFE_C_SS:
 	  if (fn_proc(arg) == g_cons)       return(fx_cons_ss);
@@ -57608,7 +57609,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 	  if (fn_proc(arg) == g_geq_2)      return(fx_geq_ss);
 	  if (fn_proc(arg) == g_greater_2)  return(fx_gt_ss);
 	  if (fn_proc(arg) == g_leq_2)      return(fx_leq_ss);
-	  if (fn_proc(arg) == g_less_2)     return((is_global(caddr(arg))) ? fx_lt_sg : fx_lt_ss);
+	  if (fn_proc(arg) == g_less_2)     return((is_defined_global(caddr(arg))) ? fx_lt_sg : fx_lt_ss);
 	  if ((fx_matches(car(arg), sc->multiply_symbol)) && (cadr(arg) == caddr(arg))) return(fx_sqr_s);
 	  if (fn_proc(arg) == g_multiply_2) return(fx_multiply_ss);
 	  if (fn_proc(arg) == g_is_eq)      return(fx_is_eq_ss);
@@ -57643,7 +57644,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 	  return(fx_c_opsq_s);
 
 	case HOP_SAFE_C_SSS:
-	  if ((fn_proc(arg) == g_less) && (is_global(cadr(arg))) && (is_global(cadddr(arg)))) return(fx_lt_gsg);
+	  if ((fn_proc(arg) == g_less) && (is_defined_global(cadr(arg))) && (is_defined_global(cadddr(arg)))) return(fx_lt_gsg);
 	  if (is_global_and_has_func(car(arg), s7_p_ppp_function))
 	    {
 	      set_opt3_direct(cdr(arg), (s7_pointer)(s7_p_ppp_function(global_value(car(arg)))));
@@ -57699,7 +57700,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 		    if (car(arg) == sc->is_eq_symbol)    return(fx_is_eq_s_vref);
 		    if (car(arg) == sc->hash_table_ref_symbol) return(fx_href_s_vref);
 		    if (car(arg) == sc->let_ref_symbol)  return(fx_lref_s_vref);
-		    if ((is_global(cadr(arg))) && (is_global(cadr(s2))) && (car(arg) == sc->vector_ref_symbol)) return(fx_vref_g_vref_gs);
+		    if ((is_defined_global(cadr(arg))) && (is_defined_global(cadr(s2))) && (car(arg) == sc->vector_ref_symbol)) return(fx_vref_g_vref_gs);
 		  }
 		if ((car(arg) == sc->vector_ref_symbol) && (car(s2) == sc->add_symbol)) return(fx_vref_s_add);
 		return(fx_c_s_opssq_direct);
@@ -58339,7 +58340,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (p == var1) return(with_fx(tree, fx_t));
 	  if (p == var2) return(with_fx(tree, fx_u));
 	  if (p == var3) return(with_fx(tree, fx_v));
-	  if (is_global(p)) return(with_fx(tree, fx_g));
+	  if (is_defined_global(p)) return(with_fx(tree, fx_g));
 	  if (!more_vars) return(with_fx(tree, fx_o));
 	}
       return(false);
@@ -58547,7 +58548,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (fx_proc(tree) == fx_num_eq_ss)
 	    {
 	      if (caddr(p) == var3) return(with_fx(tree, fx_num_eq_tv));
-	      if (is_global(caddr(p))) return(with_fx(tree, fx_num_eq_tg));
+	      if (is_defined_global(caddr(p))) return(with_fx(tree, fx_num_eq_tg));
 	      if ((!more_vars) && (o_var_ok(caddr(p), var1, var2, var3))) return(with_fx(tree, fx_num_eq_to));
 	      return(with_fx(tree, fx_num_eq_ts));
 	    }
@@ -58561,7 +58562,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (fx_proc(tree) == fx_lt_sg)  return(with_fx(tree, fx_lt_tg));
 	  if (fx_proc(tree) == fx_gt_ss)
 	    {
-	      if (is_global(caddr(p))) return(with_fx(tree, fx_gt_tg));
+	      if (is_defined_global(caddr(p))) return(with_fx(tree, fx_gt_tg));
 	      if ((!more_vars) && (o_var_ok(caddr(p), var1, var2, var3))) return(with_fx(tree, fx_gt_to));
 	      return(with_fx(tree, fx_gt_ts));
 	    }
@@ -58580,12 +58581,12 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
       if (caddr(p) == var1)
 	{
 	  if (fx_proc(tree) == fx_c_ss) return(with_fx(tree, fx_c_st));
-	  if (fx_proc(tree) == fx_c_ss_direct) {return(with_fx(tree, (is_global(cadr(p))) ? fx_c_gt_direct : fx_c_st_direct));}
+	  if (fx_proc(tree) == fx_c_ss_direct) {return(with_fx(tree, (is_defined_global(cadr(p))) ? fx_c_gt_direct : fx_c_st_direct));}
 	  if (fx_proc(tree) == fx_hash_table_ref_ss) return(with_fx(tree, fx_hash_table_ref_st));
 	  if (fx_proc(tree) == fx_cons_ss) return(with_fx(tree, fx_cons_st));
 	  if (fx_proc(tree) == fx_vref_ss)
 	    {
-	      if (is_global(cadr(p))) return(with_fx(tree, fx_vref_gt));
+	      if (is_defined_global(cadr(p))) return(with_fx(tree, fx_vref_gt));
 	      if ((!more_vars) && (cadr(p) != var2) && (cadr(p) != var3)) return(with_fx(tree, fx_vref_ot));
 	      return(with_fx(tree, fx_vref_st));
 	    }
@@ -58923,7 +58924,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
     case HOP_SAFE_C_opSSq_S:
       if (fx_proc(tree) == fx_vref_vref_ss_s)
 	{
-	  if ((caddr(p) == var1) && (is_global(cadadr(p))))
+	  if ((caddr(p) == var1) && (is_defined_global(cadadr(p))))
 	    {
 	      if ((!more_vars) && (o_var_ok(caddadr(p), var1, var2, var3))) return(with_fx(tree, fx_vref_vref_go_t));
 	      return(with_fx(tree, fx_vref_vref_gs_t));
@@ -58939,7 +58940,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
     case HOP_SAFE_C_S_opSSq:
       if (caddaddr(p) == var1)
 	{
-	  if ((fn_proc(p) == g_vector_ref_2) && (is_global(cadr(p)) && (is_global(cadaddr(p)))))
+	  if ((fn_proc(p) == g_vector_ref_2) && (is_defined_global(cadr(p)) && (is_defined_global(cadaddr(p)))))
 	    {
 	      set_opt3_pair(p, cdaddr(p));
 	      return(with_fx(tree, fx_vref_g_vref_gt));
@@ -62873,8 +62874,8 @@ static s7_pointer opt_arg_type(s7_scheme *sc, s7_pointer argp)
     {
       if (is_symbol(car(arg)))
 	{
-	  if ((is_global(car(arg))) ||
-	      ((is_slot(global_slot(car(arg)))) &&
+	  if ((is_slot(global_slot(car(arg)))) &&
+	      ((is_global(car(arg))) ||
 	       (s7_slot(sc, car(arg)) == global_slot(car(arg)))))
 	    {
 	      s7_pointer a_func = global_value(car(arg));
@@ -70952,6 +70953,7 @@ static void init_choosers(s7_scheme *sc)
   s7_function_set_class(sc, sc->symbol_to_string_uncopied, f);
 
   /* symbol->value */
+  f = global_value(sc->symbol_to_value_symbol);
   set_function_chooser(sc->symbol_to_value_symbol, symbol_to_value_chooser);
   sc->sv_unlet_ref = make_function_with_class(sc, f, "symbol->value", g_sv_unlet_ref, 1, 1, false);
 
@@ -71066,9 +71068,11 @@ static void init_choosers(s7_scheme *sc)
   sc->dynamic_wind_body = make_unsafe_function_with_class(sc, f, "dynamic-wind", g_dynamic_wind_body, 3, 0, false);
   sc->dynamic_wind_init = make_unsafe_function_with_class(sc, f, "dynamic-wind", g_dynamic_wind_init, 3, 0, false);
 
+  /* unlet */
+  sc->unlet_disabled = make_function_with_class(sc, global_value(sc->unlet_symbol), "unlet", g_unlet_disabled, 0, 0, false);
+
   /* outlet */
   f = set_function_chooser(sc->outlet_symbol, outlet_chooser);
-  sc->unlet_disabled = make_function_with_class(sc, f, "unlet", g_unlet_disabled, 0, 0, false);
   sc->outlet_unlet = make_function_with_class(sc, f, "outlet", g_outlet_unlet, 1, 0, false);
 
   /* inlet */
@@ -71611,7 +71615,7 @@ static inline s7_pointer find_uncomplicated_symbol(s7_scheme *sc, s7_pointer sym
    * misses 'loop (it's not in symbol_list when recursive call is encountered) -- tricky to fix
    */
 
-  if (is_global(symbol))
+  if (is_defined_global(symbol))
     return(global_slot(symbol));
 
   /* see 59108 (OP_DEFINE_* in optimize_syntax) -- keyword version of name is used if a definition is
@@ -72303,7 +72307,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 		{
 		  if (((op_no_hop(cadr(expr))) == OP_SAFE_CLOSURE_S_TO_SC) &&
 		      ((op_no_hop(caddr(expr))) == OP_SAFE_CLOSURE_S_TO_SC) &&
-		      (is_global(caadr(expr))) && (is_global(caaddr(expr))))
+		      (is_defined_global(caadr(expr))) && (is_defined_global(caaddr(expr))))
 		    {
 		      /* ideally this would be OP not HOP, but safe_closure_s_to_sc is too picky */
 		      /* set_opt3_pair(expr, caddr(expr)); */ /* set_opt3_arglen(cdr(expr), 2); */
@@ -73455,7 +73459,7 @@ static bool vars_opt_ok(s7_scheme *sc, s7_pointer vars, int32_t hop, s7_pointer 
       s7_pointer var = car(p);
       s7_pointer init = cadr(var);
       /* if ((is_slot(global_slot(car(var)))) && (is_c_function(global_value(car(var))))) return(false); */ /* too draconian (see snd-test) */
-      if ((is_normal_symbol(car(var))) && (is_global(car(var)))) /* (define (f) (let ((+ -)) (with-let (curlet) (#_integer? (+))))) (f) */
+      if ((is_normal_symbol(car(var))) && (is_defined_global(car(var)))) /* (define (f) (let ((+ -)) (with-let (curlet) (#_integer? (+))))) (f) */
 	{
 	  /* fprintf(stderr, "set %s local in %s\n", display(car(var)), display_truncated(vars)); */
 	  set_local(car(var));
@@ -73912,8 +73916,8 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 		  if (op == OP_OR)
 		    {
 		      set_opt3_sym(cdr(expr), cadadr(expr));
-		      if ((is_symbol(caadr(expr))) && (symbol_type(caadr(expr)) > 0) && (is_global(caadr(expr))) &&
-			  ((is_symbol(caaddr(expr))) && (symbol_type(caaddr(expr)) > 0) && (is_global(caaddr(expr)))))
+		      if ((is_symbol(caadr(expr))) && (symbol_type(caadr(expr)) > 0) && (is_defined_global(caadr(expr))) &&
+			  ((is_symbol(caaddr(expr))) && (symbol_type(caaddr(expr)) > 0) && (is_defined_global(caaddr(expr)))))
 			{
 			  set_opt3_int(expr, symbol_type(caadr(expr)));
 			  set_opt2_int(cdr(expr), symbol_type(caaddr(expr)));
@@ -74072,7 +74076,7 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 		   *   current optimizer.
 		   * Another case (from K Matheussen):
 		   *   (define (call-func func arg1 arg2) (define (call) (func arg1 arg2)) (call)) (call-func + 1 2.5) (call-func - 5 2)
-		   *   when we get here originally "func" is +, hop=1, but just checking for !is_global(car_expr) is
+		   *   when we get here originally "func" is +, hop=1, but just checking for !is_defined_global(car_expr) is
 		   *   not good enough -- if we load mockery.scm, nothing is global!
 		   * Yet another case (define (test-abs) (define (abs x) (+ x 1)) (format *stderr* "abs ~A~%" (abs -1)))
 		   *   when optimize_syntax sees the (define abs ...), it inserts abs into e so that the caller's e is extended (set-cdr!)
@@ -74731,7 +74735,7 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 
 	  result = ((is_simple_sequence(f)) || /* was is_sequence? */
 		    ((is_closure(f)) && (is_very_safe_closure(f))) ||
-		    ((c_safe) && ((is_immutable_slot(f_slot)) || (is_global(expr))))) ? VERY_SAFE_BODY : SAFE_BODY;
+		    ((c_safe) && ((is_immutable_slot(f_slot)) || (is_defined_global(expr))))) ? VERY_SAFE_BODY : SAFE_BODY;
 
 	  if ((c_safe) ||
 	      ((is_any_closure(f)) && (is_safe_closure(f))) ||
@@ -79022,10 +79026,9 @@ static void check_define(s7_scheme *sc)
 	   (caadr(code) == sc->lambda_star_symbol)) &&
 	  (symbol_id(caadr(code)) == 0))
 	{
-	  if ((is_global(func)) && (is_immutable(global_slot(func))) && (initial_value(func) != sc->undefined))
+	  if ((is_defined_global(func)) && (is_immutable(global_slot(func))) && (initial_value(func) != sc->undefined))
 	    immutable_object_error_nr(sc, set_elist_3(sc, wrap_string(sc, "can't ~A ~S: it is immutable", 28), caller, func));
 
-	  /* not is_global here because that bit might not be set for initial symbols (why not? -- redef as method etc) */
 	  if (!is_pair(cdadr(code)))                                             /* (define x (lambda . 1)) */
 	    syntax_error_with_caller_nr(sc, "~A: stray dot? ~A", 17, caller, sc->code);
 	  if (!is_pair(cddr(cadr(code))))                                        /* (define f (lambda (arg))) */
@@ -79046,7 +79049,7 @@ static void check_define(s7_scheme *sc)
 	    s7_warn(sc, 256, "%s: syntactic keywords tend to behave badly if redefined: %s\n", display(func), display_truncated(sc->code));
 	  set_local(func);
 	}
-      if ((is_global(func)) && (is_immutable(global_slot(func))) && (initial_value(func) != sc->undefined))     /* (define (abs x) 1) after (immutable! abs) */
+      if ((is_defined_global(func)) && (is_immutable(global_slot(func))) && (initial_value(func) != sc->undefined))     /* (define (abs x) 1) after (immutable! abs) */
 	immutable_object_error_nr(sc, set_elist_3(sc, wrap_string(sc, "can't ~A ~S: it is immutable", 28), caller, func));
       if (starred)
 	set_cdar(code, check_lambda_star_args(sc, cdar(code), cdr(code), sc->code));
@@ -88244,8 +88247,8 @@ static opt_pid_t opinit_if_a_a_opa_laq(s7_scheme *sc, bool a_op, bool la_op, s7_
 #if (!WITH_GMP)
   s7_pointer c_op = car(caller);
   if ((is_symbol(c_op)) &&
-      ((is_global(c_op)) ||
-       ((is_slot(global_slot(c_op))) &&
+      ((is_slot(global_slot(c_op))) &&
+       ((is_global(c_op)) ||
 	(s7_slot(sc, c_op) == global_slot(c_op)))))
     {
       s7_pointer s_func = global_value(c_op), slot = let_slots(sc->curlet);
@@ -88549,8 +88552,8 @@ static opt_pid_t opinit_if_a_a_opla_laq(s7_scheme *sc, bool a_op)
 #if (!WITH_GMP)
   s7_pointer c_op = car(caller);
   if ((is_symbol(c_op)) &&
-      ((is_global(c_op)) ||
-       ((is_slot(global_slot(c_op))) &&
+      ((is_slot(global_slot(c_op))) &&
+       ((is_global(c_op)) ||
 	(s7_slot(sc, c_op) == global_slot(c_op)))))
     {
       s7_pointer s_func = global_value(c_op);
@@ -91422,7 +91425,7 @@ static bool is_immutable_and_stable(s7_scheme *sc, s7_pointer func)
 {
   if (symbol_ctr(func) != 1) /* protect against (define-constant (p) (define-constant (p) ...)) */
     return(false);
-  if ((is_global(func)) && (is_immutable_slot(global_slot(func))))
+  if ((is_defined_global(func)) && (is_immutable_slot(global_slot(func))))
     return(true);
   for (s7_pointer p = sc->curlet; p; p = let_outlet(p))
     if ((is_funclet(p)) && (funclet_function(p) != func))
@@ -95745,7 +95748,7 @@ static bool is_decodable(s7_scheme *sc, const s7_pointer p)
       {
 	s7_pointer sym = car(x);
 	if ((sym == p) ||
-	    ((is_global(sym)) && (is_slot(global_slot(sym))) && (p == global_value(sym))))
+	    ((is_defined_global(sym)) && (p == global_value(sym))))
 	  return(true);
       }
 
@@ -98659,29 +98662,29 @@ int main(int argc, char **argv)
  * index            1016    973    967    972    971
  * tmock            1165   1057   1019   1032   1025
  * tvect     3408   2464   1772   1669   1497   1454
- * tauto                   2562   2048   1729   1731
- * texit     1884   1950   1778   1741   1770   1770
+ * tauto                   2562   2048   1729   1730
+ * texit     1884   1950   1778   1741   1770   1769
  * s7test           1831   1818   1829   1830   1875
- * lt        2222   2172   2150   2185   1950   1950
- * dup              3788   2492   2239   2097   2003
+ * lt        2222   2172   2150   2185   1950   1927  1909
+ * dup              3788   2492   2239   2097   1996
  * thook     7651          2590   2030   2046   2009
  * tread            2421   2419   2408   2405   2260
  * tcopy            5546   2539   2375   2386   2341
  * titer     3657   2842   2641   2509   2449   2443
  * trclo     8031   2574   2454   2445   2449   2453
- * tmat             3042   2524   2578   2590   2515
- * tload                   3046   2404   2566   2534
+ * tmat             3042   2524   2578   2590   2523
+ * tload                   3046   2404   2566   2529
  * fbench    2933   2583   2460   2430   2478   2573
  * tsort     3683   3104   2856   2804   2858   2858
  * tio              3752   3683   3620   3583   3127
  * tobj             3970   3828   3577   3508   3452
  * teq              4045   3536   3486   3544   3595
- * tmac             3873   3033   3677   3677   3683
+ * tmac             3873   3033   3677   3677   3702
  * tclo      6362   4735   4390   4384   4474   4345
- * tcase            4793   4439   4430   4439   4430
+ * tcase            4793   4439   4430   4439   4425
  * tlet      11.0   6974   5609   5980   5965   4500
  * tfft             7729   4755   4476   4536   4544
- * tstar            5923   5519   4449   4550   4535
+ * tstar            5923   5519   4449   4550   4529
  * tmap             8774   4489   4541   4586   4590
  * tshoot           5447   5183   5055   5034   5060
  * tform            5348   5307   5316   5084   5098
@@ -98690,31 +98693,31 @@ int main(int argc, char **argv)
  * tgsl             7802   6373   6282   6208   6181
  * tari      15.0   12.7   6827   6543   6278   6184
  * tlist     9219   7546   6558   6240   6300   6306
- * tset                           6260   6364   6308
+ * tset                           6260   6364   6303
  * trec      19.5   6922   6521   6588   6583   6584
  * tleft     11.1   10.2   7657   7479   7627   7615
- * tmisc                          8142   7631   7694
+ * tmisc                          8142   7631   7687
  * tlamb                          8003   7941   7956
  * tgc              11.1   8177   7857   7986   8012
- * thash            11.7   9734   9479   9526   9256
+ * thash            11.7   9734   9479   9526   9251
  * cb        12.9   11.0   9658   9564   9609   9654
  * tmap-hash                    1671.0 1467.0   10.3
  * tgen             11.4   12.0   12.1   12.2   12.3
  * tall      15.9   15.6   15.6   15.6   15.1   15.1
  * timp             24.4   20.0   19.6   19.7   15.6
  * tmv              21.9   21.1   20.7   20.6   17.4
- * calls            37.5   37.0   37.5   37.1   37.2
+ * calls            37.5   37.0   37.5   37.1   37.3
  * sg                      55.9   55.8   55.4   55.4
  * tbig            175.8  156.5  148.1  146.2  146.1
  * --------------------------------------------------------------
  *
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
- * fx_chooser can't depend on is_global because it sees args before possible local bindings, get rid of these if possible, lots of is_global(sc->quote_symbol)
+ * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * (define print-length (list 1 2)) (define (f) (with-let *s7* (+ print-length 1))) (display (f)) (newline) -- need a placeholder-let (or actual let) for *s7*?
  *   so (with-let *s7* ...) would make a let with whatever *s7* entries are needed? -> (let ((print-length (*s7* 'print-length))) ...)
  *   currently sc->s7_starlet is a let (make_s7_starlet) using g_s7_let_ref_fallback, so it assumes print-length above is undefined
  * need some print-length/print-elements distinction for vector/pair etc [which to choose if both set?]
  * 73317 vars_opt_ok problem
  * if closure signature exists, add some way to have arg types checked by s7? (*s7* :check-signature?)
- * opt_p_fx_any, clo_na_to_na, tmv: clo+values etc
+ * petrify doc strings if func removed from heap
  */
