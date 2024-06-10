@@ -6837,6 +6837,12 @@ static void free_hash_table(s7_scheme *sc, s7_pointer table);
 static void remove_gensym_from_symbol_table(s7_scheme *sc, s7_pointer sym);
 static void cull_weak_hash_table(s7_scheme *sc, s7_pointer table);
 
+
+#if S7_DEBUGGING
+void s7_heap_analyze(s7_scheme *sc);
+void s7_heap_scan(s7_scheme *sc, int32_t typ);
+#endif
+
 static void sweep(s7_scheme *sc)
 {
   s7_int i, j;
@@ -6859,11 +6865,7 @@ static void sweep(s7_scheme *sc)
 
   gp = sc->strings;
   process_gc_list(liberate(sc, string_block(s1)));
-#if 0
-  fprintf(stderr, "--------------------------------------------------------------------------------\n");
-  for (s7_int i = 0; i < gp->loc; i++)
-    fprintf(stderr, "%s\n", string_value(gp->list[i]));
-#endif
+
   gp = sc->gensyms;
   process_gc_list(remove_gensym_from_symbol_table(sc, s1); liberate(sc, gensym_block(s1)));
   if (gp->loc == 0) mark_function[T_SYMBOL] = mark_noop;
@@ -7873,6 +7875,34 @@ static void try_to_call_gc(s7_scheme *sc)
       if ((int64_t)(sc->free_heap_top - sc->free_heap) < (sc->heap_size * sc->gc_resize_heap_fraction)) /* changed 21-Jul-22 */
 	resize_heap(sc);
     }
+
+#if (false) && (S7_DEBUGGING)
+  {
+    gc_list_t *gp = sc->strings;
+    fprintf(stderr, "--------------------------------------------------------------------------------\n");
+    s7_heap_analyze(sc);
+    fprintf(stderr, "strings: %" ld64 "\n", gp->loc);
+    /* s7_heap_scan(sc, T_STRING); */
+
+    for (s7_int i = 0; i < gp->loc; i++)
+      {
+	s7_pointer x = gp->list[i];
+	fprintf(stderr, "\"%s\" %p: holder: %p%s%s%s\"%s\", holders: %d, root: %s %d %d, %d %d\n", 
+		string_value(x), x, 
+		x->holder,
+		(x->holder) ? " " : "",
+		(x->holder) ? s7_type_names[type(x->holder)] : "", 
+		(x->holder) ? " " : "",
+		((x->holder) && (is_slot(x->holder))) ? symbol_name(slot_symbol(x->holder)) : "",
+		x->holders, x->root, 
+		is_marked(x), in_heap(x),
+		(x->holder) ? is_marked(x->holder) : -1, (x->holder) ? in_heap(x->holder) : -1);
+	if (i > 100) break;
+      }
+    fprintf(stderr, "--------------------------------------------------------------------------------\n");
+    gdb_break();
+  }
+#endif
 }
   /* originally I tried to mark each temporary value until I was done with it, but that way madness lies... By delaying
    *   GC of _every_ %$^#%@ pointer, I can dispense with hundreds of individual protections.  So the free_heap's last
@@ -9454,12 +9484,31 @@ static void remove_let_from_heap(s7_scheme *sc, s7_pointer lt)
   let_set_removed(lt);
 }
 
+static s7_pointer funclet_entry(s7_scheme *sc, s7_pointer x, s7_pointer sym)
+{
+  if ((has_closure_let(x)) && (is_let(closure_let(x))) && (closure_let(x) != sc->rootlet))
+    {
+      s7_pointer val = symbol_to_local_slot(sc, sym, closure_let(x));
+      if ((!is_slot(val)) && (let_outlet(closure_let(x)) != sc->rootlet))
+	val = symbol_to_local_slot(sc, sym, let_outlet(closure_let(x)));
+      if (is_slot(val))
+	return(slot_value(val));
+    }
+  return(NULL);
+}
+
 static void remove_function_from_heap(s7_scheme *sc, s7_pointer value)
 {
   s7_pointer lt;
   remove_from_heap(sc, closure_args(value));
   remove_from_heap(sc, closure_body(value));
   /* remove closure if it's local to current func (meaning (define f (let ...) (lambda ...)) removes the enclosing let) */
+
+  { /* not sure this is worth the effort (finds 46 strings during s7test, checks 407 functions) */
+    s7_pointer val = funclet_entry(sc, value, sc->local_documentation_symbol);
+    if ((val) && (is_string(val)) && (in_heap(val))) petrify(sc, val);
+  }
+
   lt = closure_let(value);
   if ((is_let(lt)) && (!let_removed(lt)) && (lt != sc->shadow_rootlet))
     {
@@ -11453,7 +11502,13 @@ Only the let is searched if ignore-globals is not #f."
   return((is_defined_global(sym)) ? sc->T : make_boolean(sc, is_slot(s7_slot(sc, sym))));
 }
 
-static s7_pointer g_is_defined_in_unlet(s7_scheme *sc, s7_pointer args) {return(make_boolean(sc, initial_value(car(args)) != sc->undefined));}
+static s7_pointer g_is_defined_in_unlet(s7_scheme *sc, s7_pointer args) 
+{
+  s7_pointer sym = car(args);
+  if (!is_symbol(sym)) 
+    wrong_type_error_nr(sc, sc->is_defined_symbol, 1, car(args), a_symbol_string);
+  return(make_boolean(sc, initial_value(sym) != sc->undefined));
+}
 
 static s7_pointer g_is_defined_in_rootlet(s7_scheme *sc, s7_pointer args) /* aimed at lint.scm */
 {
@@ -32136,19 +32191,6 @@ static s7_pointer find_make_iterator_method(s7_scheme *sc, s7_pointer e, s7_poin
 
 
 /* -------------------------------- make-iterator -------------------------------- */
-static s7_pointer funclet_entry(s7_scheme *sc, s7_pointer x, s7_pointer sym)
-{
-  if ((has_closure_let(x)) && (is_let(closure_let(x))) && (closure_let(x) != sc->rootlet))
-    {
-      s7_pointer val = symbol_to_local_slot(sc, sym, closure_let(x));
-      if ((!is_slot(val)) && (let_outlet(closure_let(x)) != sc->rootlet))
-	val = symbol_to_local_slot(sc, sym, let_outlet(closure_let(x)));
-      if (is_slot(val))
-	return(slot_value(val));
-    }
-  return(NULL);
-}
-
 static bool is_iterable_closure(s7_scheme *sc, s7_pointer x)
 {
   s7_pointer iter;
@@ -80805,7 +80847,7 @@ static bool op_set1(s7_scheme *sc)
 		return(false); /* goto APPLY */
 	      }}
       slot_set_value(lx, sc->value);
-      symbol_increment_ctr(sym);        /* see define setfib example in s7test.scm -- I'm having second thoughts about this... */
+      symbol_increment_ctr(sym);            /* see define setfib example in s7test.scm -- I'm having second thoughts about this... */
       return(true); /* continue */
     }
   if ((!is_let(sc->curlet)) ||              /* (with-let (rootlet) (set! undef 3)) */
@@ -94210,7 +94252,12 @@ static void mark_holdee(s7_pointer holder, s7_pointer holdee, const char *root)
 {
   holdee->holders++;
   if (holder) holdee->holder = holder;
-  if (root) holdee->root = root;
+  if (root) 
+    {
+      if ((holder) && (is_pair(holder)))
+	for (s7_pointer p = holder; is_pair(p) && (!(p->root)); p = cdr(p)) {p->root = root; car(p)->root = root;}
+      holdee->root = root;
+    }
 }
 
 static void mark_stack_holdees(s7_scheme *sc, s7_pointer p, s7_int top)
@@ -94222,11 +94269,11 @@ static void mark_stack_holdees(s7_scheme *sc, s7_pointer p, s7_int top)
       for (s7_pointer *tp = (s7_pointer *)(stack_elements(p)), *tend = (s7_pointer *)(tp + top); (tp < tend); tp++)
 	{
 	  s7_pointer x = *tp++;
-	  if ((x >= heap0) && (x < heap1)) mark_holdee(p, x, NULL);
+	  if ((x >= heap0) && (x < heap1)) mark_holdee(p, x, "stack-code");
 	  x = *tp++;
-	  if ((x >= heap0) && (x < heap1)) mark_holdee(p, x, NULL);
+	  if ((x >= heap0) && (x < heap1)) mark_holdee(p, x, "stack-let");
 	  x = *tp++;
-	  if ((x >= heap0) && (x < heap1)) mark_holdee(p, x, NULL);
+	  if ((x >= heap0) && (x < heap1)) mark_holdee(p, x, "stack-args");
 	}}
 }
 
@@ -94466,8 +94513,7 @@ void s7_heap_analyze(s7_scheme *sc)
   for (s7_pointer p = sc->sole_arg_wrong_type_info; is_pair(p); p = cdr(p)) mark_holdee(NULL, car(p), "simple wrong-type-arg");
   for (s7_pointer p = sc->out_of_range_info; is_pair(p); p = cdr(p)) mark_holdee(NULL, car(p), "out-of-range");
   for (s7_pointer p = sc->sole_arg_out_of_range_info; is_pair(p); p = cdr(p)) mark_holdee(NULL, car(p), "simple out-of-range");
-  for (s7_pointer y = sc->rootlet_slots; tis_slot(y); y = next_slot(y))
-    mark_holdee(NULL, slot_value(y), "rootlet");
+  for (s7_pointer y = sc->rootlet_slots; tis_slot(y); y = next_slot(y)) mark_holdee(y, slot_value(y), symbol_name(slot_symbol(y)));
 #if WITH_HISTORY
   for (s7_pointer p1 = sc->eval_history1, p2 = sc->eval_history2, p3 = sc->history_pairs; ; p2 = cdr(p2), p3 = cdr(p3))
     {
@@ -98664,7 +98710,7 @@ int main(int argc, char **argv)
  * tvect     3408   2464   1772   1669   1497   1454
  * tauto                   2562   2048   1729   1730
  * texit     1884   1950   1778   1741   1770   1769
- * s7test           1831   1818   1829   1830   1875
+ * s7test           1831   1818   1829   1830   1875  1862
  * lt        2222   2172   2150   2185   1950   1927  1909
  * dup              3788   2492   2239   2097   1996
  * thook     7651          2590   2030   2046   2009
@@ -98719,5 +98765,5 @@ int main(int argc, char **argv)
  * need some print-length/print-elements distinction for vector/pair etc [which to choose if both set?]
  * 73317 vars_opt_ok problem
  * if closure signature exists, add some way to have arg types checked by s7? (*s7* :check-signature?)
- * petrify doc strings if func removed from heap
+ * need to clear closure args if not in use (why are these gc marked?) and leave #f or #<unused>
  */

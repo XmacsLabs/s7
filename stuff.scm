@@ -195,7 +195,7 @@
 	(lambda args #f)))))
 
 (define linearize
-  (let ((+documentation+ " (linearize lst) turns a circular list into normal list:\n\
+  (let ((+documentation+ "(linearize lst) turns a circular list into normal list:\n\
     (linearize (circular-list 1 2)) -> '(1 2)"))
     (lambda (lst)
       (let lin-1 ((lst lst)
