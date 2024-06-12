@@ -6837,12 +6837,6 @@ static void free_hash_table(s7_scheme *sc, s7_pointer table);
 static void remove_gensym_from_symbol_table(s7_scheme *sc, s7_pointer sym);
 static void cull_weak_hash_table(s7_scheme *sc, s7_pointer table);
 
-
-#if S7_DEBUGGING
-void s7_heap_analyze(s7_scheme *sc);
-void s7_heap_scan(s7_scheme *sc, int32_t typ);
-#endif
-
 static void sweep(s7_scheme *sc)
 {
   s7_int i, j;
@@ -7232,6 +7226,7 @@ static void mark_closure(s7_pointer p)
   gc_mark(closure_args(p));
   gc_mark(closure_body(p));
   mark_let(closure_let(p));
+  /* because we can't tell if a closure is live, we can't clear closure_let slot_values that are not currently in play (all gc roots are live!) */
   gc_mark(closure_setter_or_map_list(p));
 }
 
@@ -7849,6 +7844,10 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
 			 wrap_integer(sc, sc->heap_size)));
 }
 
+#define GC_STRINGS_DEBUGGING ((S7_DEBUGGING) && (false))
+#if GC_STRINGS_DEBUGGING
+  static void describe_gc_strings(s7_scheme *sc);
+#endif
 
 #define resize_heap(Sc) resize_heap_to(Sc, 0)
 
@@ -7869,40 +7868,13 @@ static void try_to_call_gc(s7_scheme *sc)
 	  sc->gc_resize_heap_fraction = 0.5;
 #if S7_DEBUGGING
       gc(sc, func, line); /* not call_gc! */
+      /* describe_gc_strings(sc); */
 #else
       gc(sc);
 #endif
       if ((int64_t)(sc->free_heap_top - sc->free_heap) < (sc->heap_size * sc->gc_resize_heap_fraction)) /* changed 21-Jul-22 */
 	resize_heap(sc);
     }
-
-#if (false) && (S7_DEBUGGING)
-  {
-    gc_list_t *gp = sc->strings;
-    fprintf(stderr, "--------------------------------------------------------------------------------\n");
-    s7_heap_analyze(sc);
-    fprintf(stderr, "strings: %" ld64 "\n", gp->loc);
-    /* s7_heap_scan(sc, T_STRING); */
-
-    for (s7_int i = 0; i < gp->loc; i++)
-      {
-	s7_pointer x = gp->list[i];
-	fprintf(stderr, "\"%s\" %p: holder: %p%s%s%s\"%s\", holders: %d, root: %s %d %d, %d %d\n", 
-		string_value(x), x, 
-		x->holder,
-		(x->holder) ? " " : "",
-		(x->holder) ? s7_type_names[type(x->holder)] : "", 
-		(x->holder) ? " " : "",
-		((x->holder) && (is_slot(x->holder))) ? symbol_name(slot_symbol(x->holder)) : "",
-		x->holders, x->root, 
-		is_marked(x), in_heap(x),
-		(x->holder) ? is_marked(x->holder) : -1, (x->holder) ? in_heap(x->holder) : -1);
-	if (i > 100) break;
-      }
-    fprintf(stderr, "--------------------------------------------------------------------------------\n");
-    gdb_break();
-  }
-#endif
 }
   /* originally I tried to mark each temporary value until I was done with it, but that way madness lies... By delaying
    *   GC of _every_ %$^#%@ pointer, I can dispense with hundreds of individual protections.  So the free_heap's last
@@ -10428,8 +10400,7 @@ static s7_pointer let_ref_chooser(s7_scheme *sc, s7_pointer f, int32_t unused_ar
 	{
 	  set_c_function(arg1, sc->unlet_disabled);
 	  return(sc->unlet_ref);
-	}
-    }
+	}}
   return(f);
 }
 
@@ -10594,8 +10565,7 @@ static s7_pointer let_set_chooser(s7_scheme *sc, s7_pointer f, int32_t unused_ar
 	{
 	  set_c_function(arg1, sc->unlet_disabled);
 	  return(sc->unlet_set);
-	}
-    }
+	}}
   return(f);
 }
 
@@ -11512,14 +11482,11 @@ static s7_pointer g_is_defined_in_unlet(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer g_is_defined_in_rootlet(s7_scheme *sc, s7_pointer args) /* aimed at lint.scm */
 {
-  /* called because is_defined_chooser below noticed arg2=(rootlet) and no arg3 and arg1 is a normal symbol (not a keyword).
-   *   since the chooser sets this up to be called via safe_c_nc, the args are unevalled when we get here.
-   *   This is aimed at lint.scm which has stuff like (defined? head (rootlet)) a lot.
-   */
-  s7_pointer sym = lookup_checked(sc, car(args)); /* ok because we know car(args) is an unquoted symbol, lookup_checked for (defined? ... (rootlet)) */
-  if (!is_symbol(sym))                            /* if sym is openlet with defined? perhaps it makes sense to call it, but we need to include the rootlet arg */
-    return(method_or_bust_pp(sc, sym, sc->is_defined_symbol, sym, sc->rootlet, sc->type_names[T_SYMBOL], 1));
-  return(make_boolean(sc, (is_keyword(sym)) || (is_slot(global_slot(sym)))));
+  /* (defined? bigi1 (rootlet)) can be optimized to opt_p_call_sf */
+  s7_pointer sym = car(args);
+  if (!is_symbol(sym)) 
+    wrong_type_error_nr(sc, sc->is_defined_symbol, 1, sym, a_symbol_string);
+  return(make_boolean(sc, (is_slot(global_slot(sym))) && (global_value(sym) != sc->undefined)));
 }
 
 static s7_pointer is_defined_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr)
@@ -11529,17 +11496,13 @@ static s7_pointer is_defined_chooser(s7_scheme *sc, s7_pointer f, int32_t args, 
       s7_pointer e = caddr(expr);
       if ((is_pair(e)) && (is_null(cdr(e))))
 	{
-	  if ((car(e) == sc->rootlet_symbol) && (is_normal_symbol(cadr(expr)))) /* i.e. not a keyword */
-	    {
-	      set_safe_optimize_op(expr, HOP_SAFE_C_NC);
-	      return(sc->is_defined_in_rootlet);
-	    }
+	  if (car(e) == sc->rootlet_symbol) 
+	    return(sc->is_defined_in_rootlet);
 	  if (car(e) == sc->unlet_symbol)
 	    {
 	      set_c_function(e, sc->unlet_disabled);
 	      return(sc->is_defined_in_unlet);
-	    }
-	}}
+	    }}}
   return(f);
 }
 
@@ -12397,7 +12360,7 @@ static void call_with_exit(s7_scheme *sc)
 
   if (!call_exit_active(sc->code))
     error_nr(sc, sc->invalid_exit_function_symbol,
-	     set_elist_1(sc, wrap_string(sc, "call-with-exit exit procedure called outside its block", 56)));
+	     set_elist_1(sc, wrap_string(sc, "call-with-exit exit procedure called outside its block", 54)));
 
   call_exit_active(sc->code) = false;
   new_stack_top = call_exit_goto_loc(sc->code);
@@ -31735,7 +31698,7 @@ static s7_pointer g_with_input_from_string(s7_scheme *sc, s7_pointer args)
   s7_pointer str = car(args), proc = cadr(args);
   if (!is_string(str))
     return(method_or_bust(sc, str, sc->with_input_from_string_symbol, args, sc->type_names[T_STRING], 1));
-  if (proc == global_value(sc->read_symbol))
+  if (proc == initial_value(sc->read_symbol)) /* was global_value 11-June-24 */
     {
       if (string_length(str) == 0)
 	return(eof_object);
@@ -94252,12 +94215,7 @@ static void mark_holdee(s7_pointer holder, s7_pointer holdee, const char *root)
 {
   holdee->holders++;
   if (holder) holdee->holder = holder;
-  if (root) 
-    {
-      if ((holder) && (is_pair(holder)))
-	for (s7_pointer p = holder; is_pair(p) && (!(p->root)); p = cdr(p)) {p->root = root; car(p)->root = root;}
-      holdee->root = root;
-    }
+  if (root) holdee->root = root;
 }
 
 static void mark_stack_holdees(s7_scheme *sc, s7_pointer p, s7_int top)
@@ -94631,6 +94589,35 @@ static s7_pointer g_is_op_stack(s7_scheme *sc, s7_pointer args)
   #define Q_is_op_stack s7_make_signature(sc, 1, sc->is_boolean_symbol)
   return(make_boolean(sc, (sc->op_stack < sc->op_stack_now)));
 }
+
+#if GC_STRINGS_DEBUGGING
+static void describe_gc_strings(s7_scheme *sc)
+{
+  gc_list_t *gp = sc->strings;
+  fprintf(stderr, "--------------------------------------------------------------------------------\n");
+  s7_heap_analyze(sc);
+  fprintf(stderr, "strings: %" ld64 "\n", gp->loc);
+  /* s7_heap_scan(sc, T_STRING); */
+  
+  for (s7_int i = 0; i < gp->loc; i++)
+    {
+      s7_pointer x = gp->list[i];
+      fprintf(stderr, "\"%s\" %p: holder: %p%s%s%s\"%s\", holders: %d, root: %s %d %d, %d %d\n", 
+	      string_value(x), x, 
+	      x->holder,
+	      (x->holder) ? " " : "",
+	      (x->holder) ? s7_type_names[type(x->holder)] : "", 
+	      (x->holder) ? " " : "",
+	      ((x->holder) && (is_slot(x->holder))) ? symbol_name(slot_symbol(x->holder)) : "",
+	      x->holders, x->root, 
+	      is_marked(x), in_heap(x),
+	      (x->holder) ? is_marked(x->holder) : -1, (x->holder) ? in_heap(x->holder) : -1);
+      if (i > 100) break;
+    }
+  fprintf(stderr, "--------------------------------------------------------------------------------\n");
+  gdb_break();
+}
+#endif
 #endif
 
 
@@ -98696,6 +98683,7 @@ int main(int argc, char **argv)
  * musl works, but there is some problem in libgsl.scm with gsl/gsl_blas.h I think
  *
  * valgrind --leak-check=full --show-reachable=no --suppressions=/home/bil/cl/free.supp repl s7test.scm
+ * addr2line -e repl 0xd7237 -> s7.c:29697
  */
 #endif
 #endif
@@ -98765,5 +98753,4 @@ int main(int argc, char **argv)
  * need some print-length/print-elements distinction for vector/pair etc [which to choose if both set?]
  * 73317 vars_opt_ok problem
  * if closure signature exists, add some way to have arg types checked by s7? (*s7* :check-signature?)
- * need to clear closure args if not in use (why are these gc marked?) and leave #f or #<unused>
  */
