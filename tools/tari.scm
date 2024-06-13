@@ -438,6 +438,7 @@
 
 (exptest)
 
+#|
 (fill! ratvals 0)
 (fill! cvals 0)
 (set! unzeros #f)
@@ -449,5 +450,6 @@
 (set! ivals1 #f)
 (set! ratvals #f)
 (set! cvals #f)
+|#
 
 (exit)

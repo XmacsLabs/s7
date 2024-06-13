@@ -11472,10 +11472,10 @@ Only the let is searched if ignore-globals is not #f."
   return((is_defined_global(sym)) ? sc->T : make_boolean(sc, is_slot(s7_slot(sc, sym))));
 }
 
-static s7_pointer g_is_defined_in_unlet(s7_scheme *sc, s7_pointer args) 
+static s7_pointer g_is_defined_in_unlet(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer sym = car(args);
-  if (!is_symbol(sym)) 
+  if (!is_symbol(sym))
     wrong_type_error_nr(sc, sc->is_defined_symbol, 1, car(args), a_symbol_string);
   return(make_boolean(sc, initial_value(sym) != sc->undefined));
 }
@@ -11484,7 +11484,7 @@ static s7_pointer g_is_defined_in_rootlet(s7_scheme *sc, s7_pointer args) /* aim
 {
   /* (defined? bigi1 (rootlet)) can be optimized to opt_p_call_sf */
   s7_pointer sym = car(args);
-  if (!is_symbol(sym)) 
+  if (!is_symbol(sym))
     wrong_type_error_nr(sc, sc->is_defined_symbol, 1, sym, a_symbol_string);
   return(make_boolean(sc, (is_slot(global_slot(sym))) && (global_value(sym) != sc->undefined)));
 }
@@ -11496,7 +11496,7 @@ static s7_pointer is_defined_chooser(s7_scheme *sc, s7_pointer f, int32_t args, 
       s7_pointer e = caddr(expr);
       if ((is_pair(e)) && (is_null(cdr(e))))
 	{
-	  if (car(e) == sc->rootlet_symbol) 
+	  if (car(e) == sc->rootlet_symbol)
 	    return(sc->is_defined_in_rootlet);
 	  if (car(e) == sc->unlet_symbol)
 	    {
@@ -80142,7 +80142,7 @@ static void check_set(s7_scheme *sc)
   else
     if (!is_symbol(settee))                                          /* (set! 12345 1) */
       error_nr(sc, sc->syntax_error_symbol,                          /* (set! #_abs 32) -> "error: set! can't change #_abs (a c-function)" */
-	       (is_c_function(settee)) ? set_elist_2(sc, wrap_string(sc, "set! can't change #_~S (a c-function)", 37), settee) : 
+	       (is_c_function(settee)) ? set_elist_2(sc, wrap_string(sc, "set! can't change #_~S (a c-function)", 37), settee) :
 	       set_elist_4(sc, wrap_string(sc, "set! can't change ~S (~A), ~S", 29), settee, sc->type_names[type(settee)], form));
 
     else
@@ -81471,7 +81471,16 @@ static goto_t set_implicit_let(s7_scheme *sc, s7_pointer let, s7_pointer inds, s
 	}
       push_stack(sc, OP_SET2, cdr(inds), val);
       sc->code = list_2(sc, let, car(inds));
-      return(goto_unopt);
+#if 1
+	    /* fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(sc->code)); */
+	    set_optimize_op(sc->code, OP_PAIR_ANY);        /* usually an error: (#\a) etc, might be (#(0) 0) */
+	    sc->value = let;
+	    return(goto_eval_args_top);
+	    /* TODO: this is unnecessary: continue at eval_args_top -> cdr(code)+push_op_stack+call eval_last_arg+ goto apply -> apply_let -> pop_stack + goto top_no_pop */
+#else
+	    /* fprintf(stderr, "%s[%d]: %s %s\n", __func__, __LINE__, display(sc->code), display(let)); */
+	    return(goto_unopt);
+#endif
     }
   if (symval)
     {
@@ -90467,55 +90476,6 @@ static bool eval_car_pair(s7_scheme *sc)
   return(false);
 }
 
-static goto_t trailers(s7_scheme *sc)
-{
-  s7_pointer code = T_Ext(sc->code);
-  if (SHOW_EVAL_OPS) fprintf(stderr, "  trailers %s\n", display_truncated(code));
-  set_current_code(sc, code);
-  if (is_pair(code))
-    {
-      s7_pointer carc = T_Ext(car(code));
-      if (is_symbol(carc))
-	{
-	  /* car is a symbol, sc->code a list */
-	  if (is_syntactic_symbol(carc))
-	    {
-	      sc->cur_op = (opcode_t)symbol_syntax_op_checked(code);
-	      pair_set_syntax_op(sc->code, sc->cur_op);
-	      return(goto_top_no_pop);
-	    }
-	  sc->value = lookup_global(sc, carc);
-	  set_optimize_op(code, OP_PAIR_SYM);	  /* mostly stuff outside functions (unopt) */
-	  return(goto_eval_args_top);
-	}
-      if (is_pair(carc))                          /* ((if x y z) a b) etc */
-	return((eval_car_pair(sc)) ? goto_top_no_pop : goto_eval);
-
-      /* here we can get syntax objects like quote */
-      if (is_syntax(carc))
-	{
-	  sc->cur_op = syntax_opcode(carc);
-	  pair_set_syntax_op(sc->code, sc->cur_op);
-	  return(goto_top_no_pop);
-	}
-      /* car must be the function to be applied, or (for example) a syntax variable like quote that has been used locally */
-      set_optimize_op(code, OP_PAIR_ANY);        /* usually an error: (#\a) etc, might be (#(0) 0) */
-      sc->value = carc;
-      return(goto_eval_args_top);
-    }
-  if (is_normal_symbol(code))
-    {
-      sc->value = lookup_checked(sc, code);
-      set_optimize_op(code, OP_SYMBOL);
-    }
-  else
-    {
-      sc->value = code;
-      set_optimize_op(code, OP_CONSTANT);
-    }
-  return(goto_start);
-}
-
 
 /* ---------------- reader funcs for eval ---------------- */
 static void back_up_stack(s7_scheme *sc)
@@ -93224,6 +93184,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_EVAL_ARGS5: op_eval_args5(sc); goto APPLY;
 
 	EVAL_ARGS_TOP:
+	  /* fprintf(stderr, "eval_args_top: code: %s\n", display(sc->code)); */
 	case OP_EVAL_ARGS:
 	  if (dont_eval_args(sc->value))
 	    {
@@ -93579,7 +93540,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	    case goto_top_no_pop: goto TOP_NO_POP;
 	    case goto_start:      continue;
 	    case goto_apply:      goto APPLY;
-	    case goto_unopt:      goto UNOPT;
+	    case goto_unopt:      /* fprintf(stderr, "op_set2 unopt: %s\n", display(sc->code)); */ goto UNOPT;
+	    case goto_eval_args_top: /* fprintf(stderr, "op_set2 eval_args_top: %s\n", display(sc->code)); */ goto EVAL_ARGS_TOP; /* temp */
 	    default:              goto EVAL_ARGS; /* goto_eval_args in funcs called by op_set2, unopt */
 	    }
 
@@ -93592,6 +93554,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	      case goto_top_no_pop: goto TOP_NO_POP;
 	      case goto_start:      continue;
 	      case goto_apply:      goto APPLY;
+	      case goto_eval_args_top: /* fprintf(stderr, "set_implicit[%d] eval_args_top: %s\n", __LINE__, display(sc->code)); */ goto EVAL_ARGS_TOP; /* temp */
 	      case goto_unopt:      goto UNOPT;
 	      default:              goto EVAL_ARGS; /* very common, op_unopt at this point */
 	      }
@@ -93608,6 +93571,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	      case goto_top_no_pop: goto TOP_NO_POP;
 	      case goto_start:      continue;
 	      case goto_apply:      goto APPLY;
+	      case goto_eval_args_top: /* fprintf(stderr, "set_implicit[%d] eval_args_top: %s\n", __LINE__, display(sc->code)); */ goto EVAL_ARGS_TOP; /* temp */
 	      case goto_unopt:      goto UNOPT;
 	      default:              goto EVAL_ARGS; /* unopt */
 	      }
@@ -94194,17 +94158,57 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
       /* this code is reached from OP_CLEAR_OPTS and many others where the optimization has turned out to be incorrect, OP_CLOSURE_SYM for example; search for break */
       if (!tree_is_cyclic(sc, sc->code))
 	clear_all_optimizations(sc, sc->code);
+
     UNOPT:
-      switch (trailers(sc))
-	{
-	case goto_top_no_pop:    goto TOP_NO_POP;
-	case goto_eval_args_top: goto EVAL_ARGS_TOP;
-	case goto_eval:          goto EVAL;
-	case goto_start:         continue; /* sc->value has been set, this is OP_SYMBOL|CONSTANT on the next pass */
-	default:
-	  if (S7_DEBUGGING) fprintf(stderr, "%s[%d]: unexpected switch default: %s\n", __func__, __LINE__, display(sc->code));
-	  break;
-	}}
+      {
+	s7_pointer code = T_Ext(sc->code);
+	if (SHOW_EVAL_OPS) fprintf(stderr, "  unopt trailers %s\n", display_truncated(code));
+	set_current_code(sc, code);
+	if (is_pair(code))
+	  {
+	    s7_pointer carc = T_Ext(car(code));
+	    if (is_symbol(carc))
+	      {
+		/* car is a symbol, sc->code a list */
+		if (is_syntactic_symbol(carc))
+		  {
+		    sc->cur_op = (opcode_t)symbol_syntax_op_checked(code);
+		    pair_set_syntax_op(sc->code, sc->cur_op);
+		    goto TOP_NO_POP;
+		  }
+		/* fprintf(stderr, "unopt line %d carc: %s, code: %s\n", __LINE__, display(carc), display(code)); */
+		sc->value = lookup_global(sc, carc);
+		set_optimize_op(code, OP_PAIR_SYM);	  /* mostly stuff outside functions (unopt) */
+		goto EVAL_ARGS_TOP;
+	      }
+	    if (is_pair(carc))                          /* ((if x y z) a b) etc */
+	      {
+		if (eval_car_pair(sc)) goto TOP_NO_POP;
+		goto EVAL;
+	      }
+	    if (is_syntax(carc)) /* here we can get syntax objects like quote */
+	      {
+		sc->cur_op = syntax_opcode(carc);
+		pair_set_syntax_op(sc->code, sc->cur_op);
+		goto TOP_NO_POP;
+	      }
+	    /* car must be the function to be applied, or (for example) a syntax variable like quote that has been used locally */
+	    /* fprintf(stderr, "at line %d %s\n", __LINE__, display(code)); */
+	    set_optimize_op(code, OP_PAIR_ANY);        /* usually an error: (#\a) etc, might be (#(0) 0) */
+	    sc->value = carc;
+	    goto EVAL_ARGS_TOP;
+	  }
+	if (is_normal_symbol(code))
+	  {
+	    sc->value = lookup_checked(sc, code);
+	    set_optimize_op(code, OP_SYMBOL);
+	  }
+	else
+	  {
+	    sc->value = code;
+	    set_optimize_op(code, OP_CONSTANT);
+	  }}} /* continue */
+
   return(sc->F); /* this never happens (make the compiler happy) */
 }
 
@@ -94598,18 +94602,18 @@ static void describe_gc_strings(s7_scheme *sc)
   s7_heap_analyze(sc);
   fprintf(stderr, "strings: %" ld64 "\n", gp->loc);
   /* s7_heap_scan(sc, T_STRING); */
-  
+
   for (s7_int i = 0; i < gp->loc; i++)
     {
       s7_pointer x = gp->list[i];
-      fprintf(stderr, "\"%s\" %p: holder: %p%s%s%s\"%s\", holders: %d, root: %s %d %d, %d %d\n", 
-	      string_value(x), x, 
+      fprintf(stderr, "\"%s\" %p: holder: %p%s%s%s\"%s\", holders: %d, root: %s %d %d, %d %d\n",
+	      string_value(x), x,
 	      x->holder,
 	      (x->holder) ? " " : "",
-	      (x->holder) ? s7_type_names[type(x->holder)] : "", 
+	      (x->holder) ? s7_type_names[type(x->holder)] : "",
 	      (x->holder) ? " " : "",
 	      ((x->holder) && (is_slot(x->holder))) ? symbol_name(slot_symbol(x->holder)) : "",
-	      x->holders, x->root, 
+	      x->holders, x->root,
 	      is_marked(x), in_heap(x),
 	      (x->holder) ? is_marked(x->holder) : -1, (x->holder) ? in_heap(x->holder) : -1);
       if (i > 100) break;
@@ -98694,34 +98698,34 @@ int main(int argc, char **argv)
  * tpeak      148    114    108    105    102    103
  * tref      1081    687    463    459    464    410
  * index            1016    973    967    972    971
- * tmock            1165   1057   1019   1032   1025
+ * tmock            1165   1057   1019   1032   1025  1018
  * tvect     3408   2464   1772   1669   1497   1454
  * tauto                   2562   2048   1729   1730
- * texit     1884   1950   1778   1741   1770   1769
+ * texit     1884   1950   1778   1741   1770   1767
  * s7test           1831   1818   1829   1830   1875  1862
  * lt        2222   2172   2150   2185   1950   1927  1909
  * dup              3788   2492   2239   2097   1996
  * thook     7651          2590   2030   2046   2009
- * tread            2421   2419   2408   2405   2260
+ * tread            2421   2419   2408   2405   2260  2246
  * tcopy            5546   2539   2375   2386   2341
  * titer     3657   2842   2641   2509   2449   2443
  * trclo     8031   2574   2454   2445   2449   2453
- * tmat             3042   2524   2578   2590   2523
- * tload                   3046   2404   2566   2529
+ * tmat             3042   2524   2578   2590   2523  2513
+ * tload                   3046   2404   2566   2529  2515
  * fbench    2933   2583   2460   2430   2478   2573
  * tsort     3683   3104   2856   2804   2858   2858
  * tio              3752   3683   3620   3583   3127
  * tobj             3970   3828   3577   3508   3452
  * teq              4045   3536   3486   3544   3595
- * tmac             3873   3033   3677   3677   3702
+ * tmac             3873   3033   3677   3677   3702  3614
  * tclo      6362   4735   4390   4384   4474   4345
- * tcase            4793   4439   4430   4439   4425
+ * tcase            4793   4439   4430   4439   4425  4420
  * tlet      11.0   6974   5609   5980   5965   4500
  * tfft             7729   4755   4476   4536   4544
  * tstar            5923   5519   4449   4550   4529
  * tmap             8774   4489   4541   4586   4590
  * tshoot           5447   5183   5055   5034   5060
- * tform            5348   5307   5316   5084   5098
+ * tform            5348   5307   5316   5084   5098  5105
  * tstr      10.0   6342   5488   5162   5180   5195
  * tnum             6013   5433   5396   5409   5432
  * tgsl             7802   6373   6282   6208   6181
@@ -98731,7 +98735,7 @@ int main(int argc, char **argv)
  * trec      19.5   6922   6521   6588   6583   6584
  * tleft     11.1   10.2   7657   7479   7627   7615
  * tmisc                          8142   7631   7687
- * tlamb                          8003   7941   7956
+ * tlamb                          8003   7941   7956  7930
  * tgc              11.1   8177   7857   7986   8012
  * thash            11.7   9734   9479   9526   9251
  * cb        12.9   11.0   9658   9564   9609   9654
@@ -98740,7 +98744,7 @@ int main(int argc, char **argv)
  * tall      15.9   15.6   15.6   15.6   15.1   15.1
  * timp             24.4   20.0   19.6   19.7   15.6
  * tmv              21.9   21.1   20.7   20.6   17.4
- * calls            37.5   37.0   37.5   37.1   37.3
+ * calls            37.5   37.0   37.5   37.1   37.2
  * sg                      55.9   55.8   55.4   55.4
  * tbig            175.8  156.5  148.1  146.2  146.1
  * --------------------------------------------------------------
@@ -98753,4 +98757,5 @@ int main(int argc, char **argv)
  * need some print-length/print-elements distinction for vector/pair etc [which to choose if both set?]
  * 73317 vars_opt_ok problem
  * if closure signature exists, add some way to have arg types checked by s7? (*s7* :check-signature?)
+ * goto_unopt expanded in place, 7 cases (4 actual) (let case started). check the 4 goto UNOPT cases too -- all will go away??
  */
