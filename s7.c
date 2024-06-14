@@ -11447,6 +11447,7 @@ Only the let is searched if ignore-globals is not #f."
       if (is_keyword(sym))                       /* if no "e", is global -> #t */
 	{                                        /* we're treating :x as 'x outside rootlet, but consider all keywords defined (as themselves) in rootlet? */
 	  if (e == sc->rootlet) return(sc->T);   /* (defined? x (rootlet)) where x value is a keyword */
+	  if (is_unlet(e)) return(make_boolean(sc, initial_value(sym) != sc->undefined));
 	  sym = keyword_symbol(sym);             /* (defined? :print-length *s7*) */
 	}
       if (e == sc->s7_starlet)
@@ -78046,7 +78047,7 @@ static bool op_let_temp_init1(s7_scheme *sc)
 typedef enum {goto_start, goto_begin, fall_through, goto_do_end_clauses, goto_safe_do_end_clauses,
 	      goto_eval, goto_apply_lambda, goto_do_end, goto_top_no_pop, goto_apply,
 	      goto_eval_args, goto_eval_args_top, goto_do_unchecked, goto_pop_read_list,
-	      goto_read_tok, goto_feed_to, goto_set_unchecked, goto_unopt} goto_t;
+	      goto_read_tok, goto_feed_to, goto_set_unchecked} goto_t;
 
 static goto_t op_let_temp_init2(s7_scheme *sc)
 {
@@ -80435,13 +80436,10 @@ static bool pair3_cfunc(s7_scheme *sc, s7_pointer obj, s7_pointer setf, s7_point
   if (!c_function_is_aritable(setf, 2))
     error_nr(sc, sc->wrong_number_of_args_symbol,
 	     set_elist_6(sc, wrap_string(sc, "set!: two arguments? (~A ~S ~S), ~A is (setter ~A)", 50), setf, arg, value, setf, obj));
-  if (!is_safe_procedure(setf)) /* if unsafe, we can't call c_function_call(setf) directly (need drop into eval+apply) */
-    {
-      sc->code = setf;
-      sc->args = list_2(sc, arg, value);
-      return(true); /* goto APPLY */
-    }
-  sc->value = c_function_call(setf)(sc, with_list_t2(arg, value));
+  if (!is_safe_procedure(setf))
+    sc->args = list_2(sc, arg, value);
+  else sc->args = with_list_t2(arg, value);
+  sc->value = c_function_call(setf)(sc, sc->args);
   return(false);
 }
 
@@ -80966,8 +80964,7 @@ static Inline bool inline_op_implicit_vector_ref_a(s7_scheme *sc) /* called once
   s7_pointer x, v = lookup_checked(sc, car(sc->code));
   if (!is_any_vector(v)) {sc->last_function = v; return(false);}
   x = fx_call(sc, cdr(sc->code));
-  if ((s7_is_integer(x)) &&
-      (vector_rank(v) == 1))
+  if ((s7_is_integer(x)) && (vector_rank(v) == 1))
     {
       s7_int index = s7_integer_clamped_if_gmp(sc, x);
       if ((index < vector_length(v)) && (index >= 0))
@@ -80985,8 +80982,7 @@ static s7_pointer fx_implicit_vector_ref_a(s7_scheme *sc, s7_pointer arg)
   if (!is_any_vector(v))
     return(s7_apply_function(sc, v, list_1(sc, fx_call(sc, cdr(arg)))));
   x = fx_call(sc, cdr(arg));
-  if ((s7_is_integer(x)) &&
-      (vector_rank(v) == 1))
+  if ((s7_is_integer(x)) && (vector_rank(v) == 1))
     {
       s7_int index = s7_integer_clamped_if_gmp(sc, x);
       if ((index < vector_length(v)) && (index >= 0))
@@ -81009,8 +81005,7 @@ static bool op_implicit_vector_ref_aa(s7_scheme *sc) /* if Inline 70 in concorda
   gc_protect_via_stack(sc, x);
   y = fx_call(sc, cdr(code));
   set_gc_protected2(sc, y);
-  if ((s7_is_integer(x)) && (s7_is_integer(y)) &&
-      (vector_rank(v) == 2))
+  if ((s7_is_integer(x)) && (s7_is_integer(y)) && (vector_rank(v) == 2))
     {
       s7_int ix = s7_integer_clamped_if_gmp(sc, x);
       s7_int iy = s7_integer_clamped_if_gmp(sc, y);
@@ -81106,7 +81101,10 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer ind
 	    }}
       push_stack(sc, OP_SET2, cdr(inds), val);
       sc->code = list_2(sc, vect, car(inds));
-      return(goto_unopt);
+
+      set_optimize_op(sc->code, OP_PAIR_ANY);        /* usually an error: (#\a) etc, might be (#(0) 0) */
+      sc->value = vect;
+      return(goto_eval_args_top);
     }
 
   if ((argnum > 1) || (vector_rank(vect) > 1))
@@ -81354,8 +81352,11 @@ static goto_t set_implicit_pair(s7_scheme *sc, s7_pointer lst, s7_pointer inds, 
 	  return(call_set_implicit(sc, obj, cdr(inds), val, form));
 	}
       push_stack(sc, OP_SET2, cdr(inds), val);            /* (let ((L (list (list 1 2 3)))) (set! (L (- (length L) 1) 2) 0) L) */
-      sc->code = list_2(sc, caadr(form), car(inds));
-      return(goto_unopt);
+      sc->code = list_2(sc, lst, car(inds));
+
+      set_optimize_op(sc->code, OP_PAIR_ANY);
+      sc->value = lst;
+      return(goto_eval_args_top);
     }
   if (index_val)
     {
@@ -81413,9 +81414,11 @@ static goto_t set_implicit_hash_table(s7_scheme *sc, s7_pointer table, s7_pointe
 	   */
 	  return(call_set_implicit(sc, obj, cdr(inds), val, form));
 	}
-      push_stack(sc, OP_SET2, cdr(inds), val); /* (let ((L (hash-table 'b (hash-table 'a 1)))) (set! (L (symbol "b") (symbol "a")) 0) L) */
-      sc->code = list_2(sc, caadr(form), key);  /* plist unsafe */
-      return(goto_unopt);
+      push_stack(sc, OP_SET2, cdr(inds), val);  /* (let ((L (hash-table 'b (hash-table 'a 1)))) (set! (L (symbol "b") (symbol "a")) 0) L) */
+      sc->code = list_2(sc, table, key);  /* plist unsafe */
+      set_optimize_op(sc->code, OP_PAIR_ANY);        /* usually an error: (#\a) etc, might be (#(0) 0) */
+      sc->value = table;
+      return(goto_eval_args_top);
     }
   if (keyval)
     {
@@ -81471,16 +81474,11 @@ static goto_t set_implicit_let(s7_scheme *sc, s7_pointer let, s7_pointer inds, s
 	}
       push_stack(sc, OP_SET2, cdr(inds), val);
       sc->code = list_2(sc, let, car(inds));
-#if 1
-	    /* fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(sc->code)); */
-	    set_optimize_op(sc->code, OP_PAIR_ANY);        /* usually an error: (#\a) etc, might be (#(0) 0) */
-	    sc->value = let;
-	    return(goto_eval_args_top);
-	    /* TODO: this is unnecessary: continue at eval_args_top -> cdr(code)+push_op_stack+call eval_last_arg+ goto apply -> apply_let -> pop_stack + goto top_no_pop */
-#else
-	    /* fprintf(stderr, "%s[%d]: %s %s\n", __func__, __LINE__, display(sc->code), display(let)); */
-	    return(goto_unopt);
-#endif
+
+      set_optimize_op(sc->code, OP_PAIR_ANY);
+      sc->value = let;
+      return(goto_eval_args_top);
+      /* TODO: this is unnecessary: continue at eval_args_top -> cdr(code)+push_op_stack+call eval_last_arg+ goto apply -> apply_let -> pop_stack + goto top_no_pop */
     }
   if (symval)
     {
@@ -84831,7 +84829,7 @@ static void apply_vector(s7_scheme *sc)                    /* -------- vector as
 {
   /* sc->code is the vector, sc->args is the list of indices */
   if (is_null(sc->args))                  /* (#2d((1 2) (3 4))) */
-    wrong_number_of_arguments_error_nr(sc, "implicit vector-ref nedes an index argument: (~A)", 49, sc->code);
+    wrong_number_of_arguments_error_nr(sc, "implicit vector-ref needs an index argument: (~A)", 49, sc->code);
   if ((is_null(cdr(sc->args))) &&
       (s7_is_integer(car(sc->args))) &&
       (vector_rank(sc->code) == 1))
@@ -93140,7 +93138,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_IMPLICIT_S7_STARLET_REF_S:  sc->value = s7_starlet(sc, opt3_int(sc->code)); continue;
 	case OP_IMPLICIT_S7_STARLET_SET:    sc->value = s7_starlet_set_1(sc, opt3_sym(sc->code), fx_call(sc, cddr(sc->code))); continue;
 
-	case OP_UNOPT:       goto UNOPT;
 	case OP_SYMBOL:      sc->value = lookup_checked(sc, sc->code);     continue;
 	case OP_CONSTANT:    sc->value = sc->code;                         continue;
 	case OP_PAIR_PAIR:   if (op_pair_pair(sc)) goto EVAL;              continue;         /* car is pair ((if x car cadr) ...) */
@@ -93184,7 +93181,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_EVAL_ARGS5: op_eval_args5(sc); goto APPLY;
 
 	EVAL_ARGS_TOP:
-	  /* fprintf(stderr, "eval_args_top: code: %s\n", display(sc->code)); */
 	case OP_EVAL_ARGS:
 	  if (dont_eval_args(sc->value))
 	    {
@@ -93540,8 +93536,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	    case goto_top_no_pop: goto TOP_NO_POP;
 	    case goto_start:      continue;
 	    case goto_apply:      goto APPLY;
-	    case goto_unopt:      /* fprintf(stderr, "op_set2 unopt: %s\n", display(sc->code)); */ goto UNOPT;
-	    case goto_eval_args_top: /* fprintf(stderr, "op_set2 eval_args_top: %s\n", display(sc->code)); */ goto EVAL_ARGS_TOP; /* temp */
+	    case goto_eval_args_top: goto EVAL_ARGS_TOP; /* temp */
 	    default:              goto EVAL_ARGS; /* goto_eval_args in funcs called by op_set2, unopt */
 	    }
 
@@ -93554,8 +93549,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	      case goto_top_no_pop: goto TOP_NO_POP;
 	      case goto_start:      continue;
 	      case goto_apply:      goto APPLY;
-	      case goto_eval_args_top: /* fprintf(stderr, "set_implicit[%d] eval_args_top: %s\n", __LINE__, display(sc->code)); */ goto EVAL_ARGS_TOP; /* temp */
-	      case goto_unopt:      goto UNOPT;
+	      case goto_eval_args_top: goto EVAL_ARGS_TOP; /* temp */
 	      default:              goto EVAL_ARGS; /* very common, op_unopt at this point */
 	      }
 	case OP_SET_NORMAL: if (op_set_normal(sc)) goto EVAL;
@@ -93571,8 +93565,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	      case goto_top_no_pop: goto TOP_NO_POP;
 	      case goto_start:      continue;
 	      case goto_apply:      goto APPLY;
-	      case goto_eval_args_top: /* fprintf(stderr, "set_implicit[%d] eval_args_top: %s\n", __LINE__, display(sc->code)); */ goto EVAL_ARGS_TOP; /* temp */
-	      case goto_unopt:      goto UNOPT;
+	      case goto_eval_args_top: goto EVAL_ARGS_TOP; /* temp */
 	      default:              goto EVAL_ARGS; /* unopt */
 	      }
 	  set_with_let_error_nr(sc);
@@ -94148,14 +94141,13 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_READ_FLOAT_VECTOR: if (op_read_float_vector(sc)) continue; goto POP_READ_LIST;
 	case OP_READ_BYTE_VECTOR:  if (op_read_byte_vector(sc)) continue;  goto POP_READ_LIST;
 
-	case OP_CLEAR_OPTS:
-	  break;
-
+	case OP_CLEAR_OPTS: break;
+	case OP_UNOPT: goto UNOPT;
 	default:
 	  return(sc->F);
 	}
 
-      /* this code is reached from OP_CLEAR_OPTS and many others where the optimization has turned out to be incorrect, OP_CLOSURE_SYM for example; search for break */
+      /* this code is reached from OP_CLEAR_OPTS and many others where the optimization has turned out to be incorrect, search for !c_function_is_ok -> break */
       if (!tree_is_cyclic(sc, sc->code))
 	clear_all_optimizations(sc, sc->code);
 
@@ -94176,7 +94168,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 		    pair_set_syntax_op(sc->code, sc->cur_op);
 		    goto TOP_NO_POP;
 		  }
-		/* fprintf(stderr, "unopt line %d carc: %s, code: %s\n", __LINE__, display(carc), display(code)); */
 		sc->value = lookup_global(sc, carc);
 		set_optimize_op(code, OP_PAIR_SYM);	  /* mostly stuff outside functions (unopt) */
 		goto EVAL_ARGS_TOP;
@@ -94192,8 +94183,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 		pair_set_syntax_op(sc->code, sc->cur_op);
 		goto TOP_NO_POP;
 	      }
-	    /* car must be the function to be applied, or (for example) a syntax variable like quote that has been used locally */
-	    /* fprintf(stderr, "at line %d %s\n", __LINE__, display(code)); */
+	    /* car is the function/sequence to be applied, or (for example) a syntax variable like quote that has been used locally */
 	    set_optimize_op(code, OP_PAIR_ANY);        /* usually an error: (#\a) etc, might be (#(0) 0) */
 	    sc->value = carc;
 	    goto EVAL_ARGS_TOP;
@@ -98757,5 +98747,5 @@ int main(int argc, char **argv)
  * need some print-length/print-elements distinction for vector/pair etc [which to choose if both set?]
  * 73317 vars_opt_ok problem
  * if closure signature exists, add some way to have arg types checked by s7? (*s7* :check-signature?)
- * goto_unopt expanded in place, 7 cases (4 actual) (let case started). check the 4 goto UNOPT cases too -- all will go away??
+ * set_let_implicit et al could be further optimized, but it's never called?
  */
