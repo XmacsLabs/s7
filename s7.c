@@ -10292,6 +10292,7 @@ static /* inline */ s7_pointer let_ref(s7_scheme *sc, s7_pointer let, s7_pointer
   /* (let ((a 1)) ((curlet) 'a)) or ((rootlet) 'abs) */
   if (!is_let(let))
     {
+      if (let == sc->unlet_disabled) return(initial_value(symbol));
       let = find_let(sc, let);
       if (!is_let(let))
 	wrong_type_error_nr(sc, sc->let_ref_symbol, 1, let, a_let_string);
@@ -10382,7 +10383,12 @@ static inline s7_pointer g_simple_let_ref(s7_scheme *sc, s7_pointer args)
   return(let_ref_p_pp(sc, let_outlet(lt), sym));
 }
 
-static s7_pointer g_rootlet_ref(s7_scheme *sc, s7_pointer args) {return(global_value(cadr(args)));}
+static s7_pointer g_rootlet_ref(s7_scheme *sc, s7_pointer args) 
+{
+  s7_pointer sym = cadr(args);
+  return((is_slot(global_slot(sym))) ? global_value(sym) : sc->undefined);
+}
+
 static s7_pointer g_unlet_ref(s7_scheme *sc, s7_pointer args) {return(initial_value(cadr(args)));}
 
 static s7_pointer let_ref_chooser(s7_scheme *sc, s7_pointer f, int32_t unused_args, s7_pointer expr)
@@ -10701,7 +10707,7 @@ static s7_pointer outlet_p_p(s7_scheme *sc, s7_pointer let)
   return((let == sc->rootlet) ? sc->rootlet : let_outlet(let)); /* rootlet check is needed(!) */
 }
 
-static s7_pointer g_unlet_disabled(s7_scheme *sc, s7_pointer args) {return(sc->F);}
+static s7_pointer g_unlet_disabled(s7_scheme *sc, s7_pointer args) {return(sc->unlet_disabled);} /* we need a self-id here for let_ref */
 static s7_pointer g_outlet_unlet(s7_scheme *sc, s7_pointer args) {return(sc->curlet);}
 
 static s7_pointer g_outlet(s7_scheme *sc, s7_pointer args)
