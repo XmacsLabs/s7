@@ -57,7 +57,7 @@
  *
  * naming conventions: s7_* usually are C accessible (s7.h), g_* are scheme accessible,
  *   H_* are documentation strings, Q_* are procedure signatures, scheme "?" corresponds to C "is_", scheme "->" to C "_to_",
- *   *_1 are ancillary functions, big_* refer to gmp, *_nr means no return, inline_* means always-inline.
+ *   *_1 are ancillary functions, big_* refer to gmp, *_nr means no return, Inline means always-inline.
  *
  * ---------------- compile time switches ----------------
  */
@@ -58611,8 +58611,8 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	    }}
       if (cadr(p) == var2)
 	{
-	  if (fx_proc(tree) == fx_num_eq_ss) return(with_fx(tree, (caddr(p) == var1) ? fx_num_eq_ut : fx_num_eq_us));
 	  if (fx_proc(tree) == fx_geq_ss) return(with_fx(tree, fx_geq_us));
+	  if (fx_proc(tree) == fx_num_eq_ss) return(with_fx(tree, (caddr(p) == var1) ? fx_num_eq_ut : fx_num_eq_us));
 	  if (fx_proc(tree) == fx_add_ss) return(with_fx(tree, (caddr(p) == var1) ? fx_add_ut : ((caddr(p) == var3) ? fx_add_uv : fx_add_us)));
 	  if (fx_proc(tree) == fx_subtract_ss) return(with_fx(tree, (caddr(p) == var1) ? fx_subtract_ut : fx_subtract_us));
 	  if (caddr(p) == var3) return(with_fx(tree, fx_c_uv));
@@ -58934,19 +58934,22 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
       break;
 
     case HOP_SAFE_C_opSSq_S:
-      if (fx_proc(tree) == fx_vref_vref_ss_s)
-	{
-	  if ((caddr(p) == var1) && (is_defined_global(cadadr(p))))
-	    {
-	      if ((!more_vars) && (o_var_ok(caddadr(p), var1, var2, var3))) return(with_fx(tree, fx_vref_vref_go_t));
-	      return(with_fx(tree, fx_vref_vref_gs_t));
-	    }
-	  if ((cadadr(p) == var1) && (caddadr(p) == var2) && (caddr(p) == var3)) return(with_fx(tree, fx_vref_vref_tu_v));
-	}
-      if ((fx_proc(tree) == fx_gt_add_s) && (cadadr(p) == var1) && (caddadr(p) == var2))
-	return(with_fx(tree, fx_gt_add_tu_s));
-      if ((fx_proc(tree) == fx_add_sub_s) && (cadadr(p) == var1) && (caddadr(p) == var2))
-	return(with_fx(tree, fx_add_sub_tu_s));
+      {
+	s7_pointer s1 = cadadr(p), s2 = caddadr(p), s3 = caddr(p);
+	if (fx_proc(tree) == fx_vref_vref_ss_s)
+	  {
+	    if ((s3 == var1) && (is_defined_global(s1)))
+	      {
+		if ((!more_vars) && (o_var_ok(s2, var1, var2, var3))) return(with_fx(tree, fx_vref_vref_go_t));
+		return(with_fx(tree, fx_vref_vref_gs_t));
+	      }
+	    if ((s1 == var1) && (s2 == var2) && (s3 == var3)) return(with_fx(tree, fx_vref_vref_tu_v));
+	  }
+	if ((fx_proc(tree) == fx_gt_add_s) && (s1 == var1) && (s2 == var2))
+	  return(with_fx(tree, fx_gt_add_tu_s));
+	if ((fx_proc(tree) == fx_add_sub_s) && (s1 == var1) && (s2 == var2))
+	  return(with_fx(tree, fx_add_sub_tu_s));
+      }
       break;
 
     case HOP_SAFE_C_S_opSSq:
@@ -81620,7 +81623,7 @@ static goto_t set_implicit_syntax(s7_scheme *sc, s7_pointer wlet)
 
 static goto_t call_set_implicit(s7_scheme *sc, s7_pointer obj, s7_pointer inds, s7_pointer val, s7_pointer form)
 {
-  /* these depend on sc->code making sense given obj as the sequence being set */
+  /* these depend on sc->code making sense given obj as the sequence being set (and 99% of these cases are handled elsewhere -- this is the eval fallback code) */
   switch (type(obj))
     {
     case T_STRING:     return(set_implicit_string(sc, obj, inds, val, form));
@@ -81646,10 +81649,10 @@ static goto_t call_set_implicit(s7_scheme *sc, s7_pointer obj, s7_pointer inds, 
       if (is_applicable(obj))
 	no_setter_error_nr(sc, obj); /* this is reachable if obj is a goto or continuation: (set! (go 1) 2) in s7test.scm */
       error_nr(sc, sc->no_setter_symbol,
-	       list_3(sc, wrap_string(sc, "in ~S, ~S has no setter", 23),
-		      cons_unchecked(sc, sc->set_symbol,       /* copy_tree(sc, form) also works but copies too much: we want to copy the ulists */
-				     cons(sc, copy_proper_list(sc, cadr(form)), cddr(form))),
-		      obj));
+	       set_elist_3(sc, wrap_string(sc, "in ~S, ~S has no setter", 23),
+			   cons_unchecked(sc, sc->set_symbol,       /* copy_tree(sc, form) also works but copies too much: we want to copy the ulists */
+					  cons(sc, copy_proper_list(sc, cadr(form)), cddr(form))),
+			   obj));
     }
   return(goto_top_no_pop);
 }
@@ -96035,7 +96038,7 @@ static void init_fx_function(void)
   fx_function[OP_TC_IF_A_Z_IF_A_Z_LAA] = fx_tc_if_a_z_if_a_z_laa;
   fx_function[OP_TC_COND_A_Z_A_Z_LAA] = fx_tc_cond_a_z_a_z_laa;
   fx_function[OP_TC_COND_A_Z_A_LAA_Z] = fx_tc_cond_a_z_a_laa_z;
-  fx_function[OP_TC_IF_A_Z_IF_A_L3A_L3A] = fx_tc_if_a_z_if_a_l3a_l3a;
+  fx_function[OP_TC_IF_A_Z_IF_A_L3A_L3A] = fx_tc_if_a_z_if_a_l3a_l3a; /* also op_tc_if_a_if_a_l3a_l3a_a */
   fx_function[OP_TC_CASE_LA] = fx_tc_case_la;
   fx_function[OP_TC_OR_A_AND_A_A_L3A] = fx_tc_or_a_and_a_a_l3a;
   fx_function[OP_TC_LET_IF_A_Z_LA] = fx_tc_let_if_a_z_la;
@@ -98728,7 +98731,7 @@ int main(int argc, char **argv)
  * tari      15.0   12.7   6827   6543   6278   6184
  * tlist     9219   7546   6558   6240   6300   6306
  * tset                           6260   6364   6303
- * trec      19.5   6922   6521   6588   6583   6584
+ * trec      19.6   6980   6599   6656   6658   6664
  * tleft     11.1   10.2   7657   7479   7627   7615
  * tmisc                          8142   7631   7687
  * tlamb                          8003   7941   7956  7930
@@ -98753,5 +98756,18 @@ int main(int argc, char **argv)
  * need some print-length/print-elements distinction for vector/pair etc [which to choose if both set?]
  * 73317 vars_opt_ok problem
  * if closure signature exists, add some way to have arg types checked by s7? (*s7* :check-signature?)
- * set_let_implicit et al could be further optimized, but it's never called?
+ *   (func . args) (dynamic-unwind reporter <data>) ...) -> calls (reporter <data> value) then returns value from func
+ *   so we'd need to insert an arg-checker and the dynamic-wind for the result into each function
+ *   currently make_closure calls add_profile or add_trace, so we'd need another option here -- make it user-settable?
+ *     (*s7* 'make-closure) -> passes body (and arglist? curlet?), returns result into make_closure?
+ *   currently: sc->debug_or_profile then sc->debug>1 -> add_trace else add_profile
+ *   (*s7* 'make-closure) could precede the debug/profile check (and be compatible with them)
+ *      user-inserted code: (dynamic-unwind check-result (car sig)) (check-args (cdr sig)) -- or just wrap in dynamic-unwind? [pass type|caller?]
+ *   or should these be hooks? or should all hooks be moved in to *s7* and handled as user-coded functions?
+ *   can c-functions/macros also be handled here (via wrapper functions)
+ *   others: (*s7* 'before|after-gc) stack-trace-function error-function (replace error-hook) (C/gdb)-backtrace-function
+ * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
+ * perhaps the l3a case can be done by moving the last expr to the first true branch, reversing the if op, and others similarly
+ * tmac.scm needs work, if mac involves no [undefined in rootlet?] free-vars and just returns a list [of safe-ops+args?] and is at rootlet -> expansion?
+ *   an expansion can be shadowed(?) -- maybe add not recursive above and not bacro
  */
