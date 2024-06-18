@@ -11130,7 +11130,7 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool named)
 {
   s7_pointer mac, body, mac_name = NULL;
   uint64_t typ;
-  if (SHOW_EVAL_OPS) fprintf(stderr, "  %s[%d]: %s\n", __func__, __LINE__, display_truncated(sc->code));
+  if (SHOW_EVAL_OPS) fprintf(stderr, "  %s[%d]: %d, %s\n", __func__, __LINE__, named, display_truncated(sc->code));
   switch (op)
     {
     case OP_DEFINE_MACRO:      case OP_MACRO:      typ = T_MACRO;      break;
@@ -11197,6 +11197,12 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool named)
 	  set_has_location(closure_body(mac));
 	}}
   /* passed to maclet in apply_macro et al, copied in copy_closure */
+
+  /* we can't add the T_EXPANSION bit ourselves if
+   *  ((mac_name) && (!is_bacro(mac_name)) && (!is_expansion(mac_name)) && (sc->curlet == sc->rootlet) && (is_global(mac_name)))
+   * because the user might reuse mac_name locally later, and our hidden expansion setting will cause the s7 reader to try to
+   * treat that reuse as a call of the original macro.
+   */
   return(mac);
 }
 
@@ -11214,8 +11220,8 @@ static s7_pointer make_closure_unchecked(s7_scheme *sc, s7_pointer args, s7_poin
   return(x);
 }
 
-static inline s7_pointer make_closure_gc_checked(s7_scheme *sc, s7_pointer args, s7_pointer code, uint64_t type, int32_t arity) /* inline 100=1% tgc, 35=2% texit */
-{
+static inline s7_pointer make_closure_gc_checked(s7_scheme *sc, s7_pointer args, s7_pointer code, uint64_t type, int32_t arity) /* inline 100>1% tgc, 35=2% texit */
+{ /* used in op_lambda_unchecked to avoid enormous call overhead if using make_closure */
   s7_pointer x;
   new_cell(sc, x, (type | closure_bits(code)));
   closure_set_args(x, args);
@@ -26915,6 +26921,7 @@ static s7_pointer wrap_string(s7_scheme *sc, const char *str, s7_int len)
   s7_pointer x = car(sc->string_wrappers);
 #if S7_DEBUGGING
   if ((full_type(x) & (~T_GC_MARK)) != (T_STRING | T_IMMUTABLE | T_UNHEAP | T_SAFE_PROCEDURE)) fprintf(stderr, "%s\n", describe_type_bits(sc, x));
+  /* if (safe_strlen(str) < len) {fprintf(stderr, "wrap_string \"%s\" length should be %" ld64 " not %" ld64 "\n", str, safe_strlen(str), len); gdb_break();} */
 #endif
   sc->string_wrappers = cdr(sc->string_wrappers);
   string_value(x) = (char *)str;
@@ -46062,7 +46069,7 @@ static s7_pointer g_procedure_arglist(s7_scheme *sc, s7_pointer args)
   if (has_closure_let(p)) return(closure_args(p));
   check_method(sc, p, sc->procedure_arglist_symbol, set_plist_1(sc, p));
   error_nr(sc, sc->wrong_type_arg_symbol,
-	   set_elist_2(sc, wrap_string(sc, "procedure-arglist argument, ~S, is not a function", 48), p));
+	   set_elist_2(sc, wrap_string(sc, "procedure-arglist argument, ~S, is not a function", 49), p));
   return(sc->nil); /* never hit */
 }
 
@@ -76236,13 +76243,13 @@ static s7_pointer check_case(s7_scheme *sc)
       s7_pointer y, car_x;
       if (!is_pair(car(x)))
 	error_nr(sc, sc->syntax_error_symbol,
-		 set_elist_3(sc, wrap_string(sc, "case clause ~S messed up in ~A", sc->print_length),
+		 set_elist_3(sc, wrap_string(sc, "case clause ~S messed up in ~A", 30),
 			     x, object_to_string_truncated(sc, form)));
       car_x = car(x);
 
       if (!is_list(cdr(car_x)))                                      /* (case 1 ((1))) */
 	error_nr(sc, sc->syntax_error_symbol,
-		 set_elist_3(sc, wrap_string(sc, "case clause result ~S is messed up in ~A", sc->print_length),
+		 set_elist_3(sc, wrap_string(sc, "case clause result ~S is messed up in ~A", 40),
 			     car_x, object_to_string_truncated(sc, form)));
       if ((bodies_simple) &&
 	  ((is_null(cdr(car_x))) || (!is_null(cddr(car_x)))))
@@ -98756,18 +98763,14 @@ int main(int argc, char **argv)
  * need some print-length/print-elements distinction for vector/pair etc [which to choose if both set?]
  * 73317 vars_opt_ok problem
  * if closure signature exists, add some way to have arg types checked by s7? (*s7* :check-signature?)
- *   (func . args) (dynamic-unwind reporter <data>) ...) -> calls (reporter <data> value) then returns value from func
- *   so we'd need to insert an arg-checker and the dynamic-wind for the result into each function
  *   currently make_closure calls add_profile or add_trace, so we'd need another option here -- make it user-settable?
- *     (*s7* 'make-closure) -> passes body (and arglist? curlet?), returns result into make_closure?
- *   currently: sc->debug_or_profile then sc->debug>1 -> add_trace else add_profile
+ *     (*s7* 'make-closure|procedure|function) -> passes body (and arglist? curlet? sig?), returns result into make_closure?
  *   (*s7* 'make-closure) could precede the debug/profile check (and be compatible with them)
- *      user-inserted code: (dynamic-unwind check-result (car sig)) (check-args (cdr sig)) -- or just wrap in dynamic-unwind? [pass type|caller?]
- *   or should these be hooks? or should all hooks be moved in to *s7* and handled as user-coded functions?
- *   can c-functions/macros also be handled here (via wrapper functions)
+ *   should all hooks be moved in to *s7* and handled as user-coded functions?
  *   others: (*s7* 'before|after-gc) stack-trace-function error-function (replace error-hook) (C/gdb)-backtrace-function
+ *   make-closure passed body+arg-list)+sig(?) (dynamic-wind (lambda () check arg-list via cdr(sig)) (lambda () get result) (lambda () check result via car(sig)))
+ *   +signature+ if any must be in the local let at call -- accessible if curlet passed?
+ *   in C, if (sc->make_closure_function) body = s7_apply_function(it, set_plist_3(arg-list, body, curlet)
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * perhaps the l3a case can be done by moving the last expr to the first true branch, reversing the if op, and others similarly
- * tmac.scm needs work, if mac involves no [undefined in rootlet?] free-vars and just returns a list [of safe-ops+args?] and is at rootlet -> expansion?
- *   an expansion can be shadowed(?) -- maybe add not recursive above and not bacro
  */
