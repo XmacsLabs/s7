@@ -10811,7 +10811,7 @@
 					history-size profile profile-info profile-prefix autoloading? accept-all-keyword-arguments
 					muffle-warnings? most-positive-fixnum most-negative-fixnum output-port-data-size debug version
 					gc-temps-size gc-resize-heap-fraction gc-resize-heap-by-4-fraction openlets expansions?
-					number-separator symbol-quote? symbol-printer))
+					number-separator symbol-quote? symbol-printer make-function))
 			    h)))
 	   (lambda (caller head form env)
 	     (if (len=2? form)

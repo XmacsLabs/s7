@@ -1162,7 +1162,7 @@ struct s7_scheme {
   s7_double default_rationalize_error, equivalent_float_epsilon, hash_table_float_epsilon;
   s7_int default_hash_table_length, initial_string_port_length, print_length, objstr_max_len, history_size, true_history_size, output_file_port_data_size;
   s7_int max_vector_length, max_string_length, max_list_length, max_vector_dimensions, max_format_length, max_port_data_size, rec_loc, rec_len, show_stack_limit;
-  s7_pointer stacktrace_defaults, symbol_printer;
+  s7_pointer stacktrace_defaults, symbol_printer, make_function;
 
   s7_pointer rec_stack, rec_testp, rec_f1p, rec_f2p, rec_f3p, rec_f4p, rec_f5p, rec_f6p, rec_f7p, rec_f8p, rec_f9p;
   s7_pointer rec_resp, rec_slot1, rec_slot2, rec_slot3, rec_p1, rec_p2;
@@ -4628,7 +4628,7 @@ typedef enum {SL_NO_FIELD=0, SL_ACCEPT_ALL_KEYWORD_ARGUMENTS, SL_AUTOLOADING, SL
 	      SL_EXPANSIONS, SL_FILENAMES, SL_FILE_NAMES, SL_FLOAT_FORMAT_PRECISION, SL_FREE_HEAP_SIZE, SL_GC_FREED, SL_GC_INFO,
 	      SL_GC_PROTECTED_OBJECTS, SL_GC_RESIZE_HEAP_BY_4_FRACTION, SL_GC_RESIZE_HEAP_FRACTION, SL_GC_STATS, SL_GC_TEMPS_SIZE,
 	      SL_GC_TOTAL_FREED, SL_HASH_TABLE_FLOAT_EPSILON, SL_HEAP_SIZE, SL_HISTORY, SL_HISTORY_ENABLED, SL_HISTORY_SIZE,
-	      SL_INITIAL_STRING_PORT_LENGTH, SL_MAJOR_VERSION, SL_MAX_FORMAT_LENGTH, SL_MAX_HEAP_SIZE, SL_MAX_LIST_LENGTH,
+	      SL_INITIAL_STRING_PORT_LENGTH, SL_MAJOR_VERSION, SL_MAKE_FUNCTION, SL_MAX_FORMAT_LENGTH, SL_MAX_HEAP_SIZE, SL_MAX_LIST_LENGTH,
 	      SL_MAX_PORT_DATA_SIZE, SL_MAX_STACK_SIZE, SL_MAX_STRING_LENGTH, SL_MAX_VECTOR_DIMENSIONS, SL_MAX_VECTOR_LENGTH,
 	      SL_MEMORY_USAGE, SL_MINOR_VERSION, SL_MOST_NEGATIVE_FIXNUM, SL_MOST_POSITIVE_FIXNUM, SL_MUFFLE_WARNINGS,
 	      SL_NUMBER_SEPARATOR, SL_OPENLETS, SL_OUTPUT_FILE_PORT_DATA_SIZE, SL_PRINT_LENGTH, SL_PROFILE, SL_PROFILE_INFO,
@@ -4642,7 +4642,7 @@ static const char *s7_starlet_names[SL_NUM_FIELDS] =
    "expansions?", "filenames", "file-names", "float-format-precision", "free-heap-size", "gc-freed", "gc-info",
    "gc-protected-objects", "gc-resize-heap-by-4-fraction", "gc-resize-heap-fraction", "gc-stats", "gc-temps-size",
    "gc-total-freed", "hash-table-float-epsilon", "heap-size", "history", "history-enabled", "history-size",
-   "initial-string-port-length", "major-version", "max-format-length", "max-heap-size", "max-list-length",
+   "initial-string-port-length", "major-version", "make-function", "max-format-length", "max-heap-size", "max-list-length",
    "max-port-data-size", "max-stack-size", "max-string-length", "max-vector-dimensions", "max-vector-length",
    "memory-usage", "minor-version", "most-negative-fixnum", "most-positive-fixnum", "muffle-warnings?",
    "number-separator", "openlets", "output-port-data-size", "print-length", "profile", "profile-info",
@@ -7629,6 +7629,7 @@ static int64_t gc(s7_scheme *sc)
   set_mark(sc->protected_setter_symbols);
   if ((is_symbol(sc->profile_prefix)) && (is_gensym(sc->profile_prefix))) set_mark(sc->profile_prefix);
   gc_mark(sc->symbol_printer);
+  gc_mark(sc->make_function);
 
   /* protect recent allocations using the free_heap cells above the current free_heap_top (if any).
    * cells above sc->free_heap_top might be malloc'd garbage (after heap reallocation), so we keep track of
@@ -11234,6 +11235,18 @@ static inline s7_pointer make_closure_gc_checked(s7_scheme *sc, s7_pointer args,
   return(x);
 }
 
+static s7_pointer eval(s7_scheme *sc, opcode_t first_op);
+
+static s7_pointer sl_make_function(s7_scheme *sc, s7_pointer args, s7_pointer code)
+{
+  push_stack_direct(sc, OP_EVAL_DONE);
+  sc->code = sc->make_function;
+  sc->args = set_plist_2(sc, args, code);
+  set_curlet(sc, make_let(sc, closure_let(sc->make_function)));
+  eval(sc, OP_APPLY_LAMBDA);
+  return(sc->value);
+}
+
 static s7_pointer make_closure(s7_scheme *sc, s7_pointer args, s7_pointer code, uint64_t type, int32_t arity)
 {
   /* this is called (almost?) every time a lambda form is evaluated, or during letrec, etc */
@@ -11243,10 +11256,16 @@ static s7_pointer make_closure(s7_scheme *sc, s7_pointer args, s7_pointer code, 
   closure_set_let(x, sc->curlet);
   closure_set_setter(x, sc->F);
   closure_set_arity(x, arity);
-  closure_set_body(x, code);           /* in case add_trace triggers GC, new func (x) needs some legit body for mark_closure */
+  closure_set_body(x, code);                /* in case add_trace or make-function triggers GC, new func (x) needs some legit body for mark_closure */
+  if (sc->make_function != sc->F)
+    {
+      gc_protect_via_stack(sc, x);          /* GC protect func during (*s7* 'make-function) */
+      closure_set_body(x, sl_make_function(sc, args, code));
+      unstack_gc_protect(sc);
+    }
   if (sc->debug_or_profile)
     {
-      gc_protect_via_stack(sc, x);     /* GC protect func during add_trace */
+      gc_protect_via_stack(sc, x);          /* GC protect func during add_trace */
       closure_set_body(x, (sc->debug > 1) ? add_trace(sc, code) : add_profile(sc, code));
       set_closure_has_multiform(x);
       unstack_gc_protect(sc);
@@ -30730,8 +30749,6 @@ static s7_pointer g_read_string(s7_scheme *sc, s7_pointer args)
     jump_loc = (jump_loc_t)SetJmp(new_goto_start, 1);	\
     Sc->goto_start = &new_goto_start;		\
   } while (0)
-
-static s7_pointer eval(s7_scheme *sc, opcode_t first_op);
 
 s7_pointer s7_read(s7_scheme *sc, s7_pointer port)
 {
@@ -95182,6 +95199,7 @@ static s7_pointer s7_starlet(s7_scheme *sc, s7_int choice)
     case SL_INITIAL_STRING_PORT_LENGTH:    return(make_integer(sc, sc->initial_string_port_length));
     case SL_MAJOR_VERSION:                 return(make_integer(sc, S7_MAJOR_VERSION));
     case SL_MINOR_VERSION:                 return(make_integer(sc, S7_MINOR_VERSION));
+    case SL_MAKE_FUNCTION:                 return(sc->make_function);
     case SL_MAX_FORMAT_LENGTH:             return(make_integer(sc, sc->max_format_length));
     case SL_MAX_HEAP_SIZE:                 return(make_integer(sc, sc->max_heap_size));
     case SL_MAX_LIST_LENGTH:               return(make_integer(sc, sc->max_list_length));
@@ -95587,6 +95605,15 @@ static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val
     case SL_MAJOR_VERSION:
     case SL_MINOR_VERSION:
       sl_unsettable_error_nr(sc, sym);
+
+    case SL_MAKE_FUNCTION:
+      if ((!is_any_procedure(val)) && (val != sc->F)) 
+	s7_starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "a procedure or #f", 17));
+      if ((is_any_procedure(val)) && (!s7_is_aritable(sc, val, 2)))
+	error_nr(sc, sc->wrong_type_arg_symbol,
+		 set_elist_2(sc, wrap_string(sc, "(*s7* 'make-function) function, ~A, should take two arguments", 61), val));
+      sc->make_function = val;
+      return(val);
 
     case SL_MAX_FORMAT_LENGTH:     sc->max_format_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));     return(val);
     case SL_MAX_HEAP_SIZE:         sc->max_heap_size = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));         return(val);
@@ -98073,6 +98100,7 @@ s7_scheme *s7_init(void)
   sc->syms_tag = 0;
   sc->syms_tag2 = 0;
   sc->symbol_printer = sc->F;
+  sc->make_function = sc->F;
   sc->class_name_symbol = make_symbol(sc, "class-name", 10);
   sc->name_symbol = make_symbol(sc, "name", 4);
   sc->trace_in_symbol = make_symbol(sc, "trace-in", 8);
@@ -98253,6 +98281,7 @@ s7_scheme *s7_init(void)
 					"*rootlet-redefinition-hook* functions are called when a top-level variable's value is changed, (hook 'name 'value).");
 
   sc->let_temp_hook = s7_eval_c_string(sc, "(make-hook 'type 'data)");
+  /* this is saving error-hook functions across an evaluation where error-hook is temporarily nil -- do we actually need a hook for this? */
 
   s7_eval_c_string(sc, "(define-expansion (reader-cond . clauses)                                         \n\
                           (if (null? clauses)                                                             \n\
@@ -98762,15 +98791,9 @@ int main(int argc, char **argv)
  *   currently sc->s7_starlet is a let (make_s7_starlet) using g_s7_let_ref_fallback, so it assumes print-length above is undefined
  * need some print-length/print-elements distinction for vector/pair etc [which to choose if both set?]
  * 73317 vars_opt_ok problem
- * if closure signature exists, add some way to have arg types checked by s7? (*s7* :check-signature?)
- *   currently make_closure calls add_profile or add_trace, so we'd need another option here -- make it user-settable?
- *     (*s7* 'make-closure|procedure|function) -> passes body (and arglist? curlet? sig?), returns result into make_closure?
- *   (*s7* 'make-closure) could precede the debug/profile check (and be compatible with them)
- *   should all hooks be moved in to *s7* and handled as user-coded functions?
- *   others: (*s7* 'before|after-gc) stack-trace-function error-function (replace error-hook) (C/gdb)-backtrace-function
- *   make-closure passed body+arg-list)+sig(?) (dynamic-wind (lambda () check arg-list via cdr(sig)) (lambda () get result) (lambda () check result via car(sig)))
- *   +signature+ if any must be in the local let at call -- accessible if curlet passed?
- *   in C, if (sc->make_closure_function) body = s7_apply_function(it, set_plist_3(arg-list, body, curlet)
+ * should all hooks be moved in to *s7* and handled as simple functions?
+ *   the hook notion is far more complexity than we need, and can be implemented elsewhere if desired
+ *   others like make-function: (*s7* after-gc stack-trace-function error-function (replace error-hook?)
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * perhaps the l3a case can be done by moving the last expr to the first true branch, reversing the if op, and others similarly
  */
