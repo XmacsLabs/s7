@@ -98281,7 +98281,7 @@ s7_scheme *s7_init(void)
 					"*rootlet-redefinition-hook* functions are called when a top-level variable's value is changed, (hook 'name 'value).");
 
   sc->let_temp_hook = s7_eval_c_string(sc, "(make-hook 'type 'data)");
-  /* this is saving error-hook functions across an evaluation where error-hook is temporarily nil -- do we actually need a hook for this? */
+  /* internal; this is saving error-hook functions across an evaluation where error-hook is temporarily nil -- do we actually need a hook for this? */
 
   s7_eval_c_string(sc, "(define-expansion (reader-cond . clauses)                                         \n\
                           (if (null? clauses)                                                             \n\
@@ -98796,4 +98796,5 @@ int main(int argc, char **argv)
  *   others like make-function: (*s7* after-gc stack-trace-function error-function (replace error-hook?)
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * perhaps the l3a case can be done by moving the last expr to the first true branch, reversing the if op, and others similarly
+ * t101-13 symbol-initial-value of keyword 8159 ff, why isn't equivalent #t in (eg) t101-14 37161, t101-32 new oddities
  */

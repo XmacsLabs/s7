@@ -5900,6 +5900,8 @@ list will have the entry 'number-separator if s7 was compiled with WITH_NUMBER_S
 
 <p>(*s7* 'symbol-printer) is invoked by object-&gt;string when it has to print a symbol whose
 name can normally only be handled by the <a href="#weirdsymbols">symbol</a> function.
+(*s7* 'make-function) is a function called when a Scheme function is created.  It is aimed
+at argument type checks and so on.  See s7test.scm for examples.
 </p>
 
 
