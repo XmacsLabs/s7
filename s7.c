@@ -7544,7 +7544,7 @@ static int64_t gc(s7_scheme *sc)
 
   gc_mark(sc->code);
   if ((S7_DEBUGGING) && (!(sc->args))) {fprintf(stderr, "%d: sc->args is NULL\n", __LINE__); if (sc->stop_at_error) abort();}
-  /* if (sc->args) */ gc_mark(sc->args);
+  gc_mark(sc->args);
   gc_mark(sc->curlet);   /* not mark_let because op_any_closure_3p uses sc->curlet as a temp!! */
   mark_current_code(sc); /* probably redundant if with_history */
   gc_mark(sc->value);
@@ -90513,10 +90513,7 @@ static void back_up_stack(s7_scheme *sc)
       pop_stack(sc);
       top_op = stack_top_op(sc);
     }
-  if ((top_op == OP_READ_VECTOR) ||
-      (top_op == OP_READ_BYTE_VECTOR) ||
-      (top_op == OP_READ_INT_VECTOR) ||
-      (top_op == OP_READ_FLOAT_VECTOR))
+  if ((top_op == OP_READ_VECTOR) || (top_op == OP_READ_BYTE_VECTOR) || (top_op == OP_READ_INT_VECTOR) || (top_op == OP_READ_FLOAT_VECTOR))
    {
       pop_stack(sc);
       top_op = stack_top_op(sc);
@@ -98796,16 +98793,13 @@ int main(int argc, char **argv)
  * (define print-length (list 1 2)) (define (f) (with-let *s7* (+ print-length 1))) (display (f)) (newline) -- need a placeholder-let (or actual let) for *s7*?
  *   so (with-let *s7* ...) would make a let with whatever *s7* entries are needed? -> (let ((print-length (*s7* 'print-length))) ...)
  *   currently sc->s7_starlet is a let (make_s7_starlet) using g_s7_let_ref_fallback, so it assumes print-length above is undefined
+ *   check_with_let could notice cadr=sc->s7_starlet_symbol, op_with_starlet?, with_let_s also does notice it but here global_value is wrong
  * need some print-length/print-elements distinction for vector/pair etc [which to choose if both set?]
  * 73317 vars_opt_ok problem
  * should all hooks be moved in to *s7* and handled as simple functions?
- *   the hook notion is far more complexity than we need, and can be implemented elsewhere if desired
- *   others like make-function: after-gc stack-trace-function error-function (replace error-hook?)
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
+ * safe_closure_s_na (and others)? safe_closure_star_aa_a from _o(?) op_tc_if_a_a_if_a_a_l3a (tfib(*))
  * perhaps the l3a case can be done by moving the last expr to the first true branch, reversing the if op, and others similarly
- * t101-13 symbol-initial-value of keyword 8159 ff, why isn't equivalent #t in (eg) t101-14 37161, t101-32 new oddities
  * t801 make-function: funcize the arg part, use dyn-unwind for result?? [like add_trace]
  * error-hook as function, temp_error_hook as function: does error-hook work at all? (not clear any s7tests are correct -- 23 refs)
- *    error-hook is called 16548 but is ignored??
- * check make-function via rest arg symbol? integer?... with 0/1/2/(3?) req args
  */
