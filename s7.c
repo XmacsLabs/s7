@@ -4375,7 +4375,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_TC_WHEN_LA, OP_TC_WHEN_LAA, OP_TC_WHEN_L3A, OP_TC_LET_WHEN_LAA, OP_TC_LET_UNLESS_LAA,
       OP_TC_COND_A_Z_A_Z_LAA, OP_TC_COND_A_Z_A_LAA_Z, OP_TC_COND_A_Z_A_LAA_LAA, OP_TC_LET_COND,
       OP_TC_IF_A_Z_LA, OP_TC_IF_A_Z_LAA, OP_TC_IF_A_Z_L3A, OP_TC_IF_A_L3A_Z, OP_TC_IF_A_LA_Z, OP_TC_IF_A_LAA_Z,
-      OP_TC_IF_A_Z_IF_A_Z_LA, OP_TC_IF_A_Z_IF_A_LA_Z, OP_TC_IF_A_Z_IF_A_Z_LAA, OP_TC_IF_A_Z_IF_A_LAA_Z, OP_TC_IF_A_Z_IF_A_L3A_L3A,
+      OP_TC_IF_A_Z_IF_A_Z_LA, OP_TC_IF_A_Z_IF_A_LA_Z, OP_TC_IF_A_Z_IF_A_Z_LAA, OP_TC_IF_A_Z_IF_A_LAA_Z, OP_TC_IF_A_Z_IF_A_Z_L3A, OP_TC_IF_A_Z_IF_A_L3A_L3A,
       OP_TC_COND_A_Z_A_Z_LA, OP_TC_COND_A_Z_A_LA_Z, OP_TC_COND_A_Z_LA, OP_TC_COND_A_LA_Z, OP_TC_COND_A_Z_LAA, OP_TC_COND_A_LAA_Z,
       OP_TC_LET_IF_A_Z_LA, OP_TC_LET_IF_A_Z_LAA, OP_TC_IF_A_Z_LET_IF_A_Z_LAA,
       OP_TC_CASE_LA, OP_TC_AND_A_IF_A_Z_LA, OP_TC_AND_A_IF_A_LA_Z,
@@ -4589,7 +4589,7 @@ static const char* op_names[NUM_OPS] =
       "tc_when_la", "tc_when_laa", "tc_when_l3a", "tc_let_when_laa", "tc_let_unless_laa",
       "tc_cond_a_z_a_z_laa", "tc_cond_a_z_a_laa_z", "tc_cond_a_z_a_laa_laa", "tc_let_cond",
       "tc_if_a_z_la", "tc_if_a_z_laa", "tc_if_a_z_l3a", "tc_if_a_l3a_z", "tc_if_a_la_z", "tc_if_a_laa_z",
-      "tc_if_a_z_if_a_z_la", "tc_if_a_z_if_a_la_z", "tc_if_a_z_if_a_z_laa", "tc_if_a_z_if_a_laa_z", "tc_if_a_z_if_a_l3a_l3a",
+      "tc_if_a_z_if_a_z_la", "tc_if_a_z_if_a_la_z", "tc_if_a_z_if_a_z_laa", "tc_if_a_z_if_a_laa_z", "tc_if_a_z_if_a_z_l3a", "tc_if_a_z_if_a_l3a_l3a",
       "tc_cond_a_z_a_z_la", "tc_cond_a_z_a_la_z", "tc_cond_a_z_la", "tc_cond_a_la_z", "tc_cond_a_z_laa", "tc_cond_a_laa_z",
       "tc_let_if_a_z_la", "tc_let_if_a_z_laa", "if_a_z_let_if_a_z_laa",
       "tc_case_la", "tc_and_a_if_a_z_la", "tc_and_a_if_a_la_z",
@@ -9660,8 +9660,6 @@ static s7_pointer g_openlet(s7_scheme *sc, s7_pointer args)
   #define Q_openlet sc->pcl_e
 
   s7_pointer e = car(args), elet, func;
-  if (e == sc->nil)
-    error_nr(sc, sc->out_of_range_symbol, set_elist_1(sc, wrap_string(sc, "can't openlet nil", 17)));
   elet = find_let(sc, e); /* returns nil if no let found, so has to follow error check above */
   if (!is_let(elet))
     sole_arg_wrong_type_error_nr(sc, sc->openlet_symbol, e, a_let_string);
@@ -9785,22 +9783,20 @@ static s7_pointer g_varlet(s7_scheme *sc, s7_pointer args)   /* varlet = with-le
 {
   #define H_varlet "(varlet target-let ...) adds its arguments (a let, a cons: symbol . value, or two arguments, the symbol and its value) \
 to the let target-let, and returns target-let.  (varlet (curlet) 'a 1) adds 'a to the current environment with the value 1."
-  #define Q_varlet s7_make_circular_signature(sc, 2, 4, sc->is_let_symbol, \
-                     s7_make_signature(sc, 2, sc->is_let_symbol, sc->is_null_symbol), \
+  #define Q_varlet s7_make_circular_signature(sc, 2, 4, sc->is_let_symbol, sc->is_let_symbol, \
                        s7_make_signature(sc, 3, sc->is_pair_symbol, sc->is_symbol_symbol, sc->is_let_symbol), \
                          sc->T)
-
   s7_pointer e = car(args);
-  if (is_null(e)) /* PERHAPS: this is a leftover from the days when () -> rootlet -- remove? */
-    e = sc->rootlet;
-  else
+
+  if (e != sc->rootlet)
     {
       check_method(sc, e, sc->varlet_symbol, args);
       if (!is_let(e))
 	wrong_type_error_nr(sc, sc->varlet_symbol, 1, e, a_let_string);
-      if ((is_immutable_let(e)) || (e == sc->s7_starlet))
-	immutable_object_error_nr(sc, set_elist_3(sc, wrap_string(sc, "can't (varlet ~{~S~^ ~}), ~S is immutable", 41), args, e));
     }
+  if ((is_immutable_let(e)) || (e == sc->s7_starlet))
+    immutable_object_error_nr(sc, set_elist_3(sc, wrap_string(sc, "can't (varlet ~{~S~^ ~}), ~S is immutable", 41), args, e));
+
   for (s7_pointer x = cdr(args); is_pair(x); x = cdr(x))
     {
       s7_pointer sym, val, p = car(x);
@@ -9868,16 +9864,15 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
 
   s7_pointer e = car(args);
   s7_int the_un_id;
-  if (is_null(e))
-    e = sc->rootlet; /* PERHAPS: this is a leftover from the days when () -> rootlet -- remove? */
-  else
+  if (e != sc->rootlet)
     {
       check_method(sc, e, sc->cutlet_symbol, args);
       if (!is_let(e))
 	wrong_type_error_nr(sc, sc->cutlet_symbol, 1, e, a_let_string);
-      if ((is_immutable_let(e)) || (e == sc->s7_starlet))
-	immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->cutlet_symbol, e));
     }
+  if ((is_immutable_let(e)) || (e == sc->s7_starlet))
+    immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->cutlet_symbol, e));
+
   /* besides removing the slot we have to make sure the symbol_id does not match else
    *   let-ref and others will use the old slot!  What's the un-id?  Perhaps the next one?
    *   (let ((b 1)) (let ((b 2)) (cutlet (curlet) 'b)) b)
@@ -9940,7 +9935,6 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
 static s7_pointer sublet_1(s7_scheme *sc, s7_pointer e, s7_pointer bindings, s7_pointer caller)
 {
   s7_pointer new_e;
-  if (e == sc->nil) e = sc->rootlet; /* PERHAPS: this is a leftover from the days when () -> rootlet -- remove? */
   new_e = make_let(sc, e);
   set_all_methods(new_e, e);
 
@@ -10015,15 +10009,12 @@ static s7_pointer g_sublet(s7_scheme *sc, s7_pointer args)
   #define Q_sublet Q_varlet
 
   s7_pointer e = car(args);
-  if (is_null(e))    /* is this a good idea anymore?  () no longer stands for rootlet elsewhere(?) */
-    e = sc->rootlet; /* PERHAPS: this is a leftover from the days when () -> rootlet -- remove? */
-  else
-    if (e != sc->rootlet)
-      {
-	check_method(sc, e, sc->sublet_symbol, args);
-	if (!is_let(e))
-	  wrong_type_error_nr(sc, sc->sublet_symbol, 1, e, a_let_string);
-      }
+  if (e != sc->rootlet)
+    {
+      check_method(sc, e, sc->sublet_symbol, args);
+      if (!is_let(e))
+	wrong_type_error_nr(sc, sc->sublet_symbol, 1, e, a_let_string);
+    }
   return(sublet_1(sc, e, cdr(args), sc->sublet_symbol));
 }
 
@@ -11018,7 +11009,7 @@ static bool let_star_symbol_is_safe(s7_scheme *sc, s7_pointer sym, s7_pointer e)
 static bool pair_symbol_is_safe(s7_scheme *unused_sc, s7_pointer sym, s7_pointer e)
 {
   return((is_slot(global_slot(sym))) ||
-	 (direct_memq(sym, e)));
+	 (direct_memq(sym, e)));  /* optimize_syntax pushes :if (and others like () I think) on this list */
 }
 
 static s7_pointer collect_variables(s7_scheme *sc, s7_pointer lst, s7_pointer e)
@@ -11035,7 +11026,7 @@ static s7_pointer collect_parameters(s7_scheme *sc, s7_pointer lst, s7_pointer e
   /* collect local variable names from lambda arglists (pre-error-check) */
   s7_pointer p;
   s7_int the_un_id = ++sc->let_number;
-  if (is_symbol(lst))
+  if (is_normal_symbol(lst))
     {
       symbol_set_id(lst, the_un_id);
       return(cons(sc, add_symbol_to_list(sc, lst), e));
@@ -11051,7 +11042,7 @@ static s7_pointer collect_parameters(s7_scheme *sc, s7_pointer lst, s7_pointer e
 	  symbol_set_id(car_p, the_un_id);
 	  sc->w = cons(sc, add_symbol_to_list(sc, car_p), sc->w);
 	}}
-  if (is_symbol(p)) /* rest arg */
+  if (is_normal_symbol(p)) /* rest arg */
     {
       symbol_set_id(p, the_un_id);
       sc->w = cons(sc, add_symbol_to_list(sc, p), sc->w);
@@ -31085,7 +31076,9 @@ s7_pointer s7_load_with_environment(s7_scheme *sc, const char *filename, s7_poin
   declare_jump_info();
   TRACK(sc);
   if (e == sc->s7_starlet) return(NULL);
-  if (e == sc->nil) e = sc->rootlet; /* PERHAPS: this is a leftover from the days when () -> rootlet -- remove? */
+#if DISABLE_DEPRECATED
+  if (e == sc->nil) e = sc->rootlet; /* this is a leftover from the days when () -> rootlet */
+#endif
   if (!is_let(e)) s7_warn(sc, 128, "third argument (the let) to s7_load_with_environment is not a let");
 #if WITH_C_LOADER
   port = load_shared_object(sc, filename, e);
@@ -31125,7 +31118,9 @@ s7_pointer s7_load_c_string_with_environment(s7_scheme *sc, const char *content,
   declare_jump_info();
   TRACK(sc);
 
-  if (e == sc->nil) e = sc->rootlet; /* PERHAPS: this is a leftover from the days when () -> rootlet -- remove? */
+#if DISABLE_DEPRECATED
+  if (e == sc->nil) e = sc->rootlet; /* this is a leftover from the days when () -> rootlet */
+#endif
   if (content[bytes] != 0)
     error_nr(sc, make_symbol(sc, "bad-data", 8), set_elist_1(sc, wrap_string(sc, "s7_load_c_string content is not terminated", 42)));
   port = open_input_string(sc, content, bytes);
@@ -54278,6 +54273,7 @@ static void check_t_1(s7_scheme *sc, s7_pointer e, const char* func, s7_pointer 
       fprintf(stderr, "%s%s %s is out of date (%s in %s -> %s)%s\n", bold_text, func, display(expr), display(var), display(sc->curlet),
 	      (tis_slot(let_slots(e))) ? display(let_slots(e)) : "no slots", unbold_text);
       if (sc->stop_at_error) abort();
+      /* this usually signals a problem with enviroments (or arglists if optimize_lambda) */
     }
 }
 
@@ -71630,7 +71626,7 @@ static opt_t wrap_bad_args(s7_scheme *sc, s7_pointer func, s7_pointer expr, int3
 	set_optimize_op(expr, ((is_safe_closure(func)) ? OP_SAFE_CLOSURE_STAR_A : OP_CLOSURE_STAR_A));
       else
 	if (closure_star_arity_to_int(sc, func) == 2)
-	  set_optimize_op(expr, ((is_safe_closure(func)) ? ((is_null(cdr(closure_body(func)))) ? OP_SAFE_CLOSURE_STAR_AA_O :
+	  set_optimize_op(expr, ((is_safe_closure(func)) ? ((is_null(cdr(closure_body(func)))) ? OP_SAFE_CLOSURE_STAR_AA_O : /* aa_a was not faster */
 							    OP_SAFE_CLOSURE_STAR_AA) : OP_CLOSURE_STAR_NA));
 	else set_optimize_op(expr, ((is_safe_closure(func)) ? OP_SAFE_CLOSURE_STAR_NA : OP_CLOSURE_STAR_NA));
       set_opt1_lambda_add(expr, func);
@@ -75917,13 +75913,21 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 			la = in_true;
 			z = cdddr(false_p);
 		      }
+#if 0
+		  fprintf(stderr, "body: %s\n  test: %s, true_p: %s, false_p: %s,\n  in_test: %s, in_true: %s, in_false: %s,\n  la: %s, z: %s\n",
+			  display(body), display(test), display(true_p), display(false_p),
+			  display(in_test), display(in_true), display(in_false), 
+			  (la) ? display(la) : "null", (la) ? display(z) : "null");
+#endif
 		  if ((la) && ((vars == 3) || (!s7_tree_memq(sc, name, car(z)))))
 		    {
 		      if (((vars == 1) && (is_null(cddr(la)))) ||
 			  ((vars == 2) && (is_pair(cddr(la))) && (is_null(cdddr(la))) && (is_safe_fxable(sc, caddr(la)))) ||
-			  ((vars == 3) && (is_proper_list_4(sc, in_true)) && (car(in_true) == name) &&
-			   (is_proper_list_4(sc, in_false)) && (is_safe_fxable(sc, caddr(la))) && (is_safe_fxable(sc, cadddr(la))) &&
-			   (is_fxable(sc, cadr(in_true))) && (is_safe_fxable(sc, caddr(in_true))) && (is_safe_fxable(sc, cadddr(in_true)))))
+			  ((vars == 3) && 
+			   (is_proper_list_4(sc, in_false)) && (is_safe_fxable(sc, caddr(la))) && (is_safe_fxable(sc, cadddr(la))) && /* last l3a */
+			   (((is_proper_list_4(sc, in_true)) && (car(in_true) == name) && /* previous l3a */
+			     (is_fxable(sc, cadr(in_true))) && (is_safe_fxable(sc, caddr(in_true))) && (is_safe_fxable(sc, cadddr(in_true)))) ||
+			    (!s7_tree_memq(sc, name, in_true)))))
 			{
 			  bool zs_fxable = true;
 			  if (vars == 1)
@@ -75931,18 +75935,27 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 			  else
 			    if (vars == 2)
 			      set_optimize_op(body, (la == in_false) ? OP_TC_IF_A_Z_IF_A_Z_LAA : OP_TC_IF_A_Z_IF_A_LAA_Z);
-			    else set_optimize_op(body, OP_TC_IF_A_Z_IF_A_L3A_L3A);
+			    else set_optimize_op(body, ((is_pair(in_true)) && (car(in_true) == name)) ? OP_TC_IF_A_Z_IF_A_L3A_L3A : OP_TC_IF_A_Z_IF_A_Z_L3A);
+
+			  /* fprintf(stderr, "%s[%d]: curlet: %s, args: %s\n", __func__, __LINE__, display(sc->curlet), display(args)); */
+
 			  if (is_fxable(sc, true_p))             /* outer (z) result */
 			    fx_annotate_arg(sc, cddr(body), args);
 			  else zs_fxable = false;
 			  fx_annotate_arg(sc, cdr(false_p), args);  /* inner test */
 			  fx_annotate_args(sc, cdr(la), args);      /* la arg(s) */
 			  if (vars == 3)
-			    fx_annotate_args(sc, cdr(in_true), args);
-			  else
-			    if (is_fxable(sc, car(z)))
-			      fx_annotate_arg(sc, z, args);       /* inner (z) result */
-			    else zs_fxable = false;
+			    {
+			      fx_annotate_args(sc, cdr(in_false), args);
+			      if (optimize_op(body) == OP_TC_IF_A_Z_IF_A_L3A_L3A) 
+				fx_annotate_args(sc, cdr(in_true), args);
+			    }
+			  if (optimize_op(body) != OP_TC_IF_A_Z_IF_A_L3A_L3A)
+			    {
+			      if (is_fxable(sc, car(z)))
+				fx_annotate_arg(sc, z, args);       /* inner (z) result */
+			      else zs_fxable = false;
+			    }
 			  if ((has_fx(cddr(body))) && (has_fx(z)))
 			    fx_tree(sc, cdr(body), car(args), (vars > 1) ? cadr(args) : NULL, (vars > 2) ? caddr(args) : NULL, false);
 			  if (zs_fxable) set_optimized(body);
@@ -76098,15 +76111,25 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
 	    int32_t nvars;
 	    mark_fx_treeable(sc, body);
 
-	    for (nvars = 0, p = args; (is_pair(p)) && (!is_symbol_and_keyword(car(p))); nvars++, p = cdr(p));
+	    /* TODO: maybe use args if unstarred_lambda */
+	    if ((!unstarred_lambda) && (is_pair(cleared_args)))
+	      {
+		cleared_args = proper_list_reverse_in_place(sc, cleared_args); 
+		/* we needs pars in decl order below, else (e.g.) fx_o out-of-date because args does not represent lambda args */
+		if (car(cleared_args) == func) cleared_args = cdr(cleared_args);
+	      }
+	    else cleared_args = args;
+	    /* fprintf(stderr, "cleared_args: %s, args: %s\n", display(cleared_args), display(args)); */
+
+	    for (nvars = 0, p = args; (is_pair(p)) && (!is_symbol_and_keyword(car(p))); nvars++, p = cdr(p)); /* nvars should not include a dotted (rest) arg */
 	    if ((is_null(p)) &&
 		(nvars > 0))
 	      {
 		fx_annotate_args(sc, body, cleared_args); /* almost useless -- we need a recursive traversal here but that collides with check_if et al */
 		fx_tree(sc, body, /* this usually costs more than it saves! */
-			(is_pair(car(args))) ? caar(args) : car(args),
-			(nvars > 1) ? ((is_pair(cadr(args))) ? caadr(args) : cadr(args)) : NULL,
-			(nvars > 2) ? ((is_pair(caddr(args))) ? caaddr(args) : caddr(args)) : NULL,
+			car(cleared_args),
+			(nvars > 1) ? cadr(cleared_args) : NULL,
+			(nvars > 2) ? caddr(cleared_args) : NULL,
 			nvars > 3);
 	      }
 	    if (((unstarred_lambda) || ((is_null(p)) && (nvars == sc->rec_tc_args))) &&
@@ -76114,13 +76137,13 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
 	      { /* (if <a> #t|#f...) happens only rarely */
 		if (sc->got_tc)
 		  {
-		    if (check_tc(sc, func, nvars, args, car(body)))
+		    if (check_tc(sc, func, nvars, cleared_args, car(body)))
 		      set_safe_closure_body(body);	      /* (very_)safe_closure set above if > RECUR_BODY */
 		    /* if not check_tc, car(body) is either not a tc op or it is not optimized so that is_fxable will return false */
 		  }
 		if ((sc->got_rec) &&
 		    (!is_tc_op(optimize_op(car(body)))) &&
-		    (check_recur(sc, func, nvars, args, car(body))))
+		    (check_recur(sc, func, nvars, cleared_args, car(body))))
 		  set_safe_closure_body(body);
 	      }}
       if (is_symbol(func))
@@ -85584,7 +85607,7 @@ static bool call_lambda_star(s7_scheme *sc, s7_pointer code, s7_pointer arglist)
   return(target);
 }
 
-static bool op_safe_closure_star_aaa(s7_scheme *sc, s7_pointer code)
+static bool op_safe_closure_star_3a(s7_scheme *sc, s7_pointer code)
 {
   s7_pointer arg2, arg3, func = opt1_lambda(code);
   s7_pointer arg1 = fx_call(sc, cdr(code));
@@ -87769,6 +87792,42 @@ static s7_pointer fx_tc_if_a_z_if_a_l3a_l3a(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_IF_A_Z_IF_A_L3A_L3A);
   op_tc_if_a_z_if_a_l3a_l3a(sc, arg);
+  sc->rec_p1 = sc->unused;
+  sc->rec_p2 = sc->unused;
+  return(sc->value);
+}
+
+static bool op_tc_if_a_z_if_a_z_l3a(s7_scheme *sc, s7_pointer code)
+{
+  s7_pointer if_test = cdr(code);
+  s7_pointer endp, la_slot = let_slots(sc->curlet);
+  s7_pointer laa_slot = next_slot(la_slot);
+  s7_pointer l3a_slot = next_slot(laa_slot);
+  s7_pointer if_true = cdr(if_test);
+  s7_pointer if_false = cadr(if_true);
+  s7_pointer f_test = cdr(if_false);
+  s7_pointer f_true = cdr(f_test);
+  s7_pointer f_false = cdr(f_true);
+  s7_pointer la2 = cdar(f_false);
+  s7_pointer laa2 = cdr(la2);
+  s7_pointer l3a2 = cdr(laa2);
+  while (true)
+    {
+      if (fx_call(sc, if_test) != sc->F) {endp = if_true; break;}
+      if (fx_call(sc, f_test) != sc->F) {endp = f_true; break;}
+      sc->rec_p1 = fx_call(sc, la2);
+      sc->rec_p2 = fx_call(sc, laa2);
+      slot_set_value(l3a_slot, fx_call(sc, l3a2));
+      slot_set_value(laa_slot, sc->rec_p2);
+      slot_set_value(la_slot, sc->rec_p1);
+    }
+  return(op_tc_z(sc, endp));
+}
+
+static s7_pointer fx_tc_if_a_z_if_a_z_l3a(s7_scheme *sc, s7_pointer arg)
+{
+  tick_tc(sc, OP_TC_IF_A_Z_IF_A_Z_L3A);
+  op_tc_if_a_z_if_a_z_l3a(sc, arg);
   sc->rec_p1 = sc->unused;
   sc->rec_p2 = sc->unused;
   return(sc->value);
@@ -93069,6 +93128,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_TC_COND_A_Z_A_LAA_LAA:    tick_tc(sc, sc->cur_op); if (op_tc_cond_a_z_a_laa_laa(sc, sc->code))              continue; goto EVAL;
 	case OP_TC_IF_A_Z_IF_A_L3A_L3A:   tick_tc(sc, sc->cur_op); if (op_tc_if_a_z_if_a_l3a_l3a(sc, sc->code))             continue; goto EVAL;
+	case OP_TC_IF_A_Z_IF_A_Z_L3A:     tick_tc(sc, sc->cur_op); if (op_tc_if_a_z_if_a_z_l3a(sc, sc->code))               continue; goto EVAL;
 	case OP_TC_IF_A_Z_LET_IF_A_Z_LAA: tick_tc(sc, sc->cur_op); if (op_tc_if_a_z_let_if_a_z_laa(sc, sc->code))           continue; goto EVAL;
 	case OP_TC_CASE_LA:               tick_tc(sc, sc->cur_op); if (op_tc_case_la(sc, sc->code))                         continue; goto BEGIN;
 	case OP_TC_LET_COND:              tick_tc(sc, sc->cur_op); if (op_tc_let_cond(sc, sc->code))                        continue; goto EVAL;
@@ -93116,7 +93176,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case HOP_SAFE_CLOSURE_STAR_AA_O: op_safe_closure_star_aa(sc, sc->code); sc->code = car(sc->code); goto EVAL;
 
 	case OP_SAFE_CLOSURE_STAR_3A: if (!closure_star_is_fine(sc, sc->code, FINE_UNSAFE_CLOSURE_STAR, 3)) {if (op_unknown_na(sc)) goto EVAL; continue;}
-	case HOP_SAFE_CLOSURE_STAR_3A: if (op_safe_closure_star_aaa(sc, sc->code)) goto EVAL; goto BEGIN;
+	case HOP_SAFE_CLOSURE_STAR_3A: if (op_safe_closure_star_3a(sc, sc->code)) goto EVAL; goto BEGIN;
 
 	case OP_SAFE_CLOSURE_STAR_NA:
 	  if (!closure_star_is_fine(sc, sc->code, FINE_SAFE_CLOSURE_STAR, (is_pair(cdr(sc->code))) ? opt3_arglen(cdr(sc->code)) : 0))
@@ -96076,7 +96136,8 @@ static void init_fx_function(void)
   fx_function[OP_TC_IF_A_Z_IF_A_Z_LAA] = fx_tc_if_a_z_if_a_z_laa;
   fx_function[OP_TC_COND_A_Z_A_Z_LAA] = fx_tc_cond_a_z_a_z_laa;
   fx_function[OP_TC_COND_A_Z_A_LAA_Z] = fx_tc_cond_a_z_a_laa_z;
-  fx_function[OP_TC_IF_A_Z_IF_A_L3A_L3A] = fx_tc_if_a_z_if_a_l3a_l3a; /* also op_tc_if_a_if_a_l3a_l3a_a */
+  fx_function[OP_TC_IF_A_Z_IF_A_L3A_L3A] = fx_tc_if_a_z_if_a_l3a_l3a;
+  fx_function[OP_TC_IF_A_Z_IF_A_Z_L3A] = fx_tc_if_a_z_if_a_z_l3a;
   fx_function[OP_TC_CASE_LA] = fx_tc_case_la;
   fx_function[OP_TC_OR_A_AND_A_A_L3A] = fx_tc_or_a_and_a_a_l3a;
   fx_function[OP_TC_LET_IF_A_Z_LA] = fx_tc_let_if_a_z_la;
@@ -98357,7 +98418,7 @@ s7_scheme *s7_init(void)
   s7_define_function(sc, "report-missed-calls", g_report_missed_calls, 0, 0, false, NULL); /* tc/recur tests in s7test.scm */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 929) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 930) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
   if (false) gdb_break();
 #endif
@@ -98743,36 +98804,36 @@ int main(int argc, char **argv)
  * texit     1884   1950   1778   1741   1770   1767
  * s7test           1831   1818   1829   1830   1869
  * lt        2222   2172   2150   2185   1950   1911
- * dup              3788   2492   2239   2097   1996
- * thook     7651          2590   2030   2046   2009
+ * dup              3788   2492   2239   2097   1996  2014 [fx_vref_ot]
+ * thook     7651   ----   2590   2030   2046   2009
  * tread            2421   2419   2408   2405   2244
  * tcopy            5546   2539   2375   2386   2341
  * titer     3657   2842   2641   2509   2449   2443
  * trclo     8031   2574   2454   2445   2449   2453
- * tmat             3042   2524   2578   2590   2513
+ * tmat             3042   2524   2578   2590   2513  2521
  * tload                   3046   2404   2566   2516
  * fbench    2933   2583   2460   2430   2478   2573
  * tsort     3683   3104   2856   2804   2858   2858
  * tio              3752   3683   3620   3583   3127
  * tobj             3970   3828   3577   3508   3452
  * teq              4045   3536   3486   3544   3595
- * tmac             3873   3033   3677   3677   3615
+ * tmac             3873   3033   3677   3677   3615  3622
  * tclo      6362   4735   4390   4384   4474   4345
  * tcase            4793   4439   4430   4439   4419
  * tlet      11.0   6974   5609   5980   5965   4500
  * tfft             7729   4755   4476   4536   4543
- * tstar            5923   5519   4449   4550   4522
+ * tstar            5923   5519   4449   4550   4522  4531 [eval]
  * tmap             8774   4489   4541   4586   4590
  * tshoot           5447   5183   5055   5034   5060
  * tform            5348   5307   5316   5084   5098
- * tstr      10.0   6342   5488   5162   5180   5195
+ * tstr      10.0   6342   5488   5162   5180   5195  5180 [op_tc_if_a_z_if_a_z_l3a etc]
  * tnum             6013   5433   5396   5409   5432
  * tgsl             7802   6373   6282   6208   6181
  * tari      15.0   12.7   6827   6543   6278   6184
- * tlist     9219   7546   6558   6240   6300   6306
+ * tlist     9219   7546   6558   6240   6300   6306  6312 [reverse_in_place_unchecked]
  * tset                           6260   6364   6303  6325
- * trec      19.6   6980   6599   6656   6658   6664
- * tleft     11.1   10.2   7657   7479   7627   7615
+ * trec      19.6   6980   6599   6656   6658   6664  6490 [op_tc_if_a_z_if_a_z_l3a]
+ * tleft     11.1   10.2   7657   7479   7627   7615  7491 [op_tc_if_a_z_if_a_z_l3a etc]
  * tmisc                          8142   7631   7685
  * tlamb                          8003   7941   7938
  * tgc              11.1   8177   7857   7986   8007
@@ -98781,11 +98842,11 @@ int main(int argc, char **argv)
  * tmap-hash                                    10.3
  * tgen             11.4   12.0   12.1   12.2   12.3
  * tall      15.9   15.6   15.6   15.6   15.1   15.1
- * timp             24.4   20.0   19.6   19.7   15.6
+ * timp             24.4   20.0   19.6   19.7   15.6  15.7 [reverse again 96]
  * tmv              21.9   21.1   20.7   20.6   17.4
  * calls            37.5   37.0   37.5   37.1   37.2
  * sg                      55.9   55.8   55.4   55.3
- * tbig            175.8  156.5  148.1  146.2  146.1
+ * tbig            175.8  156.5  148.1  146.2  146.1  [reverse again 43]
  * --------------------------------------------------------------
  *
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
@@ -98796,10 +98857,7 @@ int main(int argc, char **argv)
  *   check_with_let could notice cadr=sc->s7_starlet_symbol, op_with_starlet?, with_let_s also does notice it but here global_value is wrong
  * need some print-length/print-elements distinction for vector/pair etc [which to choose if both set?]
  * 73317 vars_opt_ok problem
- * should all hooks be moved in to *s7* and handled as simple functions?
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
- * safe_closure_s_na (and others)? safe_closure_star_aa_a from _o(?) op_tc_if_a_a_if_a_a_l3a (tfib(*))
  * perhaps the l3a case can be done by moving the last expr to the first true branch, reversing the if op, and others similarly
  * t801 make-function: funcize the arg part, use dyn-unwind for result?? [like add_trace]
- * error-hook as function, temp_error_hook as function: does error-hook work at all? (not clear any s7tests are correct -- 23 refs)
  */

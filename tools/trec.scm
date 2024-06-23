@@ -102,6 +102,10 @@
            b
            (tfib* (- n 1) b (+ a b)))))
 
+(when (provided? 'debugging)
+  (unless (= (tfib* 91 1 1) 7540113804746346429)
+    (format *stderr* "(tfib* 91 1 1): ~D~%" (tfib 91))))
+
 (define (test31)
   (do ((i 0 (+ i 1)))
       ((= i size))

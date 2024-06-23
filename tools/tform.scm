@@ -39,7 +39,7 @@
 			  '((1 2) (3 4)) '((1 (2)) (((3) 4))) "" (list #(1) "1") '(1 2 . 3) (list (cons 'a 2) (cons 'b 3))
 			  #(1 2) (vector 1 '(3)) (let ((x 3)) (lambda (y) (+ x y))) abs 'a 'b one apply 
 			  (lambda args args) (lambda* ((a 3) (b 2)) (+ a b)) (lambda () 3)
-			  (sublet () (cons 'a 1)) ;(rootlet)
+			  (sublet (rootlet) (cons 'a 1))
 			  *load-hook*  *error-hook* (random-state 123)
 			  quasiquote macroexpand cond-expand begin let letrec* if case cond (call-with-exit (lambda (goto) goto))
 			  (with-baffle (call/cc (lambda (cc) cc)))
