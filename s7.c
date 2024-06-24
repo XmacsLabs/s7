@@ -75937,8 +75937,6 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 			      set_optimize_op(body, (la == in_false) ? OP_TC_IF_A_Z_IF_A_Z_LAA : OP_TC_IF_A_Z_IF_A_LAA_Z);
 			    else set_optimize_op(body, ((is_pair(in_true)) && (car(in_true) == name)) ? OP_TC_IF_A_Z_IF_A_L3A_L3A : OP_TC_IF_A_Z_IF_A_Z_L3A);
 
-			  /* fprintf(stderr, "%s[%d]: curlet: %s, args: %s\n", __func__, __LINE__, display(sc->curlet), display(args)); */
-
 			  if (is_fxable(sc, true_p))             /* outer (z) result */
 			    fx_annotate_arg(sc, cddr(body), args);
 			  else zs_fxable = false;
@@ -76111,11 +76109,10 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
 	    int32_t nvars;
 	    mark_fx_treeable(sc, body);
 
-	    /* TODO: maybe use args if unstarred_lambda */
 	    if ((!unstarred_lambda) && (is_pair(cleared_args)))
 	      {
 		cleared_args = proper_list_reverse_in_place(sc, cleared_args); 
-		/* we needs pars in decl order below, else (e.g.) fx_o out-of-date because args does not represent lambda args */
+		/* we need pars in decl order below, else (e.g.) fx_o out-of-date because args does not represent lambda args (as in its env) */
 		if (car(cleared_args) == func) cleared_args = cdr(cleared_args);
 	      }
 	    else cleared_args = args;
@@ -98826,14 +98823,14 @@ int main(int argc, char **argv)
  * tmap             8774   4489   4541   4586   4590
  * tshoot           5447   5183   5055   5034   5060
  * tform            5348   5307   5316   5084   5098
- * tstr      10.0   6342   5488   5162   5180   5195  5180 [op_tc_if_a_z_if_a_z_l3a etc]
+ * tstr      10.0   6342   5488   5162   5180   5180
  * tnum             6013   5433   5396   5409   5432
  * tgsl             7802   6373   6282   6208   6181
  * tari      15.0   12.7   6827   6543   6278   6184
  * tlist     9219   7546   6558   6240   6300   6306  6312 [reverse_in_place_unchecked]
  * tset                           6260   6364   6303  6325
- * trec      19.6   6980   6599   6656   6658   6664  6490 [op_tc_if_a_z_if_a_z_l3a]
- * tleft     11.1   10.2   7657   7479   7627   7615  7491 [op_tc_if_a_z_if_a_z_l3a etc]
+ * trec      19.6   6980   6599   6656   6658   6490
+ * tleft     11.8   9459   7273   7050   7050   7027
  * tmisc                          8142   7631   7685
  * tlamb                          8003   7941   7938
  * tgc              11.1   8177   7857   7986   8007
@@ -98860,4 +98857,6 @@ int main(int argc, char **argv)
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * perhaps the l3a case can be done by moving the last expr to the first true branch, reversing the if op, and others similarly
  * t801 make-function: funcize the arg part, use dyn-unwind for result?? [like add_trace]
+ * tleft has unhandled cases: op_tc_unless*, if_a_if_a_l3a_z cond_a_z_l3a [built on if_a_z_l3a] etc
+ *   also case cases [fxable op_safe_closure cases -- why aren't these opt'd?], also a_i_s_* seems suspicious
  */
