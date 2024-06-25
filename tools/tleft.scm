@@ -41,7 +41,7 @@
 (f12 tc-size 1 2)
 
 ;;; --------------------------------------------------------------------------------
-;OP_TC_IF_A_Z_IF_A_Z_L3A and reverse [forward now handled 23-Jun-24]
+;OP_TC_IF_A_Z_IF_A_Z_L3A and reverse [23-Jun-24]
 
 (define (f3 x y z)
   (if (<= x 0)                      ; fx_leq_ti
@@ -62,7 +62,7 @@
 (f4 tc-size (* 2 tc-size) 0) ; safe_closure_3a[checked] if_a_a_p[leq] if_a_p_a[gt]
 
 ;;; --------------------------------------------------------------------------------
-;OP_TC_IF_A_LA_IF_A_Z[_Z] -- already handled:
+;OP_TC_IF_A_LA_IF_A_Z[_Z] -- already handled
 
 (define (f5 x)        ; op_tc_if_a_la_z
   (if (>= x 0)        ; opt_b_ii_sc_geq_0
@@ -105,7 +105,7 @@
 (f7 tc-size) ; op_safe_closure_3a[checked] if_a_a_p[fx_lt_si] if_b_a_p[fb_num_eq_s0]
 
 ;;; --------------------------------------------------------------------------------
-;OP_TC_COND_A_Z_L3A
+;OP_TC_COND_A_Z_L3A [24-June-24]
 
 (define (f8 x y z)
   (cond ((= x 0) 0)                     ; fx_num_eq_t0

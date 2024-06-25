@@ -2063,18 +2063,18 @@ int main(int argc, char **argv)
       s7_load_c_string_with_environment(sc, (const char *)yet_another_var, yet_another_var_len, e);
       p = s7_symbol_local_value(sc, s7_make_symbol(sc, "yet-another-var"), e);
       if (s7_integer(p) != 123)
-	{fprintf(stderr, "load_c_string_with_environment: %s\n", s1 = TO_STR(p)); free(s1);}
+	{fprintf(stderr, "%d load_c_string_with_environment: %s\n", __LINE__, s1 = TO_STR(p)); free(s1);}
       s7_gc_unprotect_at(sc, gc_loc);
 
-      s7_load_c_string_with_environment(sc, (const char *)a_global_var, a_global_var_len, s7_nil(sc));
+      s7_load_c_string_with_environment(sc, (const char *)a_global_var, a_global_var_len, s7_rootlet(sc));
       p = s7_symbol_value(sc, s7_make_symbol(sc, "a-global-var"));
       if (s7_integer(p) != 321)
-	{fprintf(stderr, "load_c_string_with_environment nil: %s\n", s1 = TO_STR(p)); free(s1);}
+	{fprintf(stderr, "%d load_c_string_with_environment: %s\n", __LINE__, s1 = TO_STR(p)); free(s1);}
 
       s7_load_c_string_with_environment(sc, (const char *)a_test_var, a_test_var_len, s7_rootlet(sc));
       p = s7_symbol_value(sc, s7_make_symbol(sc, "a-test-var"));
       if (s7_integer(p) != 321)
-	{fprintf(stderr, "load_c_string_with_environment rootlet: %s\n", s1 = TO_STR(p)); free(s1);}
+	{fprintf(stderr, "%d load_c_string_with_environment rootlet: %s\n", __LINE__, s1 = TO_STR(p)); free(s1);}
 
       s7_load_with_environment(sc, "~/cl/ffitest.scm", s7_rootlet(sc));  /* rootlet=segfault 10-Jul-21 */
     }
