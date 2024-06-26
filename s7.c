@@ -8425,6 +8425,27 @@ void s7_show_stack(s7_scheme *sc)
     fprintf(stderr, "  %s\n", op_names[stack_op(sc->stack, i)]);
 }
 
+void s7_show_full_stack(s7_scheme *sc);
+void s7_show_full_stack(s7_scheme *sc)
+{
+  bool old_stop = sc->stop_at_error;
+  if (sc->stack_end >= sc->stack_resize_trigger)
+    resize_stack_unchecked(sc);
+  sc->stop_at_error = false;
+  fprintf(stderr, "stack:\n");
+  for (s7_int i = stack_top(sc) - 1, j = 0; (i >= 3) && (j < sc->show_stack_limit); i -= 4, j++) /* s7_int (or uint64_t?) is correct -- not uint32_t */
+    {
+      fprintf(stderr, "  %s: ", op_names[stack_op(sc->stack, i)]);
+      if (s7_is_valid(sc, stack_code(sc->stack, i)))
+	fprintf(stderr, "code: %s, ", display_truncated(stack_code(sc->stack, i)));
+      if (s7_is_valid(sc, stack_args(sc->stack, i)))
+	fprintf(stderr, "args: %s, ", display_truncated(stack_args(sc->stack, i)));
+      if ((stack_op(sc->stack, i) != OP_GC_PROTECT) && (s7_is_valid(sc, stack_let(sc->stack, i)))) /* this probably won't work */
+	fprintf(stderr, "let: %s, ", display_truncated(stack_let(sc->stack, i)));
+    }
+  sc->stop_at_error = old_stop;
+}
+
 #if S7_DEBUGGING
 #define resize_stack(Sc) resize_stack_1(Sc, __func__, __LINE__)
 static void resize_stack_1(s7_scheme *sc, const char *func, int line)
@@ -75409,9 +75430,8 @@ static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t vars, s7_point
       p = cdr(p);
       if ((is_pair(p)) && (is_null(cdr(p))) && ((caar(p) == sc->else_symbol) || (caar(p) == sc->T)))
 	{
-	  s7_pointer else_clause;
+	  s7_pointer else_clause = cdar(p);
 	  if ((vars > 3) || (tree_count(sc, name, body, 0) != 1)) return(false);
-	  else_clause = cdar(p);
 	  if (is_proper_list_1(sc, else_clause))
 	    {
 	      s7_pointer la = car(else_clause);
@@ -80672,7 +80692,12 @@ static bool op_set_opsaq_a(s7_scheme *sc)        /* (set! (symbol fxable) fxable
   else index = fx_call(sc, cdar(code));
   set_gc_protected2(sc, index);
   result = set_pair3(sc, obj, index, value);
-  unstack_gc_protect(sc);
+  /* set_pair3 can assume goto apply as above, and can push the setter on the stack preparing to goto apply, but that means
+   *   we can't blithely unstack_gc_protect.  So if result is true, we leave the stack alone. This code somehow hits the bug:
+   *   (set! (setter #_list) for-each) (set! (#_list (#_list 1 2)) (inlet))
+   *   but I can't find the magic triggering context.
+   */
+  if (!result) unstack_gc_protect(sc);
   return(result);
 }
 
@@ -80813,7 +80838,7 @@ static bool op_set_opsaaq_a(s7_scheme *sc)        /* (set! (symbol fxable fxable
   index1 = fx_call(sc, cdar(code));
   set_gc_protected2(sc, index1);
   result = set_pair4(sc, obj, index1, fx_call(sc, cddar(code)), value);
-  unstack_gc_protect(sc);
+  if (!result) unstack_gc_protect(sc); /* see comment under op_set_opsaq_a above */
   return(result);
 }
 
@@ -80842,7 +80867,7 @@ static bool op_set_opsaaq_p_1(s7_scheme *sc)
   s7_pointer index1 = fx_call(sc, cdar(sc->code));
   gc_protect_via_stack(sc, index1);
   result = set_pair4(sc, sc->args, index1, fx_call(sc, cddar(sc->code)), value);
-  unstack_gc_protect(sc);
+  if (!result) unstack_gc_protect(sc);
   return(result);
 }
 
@@ -98857,7 +98882,7 @@ int main(int argc, char **argv)
  * tmv              21.9   21.1   20.7   20.6   17.4
  * calls            37.5   37.0   37.5   37.1   37.2
  * sg                      55.9   55.8   55.4   55.3
- * tbig            175.8  156.5  148.1  146.2  146.1  [reverse again 43]
+ * tbig            175.8  156.5  148.1  146.2  146.1
  * --------------------------------------------------------------
  *
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
@@ -98871,4 +98896,7 @@ int main(int argc, char **argv)
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * t801 make-function: funcize the arg part, use dyn-unwind for result?? [like add_trace]
  * tleft has unhandled cases: op_tc_unless* [((tf(sc, if_test) == sc->F) == z_first)], if_a_if_a_l3a_z
+ * need a debugging procedure to find a current pointer's scheme-level name
+ * mogan installed to test define-public badness
+ * maybe add t802 symbol-initial-value stuff to s7.html
  */
