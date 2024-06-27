@@ -1479,6 +1479,58 @@ to be evaluated in its definition environment:
 </pre>
 -->
 
+<blockquote>
+<div class="indented">
+<pre>
+(let ()
+  (define (f23 y) (+ y 1))          ; the first f23
+  (define-macro (m1 x) `(f23 ,x))   ; picks up f23 from whatever the local env is where m1 is expanded
+  (m1 3) ; 4
+  
+  (let ((f23 (lambda (y) (+ y 2)))) ; the second f23
+    (m1 3) ; 5
+    (set! (symbol-initial-value :f23) f23))
+    ;; this remembers the second f23 as #_:f23 or (symbol-initial-value :f23)
+  
+  (define-macro (m2 x) `(,f23 ,x)) ; ",f23" picks up f23 from m2's definition-time environment
+
+  (define e1 #f)  
+  (let ((f23 (lambda (y) (+ y 3))))  ; the third f23
+    (set! e1 (curlet))      ; save the environment holding the third f23
+    (m2 3)) ; 4             ; y + 1 because at this point the definition env f23 is the first
+  
+  (set! (symbol-initial-value 'f23) f23) ; #_f23 now refers to the first f23
+  (set! f23 (lambda (y) (+ y 4)))        ; the fourth f23
+  
+  (define-macro (m3 x) `((#_symbol-initial-value 'f23) ,x))
+  ;; this picks up the first f23 by delaying the reference to it until evaluation time.
+  ;; Using `(#_f23 ,x) here will fail unless f23's symbol-initial-value is set at the top-level 
+  ;; because the reader only knows about global values:
+
+  (define-macro (m4 x) `(#_f23 ,x))
+  ;; that is, when this definition is encountered, the reader sees the #_f23 without knowing anything about its
+  ;; context (this is while reading the let form, before the symbol-initial-value is actually set).
+  ;; When the let is later evaluated, the m4 code has already become `(#&lt;undefined: f23&gt; ,x)
+  ;; so we get the error: "attempt to apply an undefined object #_f23 in (#_f23 3)?"
+
+  (define-macro (m5 x) `((#_symbol-initial-value :f23) ,x))  ; this is a reference to the second f23
+  ;; 'f23 and :f23 can have different initial-values
+
+  (define-macro (m6 x) `((,e1 'f23) ,x)) ; use e1 to get the third f23
+  ;; more hygienic: set e1's symbol-initial-value to itself above, then use (#_symbol-initial-value 'e1) here
+  
+  (let ((f23 (lambda (y) (+ y 5))))   ; the fifth f23
+    (m1 3)   ; 8 = 3 + 5 from local (fifth) f23
+    (m2 3)   ; 7 = 3 + 4 from definition environment f23 (the fourth)
+    (m3 3)   ; 4 = 3 + 1 from the first f23 (before the (set! f23 ...))
+    (catch #t (lambda () (m4 3)) (lambda (type info) (apply format #f info))))) ; error given above
+    (m5 3)   ; 5 = 3 + 2 from second f23
+    (m6 3))) ; 6 = 3 + 3 from third f23
+</pre>
+</div>
+</blockquote>
+
+
 <!--
 <blockquote>
 <div class="indented">

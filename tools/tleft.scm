@@ -50,7 +50,8 @@
 	  x
 	  (f3 (- x 1) (- y 1) z)))) ; fx_subtract_t|u1 fx_v
 
-(f3 tc-size (* 2 tc-size) 0) ; safe_closure_3a[checked] if_a_a_p[leq] if_b_a_p[=] -- b_a_p leq case?
+(unless (= tc-size (f3 tc-size (* 2 tc-size) 0)) ; safe_closure_3a[checked] if_a_a_p[leq] if_b_a_p[=] -- b_a_p leq case?
+  (display "f3 if_a_z_if_a_z_l3a: ~S~%" (f3 tc-size (*2 tc-size) 0)))
 
 (define (f4 x y z)
   (if (<= x 0)
@@ -59,7 +60,8 @@
 	  (f4 (- x 1) (- y 1) z)
 	  x)))
 
-(f4 tc-size (* 2 tc-size) 0) ; safe_closure_3a[checked] if_a_a_p[leq] if_a_p_a[gt]
+(unless (= tc-size (f4 tc-size (* 2 tc-size) 0)) ; safe_closure_3a[checked] if_a_a_p[leq] if_a_p_a[gt]
+  (display "f4 if_a_z_if_a_l3a_z: ~S~%" (f4 tc-size (*2 tc-size) 0)))
 
 ;;; --------------------------------------------------------------------------------
 ;OP_TC_IF_A_LA_IF_A_Z[_Z] -- already handled

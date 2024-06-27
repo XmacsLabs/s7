@@ -3154,6 +3154,7 @@ static void symbol_set_id(s7_pointer p, s7_int id)
   #define set_local(Symbol)            set_local_1(sc, T_Sym(Symbol), __func__, __LINE__)
 #else
   #define set_local(p)                 full_type(T_Sym(p)) &= ~(T_DONT_EVAL_ARGS | T_SYNTACTIC)
+  /* if symbol_increment_ctr, local shadowing value is not found? same if {} */
 #endif
 #define is_global(p)                   (symbol_id(p) == 0)
 #define is_defined_global(p)           ((is_slot(global_slot(p))) && (symbol_id(p) == 0))
@@ -4376,7 +4377,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_TC_COND_A_Z_A_Z_LAA, OP_TC_COND_A_Z_A_LAA_Z, OP_TC_COND_A_Z_A_LAA_LAA, OP_TC_LET_COND,
       OP_TC_IF_A_Z_LA, OP_TC_IF_A_Z_LAA, OP_TC_IF_A_Z_L3A, OP_TC_IF_A_L3A_Z, OP_TC_IF_A_LA_Z, OP_TC_IF_A_LAA_Z,
       OP_TC_IF_A_Z_IF_A_Z_LA, OP_TC_IF_A_Z_IF_A_LA_Z, OP_TC_IF_A_Z_IF_A_Z_LAA, OP_TC_IF_A_Z_IF_A_LAA_Z, 
-      OP_TC_IF_A_Z_IF_A_Z_L3A, OP_TC_IF_A_Z_IF_A_L3A_L3A,
+      OP_TC_IF_A_Z_IF_A_Z_L3A, OP_TC_IF_A_Z_IF_A_L3A_Z, OP_TC_IF_A_Z_IF_A_L3A_L3A,
       OP_TC_COND_A_Z_A_Z_LA, OP_TC_COND_A_Z_A_LA_Z, OP_TC_COND_A_Z_LA, OP_TC_COND_A_LA_Z, OP_TC_COND_A_Z_LAA, OP_TC_COND_A_LAA_Z, 
       OP_TC_COND_A_Z_L3A, OP_TC_COND_A_L3A_Z,
       OP_TC_LET_IF_A_Z_LA, OP_TC_LET_IF_A_Z_LAA, OP_TC_IF_A_Z_LET_IF_A_Z_LAA,
@@ -4592,7 +4593,7 @@ static const char* op_names[NUM_OPS] =
       "tc_cond_a_z_a_z_laa", "tc_cond_a_z_a_laa_z", "tc_cond_a_z_a_laa_laa", "tc_let_cond",
       "tc_if_a_z_la", "tc_if_a_z_laa", "tc_if_a_z_l3a", "tc_if_a_l3a_z", "tc_if_a_la_z", "tc_if_a_laa_z",
       "tc_if_a_z_if_a_z_la", "tc_if_a_z_if_a_la_z", "tc_if_a_z_if_a_z_laa", "tc_if_a_z_if_a_laa_z", 
-      "tc_if_a_z_if_a_z_l3a", "tc_if_a_z_if_a_l3a_l3a",
+      "tc_if_a_z_if_a_z_l3a", "tc_if_a_z_if_a_l3a_z", "tc_if_a_z_if_a_l3a_l3a",
       "tc_cond_a_z_a_z_la", "tc_cond_a_z_a_la_z", "tc_cond_a_z_la", "tc_cond_a_la_z", "tc_cond_a_z_laa", "tc_cond_a_laa_z", 
       "tc_cond_a_z_l3a", "tc_cond_a_l3a_z",
       "tc_let_if_a_z_la", "tc_let_if_a_z_laa", "if_a_z_let_if_a_z_laa",
@@ -73529,15 +73530,11 @@ static bool vars_opt_ok(s7_scheme *sc, s7_pointer vars, int32_t hop, s7_pointer 
       /* if ((is_slot(global_slot(car(var)))) && (is_c_function(global_value(car(var))))) return(false); */ /* too draconian (see snd-test) */
       if ((is_normal_symbol(car(var))) && (is_defined_global(car(var)))) /* (define (f) (let ((+ -)) (with-let (curlet) (#_integer? (+))))) (f) */
 	{
-	  /* fprintf(stderr, "set %s local in %s\n", display(car(var)), display_truncated(vars)); */
-	  set_local(car(var));
+	  fprintf(stderr, "set %s local in %s\n", display(car(var)), display_truncated(vars));
+	  /* set_local(car(var)); */ /* set_local also too draconian (tall for example) but +/- above is broken now (returns #t) */
+	  /* no effect? symbol_increment_ctr(car(var)); */
 	  return(false);
 	}
-      /* also too draconian (tall for example) but +/- above is broken now (returns #t)
-       *   perhaps set_local could be undone upon leaving the let if there's no capture possible:
-       *   for each here, save full type, add to list, set_local, then when let opt is done, reset to outside type
-       *   would need lists of such lists following the let chain
-       */
 #else
       s7_pointer init = cadar(p);
 #endif
@@ -75934,7 +75931,7 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 	      s7_pointer in_false = cadddr(false_p);
  	      if (is_fxable(sc, in_test))
 		{
-		  s7_pointer la = NULL, z;
+		  s7_pointer la = NULL, z = NULL;
 		  if ((is_pair(in_false)) &&
 		      (car(in_false) == name) &&
 		      (is_pair(cdr(in_false))) &&
@@ -75952,19 +75949,14 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 			la = in_true;
 			z = cdddr(false_p);
 		      }
-#if 0
-		  fprintf(stderr, "body: %s\n  test: %s, true_p: %s, false_p: %s,\n  in_test: %s, in_true: %s, in_false: %s,\n  la: %s, z: %s\n",
-			  display(body), display(test), display(true_p), display(false_p),
-			  display(in_test), display(in_true), display(in_false), 
-			  (la) ? display(la) : "null", (la) ? display(z) : "null");
-#endif
 		  if ((la) && ((vars == 3) || (!s7_tree_memq(sc, name, car(z)))))
 		    {
 		      if (((vars == 1) && (is_null(cddr(la)))) ||
 			  ((vars == 2) && (is_pair(cddr(la))) && (is_null(cdddr(la))) && (is_safe_fxable(sc, caddr(la)))) ||
 			  ((vars == 3) && 
-			   (is_proper_list_4(sc, in_false)) && (is_safe_fxable(sc, caddr(la))) && (is_safe_fxable(sc, cadddr(la))) && /* last l3a */
-			   (((is_proper_list_4(sc, in_true)) && (car(in_true) == name) && /* previous l3a */
+			   ((is_proper_list_4(sc, in_false)) || (is_proper_list_4(sc, in_true))) && 
+			   (is_safe_fxable(sc, caddr(la))) && (is_safe_fxable(sc, cadddr(la))) &&
+			   (((is_proper_list_4(sc, in_true)) && (car(in_true) == name) &&
 			     (is_fxable(sc, cadr(in_true))) && (is_safe_fxable(sc, caddr(in_true))) && (is_safe_fxable(sc, cadddr(in_true)))) ||
 			    (!s7_tree_memq(sc, name, in_true)))))
 			{
@@ -75974,7 +75966,10 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 			  else
 			    if (vars == 2)
 			      set_optimize_op(body, (la == in_false) ? OP_TC_IF_A_Z_IF_A_Z_LAA : OP_TC_IF_A_Z_IF_A_LAA_Z);
-			    else set_optimize_op(body, ((is_pair(in_true)) && (car(in_true) == name)) ? OP_TC_IF_A_Z_IF_A_L3A_L3A : OP_TC_IF_A_Z_IF_A_Z_L3A);
+			    else
+			      if (la == in_false)
+				set_optimize_op(body, ((is_pair(in_true)) && (car(in_true) == name)) ? OP_TC_IF_A_Z_IF_A_L3A_L3A : OP_TC_IF_A_Z_IF_A_Z_L3A);
+			      else set_optimize_op(body, OP_TC_IF_A_Z_IF_A_L3A_Z);
 
 			  if (is_fxable(sc, true_p))             /* outer (z) result */
 			    fx_annotate_arg(sc, cddr(body), args);
@@ -75983,8 +75978,9 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 			  fx_annotate_args(sc, cdr(la), args);      /* la arg(s) */
 			  if (vars == 3)
 			    {
-			      fx_annotate_args(sc, cdr(in_false), args);
-			      if (optimize_op(body) == OP_TC_IF_A_Z_IF_A_L3A_L3A) 
+			      if (optimize_op(body) != OP_TC_IF_A_Z_IF_A_L3A_Z) 
+				fx_annotate_args(sc, cdr(in_false), args);
+			      if (optimize_op(body) != OP_TC_IF_A_Z_IF_A_Z_L3A) 
 				fx_annotate_args(sc, cdr(in_true), args);
 			    }
 			  if (optimize_op(body) != OP_TC_IF_A_Z_IF_A_L3A_L3A)
@@ -87830,7 +87826,7 @@ static s7_pointer fx_tc_if_a_z_if_a_l3a_l3a(s7_scheme *sc, s7_pointer arg)
   return(sc->value);
 }
 
-static bool op_tc_if_a_z_if_a_z_l3a(s7_scheme *sc, s7_pointer code)
+static bool op_tc_if_a_z_if_a_z_l3a(s7_scheme *sc, s7_pointer code, bool zfirst) /* zfirst: z_l3a rather than l3a_z */
 {
   s7_pointer if_test = cdr(code);
   s7_pointer endp, la_slot = let_slots(sc->curlet);
@@ -87841,13 +87837,14 @@ static bool op_tc_if_a_z_if_a_z_l3a(s7_scheme *sc, s7_pointer code)
   s7_pointer f_test = cdr(if_false);
   s7_pointer f_true = cdr(f_test);
   s7_pointer f_false = cdr(f_true);
-  s7_pointer la2 = cdar(f_false);
+  s7_pointer zendp = (zfirst) ? f_true : f_false;
+  s7_pointer la2 = (zfirst) ? cdar(f_false) : cdar(f_true);
   s7_pointer laa2 = cdr(la2);
   s7_pointer l3a2 = cdr(laa2);
   while (true)
     {
       if (fx_call(sc, if_test) != sc->F) {endp = if_true; break;}
-      if (fx_call(sc, f_test) != sc->F) {endp = f_true; break;}
+      if ((fx_call(sc, f_test) != sc->F) == zfirst) {endp = zendp; break;}
       sc->rec_p1 = fx_call(sc, la2);
       sc->rec_p2 = fx_call(sc, laa2);
       slot_set_value(l3a_slot, fx_call(sc, l3a2));
@@ -87860,7 +87857,7 @@ static bool op_tc_if_a_z_if_a_z_l3a(s7_scheme *sc, s7_pointer code)
 static s7_pointer fx_tc_if_a_z_if_a_z_l3a(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_TC_IF_A_Z_IF_A_Z_L3A);
-  op_tc_if_a_z_if_a_z_l3a(sc, arg);
+  op_tc_if_a_z_if_a_z_l3a(sc, arg, true);
   sc->rec_p1 = sc->unused;
   sc->rec_p2 = sc->unused;
   return(sc->value);
@@ -93164,7 +93161,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 	case OP_TC_COND_A_Z_A_LAA_LAA:    tick_tc(sc, sc->cur_op); if (op_tc_cond_a_z_a_laa_laa(sc, sc->code))              continue; goto EVAL;
 	case OP_TC_IF_A_Z_IF_A_L3A_L3A:   tick_tc(sc, sc->cur_op); if (op_tc_if_a_z_if_a_l3a_l3a(sc, sc->code))             continue; goto EVAL;
-	case OP_TC_IF_A_Z_IF_A_Z_L3A:     tick_tc(sc, sc->cur_op); if (op_tc_if_a_z_if_a_z_l3a(sc, sc->code))               continue; goto EVAL;
+	case OP_TC_IF_A_Z_IF_A_Z_L3A:     tick_tc(sc, sc->cur_op); if (op_tc_if_a_z_if_a_z_l3a(sc, sc->code, true))         continue; goto EVAL;
+	case OP_TC_IF_A_Z_IF_A_L3A_Z:     tick_tc(sc, sc->cur_op); if (op_tc_if_a_z_if_a_z_l3a(sc, sc->code, false))        continue; goto EVAL;
 	case OP_TC_IF_A_Z_LET_IF_A_Z_LAA: tick_tc(sc, sc->cur_op); if (op_tc_if_a_z_let_if_a_z_laa(sc, sc->code))           continue; goto EVAL;
 	case OP_TC_CASE_LA:               tick_tc(sc, sc->cur_op); if (op_tc_case_la(sc, sc->code))                         continue; goto BEGIN;
 	case OP_TC_LET_COND:              tick_tc(sc, sc->cur_op); if (op_tc_let_cond(sc, sc->code))                        continue; goto EVAL;
@@ -95890,7 +95888,7 @@ static const char *decoded_name(s7_scheme *sc, const s7_pointer p)
   if (p == sc->standard_input)      return("*stdin*");
   if (p == sc->standard_output)     return("*stdout*");
   if (p == sc->standard_error)      return("*stderr*");
-  if (p == sc->else_symbol)         return("else_symbol");
+  if (p == sc->else_symbol)         return("else");
   if (p == current_input_port(sc))  return("current-input-port");
   if (p == current_output_port(sc)) return("current-output-port");
   if (p == current_error_port(sc))  return("current-error_port");
@@ -98454,7 +98452,7 @@ s7_scheme *s7_init(void)
   s7_define_function(sc, "report-missed-calls", g_report_missed_calls, 0, 0, false, NULL); /* tc/recur tests in s7test.scm */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 932) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 933) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
   if (false) gdb_break();
 #endif
@@ -98869,7 +98867,7 @@ int main(int argc, char **argv)
  * tlist     9219   7546   6558   6240   6300   6306
  * tset                           6260   6364   6325
  * trec      19.6   6980   6599   6656   6658   6490
- * tleft     11.8   9459   7273   7050   7050   6928
+ * tleft     11.8   9459   7273   7050   7050   6928  6820
  * tmisc                          8142   7631   7685
  * tlamb                          8003   7941   7930
  * tgc              11.1   8177   7857   7986   8007
@@ -98878,9 +98876,9 @@ int main(int argc, char **argv)
  * tmap-hash                                    10.3
  * tgen             11.4   12.0   12.1   12.2   12.3
  * tall      15.9   15.6   15.6   15.6   15.1   15.1
- * timp             24.4   20.0   19.6   19.7   15.6
+ * timp             24.4   20.0   19.6   19.7   15.6  16.2 [nothing??]
  * tmv              21.9   21.1   20.7   20.6   17.4
- * calls            37.5   37.0   37.5   37.1   37.2
+ * calls            37.5   37.0   37.5   37.1   37.2 [formants time times two-pi cascade->canonical ramp zn][fft-window in generators]
  * sg                      55.9   55.8   55.4   55.3
  * tbig            175.8  156.5  148.1  146.2  146.1
  * --------------------------------------------------------------
@@ -98892,11 +98890,9 @@ int main(int argc, char **argv)
  *   currently sc->s7_starlet is a let (make_s7_starlet) using g_s7_let_ref_fallback, so it assumes print-length above is undefined
  *   check_with_let could notice cadr=sc->s7_starlet_symbol, op_with_starlet?, with_let_s also does notice it but here global_value is wrong
  * need some print-length/print-elements distinction for vector/pair etc [which to choose if both set?]
- * 73317 vars_opt_ok problem
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * t801 make-function: funcize the arg part, use dyn-unwind for result?? [like add_trace]
- * tleft has unhandled cases: op_tc_unless* [((tf(sc, if_test) == sc->F) == z_first)], if_a_if_a_l3a_z
- * need a debugging procedure to find a current pointer's scheme-level name
- * mogan installed to test define-public badness
- * maybe add t802 symbol-initial-value stuff to s7.html
+ * tleft has unhandled cases: op_tc_unless* [((tf(sc, if_test) == sc->F) == z_first)]
+ * mogan installed to test define-public badness, gsl installed to test libgsl updates (need cload loader dirs)
+ * finish vars_opt_ok tests (set to 1!)
  */
