@@ -20,7 +20,7 @@
 		      (char=? c #\_)
 		      (and (char-numeric? c)
 			   (positive? (length cur-word))))
-		  (begin 
+		  (begin
 		    (string-set! cur-word cur-loc c)
 		    (set! cur-loc (+ cur-loc 1)))
 		  (begin
@@ -38,7 +38,7 @@
 			       (set! last-c1 c1))))
 
 			  ((and (char=? c #\")
-				(not (char=? last-c #\')))               ; '"' 
+				(not (char=? last-c #\')))               ; '"'
 			   (let ((last-c1 #\null)
 				 (last-c2 #\null))
 			     (do ((c1 (read-char ip) (read-char ip)))
@@ -106,7 +106,7 @@
 	 (new-str (make-string len)))
     (let loop ((i 0))
       (cond ((= i len) new-str)
-	    (else 
+	    (else
 	     (string-set! new-str i (char-upcase (string-ref str i)))
 	     (loop (+ i 1)))))))
 
@@ -181,7 +181,7 @@
       (set! str str1)
       (cond2-cposrev-2 c1 0))))
 
-(define tc3-cpos ; eval? (there is no op_tc_if_a_z_if_a_z_l3a)
+(define tc3-cpos ; op_tc_if_a_z_if_a_z_l3a
   (let ((len 0))
     (define (cpos-3 c str pos)
       (if (= pos len)
@@ -193,7 +193,7 @@
       (set! len (length str1))
       (cpos-3 c1 str1 0))))
 
-(define and-cpos 
+(define and-cpos
   (let ((len 0)
 	(c #f)
 	(str #f))
@@ -208,7 +208,7 @@
       (set! str str1)
       (and-cpos-1 0))))
 
-(define andrev-cpos 
+(define andrev-cpos
   (let ((len 0)
 	(c #f)
 	(str #f))
@@ -239,7 +239,7 @@
       (set! str str1)
       (cond-cpos-1 0))))
 
-(define condrev-cpos 
+(define condrev-cpos
   (let ((len 0)
 	(c #f)
 	(str #f))
@@ -401,7 +401,9 @@
       (if (= pos len)
 	  count
 	  (tc-count-1 (+ pos 1)
-		      (if (char=? c (string-ref str pos)) (+ count 1) count))))
+		      (if (char=? c (string-ref str pos))
+			  (+ count 1)
+			  count))))
     (lambda (c1 str1)
       (set! c c1)
       (set! str str1)
@@ -414,8 +416,9 @@
       (if (= pos len)
 	  count
 	  (loop (+ pos 1)
-		(if (char=? c (string-ref str pos)) (+ count 1) count))))))
-    
+		(if (char=? c (string-ref str pos))
+		    (+ count 1)
+		    count))))))
 
 
 (let ((val (strcop "asdfghjkl")))
@@ -505,7 +508,7 @@
   (when val (format *stderr* "cond-spos ~S ~S: ~S~%" "asdf" "fdsghjkasd" val)))
 
 
-(define-macro (time . expr) 
+(define-macro (time . expr)
   `(let ((start (*s7* 'cpu-time)))
      (do ((k 0 (+ k 1))) ((= k 4)) ,@expr)
      (- (*s7* 'cpu-time) start)))
@@ -595,8 +598,8 @@
 	(set! t2 (time (set! c2 (do-count #\a bigstr))))
 	(set! t3 (time (set! c3 (tc-count #\a bigstr))))
 	(set! t4 (time (set! c4 (let-count #\a bigstr))))
-	(format *stderr* "counts: ~S ~S ~S ~S, times: ~D ~D ~D~%" 
-		c1 c2 c3 c4 
+	(format *stderr* "counts: ~S ~S ~S ~S, times: ~D ~D ~D~%"
+		c1 c2 c3 c4
 		(round (/ t2 t1)) (round (/ t3 t1)) (round (/ t4 t1)))))
 
     (do ((i 0 (+ i 1)))
@@ -640,7 +643,7 @@
 					     (+ (vector-ref distance (- i 1) (- j 1)) 1))))
 				 (vector-set! distance i j (min c1 c2 c3)))))
 			   (vector-ref distance L2 L1)))))))
-	
+
 	(make-full-let-iterator             ; walk the entire let chain
 	 (lambda* (lt (stop (rootlet)))
 	   (if (eq? stop lt)
@@ -658,7 +661,7 @@
 				     (iterloop))
 				   result))))))
 		 (make-iterator iterloop))))))
-    
+
     (lambda* (name (e (curlet)))
       (let ((ap-name (if (string? name) name
 			 (if (symbol? name)
@@ -678,7 +681,7 @@
 			 (if (< distance min2)
 			     (set! strs (cons (cons binding distance) strs))))))))
 	   (make-full-let-iterator ap-env))
-	  
+
 	  (if (not (pair? strs))
 	      'no-match
 	      (let ((data "")
@@ -713,4 +716,3 @@
 
 
 (#_exit)
-

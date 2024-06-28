@@ -110,7 +110,7 @@
 	;; (table4 (hash-table 'b (let ((x (vector 1 2 3))) (dilambda (lambda (ind) (x ind)) (lambda (ind val) (set! (x ind) val))))))
 	(table5 (hash-table 'a 1 'b (hash-table 'a 3 'b (hash-table 'a 4))))
 	(table6 (vector (list 0 1) (list 2 3)))
-	(env (inlet 'a 1 'b (inlet 'a 4)))
+	(envir (inlet 'a 1 'b (inlet 'a 4)))
 	(lst (list 0 1))
 	(lst1 (list dilambda_test)) ; from s7test-block
 	(lst2 (list (list 0 1)))
@@ -131,11 +131,11 @@
       (s11111 table '(a) 12)
       (unless (= (table 'b 'a) 12) (format *stderr* "[5]"))
 
-      (s1 env 12)
-      (s11 env 12)
-      (s111 env 12)
-      (s1111 env 'a 12)
-      (s11111 env '(a) 12)
+      (s1 envir 12)
+      (s11 envir 12)
+      (s111 envir 12)
+      (s1111 envir 'a 12)
+      (s11111 envir '(a) 12)
 
       (s2 table 12)
       (unless (= (table 'a) 14) (format *stderr* "[6]"))
@@ -148,14 +148,14 @@
       (s22222 table '(a) 12)
       (unless (= (table 'b 'a) 14) (format *stderr* "[10]"))
 
-      (s2 env 12)
-      (s22 env 12)
-      (s222 env 12)
-      (s2222 env 'a 12)
-      (s22222 env '(a) 12)
+      (s2 envir 12)
+      (s22 envir 12)
+      (s222 envir 12)
+      (s2222 envir 'a 12)
+      (s22222 envir '(a) 12)
 
-      (s3 env 32)
-      (unless (= (env 'b 'a) 32) (format *stderr* "[11]"))
+      (s3 envir 32)
+      (unless (= (envir 'b 'a) 32) (format *stderr* "[11]"))
 
       (s4 table1 #\a) ; set_implicit_string
       (unless (char=? (table1 'b 1) #\a) (format *stderr* "[12]"))
