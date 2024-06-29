@@ -1415,7 +1415,7 @@ struct s7_scheme {
   s7_int safe_list_uses[NUM_SAFE_LISTS];
 #endif
 
-  s7_pointer autoload_table, s7_starlet, s7_starlet_symbol, temp_error_hook;
+  s7_pointer autoload_table, starlet, starlet_symbol, temp_error_hook;
   const char ***autoload_names;
   s7_int *autoload_names_sizes;
   bool **autoloaded_already;
@@ -2771,7 +2771,7 @@ static void init_types(void)
 
 #define T_UNHEAP                       0x4000000000000000
 #define T_SHORT_UNHEAP                 (1 << 14)
-#define in_heap(p)                     (((T_Pos(p))->tf.bits.high_bits & T_SHORT_UNHEAP) == 0) /* can be slot, make_s7_starlet let_set_slot */
+#define in_heap(p)                     (((T_Pos(p))->tf.bits.high_bits & T_SHORT_UNHEAP) == 0) /* can be slot, make_starlet let_set_slot */
 #define unheap(sc, p)                  set_high_type_bit(T_Ext(p), T_SHORT_UNHEAP)
 
 #define is_eof(p)                      ((T_Ext(p)) == eof_object)
@@ -2795,7 +2795,6 @@ static void init_types(void)
 #define is_safe_quoted_pair(p)         ((is_pair(p)) && (is_safe_quote(car(p))))
 #define is_unquoted_pair(p)            ((is_pair(p)) && (!is_quote(car(p))))
 #define is_quoted_symbol(p)            ((is_quoted_pair(p)) && (is_symbol(cadr(p))))
-
 
 /* pair line/file/position */
 #define PAIR_LINE_BITS                 24
@@ -3144,8 +3143,8 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 #define symbol_type(p)                 (block_size(symbol_info(p)) & 0xff)                    /* boolean function bool type */
 #define symbol_set_type(p, Type)       block_size(symbol_info(p)) = ((block_size(symbol_info(p)) & ~0xff) | ((Type) & 0xff))
 #define symbol_clear_type(p)           block_size(symbol_info(p)) = 0
-#define s7_starlet_symbol_id(p)        ((uint8_t)((block_size(symbol_info(p)) >> 8) & 0xff))  /* *s7* id */
-#define s7_starlet_symbol_set(p, F)    block_size(symbol_info(p)) = ((block_size(symbol_info(p)) & ~0xff00) | (((F) & 0xff) << 8))
+#define starlet_symbol_id(p)           ((uint8_t)((block_size(symbol_info(p)) >> 8) & 0xff))  /* *s7* id */
+#define starlet_symbol_set(p, F)       block_size(symbol_info(p)) = ((block_size(symbol_info(p)) & ~0xff00) | (((F) & 0xff) << 8))
 
 #define REPORT_ROOTLET_REDEF 0
 #if REPORT_ROOTLET_REDEF
@@ -4269,7 +4268,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_IMPLICIT_VECTOR_REF_A, OP_IMPLICIT_VECTOR_REF_AA, OP_IMPLICIT_VECTOR_SET_3, OP_IMPLICIT_VECTOR_SET_4,
       OP_IMPLICIT_STRING_REF_A, OP_IMPLICIT_C_OBJECT_REF_A, OP_IMPLICIT_PAIR_REF_A, OP_IMPLICIT_PAIR_REF_AA,
       OP_IMPLICIT_HASH_TABLE_REF_A, OP_IMPLICIT_HASH_TABLE_REF_AA,
-      OP_IMPLICIT_LET_REF_C, OP_IMPLICIT_LET_REF_A, OP_IMPLICIT_S7_STARLET_REF_S, OP_IMPLICIT_S7_STARLET_SET,
+      OP_IMPLICIT_LET_REF_C, OP_IMPLICIT_LET_REF_A, OP_IMPLICIT_STARLET_REF_S, OP_IMPLICIT_STARLET_SET,
       OP_UNKNOWN, OP_UNKNOWN_NS, OP_UNKNOWN_NA, OP_UNKNOWN_S, OP_UNKNOWN_GG, OP_UNKNOWN_A, OP_UNKNOWN_AA, OP_UNKNOWN_NP,
 
       OP_SYMBOL, OP_CONSTANT, OP_PAIR_SYM, OP_PAIR_PAIR, OP_PAIR_ANY, HOP_HASH_TABLE_INCREMENT, OP_CLEAR_OPTS,
@@ -4640,9 +4639,9 @@ typedef enum {SL_NO_FIELD=0, SL_ACCEPT_ALL_KEYWORD_ARGUMENTS, SL_AUTOLOADING, SL
 	      SL_NUMBER_SEPARATOR, SL_OPENLETS, SL_OUTPUT_FILE_PORT_DATA_SIZE, SL_PRINT_LENGTH, SL_PROFILE, SL_PROFILE_INFO,
 	      SL_PROFILE_PREFIX, SL_ROOTLET_SIZE, SL_SAFETY, SL_STACK, SL_STACKTRACE_DEFAULTS, SL_STACK_SIZE, SL_STACK_TOP,
 	      SL_SYMBOL_QUOTE, SL_SYMBOL_PRINTER, SL_UNDEFINED_CONSTANT_WARNINGS, SL_UNDEFINED_IDENTIFIER_WARNINGS, SL_VERSION,
-	      SL_NUM_FIELDS} s7_starlet_t;
+	      SL_NUM_FIELDS} starlet_t;
 
-static const char *s7_starlet_names[SL_NUM_FIELDS] =
+static const char *starlet_names[SL_NUM_FIELDS] =
   {"no-field", "accept-all-keyword-arguments", "autoloading?", "bignum-precision", "catches", "cpu-time", "c-types",
    "debug", "default-hash-table-length", "default-random-state", "default-rationalize-error", "equivalent-float-epsilon",
    "expansions?", "filenames", "file-names", "float-format-precision", "free-heap-size", "gc-freed", "gc-info",
@@ -9412,7 +9411,7 @@ static s7_pointer let_fill(s7_scheme *sc, s7_pointer args)
   s7_pointer e = car(args), val;
   if (e == sc->rootlet)
     out_of_range_error_nr(sc, sc->fill_symbol, int_one, e, wrap_string(sc, "can't fill! rootlet", 19));
-  if (e == sc->s7_starlet)
+  if (e == sc->starlet)
     out_of_range_error_nr(sc, sc->fill_symbol, int_one, e, wrap_string(sc, "can't fill! *s7*", 16));
   if (e == sc->owlet)                 /* (owlet) copies sc->owlet, so this probably can't happen */
     out_of_range_error_nr(sc, sc->fill_symbol, int_one, e, wrap_string(sc, "can't fill! owlet", 17));
@@ -9424,7 +9423,7 @@ static s7_pointer let_fill(s7_scheme *sc, s7_pointer args)
   return(val);
 }
 
-static s7_int s7_starlet_length(void);
+static s7_int starlet_length(void);
 
 static s7_int let_length(s7_scheme *sc, s7_pointer e)
 {
@@ -9437,8 +9436,8 @@ static s7_int let_length(s7_scheme *sc, s7_pointer e)
       for (i = 0, p = sc->rootlet_slots; tis_slot(p); i++, p = next_slot(p));
       return(i);
     }
-  if (e == sc->s7_starlet)
-    return(s7_starlet_length());
+  if (e == sc->starlet)
+    return(starlet_length());
   if (has_active_methods(sc, e))
     {
       s7_pointer length_func = find_method(sc, e, sc->length_symbol);
@@ -9709,7 +9708,7 @@ static s7_pointer g_coverlet(s7_scheme *sc, s7_pointer args)
 
   s7_pointer e = car(args);
   check_method(sc, e, sc->coverlet_symbol, set_plist_1(sc, e));
-  if ((e == sc->rootlet) || (e == sc->s7_starlet))
+  if ((e == sc->rootlet) || (e == sc->starlet))
     error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "can't coverlet ~S", 17), e));
   if ((is_let(e)) && (is_unlet(e)))
     error_nr(sc, sc->out_of_range_symbol, set_elist_1(sc, wrap_string(sc, "can't coverlet unlet", 20)));
@@ -9746,9 +9745,9 @@ static void append_let(s7_scheme *sc, s7_pointer new_e, s7_pointer old_e)
 	else s7_make_slot(sc, sc->rootlet, sym, val);
       }
   else
-    if (old_e == sc->s7_starlet)
+    if (old_e == sc->starlet)
       {
-	s7_pointer iter = s7_make_iterator(sc, sc->s7_starlet);
+	s7_pointer iter = s7_make_iterator(sc, sc->starlet);
 	s7_int gc_loc = gc_protect_1(sc, iter);
 	iterator_current(iter) = cons_unchecked(sc, sc->F, sc->F);
 	set_mark_seq(iter); /* so carrier is GC protected by mark_iterator */
@@ -9821,7 +9820,7 @@ to the let target-let, and returns target-let.  (varlet (curlet) 'a 1) adds 'a t
       if (!is_let(e))
 	wrong_type_error_nr(sc, sc->varlet_symbol, 1, e, a_let_string);
     }
-  if ((is_immutable_let(e)) || (e == sc->s7_starlet))
+  if ((is_immutable_let(e)) || (e == sc->starlet))
     immutable_object_error_nr(sc, set_elist_3(sc, wrap_string(sc, "can't (varlet ~{~S~^ ~}), ~S is immutable", 41), args, e));
 
   for (s7_pointer x = cdr(args); is_pair(x); x = cdr(x))
@@ -9850,7 +9849,7 @@ to the let target-let, and returns target-let.  (varlet (curlet) 'a 1) adds 'a t
 	  break;
 
 	case T_LET: /* (varlet (inlet 'a 1) (rootlet)) is trouble */
-	  if ((p == sc->rootlet) || (e == sc->s7_starlet)) continue;
+	  if ((p == sc->rootlet) || (e == sc->starlet)) continue;
 	  append_let(sc, e, check_c_object_let(sc, p, sc->varlet_symbol));
 	  if (has_let_set_fallback(p)) set_has_let_set_fallback(e);
 	  if (has_let_ref_fallback(p)) set_has_let_ref_fallback(e);
@@ -9897,7 +9896,7 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
       if (!is_let(e))
 	wrong_type_error_nr(sc, sc->cutlet_symbol, 1, e, a_let_string);
     }
-  if ((is_immutable_let(e)) || (e == sc->s7_starlet))
+  if ((is_immutable_let(e)) || (e == sc->starlet))
     immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->cutlet_symbol, e));
 
   /* besides removing the slot we have to make sure the symbol_id does not match else
@@ -9994,7 +9993,7 @@ static s7_pointer sublet_1(s7_scheme *sc, s7_pointer e, s7_pointer bindings, s7_
 	      break;
 
 	    case T_LET:
-	      if ((p == sc->rootlet) || (new_e == sc->s7_starlet)) continue;
+	      if ((p == sc->rootlet) || (new_e == sc->starlet)) continue;
 	      append_let(sc, new_e, check_c_object_let(sc, p, caller));
 	      if (tis_slot(let_slots(new_e))) /* make sure the end slot (sp) is correct */
 		for (sp = let_slots(new_e); tis_slot(next_slot(sp)); sp = next_slot(sp));
@@ -10228,7 +10227,7 @@ s7_pointer s7_let_to_list(s7_scheme *sc, s7_pointer let)
 	  ((func = find_method(sc, let, sc->make_iterator_symbol)) != sc->undefined))
 	iter = s7_apply_function(sc, func, set_plist_1(sc, let));
       else
-	if (let == sc->s7_starlet) /* (let->list *s7*) via s7_starlet_make_iterator */
+	if (let == sc->starlet) /* (let->list *s7*) via starlet_make_iterator */
 	  {
 	    iter = s7_make_iterator(sc, let);
 	    gc_loc = gc_protect_1(sc, iter);
@@ -10752,7 +10751,7 @@ static s7_pointer g_set_outlet(s7_scheme *sc, s7_pointer args)
 
   if (!is_let(let))
     wrong_type_error_nr(sc, wrap_string(sc, "set! outlet", 11), 1, let, sc->type_names[T_LET]);
-  if (let == sc->s7_starlet)
+  if (let == sc->starlet)
     error_nr(sc, sc->out_of_range_symbol, set_elist_1(sc, wrap_string(sc, "can't set! (outlet *s7*)", 24)));
   if (is_immutable_let(let))
     immutable_object_error_nr(sc, set_elist_4(sc, wrap_string(sc, "can't (set! (outlet ~S) ~S), ~S is immutable", 44), let, cadr(args), let));
@@ -10875,7 +10874,7 @@ s7_pointer s7_symbol_local_value(s7_scheme *sc, s7_pointer sym, s7_pointer let)
 /* -------------------------------- symbol->value -------------------------------- */
 #define lookup_global(Sc, Sym) ((is_defined_global(Sym)) ? global_value(Sym) : lookup_checked(Sc, Sym))
 
-static s7_pointer s7_starlet(s7_scheme *sc, s7_int choice);
+static s7_pointer starlet(s7_scheme *sc, s7_int choice);
 
 static s7_pointer g_symbol_to_value(s7_scheme *sc, s7_pointer args)
 {
@@ -10906,7 +10905,7 @@ symbol sym in the given let: (let ((x 32)) (symbol->value 'x)) -> 32"
 	}
       if (local_let == sc->rootlet) return((is_slot(global_slot(sym))) ? global_value(sym) : sc->undefined);
       if (is_unlet(local_let)) return(initial_value(sym));
-      if (local_let == sc->s7_starlet) return(s7_starlet(sc, s7_starlet_symbol_id(sym)));
+      if (local_let == sc->starlet) return(starlet(sc, starlet_symbol_id(sym)));
       return(s7_symbol_local_value(sc, sym, local_let));
     }
   if (is_defined_global(sym))
@@ -11498,8 +11497,8 @@ Only the let is searched if ignore-globals is not #f."
 	  if (e == sc->rootlet) return(sc->T);   /* (defined? x (rootlet)) where x value is a keyword */
 	  sym = keyword_symbol(sym);             /* (defined? :print-length *s7*) */
 	}
-      if (e == sc->s7_starlet)
-	return(make_boolean(sc, s7_starlet_symbol_id(sym) != SL_NO_FIELD));
+      if (e == sc->starlet)
+	return(make_boolean(sc, starlet_symbol_id(sym) != SL_NO_FIELD));
       if (is_pair(cddr(args)))
 	{
 	  b = caddr(args);
@@ -12179,7 +12178,7 @@ s7_pointer s7_make_continuation(s7_scheme *sc)
 
 static void let_temp_done(s7_scheme *sc, s7_pointer args, s7_pointer let);
 static void let_temp_unwind(s7_scheme *sc, s7_pointer slot, s7_pointer new_value);
-static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val);
+static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val);
 
 static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
 {
@@ -12239,7 +12238,7 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
 	  break;
 
 	case OP_LET_TEMP_S7_UNWIND:
-	  s7_starlet_set_1(sc, T_Sym(stack_code(sc->stack, i)), stack_args(sc->stack, i));
+	  starlet_set_1(sc, T_Sym(stack_code(sc->stack, i)), stack_args(sc->stack, i));
 	  break;
 
 	case OP_LET_TEMP_S7_DIRECT_UNWIND:
@@ -12466,7 +12465,7 @@ static void call_with_exit(s7_scheme *sc)
 	break;
 
       case OP_LET_TEMP_S7_UNWIND:
-	s7_starlet_set_1(sc, T_Sym(stack_code(sc->stack, i)), stack_args(sc->stack, i));
+	starlet_set_1(sc, T_Sym(stack_code(sc->stack, i)), stack_args(sc->stack, i));
 	break;
 
       case OP_LET_TEMP_S7_DIRECT_UNWIND:
@@ -31102,7 +31101,7 @@ s7_pointer s7_load_with_environment(s7_scheme *sc, const char *filename, s7_poin
   s7_pointer port;
   declare_jump_info();
   TRACK(sc);
-  if (e == sc->s7_starlet) return(NULL);
+  if (e == sc->starlet) return(NULL);
 #if (!DISABLE_DEPRECATED)
   if (e == sc->nil) e = sc->rootlet; /* this is a leftover from the days when () -> rootlet */
 #endif
@@ -31197,7 +31196,7 @@ defaults to the rootlet.  To load into the current environment instead, pass (cu
       s7_pointer e = cadr(args);
       if (!is_let(e))
 	wrong_type_error_nr(sc, sc->load_symbol, 2, e, a_let_string);
-      if (e == sc->s7_starlet)
+      if (e == sc->starlet)
 	error_nr(sc, sc->wrong_type_arg_symbol,
 		 set_elist_2(sc, wrap_string(sc, "can't load ~S into *s7*", 23), name));
       set_curlet(sc, e);
@@ -31970,7 +31969,7 @@ static s7_pointer titr_len(s7_scheme *sc, s7_pointer p, const char *func, int32_
 
 static s7_pointer titr_pos(s7_scheme *sc, s7_pointer p, const char *func, int32_t line)
 {
-  if (((is_let(iterator_sequence(p))) && (iterator_sequence(p) != sc->rootlet) && (iterator_sequence(p) != sc->s7_starlet)) ||
+  if (((is_let(iterator_sequence(p))) && (iterator_sequence(p) != sc->rootlet) && (iterator_sequence(p) != sc->starlet)) ||
       (is_pair(iterator_sequence(p))))
     {
       fprintf(stderr, "%s%s[%d]: iterator-position sequence is %s%s\n",
@@ -32215,7 +32214,7 @@ static bool is_iterable_closure(s7_scheme *sc, s7_pointer x)
   return((iter) && (iter != sc->F));
 }
 
-static s7_pointer s7_starlet_make_iterator(s7_scheme *sc, s7_pointer iter);
+static s7_pointer starlet_make_iterator(s7_scheme *sc, s7_pointer iter);
 static s7_int c_object_length_to_int(s7_scheme *sc, s7_pointer obj);
 
 s7_pointer s7_make_iterator(s7_scheme *sc, s7_pointer e)
@@ -32244,8 +32243,8 @@ s7_pointer s7_make_iterator(s7_scheme *sc, s7_pointer e)
 	  iterator_let_cons(iter) = NULL;
 	  return(iter);
 	}
-      if (e == sc->s7_starlet)
-	return(s7_starlet_make_iterator(sc, iter));
+      if (e == sc->starlet)
+	return(starlet_make_iterator(sc, iter));
       p = find_make_iterator_method(sc, e, iter);
       if (p) {free_cell(sc, iter); return(p);}
       iterator_set_current_slot(iter, let_slots(e));
@@ -34582,8 +34581,8 @@ static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
 	  return;
 	}}
   if (obj == sc->rootlet)    {port_write_string(port)(sc, "(rootlet)", 9, port); return;}
-  if (obj == sc->s7_starlet) {port_write_string(port)(sc, "*s7*", 4, port);      return;}
-  if (is_unlet(obj))         {port_write_string(port)(sc, "(unlet)", 7, port);   return;}
+  if (obj == sc->starlet) {port_write_string(port)(sc, "*s7*", 4, port);      return;}
+  /* if (is_unlet(obj))      {port_write_string(port)(sc, "(unlet)", 7, port);   return;} */ /* this is the let created by (unlet), not sc->unlet_entries */
   if (sc->short_print)       {port_write_string(port)(sc, "#<let>", 6, port);    return;}
 
   /* circles can happen here:
@@ -35149,7 +35148,7 @@ static void iterator_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 		}
 	      else
 		{
-		  if ((is_let(seq)) && (seq != sc->rootlet) && (seq != sc->s7_starlet))
+		  if ((is_let(seq)) && (seq != sc->rootlet) && (seq != sc->starlet))
 		    {
 		      port_write_string(port)(sc, "(let ((iter (make-iterator ", 27, port);
 		      object_to_port_with_circle_check(sc, seq, port, use_write, ci);
@@ -46577,7 +46576,7 @@ const char *s7_help(s7_scheme *sc, s7_pointer obj)
   if (is_any_procedure(obj))
     return(s7_documentation(sc, obj));
 
-  if (obj == sc->s7_starlet)
+  if (obj == sc->starlet)
     return("*s7* is a let that gives access to s7's internal state: e.g. (*s7* 'print-length)");
 
   /* if is string, apropos? (can scan symbol table) */
@@ -47819,7 +47818,7 @@ static s7_pointer g_set_setter(s7_scheme *sc, s7_pointer args)
   s7_pointer p = car(args), setter;
   if (is_symbol(p)) /* has to precede cadr(args) checks, (set! (setter 'x let) ...) where setter is caddr(args) */
     return(symbol_set_setter(sc, p, args));
-  if (p == sc->s7_starlet)
+  if (p == sc->starlet)
     wrong_type_error_nr(sc, wrap_string(sc, "set! setter", 11), 1, p, wrap_string(sc, "something other than *s7*", 25));
 
   setter = cadr(args);
@@ -49788,7 +49787,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
       check_method(sc, source, sc->copy_symbol, args);
       if (source == sc->rootlet)
 	wrong_type_error_nr(sc, caller, 1, source, wrap_string(sc, "a sequence other than the rootlet", 33));
-      if ((!have_indices) && (is_let(dest)) && (dest != sc->s7_starlet))
+      if ((!have_indices) && (is_let(dest)) && (dest != sc->starlet))
 	{
 	  s7_pointer slot;
 	  if (dest == sc->rootlet) /* (copy (inlet 'a 1) (rootlet)) */
@@ -49887,7 +49886,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
     case T_LET:
       if (dest == sc->rootlet)
 	wrong_type_error_nr(sc, caller, 2, dest, wrap_string(sc, "a sequence other rootlet", 24));
-      if (dest == sc->s7_starlet)
+      if (dest == sc->starlet)
 	wrong_type_error_nr(sc, caller, 2, dest, wrap_string(sc, "a sequence other than *s7*", 26));
       set = let_setter;
       dest_len = source_len;          /* grows via set, so dest_len isn't relevant */
@@ -49966,9 +49965,9 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
       }
 
     case T_LET:
-      if (source == sc->s7_starlet) /* *s7* */
+      if (source == sc->starlet) /* *s7* */
 	{
-	  s7_pointer iter = s7_make_iterator(sc, sc->s7_starlet);
+	  s7_pointer iter = s7_make_iterator(sc, sc->starlet);
 	  s7_int gc_loc = gc_protect_1(sc, iter);
 	  for (i = 0; i < start; i++)
 	    {
@@ -51393,7 +51392,7 @@ static s7_pointer let_to_let(s7_scheme *sc, s7_pointer obj)
 	      s7_varlet(sc, let, sc->line_symbol, make_integer(sc, let_line(obj)));
 	    }}
       else
-	if (obj == sc->s7_starlet)
+	if (obj == sc->starlet)
 	  {
 	    s7_pointer iter = s7_make_iterator(sc, obj);
 	    s7_int gc_loc1 = gc_protect_1(sc, iter);
@@ -52472,7 +52471,7 @@ static s7_pointer init_owlet(s7_scheme *sc)
 static s7_pointer cull_history(s7_scheme *sc, s7_pointer code)
 {
   clear_symbol_list(sc); /* make a list of words banned from the history */
-  add_symbol_to_list(sc, sc->s7_starlet_symbol);
+  add_symbol_to_list(sc, sc->starlet_symbol);
   add_symbol_to_list(sc, sc->eval_symbol);
   add_symbol_to_list(sc, make_symbol(sc, "debug", 5));
   add_symbol_to_list(sc, make_symbol(sc, "trace-in", 8));
@@ -52863,7 +52862,7 @@ static bool catch_let_temp_unwind_function(s7_scheme *sc, s7_int catch_loc, s7_p
 static bool catch_let_temp_s7_unwind_function(s7_scheme *sc, s7_int catch_loc, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
   if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
-  s7_starlet_set_1(sc, T_Sym(stack_code(sc->stack, catch_loc)), stack_args(sc->stack, catch_loc));
+  starlet_set_1(sc, T_Sym(stack_code(sc->stack, catch_loc)), stack_args(sc->stack, catch_loc));
   return(false);
 }
 
@@ -57509,11 +57508,11 @@ static inline s7_pointer fx_cond_na_na(s7_scheme *sc, s7_pointer code)  /* all t
   return(sc->unspecified);
 }
 
-static s7_pointer s7_starlet(s7_scheme *sc, s7_int choice);
+static s7_pointer starlet(s7_scheme *sc, s7_int choice);
 
-static s7_pointer fx_implicit_s7_starlet_ref_s(s7_scheme *sc, s7_pointer arg) {return(s7_starlet(sc, opt3_int(arg)));}
-static s7_pointer fx_implicit_s7_starlet_print_length(s7_scheme *sc, s7_pointer arg) {return(make_integer(sc, sc->print_length));}
-static s7_pointer fx_implicit_s7_starlet_safety(s7_scheme *sc, s7_pointer arg) {return(make_integer(sc, sc->safety));}
+static s7_pointer fx_implicit_starlet_ref_s(s7_scheme *sc, s7_pointer arg) {return(starlet(sc, opt3_int(arg)));}
+static s7_pointer fx_implicit_starlet_print_length(s7_scheme *sc, s7_pointer arg) {return(make_integer(sc, sc->print_length));}
+static s7_pointer fx_implicit_starlet_safety(s7_scheme *sc, s7_pointer arg) {return(make_integer(sc, sc->safety));}
 
 static s7_function *fx_function = NULL;
 
@@ -58266,10 +58265,10 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 	  if (fx_proc(closure_body(opt1_lambda(arg))) == fx_vref_vref_tu_v) return(fx_vref_vref_3_no_let);
 	  return(fx_function[optimize_op(arg)]);
 
-	case OP_IMPLICIT_S7_STARLET_REF_S:
-	  if (opt3_int(arg) == SL_PRINT_LENGTH) return(fx_implicit_s7_starlet_print_length);
-	  if (opt3_int(arg) == SL_SAFETY) return(fx_implicit_s7_starlet_safety);
-	  return(fx_implicit_s7_starlet_ref_s);
+	case OP_IMPLICIT_STARLET_REF_S:
+	  if (opt3_int(arg) == SL_PRINT_LENGTH) return(fx_implicit_starlet_print_length);
+	  if (opt3_int(arg) == SL_SAFETY) return(fx_implicit_starlet_safety);
+	  return(fx_implicit_starlet_ref_s);
 
 	case HOP_C:
 	  if ((is_unchanged_global(car(arg))) && (car(arg) == sc->curlet_symbol)) return(fx_curlet);
@@ -72134,10 +72133,10 @@ static opt_t optimize_func_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer fu
 	{
 	  s7_pointer sym = (quotes == 1) ? cadr(arg1) : arg1;
 	  if (is_keyword(sym)) sym = keyword_symbol(sym);
-	  if (func == sc->s7_starlet)                   /* (*s7* ...), sc->s7_starlet is a let */
+	  if (func == sc->starlet)                   /* (*s7* ...), sc->starlet is a let */
 	    {
-	      set_safe_optimize_op(expr, OP_IMPLICIT_S7_STARLET_REF_S);
-	      set_opt3_int(expr, s7_starlet_symbol_id(sym));
+	      set_safe_optimize_op(expr, OP_IMPLICIT_STARLET_REF_S);
+	      set_opt3_int(expr, starlet_symbol_id(sym));
 	      return(OPT_T);
 	    }
 	  set_opt3_con(expr, sym);
@@ -73511,7 +73510,7 @@ static bool vars_syntax_ok(s7_pointer vars)
     {
       s7_pointer var = car(p);
       if ((!is_pair(var)) ||
-	  (!is_symbol(car(var))) ||
+	  (!is_normal_symbol(car(var))) ||
 	  (!is_pair(cdr(var))) ||
 	  (is_pair(cddr(var))))
 	return(false);
@@ -73527,7 +73526,7 @@ static bool vars_opt_ok(s7_scheme *sc, s7_pointer vars, int32_t hop, s7_pointer 
     {
       s7_pointer init = cadar(p);
       s7_pointer var = caar(p);  /* (define (f) (let ((+ -)) (with-let (curlet) (#_integer? (+))))) (f) */
-      if ((is_normal_symbol(var)) && (is_defined_initial(var)) && 
+      if (/* (is_normal_symbol(var)) && */ (is_defined_initial(var)) &&  /* is_normal_symbol is checked above in vars_syntax_ok */
 	  (is_slot(global_slot(var))) && (is_c_function(global_value(var))))
 	{ /* this is ridiculous TODO: vars_opt_ok needs to be smarter! */
 	  return(false);
@@ -73775,7 +73774,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 	  (optimize_expression(sc, caddr(expr), hop, e, body_export_ok) == OPT_OOPS))
 	return(OPT_OOPS);
 
-      if ((is_pair(cadr(expr))) && (caadr(expr) == sc->s7_starlet_symbol))
+      if ((is_pair(cadr(expr))) && (caadr(expr) == sc->starlet_symbol))
 	return(OPT_T);
       return(OPT_F);
 
@@ -78020,7 +78019,7 @@ static void check_let_temporarily(s7_scheme *sc)
 	  ((!is_symbol(caarx)) || (!is_fxable(sc, cadr(carx))))) /* if all_fx, each var is (symbol fxable-expr) */
 	all_fx = false;
       if ((all_s7) &&
-	  ((!is_pair(caarx)) || (car(caarx) != sc->s7_starlet_symbol) ||
+	  ((!is_pair(caarx)) || (car(caarx) != sc->starlet_symbol) ||
 	   (!is_quoted_symbol(cadr(caarx))) || (is_keyword(cadr(cadr(caarx)))) ||
 	   (!is_fxable(sc, cadr(carx)))))
 	all_s7 = false;
@@ -78047,7 +78046,7 @@ static void check_let_temporarily(s7_scheme *sc)
 		(is_null(cdar(code))))
 	      {
 		if ((is_quoted_symbol(cadar(var))) &&
-		    (s7_starlet_symbol_id(cadr(cadar(var))) == SL_OPENLETS)) /* (cadr(cadar(var)) == make_symbol_with_strlen(sc, "openlets"))) */
+		    (starlet_symbol_id(cadr(cadar(var))) == SL_OPENLETS)) /* (cadr(cadar(var)) == make_symbol_with_strlen(sc, "openlets"))) */
 		  {
 		    pair_set_syntax_op(form, OP_LET_TEMP_S7_DIRECT);
 		    set_opt1_pair(form, cdr(var));
@@ -78181,13 +78180,13 @@ static bool op_let_temp_done1(s7_scheme *sc)
       set_car(p, cdar(p));
       set_car(sc->args, cdar(sc->args));
 
-      if ((is_pair(settee)) && (car(settee) == sc->s7_starlet_symbol) &&  /* (let-temporarily (((*s7* (symbol "print-length")) 43))...) */
+      if ((is_pair(settee)) && (car(settee) == sc->starlet_symbol) &&  /* (let-temporarily (((*s7* (symbol "print-length")) 43))...) */
 	  ((is_symbol_and_keyword(cadr(settee))) ||
 	   (is_quoted_symbol(cadr(settee)))))
 	{
 	  s7_pointer sym = cadr(settee);
 	  if (is_pair(sym)) sym = cadr(sym);
-	  s7_starlet_set_1(sc, T_Sym(sym), sc->value);
+	  starlet_set_1(sc, T_Sym(sym), sc->value);
 	}
       else
 	{
@@ -78214,7 +78213,7 @@ static bool op_let_temp_done1(s7_scheme *sc)
   return(true);          /* goto start */
 }
 
-static bool *s7_starlet_immutable_field = NULL;
+static bool *starlet_immutable_field = NULL;
 
 static bool op_let_temp_s7(s7_scheme *sc) /* all entries are of the form ((*s7* 'field) fx-able-value) */
 {
@@ -78223,21 +78222,21 @@ static bool op_let_temp_s7(s7_scheme *sc) /* all entries are of the form ((*s7* 
   for (p = car(code); is_pair(p); p = cdr(p))
     {
       s7_pointer old_value, field = cadadr(caar(p)); /* p: (((*s7* 'expansions?) #f)) -- no keywords here (see check_let_temporarily) */
-      if (s7_starlet_immutable_field[s7_starlet_symbol_id(field)])
+      if (starlet_immutable_field[starlet_symbol_id(field)])
 	immutable_object_error_nr(sc, set_elist_2(sc, wrap_string(sc, "let-temporarily: can't set! (*s7* '~S)", 38), field));
-      old_value = s7_starlet(sc, s7_starlet_symbol_id(field));
+      old_value = starlet(sc, starlet_symbol_id(field));
       /* check_stack_size(sc); */ /* t101-42 but commented out (probably the #symbol stuff) */
       push_stack(sc, OP_LET_TEMP_S7_UNWIND, old_value, field);
     }
   for (p = car(code); is_pair(p); p = cdr(p), end += 4)
-    s7_starlet_set_1(sc, T_Sym(end[0]), fx_call(sc, cdar(p)));
+    starlet_set_1(sc, T_Sym(end[0]), fx_call(sc, cdar(p)));
   sc->code = cdr(code);
   return(is_pair(sc->code)); /* sc->code can be null if no body */
 }
 
 static void op_let_temp_s7_unwind(s7_scheme *sc)
 {
-  s7_starlet_set_1(sc, T_Sym(sc->code), sc->args);
+  starlet_set_1(sc, T_Sym(sc->code), sc->args);
   if (is_multiple_value(sc->value))
     sc->value = splice_in_values(sc, multiple_value(sc->value));
 }
@@ -79748,13 +79747,32 @@ static s7_pointer fx_with_let_s(s7_scheme *sc, s7_pointer arg)
   val = let_ref(sc, e, sym); /* (with-let e s) -> (let-ref e s), "s" unevalled? */
   if (val == sc->undefined)  /* but sym can have the value #<undefined>: (with-let (inlet 'x #<undefined>) x) */
     {
-      if ((e == sc->s7_starlet) && (is_slot(global_slot(sym)))) /* (let () (define (func) (with-let *s7* letrec*)) (func) (func)), .5 tlet */
+      if ((e == sc->starlet) && (is_slot(global_slot(sym)))) /* (let () (define (func) (with-let *s7* letrec*)) (func) (func)), .5 tlet */
 	return(global_value(sym));                              /* perhaps the e=*s7* check is not needed */
       if (is_slot(lookup_slot_with_let(sc, sym, e)))
 	return(sc->undefined);
       unbound_variable_error_nr(sc, sym);
     }
   return(val);
+}
+
+static void activate_starlet(s7_scheme *sc)
+{
+  s7_pointer new_e = let_copy(sc, sc->starlet); /* get fallback methods */
+  s7_pointer iter = s7_make_iterator(sc, sc->starlet);
+  gc_protect_2_via_stack(sc, new_e, iter);
+  iterator_current(iter) = cons_unchecked(sc, sc->F, sc->F);
+  set_mark_seq(iter);
+  while (true)
+    {
+      s7_pointer y = s7_iterate(sc, iter);
+      if (iterator_is_at_end(iter)) break;
+      if (lookup_unexamined(sc, car(y)))
+	add_slot_checked_with_id(sc, new_e, car(y), cdr(y));
+    }
+  set_curlet(sc, new_e);
+  set_immutable_let(new_e);
+  unstack_gc_protect(sc);
 }
 
 static void activate_with_let(s7_scheme *sc, s7_pointer e)
@@ -79769,12 +79787,15 @@ static void activate_with_let(s7_scheme *sc, s7_pointer e)
   if (e == sc->rootlet)
     set_curlet(sc, e);         /* (with-let (rootlet) ...) */
   else
-    {
-      set_with_let_let(e);
-      let_set_id(e, ++sc->let_number);
-      set_curlet(sc, e);
-      update_symbol_ids(sc, e);
-    }
+    if (e == sc->starlet)
+      activate_starlet(sc);
+    else
+      {
+	set_with_let_let(e);
+	let_set_id(e, ++sc->let_number);
+	set_curlet(sc, e);
+	update_symbol_ids(sc, e);
+      }
 }
 
 
@@ -80264,15 +80285,15 @@ static void check_set(s7_scheme *sc)
                          */
 			fx_annotate_arg(sc, cdr(code), sc->curlet); /* cdr(code) -> value */
 
-			if (car(settee) == sc->s7_starlet_symbol)    /* (set! (*s7* 'field) value) */
+			if (car(settee) == sc->starlet_symbol)    /* (set! (*s7* 'field) value) */
 			  {
 			    s7_pointer sym = (is_symbol(index)) ?
 			                       ((is_keyword(index)) ? keyword_symbol(index) : index) :
                                                ((is_quoted_symbol(index)) ? cadr(index) : index);
-			    if ((is_symbol(sym)) && (s7_starlet_symbol_id(sym) != SL_NO_FIELD))
+			    if ((is_symbol(sym)) && (starlet_symbol_id(sym) != SL_NO_FIELD))
 			      {
 				/* perhaps preset field -> op_print_length_set[misc?]|safety[tstar] etc, most (timing test) cases are just heap-size called once */
-				set_safe_optimize_op(form, OP_IMPLICIT_S7_STARLET_SET);
+				set_safe_optimize_op(form, OP_IMPLICIT_STARLET_SET);
 				set_opt3_sym(form, sym);
 			      }}}
 		    else pair_set_syntax_op(form, OP_SET_opSAq_P);  /* (set! (symbol fxable) any) */
@@ -93254,8 +93275,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_IMPLICIT_GOTO_A:            if (!op_implicit_goto_a(sc))            {if (op_unknown_a(sc))  goto EVAL;} continue;
 	case OP_IMPLICIT_VECTOR_SET_3:      if (op_implicit_vector_set_3(sc)) goto EVAL; continue;
 	case OP_IMPLICIT_VECTOR_SET_4:      if (op_implicit_vector_set_4(sc)) goto EVAL; continue;
-	case OP_IMPLICIT_S7_STARLET_REF_S:  sc->value = s7_starlet(sc, opt3_int(sc->code)); continue;
-	case OP_IMPLICIT_S7_STARLET_SET:    sc->value = s7_starlet_set_1(sc, opt3_sym(sc->code), fx_call(sc, cddr(sc->code))); continue;
+	case OP_IMPLICIT_STARLET_REF_S:     sc->value = starlet(sc, opt3_int(sc->code)); continue;
+	case OP_IMPLICIT_STARLET_SET:       sc->value = starlet_set_1(sc, opt3_sym(sc->code), fx_call(sc, cddr(sc->code))); continue;
 
 	case OP_SYMBOL:      sc->value = lookup_checked(sc, sc->code);     continue;
 	case OP_CONSTANT:    sc->value = sc->code;                         continue;
@@ -94737,7 +94758,7 @@ static void describe_gc_strings(s7_scheme *sc)
 
 /* -------------------------------- *s7* let -------------------------------- */
 
-static noreturn void s7_starlet_wrong_type_error_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer typ)
+static noreturn void starlet_wrong_type_error_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer typ)
 {
   error_nr(sc, sc->wrong_type_arg_symbol,
 	   set_elist_5(sc, wrap_string(sc, "(set! (*s7* '~A) ~S): new value is ~A but should be ~A", 54),
@@ -94751,28 +94772,28 @@ static noreturn void sl_stacktrace_wrong_type_error_nr(s7_scheme *sc, s7_pointer
   error_nr(sc, sc->wrong_type_arg_symbol, sc->elist_7);
 }
 
-static noreturn void s7_starlet_out_of_range_error_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer descr)
+static noreturn void starlet_out_of_range_error_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer descr)
 {
   error_nr(sc, sc->out_of_range_symbol,
 	   set_elist_4(sc, wrap_string(sc, "(set! (*s7* '~A) ~S): new value is out of range (~A)", 52), caller, arg, descr));
 }
 
-static s7_int s7_starlet_length(void) {return(SL_NUM_FIELDS - 1);}
+static s7_int starlet_length(void) {return(SL_NUM_FIELDS - 1);}
 
-static s7_pointer g_s7_starlet_set_fallback(s7_scheme *sc, s7_pointer args)
+static s7_pointer g_starlet_set_fallback(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer sym = cadr(args);
   if (!is_symbol(sym))
     sole_arg_wrong_type_error_nr(sc, sc->let_set_symbol, sym, sc->type_names[T_SYMBOL]);
-  return(s7_starlet_set_1(sc, sym, caddr(args)));
+  return(starlet_set_1(sc, sym, caddr(args)));
 }
 
-static s7_pointer g_s7_starlet_ref_fallback(s7_scheme *sc, s7_pointer args);
+static s7_pointer g_starlet_ref_fallback(s7_scheme *sc, s7_pointer args);
 
-static s7_pointer make_s7_starlet(s7_scheme *sc)  /* *s7* is semipermanent -- 20-May-21 */
+static s7_pointer make_starlet(s7_scheme *sc)  /* *s7* is semipermanent -- 20-May-21 */
 {
-  s7_pointer slot1 = make_semipermanent_slot(sc, sc->let_set_fallback_symbol, s7_make_function(sc, "s7-let-set", g_s7_starlet_set_fallback, 3, 0, false, "*s7* writer"));
-  s7_pointer slot2 = make_semipermanent_slot(sc, sc->let_ref_fallback_symbol, s7_make_function(sc, "s7-let-ref", g_s7_starlet_ref_fallback, 2, 0, false, "*s7* reader"));
+  s7_pointer slot1 = make_semipermanent_slot(sc, sc->let_set_fallback_symbol, s7_make_function(sc, "s7-let-set", g_starlet_set_fallback, 3, 0, false, "*s7* writer"));
+  s7_pointer slot2 = make_semipermanent_slot(sc, sc->let_ref_fallback_symbol, s7_make_function(sc, "s7-let-ref", g_starlet_ref_fallback, 2, 0, false, "*s7* reader"));
   s7_pointer x = alloc_pointer(sc);
   set_full_type(x, T_LET | T_SAFE_PROCEDURE | T_UNHEAP | T_HAS_METHODS | T_HAS_LET_REF_FALLBACK | T_HAS_LET_SET_FALLBACK);
   let_set_id(x, ++sc->let_number);
@@ -94785,11 +94806,11 @@ static s7_pointer make_s7_starlet(s7_scheme *sc)  /* *s7* is semipermanent -- 20
   set_immutable_slot(slot1);         /* make the *s7* let-ref|set! fallbacks immutable */
   set_immutable_slot(slot2);
   set_immutable_let(x);
-  sc->s7_starlet_symbol = s7_define_constant(sc, "*s7*", s7_openlet(sc, x)); /* define_constant returns the symbol */
+  sc->starlet_symbol = s7_define_constant(sc, "*s7*", s7_openlet(sc, x)); /* define_constant returns the symbol */
   for (int32_t i = 1; i < (int32_t)SL_NUM_FIELDS; i++)
     {
-      s7_pointer sym = make_symbol_with_strlen(sc, s7_starlet_names[i]);
-      s7_starlet_symbol_set(sym, (s7_starlet_t)i); /* evaluates sym twice */
+      s7_pointer sym = make_symbol_with_strlen(sc, starlet_names[i]);
+      starlet_symbol_set(sym, (starlet_t)i); /* evaluates sym twice */
     }
   return(x);
 }
@@ -95251,7 +95272,7 @@ static s7_pointer sl_protected_objects(s7_scheme *sc)
   return(nv);
 }
 
-static s7_pointer s7_starlet(s7_scheme *sc, s7_int choice)
+static s7_pointer starlet(s7_scheme *sc, s7_int choice)
 {
   switch (choice)
     {
@@ -95327,31 +95348,31 @@ s7_pointer s7_starlet_ref(s7_scheme *sc, s7_pointer sym) /* s7.h, not used here 
     {
       if (is_keyword(sym))
 	sym = keyword_symbol(sym);
-      if (s7_starlet_symbol_id(sym) != SL_NO_FIELD)
-	return(s7_starlet(sc, s7_starlet_symbol_id(sym)));
+      if (starlet_symbol_id(sym) != SL_NO_FIELD)
+	return(starlet(sc, starlet_symbol_id(sym)));
     }
   return(sc->undefined);
 }
 
 s7_pointer s7_let_field_ref(s7_scheme *sc, s7_pointer sym) {return(s7_starlet_ref(sc, sym));}
 
-static s7_pointer g_s7_starlet_ref_fallback(s7_scheme *sc, s7_pointer args)
+static s7_pointer g_starlet_ref_fallback(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer sym = cadr(args);
   if (!is_symbol(sym))
     sole_arg_wrong_type_error_nr(sc, sc->let_ref_symbol, sym, sc->type_names[T_SYMBOL]);
   if (is_keyword(sym))
     sym = keyword_symbol(sym);
-  return(s7_starlet(sc, s7_starlet_symbol_id(sym)));
+  return(starlet(sc, starlet_symbol_id(sym)));
 }
 
-static s7_pointer s7_starlet_iterate(s7_scheme *sc, s7_pointer iterator)
+static s7_pointer starlet_iterate(s7_scheme *sc, s7_pointer iterator)
 {
   s7_pointer symbol, value;
   iterator_position(iterator)++;
   if (iterator_position(iterator) >= SL_NUM_FIELDS)
     return(iterator_quit(iterator));
-  symbol = make_symbol_with_strlen(sc, s7_starlet_names[iterator_position(iterator)]);
+  symbol = make_symbol_with_strlen(sc, starlet_names[iterator_position(iterator)]);
 
   if ((iterator_position(iterator) == SL_STACK) ||
       (iterator_position(iterator) == SL_GC_PROTECTED_OBJECTS) ||
@@ -95359,8 +95380,8 @@ static s7_pointer s7_starlet_iterate(s7_scheme *sc, s7_pointer iterator)
     value = sc->F;  /* (format #f "~W" (inlet *s7*)) or (let->list *s7*) etc */
   else
     {
-      s7_pointer osw = sc->w;  /* protect against s7_starlet list making */
-      value = s7_starlet(sc, s7_starlet_symbol_id(symbol));
+      s7_pointer osw = sc->w;  /* protect against starlet list making */
+      value = starlet(sc, starlet_symbol_id(symbol));
       sc->w = osw;
     }
   if (iterator_let_cons(iterator))
@@ -95373,32 +95394,32 @@ static s7_pointer s7_starlet_iterate(s7_scheme *sc, s7_pointer iterator)
   return(cons(sc, symbol, value));
 }
 
-static s7_pointer s7_starlet_make_iterator(s7_scheme *sc, s7_pointer iter)
+static s7_pointer starlet_make_iterator(s7_scheme *sc, s7_pointer iter)
 {
   iterator_position(iter) = SL_NO_FIELD;
-  iterator_next(iter) = s7_starlet_iterate;
+  iterator_next(iter) = starlet_iterate;
   iterator_let_cons(iter) = NULL;
   return(iter);
 }
 
 static s7_pointer sl_real_geq_0(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 {
-  if (!is_real(val)) s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_REAL]);
-  if (s7_real(val) < 0.0) s7_starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should not be negative", 25));
+  if (!is_real(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_REAL]);
+  if (s7_real(val) < 0.0) starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should not be negative", 25));
   return(val);
 }
 
 static s7_pointer sl_integer_gt_0(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 {
-  if (!s7_is_integer(val)) s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_INTEGER]);
-  if (s7_integer_clamped_if_gmp(sc, val) <= 0) s7_starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should be positive", 21));
+  if (!s7_is_integer(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_INTEGER]);
+  if (s7_integer_clamped_if_gmp(sc, val) <= 0) starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should be positive", 21));
   return(val);
 }
 
 static s7_pointer sl_integer_geq_0(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 {
-  if (!s7_is_integer(val)) s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_INTEGER]);
-  if (s7_integer_clamped_if_gmp(sc, val) < 0) s7_starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should not be negative", 25));
+  if (!s7_is_integer(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_INTEGER]);
+  if (s7_integer_clamped_if_gmp(sc, val) < 0) starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should not be negative", 25));
   return(val);
 }
 
@@ -95455,9 +95476,9 @@ static s7_pointer set_bignum_precision(s7_scheme *sc, int32_t precision)
 static s7_pointer sl_set_stacktrace_defaults(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 {
   if (!is_pair(val))
-    s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_PAIR]);
+    starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_PAIR]);
   if (s7_list_length(sc, val) != 5)
-    s7_starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "a list with 5 entries", 21));
+    starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "a list with 5 entries", 21));
   if (!is_t_integer(car(val)))
     sl_stacktrace_wrong_type_error_nr(sc, sym, 1, car(val), wrap_string(sc, "an integer (stack frames)", 25), val);
   if (!is_t_integer(cadr(val)))
@@ -95480,12 +95501,12 @@ static s7_pointer sl_set_gc_stats(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       return(val);
     }
   if (!s7_is_integer(val))
-    s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
+    starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
   sc->gc_stats = s7_integer_clamped_if_gmp(sc, val);
   if (sc->gc_stats >= 16) /* gc_stats is uint32_t */
     {
       sc->gc_stats = 0;
-      s7_starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should be between 0 and 15", 29));
+      starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should be between 0 and 15", 29));
     }
   return(val);
 }
@@ -95504,14 +95525,14 @@ static s7_pointer sl_set_gc_info(s7_scheme *sc, s7_pointer sym, s7_pointer val) 
 	sc->gc_total_time = s7_integer(car(val));
 	sc->gc_calls = s7_integer(cadr(val));
       }
-    else s7_starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "#f or a list of two or three integers (the third is ignored)", 60));
+    else starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "#f or a list of two or three integers (the third is ignored)", 60));
   return(sc->F);
 }
 
 static s7_pointer sl_set_profile(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 {
   if (!s7_is_integer(val))
-    s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_INTEGER]);
+    starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_INTEGER]);
   sc->profile = s7_integer_clamped_if_gmp(sc, val);
   sc->debug_or_profile = ((sc->debug  > 1) || (sc->profile > 0));
   if (sc->profile > 0)
@@ -95529,7 +95550,7 @@ static s7_pointer sl_set_profile(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 static s7_pointer sl_set_debug(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 {
   if (!s7_is_integer(val))
-    s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_INTEGER]);
+    starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_INTEGER]);
   sc->debug = s7_integer_clamped_if_gmp(sc, val);
   sc->debug_or_profile = ((sc->debug  > 1) || (sc->profile > 0));
   if ((sc->debug > 0) &&
@@ -95544,11 +95565,11 @@ static s7_pointer sl_set_number_separator(s7_scheme *sc, s7_pointer sym, s7_poin
   s7_warn(sc, 128, "(set! (*s7* 'number-separator) ...) but number-separator is not included in this s7");
 #endif
   if (!is_character(val))
-    s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_CHARACTER]);
+    starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_CHARACTER]);
   if ((is_char_numeric(val)) || (is_char_whitespace(val)) || (!t_number_separator_p[character(val)]) ||
       (character(val) == 'i') || (character(val) == 'e') || (character(val) == 'E'))
     /* I guess +nan.0 and +inf.0 are not numeric literals, so we don't need to catch +n_a_n.0 */
-    s7_starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "a printing, non-numeric character", 33));
+    starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "a printing, non-numeric character", 33));
   sc->number_separator = character(val);
   return(val);
 }
@@ -95573,7 +95594,7 @@ static noreturn void sl_unsettable_error_nr(s7_scheme *sc, s7_pointer sym)
   immutable_object_error_nr(sc, set_elist_2(sc, wrap_string(sc, "can't set (*s7* '~S)", 20), sym));
 }
 
-static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
+static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 {
   s7_int iv;
 
@@ -95585,15 +95606,15 @@ static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val
   if (is_keyword(sym))
     sym = keyword_symbol(sym);
 
-  switch (s7_starlet_symbol_id(sym))
+  switch (starlet_symbol_id(sym))
     {
     case SL_ACCEPT_ALL_KEYWORD_ARGUMENTS:
-      if (!is_boolean(val)) s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
+      if (!is_boolean(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
       sc->accept_all_keyword_arguments = s7_boolean(sc, val);
       return(val);
 
     case SL_AUTOLOADING:
-      if (!is_boolean(val)) s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
+      if (!is_boolean(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
       sc->is_autoloading = s7_boolean(sc, val);
       return(val);
 
@@ -95613,7 +95634,7 @@ static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val
       return(val);
 
     case SL_DEFAULT_RANDOM_STATE:
-      if (!is_random_state(val)) s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_RANDOM_STATE]);
+      if (!is_random_state(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_RANDOM_STATE]);
 #if (!WITH_GMP)
       random_seed(sc->default_random_state) = random_seed(val);
       random_carry(sc->default_random_state) = random_carry(val);
@@ -95629,7 +95650,7 @@ static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val
       return(val);
 
     case SL_EXPANSIONS:
-      if (!is_boolean(val)) s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
+      if (!is_boolean(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
       sc->is_expanding = s7_boolean(sc, val);
       return(val);
 
@@ -95675,7 +95696,7 @@ static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val
       return(val);
 
     case SL_HISTORY_ENABLED:       /* (set! (*s7* 'history-enabled) #f|#t) */
-      if (!is_boolean(val)) s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
+      if (!is_boolean(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
       return(make_boolean(sc, s7_set_history_enabled(sc, s7_boolean(sc, val))));
 
     case SL_HISTORY_SIZE:
@@ -95695,7 +95716,7 @@ static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val
 
     case SL_MAKE_FUNCTION:
       if ((!is_any_closure(val)) && (val != sc->F)) 
-	s7_starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "a Scheme function or #f", 23));
+	starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "a Scheme function or #f", 23));
       if ((val != sc->F) && (!s7_is_aritable(sc, val, 2)))
 	error_nr(sc, sc->wrong_type_arg_symbol,
 		 set_elist_2(sc, wrap_string(sc, "(*s7* 'make-function) function, ~A, should take two arguments", 61), val));
@@ -95710,7 +95731,7 @@ static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val
     case SL_MAX_STACK_SIZE:
       iv = s7_integer_clamped_if_gmp(sc, sl_integer_geq_0(sc, sym, val));
       if (iv < INITIAL_STACK_SIZE)
-	s7_starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should be greater than the initial stack size", 48));
+	starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should be greater than the initial stack size", 48));
       sc->max_stack_size = (uint32_t)iv;
       return(val);
 
@@ -95724,7 +95745,7 @@ static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val
       sl_unsettable_error_nr(sc, sym);
 
     case SL_MUFFLE_WARNINGS:
-      if (!is_boolean(val)) s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
+      if (!is_boolean(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
       sc->muffle_warnings = s7_boolean(sc, val);
       return(val);
 
@@ -95732,7 +95753,7 @@ static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val
       return(sl_set_number_separator(sc, sym, val));
 
     case SL_OPENLETS:
-      if (!is_boolean(val)) s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
+      if (!is_boolean(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
       sc->has_openlets = s7_boolean(sc, val);
       return(val);
 
@@ -95746,20 +95767,20 @@ static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val
     case SL_PROFILE:
       return(sl_set_profile(sc,  sym, val));
     case SL_PROFILE_INFO:
-      if (val != sc->F) s7_starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "#f (to clear the table)", 23));
+      if (val != sc->F) starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "#f (to clear the table)", 23));
       return(clear_profile_info(sc));
     case SL_PROFILE_PREFIX:
       if ((is_symbol(val)) || val == sc->F) {sc->profile_prefix = val; return(val);}
-      s7_starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "a symbol or #f", 14));
+      starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "a symbol or #f", 14));
 
     case SL_ROOTLET_SIZE:
       sl_unsettable_error_nr(sc, sym);
 
     case SL_SAFETY:
       if (!s7_is_integer(val))
-	s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_INTEGER]);
+	starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_INTEGER]);
       if ((s7_integer_clamped_if_gmp(sc, val) > 2) || (s7_integer_clamped_if_gmp(sc, val) < -1))
-	s7_starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should be between -1 (no safety) and 2 (max safety)", 54));
+	starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should be between -1 (no safety) and 2 (max safety)", 54));
       sc->safety = s7_integer_clamped_if_gmp(sc, val);
       return(val);
 
@@ -95786,17 +95807,17 @@ static s7_pointer s7_starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val
       return(val);
 
     case SL_SYMBOL_QUOTE:
-      if (!is_boolean(val)) s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
+      if (!is_boolean(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
       sc->symbol_quote = s7_boolean(sc, val);
       return(val);
 
     case SL_UNDEFINED_CONSTANT_WARNINGS:
-      if (!is_boolean(val)) s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
+      if (!is_boolean(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
       sc->undefined_constant_warnings = s7_boolean(sc, val);
       return(val);
 
     case SL_UNDEFINED_IDENTIFIER_WARNINGS:
-      if (!is_boolean(val)) s7_starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
+      if (!is_boolean(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
       sc->undefined_identifier_warnings = s7_boolean(sc, val);
       return(val);
 
@@ -95816,36 +95837,36 @@ s7_pointer s7_starlet_set(s7_scheme *sc, s7_pointer sym, s7_pointer new_value)
     {
       if (is_keyword(sym))
 	sym = keyword_symbol(sym);
-      if (s7_starlet_symbol_id(sym) != SL_NO_FIELD)
-	return(s7_starlet_set_1(sc, sym, new_value));
+      if (starlet_symbol_id(sym) != SL_NO_FIELD)
+	return(starlet_set_1(sc, sym, new_value));
     }
   return(sc->undefined);
 }
 
 s7_pointer s7_let_field_set(s7_scheme *sc, s7_pointer sym, s7_pointer new_value) {return(s7_starlet_set(sc, sym, new_value));}
 
-static void init_s7_starlet_immutable_field(void)
+static void init_starlet_immutable_field(void)
 {
-  s7_starlet_immutable_field = (bool *)Calloc(SL_NUM_FIELDS, sizeof(bool));
-  s7_starlet_immutable_field[SL_CATCHES] = true;
-  s7_starlet_immutable_field[SL_CPU_TIME] = true;
-  s7_starlet_immutable_field[SL_C_TYPES] = true;
-  s7_starlet_immutable_field[SL_FILE_NAMES] = true;
-  s7_starlet_immutable_field[SL_FILENAMES] = true;
-  s7_starlet_immutable_field[SL_FREE_HEAP_SIZE] = true;
-  s7_starlet_immutable_field[SL_GC_FREED] = true;
-  s7_starlet_immutable_field[SL_GC_TOTAL_FREED] = true;
-  s7_starlet_immutable_field[SL_GC_PROTECTED_OBJECTS] = true;
-  s7_starlet_immutable_field[SL_MEMORY_USAGE] = true;
-  s7_starlet_immutable_field[SL_MOST_NEGATIVE_FIXNUM] = true;
-  s7_starlet_immutable_field[SL_MOST_POSITIVE_FIXNUM] = true;
-  s7_starlet_immutable_field[SL_ROOTLET_SIZE] = true;
-  s7_starlet_immutable_field[SL_STACK] = true;
-  s7_starlet_immutable_field[SL_STACK_SIZE] = true;
-  s7_starlet_immutable_field[SL_STACK_TOP] = true;
-  s7_starlet_immutable_field[SL_VERSION] = true;
-  s7_starlet_immutable_field[SL_MAJOR_VERSION] = true;
-  s7_starlet_immutable_field[SL_MINOR_VERSION] = true;
+  starlet_immutable_field = (bool *)Calloc(SL_NUM_FIELDS, sizeof(bool));
+  starlet_immutable_field[SL_CATCHES] = true;
+  starlet_immutable_field[SL_CPU_TIME] = true;
+  starlet_immutable_field[SL_C_TYPES] = true;
+  starlet_immutable_field[SL_FILE_NAMES] = true;
+  starlet_immutable_field[SL_FILENAMES] = true;
+  starlet_immutable_field[SL_FREE_HEAP_SIZE] = true;
+  starlet_immutable_field[SL_GC_FREED] = true;
+  starlet_immutable_field[SL_GC_TOTAL_FREED] = true;
+  starlet_immutable_field[SL_GC_PROTECTED_OBJECTS] = true;
+  starlet_immutable_field[SL_MEMORY_USAGE] = true;
+  starlet_immutable_field[SL_MOST_NEGATIVE_FIXNUM] = true;
+  starlet_immutable_field[SL_MOST_POSITIVE_FIXNUM] = true;
+  starlet_immutable_field[SL_ROOTLET_SIZE] = true;
+  starlet_immutable_field[SL_STACK] = true;
+  starlet_immutable_field[SL_STACK_SIZE] = true;
+  starlet_immutable_field[SL_STACK_TOP] = true;
+  starlet_immutable_field[SL_VERSION] = true;
+  starlet_immutable_field[SL_MAJOR_VERSION] = true;
+  starlet_immutable_field[SL_MINOR_VERSION] = true;
 }
 
 #define NUM_INTEGER_WRAPPERS 4
@@ -95872,7 +95893,7 @@ static const char *decoded_name(s7_scheme *sc, const s7_pointer p)
   if (p == sc->unused)              return("#<unused>");
   if (p == sc->symbol_table)        return("symbol_table");
   if (p == sc->rootlet)             return("rootlet");
-  if (p == sc->s7_starlet)          return("*s7*"); /* this is the function */
+  if (p == sc->starlet)          return("*s7*"); /* this is the function */
   if (p == sc->owlet)               return("owlet");
   if (p == sc->standard_input)      return("*stdin*");
   if (p == sc->standard_output)     return("*stdout*");
@@ -96122,7 +96143,7 @@ static void init_fx_function(void)
   fx_function[OP_LET_TEMP_A_A] = fx_let_temp_a_a;
   fx_function[OP_WITH_LET_S] = fx_with_let_s;
 
-  fx_function[OP_IMPLICIT_S7_STARLET_REF_S] = fx_implicit_s7_starlet_ref_s;
+  fx_function[OP_IMPLICIT_STARLET_REF_S] =    fx_implicit_starlet_ref_s;
   fx_function[OP_IMPLICIT_LET_REF_C] =        fx_implicit_let_ref_c;
   fx_function[OP_IMPLICIT_HASH_TABLE_REF_A] = fx_implicit_hash_table_ref_a;
   fx_function[OP_IMPLICIT_PAIR_REF_A] =       fx_implicit_pair_ref_a;
@@ -97875,7 +97896,7 @@ s7_scheme *s7_init(void)
       init_strings();
       init_fx_function();
       init_catchers();
-      init_s7_starlet_immutable_field();
+      init_starlet_immutable_field();
       already_inited = true;
     }
 #if S7_DEBUGGING
@@ -98299,7 +98320,7 @@ s7_scheme *s7_init(void)
 #endif
 
   init_signatures(sc);      /* depends on procedure symbols */
-  sc->s7_starlet = make_s7_starlet(sc);
+  sc->starlet = make_starlet(sc);
   s7_set_history_enabled(sc, true);
 
   s7_eval_c_string(sc, "(define make-hook                                                                 \n\
@@ -98815,7 +98836,7 @@ int main(int argc, char **argv)
 #endif
 
 /* --------------------------------------------------------------
- *           19.0   21.0   22.0   23.0   24.0   24.4
+ *           19.0   21.0   22.0   23.0   24.0   24.5
  * --------------------------------------------------------------
  * tpeak      148    114    108    105    102    103
  * tref      1081    687    463    459    464    410
@@ -98873,10 +98894,6 @@ int main(int argc, char **argv)
  *
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
- * (define print-length (list 1 2)) (define (f) (with-let *s7* (+ print-length 1))) (display (f)) (newline) -- need a placeholder-let (or actual let) for *s7*?
- *   so (with-let *s7* ...) would make a let with whatever *s7* entries are needed? -> (let ((print-length (*s7* 'print-length))) ...)
- *   currently sc->s7_starlet is a let (make_s7_starlet) using g_s7_let_ref_fallback, so it assumes print-length above is undefined
- *   check_with_let could notice cadr=sc->s7_starlet_symbol, op_with_starlet?, with_let_s also does notice it but here global_value is wrong
  * need some print-length/print-elements distinction for vector/pair etc [which to choose if both set?]
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * t801 make-function: funcize the arg part, use dyn-unwind for result?? [like add_trace]
