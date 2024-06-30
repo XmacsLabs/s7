@@ -602,8 +602,7 @@
 
 (when (zero? (*s7* 'profile))
   (let* ((syms (symbol-table))
-	 (num-syms (length syms))
-	 (orig-x (*s7* 'print-length)))
+	 (num-syms (length syms)))
     
     (define (unlet-test i)
       (with-let (unlet)
@@ -614,18 +613,7 @@
 	      (with-let (unlet)
 		(eval `(set! ,(syms i) 42) (rootlet)))))
 	  (lambda (type info)
-	    #f)))
-      
-      (with-let (unlet)
-	(do ((k 0 (+ k 1)))
-	    ((= k 1000))
-	  (catch #t
-	    (lambda ()
-	      (let ((x (+ k (*s7* 'print-length))))
-		(unless (eqv? x (+ k orig-x))
-		  (format *stderr* "sym: ~S, x: ~S, orig: ~S~%" (syms i) x (+ k orig-x)))))
-	    (lambda (type info)
-	      (format *stderr* "sym: ~S, error: ~S~%" (syms i) (apply format #f info)))))))
+	    #f))))
 
     (do ((i 0 (#_+ i 1))) ; "do" is not a procedure (see above) so it's not in danger here
 	((#_= i num-syms))

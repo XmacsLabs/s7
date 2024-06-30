@@ -586,11 +586,11 @@
 
 (require libm.scm)
 
-(define (f26) ; if s7 sqrt via *libc**(!! sqrt_p_p) [195] sqrt=30 gc=30, via *libm*: [246] sqrt=43 (s7__sqrt)+21 overhead, gc=30
+(define (f26) ; if s7 sqrt via *libc* (! sqrt_p_p) [195] sqrt=30 gc=30, via *libm*: [246] sqrt=43 (s7__sqrt)+21 overhead, gc=30
   (let ((sum 0.0))
     (do ((i 0 (+ i 1)))
 	((= i size) sum)
-      (set! sum (+ sum ((*libm* 'sqrt) (* 1.0 i)))))))
+      (set! sum (+ sum ((*libm* 'sqrt) i))))))
 
 ;(display "f26 ") (display (f26)) (newline)
 

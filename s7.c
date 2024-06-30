@@ -6095,7 +6095,11 @@ static s7_pointer find_let(s7_scheme *sc, s7_pointer obj)
        *   (*libc* 'memcpy): memcpy, ((rootlet) 'memcpy): #<undefined>, (with-let (rootlet) memcpy): error (undefined), (with-let *libc* memcpy): memcpy
        *   but how to get *libc* from (funclet (*libc* 'memcpy))
        *   currently (*libc* 'sqrt) is #_sqrt (i.e. s7's) whereas (*libm* 'sqrt) is libm's (i.e. s7__sqrt in libm_s7.c) -- confusing
-       *   perhaps add a funclet field to c_proc_t?
+       *   perhaps add a funclet field to c_proc_t?  All the define_function calls use sc->rootlet, which I think is sc->shadow_rootlet(?),
+       *   so we'd set the "let" field to the current notion of rootlet?  In any case, returning rootlet here is wrong, and including
+       *   everything in rootlet is also wrong.  cload currently uses s7_define for everything(?) so it passes cur_env.  So for all
+       *   those cases, we can save cur_env in c_proc_t.  s7_function_[set_]let(ffunc(?), cur_env).  (We're currently tacking on
+       *   initial_value by hand -- this will get ugly). s7_make_[typed|safe_]function_with_environment used by cload?
        */
     }
   return(sc->nil);
@@ -27386,7 +27390,7 @@ static s7_pointer string_set_p_pip_direct(s7_scheme *unused_sc, s7_pointer p1, s
 /* -------------------------------- string-append -------------------------------- */
 static s7_pointer c_object_length(s7_scheme *sc, s7_pointer obj);
 
-static bool sequence_is_empty(s7_scheme *sc, s7_pointer obj) /* "is_empty" is some C++ struct?? */
+static bool sequence_is_empty(s7_scheme *sc, s7_pointer obj) /* "is_empty" is taken by C++?? */
 {
   switch (type(obj))
     {
@@ -35089,7 +35093,8 @@ static void iterator_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 	      break;
 
 	    default:
-	      port_write_string(port)(sc, "(make-iterator ())", 18, port);	        break; /* c-object?? function? */
+	      port_write_string(port)(sc, "(make-iterator ())", 18, port); 
+	      break; /* c-object?? function? */
 	    }}
       else
 	{
@@ -65599,7 +65604,7 @@ static s7_pointer opt_set_p_p_f_with_setter(opt_info *o)
 {
   s7_pointer x = o->v[4].fp(o->v[3].o1);
   call_c_function_setter(o->sc, slot_setter(o->v[1].p), slot_symbol(o->v[1].p), x);
-  slot_set_value(o->v[1].p, x); /* symbol_increment?? */
+  slot_set_value(o->v[1].p, x);
   return(x);
 }
 
@@ -81582,7 +81587,7 @@ static goto_t set_implicit_let(s7_scheme *sc, s7_pointer let, s7_pointer inds, s
       set_optimize_op(sc->code, OP_PAIR_ANY);
       sc->value = let;
       return(goto_eval_args_top);
-      /* TODO: this is unnecessary: continue at eval_args_top -> cdr(code)+push_op_stack+call eval_last_arg+ goto apply -> apply_let -> pop_stack + goto top_no_pop */
+      /* this is unnecessary: continue at eval_args_top -> cdr(code)+push_op_stack+call eval_last_arg+ goto apply -> apply_let -> pop_stack + goto top_no_pop */
     }
   if (symval)
     {
@@ -98877,7 +98882,7 @@ int main(int argc, char **argv)
  * tset                           6260   6364   6325
  * trec      19.6   6980   6599   6656   6658   6490
  * tleft     11.8   9459   7273   7050   7050   6693
- * tmisc                          8142   7631   7685
+ * tmisc                          7614   7115   7107
  * tlamb                          8003   7941   7930
  * tgc              11.1   8177   7857   7986   8007
  * thash            11.7   9734   9479   9526   9251
@@ -98897,4 +98902,5 @@ int main(int argc, char **argv)
  * need some print-length/print-elements distinction for vector/pair etc [which to choose if both set?]
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * t801 make-function: funcize the arg part, use dyn-unwind for result?? [like add_trace]
+ * c_proc_t needs let field -- see find_let (also don't add to rootlet)
  */

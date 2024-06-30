@@ -6999,7 +6999,8 @@ bench s7 all
 The benchmark compiler.scm assumes that small
 integers can be compared with eq? (via assq), which is incorrect.
 pi.scm and chudnovsky.scm need the gmp version of s7.
-As of 24-Oct-23, s7 treats '&lt;&gt; as (#_quote &lt;&gt;) so dynamic.scm doesn't run, and peval.scm gets the wrong result.
+As of 24-Oct-23, s7 treats '&lt;&gt; as (#_quote &lt;&gt;) so dynamic.scm doesn't run, and peval.scm gets the wrong result,
+but (set! (*7s* 'symbol-quote?) #t) fixes this problem.
 I ran the bench script on an AMD 3950X machine, and got these results (in seconds):
 ack: 6.6, array1: 6.4, browse: 11.2, bv2string: 4.1, cat: 0.4,
 compiler: 16.9, conform: 30.0, cpstak: 42.8, ctak: 16.6, deriv: 9.7,
