@@ -605,7 +605,7 @@ typedef struct {
   uint32_t id;
   const char *doc;
   opt_funcs_t *opt_data; /* vunion-functions (see below) */
-  s7_pointer generic_ff, setter, signature, pars;
+  s7_pointer generic_ff, setter, signature, pars, let;
   s7_pointer (*chooser)(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr);
   /* arg_defaults|names call_args only T_C_FUNCTION_STAR -- call args for GC protection */
   union {
@@ -1969,7 +1969,7 @@ static void init_types(void)
   static s7_pointer check_nref(s7_pointer p, const char *func, int32_t line);
   static s7_pointer check_opcode(s7_pointer p, const char *func, int32_t line);
   static s7_pointer check_let_ref(s7_pointer p, uint64_t role, const char *func, int32_t line);
-  static s7_pointer check_ref_two(s7_pointer p, uint8_t expected_type, int32_t other_type, const char *func, int32_t line, const char *func1, const char *func2);
+  static s7_pointer check_ref_two(s7_pointer p, uint8_t expected_type, int32_t other_type, const char *func, int32_t line, const char *func1, const char *func2); /* for REPORT_ROOTLET_REDEF below */
   #define unchecked_type(p) ((p)->tf.type_field)
 #if WITH_GCC
   #define type(p) ({uint8_t _t_; _t_ = (p)->tf.type_field; if ((!cur_sc->printing_gc_info) && ((_t_ == T_FREE) || (_t_ >= NUM_TYPES))) print_gc_info(cur_sc, p, __func__, __LINE__); _t_;})
@@ -2007,7 +2007,7 @@ static void init_types(void)
   #define T_Itr(P) check_ref_one(P, T_ITERATOR,          __func__, __LINE__, "sweep", "process_iterator")
   #define T_Ivc(P) check_ref_one(P, T_INT_VECTOR,        __func__, __LINE__, "sweep", NULL)
   #define T_Key(P) check_ref_key(P,                      __func__, __LINE__)                /* keyword */
-  #define T_Let(P) check_ref_one(P, T_LET,               __func__, __LINE__, NULL, NULL)    /* let+rootlet but not nil */
+  #define T_Let(P) check_ref_one(P, T_LET,               __func__, __LINE__, NULL, NULL)
   #define T_Lst(P) check_ref_two(P, T_PAIR, T_NIL,       __func__, __LINE__, "gc", NULL)
   #define T_Mac(P) check_ref_mac(P,                      __func__, __LINE__)                /* a non-C macro */
   #define T_Met(P) check_ref_met(P,                      __func__, __LINE__)                /* anything that might contain a method */
@@ -2021,6 +2021,7 @@ static void init_types(void)
   #define T_Pcs(P) check_ref_two(P, T_PAIR, T_CLOSURE_STAR, __func__, __LINE__, NULL, NULL)
   #define T_Pos(P) check_nref(P,                         __func__, __LINE__)                /* not free */
   #define T_Prc(P) check_ref_prc(P,                      __func__, __LINE__)                /* any procedure (3-arg setters) or #f|#t */
+  #define T_Prf(P) check_ref_prf(P,                      __func__, __LINE__)                /* pair or #f */
   #define T_Pri(P) check_ref_pri(P,                      __func__, __LINE__)                /* input_port or #f */
   #define T_Pro(P) check_ref_pro(P,                      __func__, __LINE__)                /* output_port or #f */
   #define T_Prt(P) check_ref_prt(P,                      __func__, __LINE__)                /* input|output_port */
@@ -2082,6 +2083,7 @@ static void init_types(void)
   #define T_Pcs(P)  P
   #define T_Pos(P)  P
   #define T_Prc(P)  P
+  #define T_Prf(P)  P
   #define T_Pri(P)  P
   #define T_Pro(P)  P
   #define T_Prt(P)  P
@@ -3475,29 +3477,32 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define c_function_optional_args(f)    (T_Fnc(f))->object.fnc.optional_args
 #define c_function_max_args(f)         (T_Fnc(f))->object.fnc.all_args
 #define c_function_is_aritable(f, N)   ((c_function_min_args(f) <= N) && (c_function_max_args(f) >= N))
-#define c_function_name(f)             c_function_data(f)->name
-#define c_function_name_length(f)      c_function_data(f)->name_length
-#define c_function_documentation(f)    c_function_data(f)->doc
-#define c_function_signature(f)        c_function_data(f)->signature
+#define c_function_name(f)             c_function_data(f)->name                    /* const char* */
+#define c_function_name_length(f)      c_function_data(f)->name_length             /* int32_t */
+#define c_function_documentation(f)    c_function_data(f)->doc                     /* const char* */
+#define c_function_signature(f)        T_Prf(c_function_data(f)->signature)        /* pair or #f */
+#define c_function_set_signature(f, Val) c_function_data(f)->signature = T_Prf(Val)
 #define c_function_setter(f)           T_Prc(c_function_data(f)->setter)
 #define c_function_set_setter(f, Val)  c_function_data(f)->setter = T_Prc(Val)
-#define c_function_class(f)            c_function_data(f)->id
+#define c_function_class(f)            c_function_data(f)->id                      /* uint32_t */
 #define c_function_chooser(f)          c_function_data(f)->chooser
 #define c_function_base(f)             T_Fnc(c_function_data(f)->generic_ff)
 #define c_function_set_base(f, Val)    c_function_data(f)->generic_ff = T_Fnc(Val)
 #define c_function_marker(f)           c_function_data(f)->cam.marker              /* the mark function for the vector (mark_vector_1 etc) */
 #define c_function_set_marker(f, Val)  c_function_data(f)->cam.marker = Val
-#define c_function_symbol(f)           c_function_data(f)->sam.c_sym
+#define c_function_symbol(f)           c_function_data(f)->sam.c_sym               /* symbol or NULL */
+#define c_function_let(f)              T_Let(c_function_data(f)->let)
+#define c_function_set_let(f, Val)     c_function_data(f)->let = T_Let(Val)
 
 #define c_function_bool_setter(f)      c_function_data(f)->dam.bool_setter
 #define c_function_set_bool_setter(f, Val) c_function_data(f)->dam.bool_setter = T_Fnc(Val)
 
-#define c_function_arg_defaults(f)     c_function_data(T_Fst(f))->dam.arg_defaults
-#define c_function_call_args(f)        c_function_data(T_Fst(f))->cam.call_args
-#define c_function_arg_names(f)        c_function_data(T_Fst(f))->sam.arg_names
+#define c_function_arg_defaults(f)     c_function_data(T_Fst(f))->dam.arg_defaults /* array of s7_pointer */
+#define c_function_call_args(f)        c_function_data(T_Fst(f))->cam.call_args    /* pair or NULL */
+#define c_function_arg_names(f)        c_function_data(T_Fst(f))->sam.arg_names    /* array of s7_pointer */
 
 #define set_c_function(X, f)           do {set_opt1_cfunc(X, f); set_fn_direct(X, c_function_call(f));} while (0)
-#define c_function_opt_data(f)         c_function_data(f)->opt_data
+#define c_function_opt_data(f)         c_function_data(f)->opt_data                /* array or opt_funcs_t (vunion) */
 
 #define is_c_macro(p)                  (type(p) == T_C_MACRO)
 #define c_macro_data(f)                (T_CMac(f))->object.fnc.c_proc
@@ -4377,13 +4382,13 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_TC_WHEN_LA, OP_TC_WHEN_LAA, OP_TC_WHEN_L3A, OP_TC_LET_WHEN_LAA,
       OP_TC_COND_A_Z_A_Z_LAA, OP_TC_COND_A_Z_A_LAA_Z, OP_TC_COND_A_Z_A_LAA_LAA, OP_TC_LET_COND,
       OP_TC_IF_A_Z_LA, OP_TC_IF_A_Z_LAA, OP_TC_IF_A_Z_L3A, OP_TC_IF_A_L3A_Z, OP_TC_IF_A_LA_Z, OP_TC_IF_A_LAA_Z,
-      OP_TC_IF_A_Z_IF_A_Z_LA, OP_TC_IF_A_Z_IF_A_LA_Z, OP_TC_IF_A_Z_IF_A_Z_LAA, OP_TC_IF_A_Z_IF_A_LAA_Z, 
+      OP_TC_IF_A_Z_IF_A_Z_LA, OP_TC_IF_A_Z_IF_A_LA_Z, OP_TC_IF_A_Z_IF_A_Z_LAA, OP_TC_IF_A_Z_IF_A_LAA_Z,
       OP_TC_IF_A_Z_IF_A_Z_L3A, OP_TC_IF_A_Z_IF_A_L3A_Z, OP_TC_IF_A_Z_IF_A_L3A_L3A,
-      OP_TC_COND_A_Z_A_Z_LA, OP_TC_COND_A_Z_A_LA_Z, OP_TC_COND_A_Z_LA, OP_TC_COND_A_LA_Z, OP_TC_COND_A_Z_LAA, OP_TC_COND_A_LAA_Z, 
+      OP_TC_COND_A_Z_A_Z_LA, OP_TC_COND_A_Z_A_LA_Z, OP_TC_COND_A_Z_LA, OP_TC_COND_A_LA_Z, OP_TC_COND_A_Z_LAA, OP_TC_COND_A_LAA_Z,
       OP_TC_COND_A_Z_L3A, OP_TC_COND_A_L3A_Z,
       OP_TC_LET_IF_A_Z_LA, OP_TC_LET_IF_A_Z_LAA, OP_TC_IF_A_Z_LET_IF_A_Z_LAA,
       OP_TC_AND_A_IF_A_Z_LA, OP_TC_AND_A_IF_A_LA_Z,
-      OP_TC_CASE_LA, OP_TC_CASE_LAA, /* treat this as last tc op (see below) */
+      OP_TC_CASE_LA, OP_TC_CASE_LAA, OP_TC_CASE_L3A, /* treat this as last tc op (see below) */
 
       OP_RECUR_IF_A_A_opA_LAq, OP_RECUR_IF_A_opA_LAq_A, OP_RECUR_IF_A_A_opLA_Aq, OP_RECUR_IF_A_opLA_Aq_A,
       OP_RECUR_IF_A_A_opLA_LAq, OP_RECUR_IF_A_opLA_LAq_A,
@@ -4399,7 +4404,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
 
       NUM_OPS};
 
-#define is_tc_op(Op) ((Op >= OP_TC_AND_A_OR_A_LA) && (Op <= OP_TC_CASE_LAA))
+#define is_tc_op(Op) ((Op >= OP_TC_AND_A_OR_A_LA) && (Op <= OP_TC_CASE_L3A))
 
 typedef enum{E_C_P, E_C_PP, E_C_CP, E_C_SP, E_C_PC, E_C_PS} combine_op_t;
 
@@ -4594,13 +4599,13 @@ static const char* op_names[NUM_OPS] =
       "tc_when_la", "tc_when_laa", "tc_when_l3a", "tc_let_when_laa",
       "tc_cond_a_z_a_z_laa", "tc_cond_a_z_a_laa_z", "tc_cond_a_z_a_laa_laa", "tc_let_cond",
       "tc_if_a_z_la", "tc_if_a_z_laa", "tc_if_a_z_l3a", "tc_if_a_l3a_z", "tc_if_a_la_z", "tc_if_a_laa_z",
-      "tc_if_a_z_if_a_z_la", "tc_if_a_z_if_a_la_z", "tc_if_a_z_if_a_z_laa", "tc_if_a_z_if_a_laa_z", 
+      "tc_if_a_z_if_a_z_la", "tc_if_a_z_if_a_la_z", "tc_if_a_z_if_a_z_laa", "tc_if_a_z_if_a_laa_z",
       "tc_if_a_z_if_a_z_l3a", "tc_if_a_z_if_a_l3a_z", "tc_if_a_z_if_a_l3a_l3a",
-      "tc_cond_a_z_a_z_la", "tc_cond_a_z_a_la_z", "tc_cond_a_z_la", "tc_cond_a_la_z", "tc_cond_a_z_laa", "tc_cond_a_laa_z", 
+      "tc_cond_a_z_a_z_la", "tc_cond_a_z_a_la_z", "tc_cond_a_z_la", "tc_cond_a_la_z", "tc_cond_a_z_laa", "tc_cond_a_laa_z",
       "tc_cond_a_z_l3a", "tc_cond_a_l3a_z",
       "tc_let_if_a_z_la", "tc_let_if_a_z_laa", "if_a_z_let_if_a_z_laa",
       "tc_and_a_if_a_z_la", "tc_and_a_if_a_la_z",
-      "tc_case_la", "tc_case_laa",
+      "tc_case_la", "tc_case_laa", "tc_case_l3a",
 
       "recur_if_a_a_opa_laq", "recur_if_a_opa_laq_a", "recur_if_a_a_opla_aq", "recur_if_a_opla_aq_a",
       "recur_if_a_a_opla_laq", "recur_if_a_opla_laq_a",
@@ -5237,6 +5242,14 @@ static s7_pointer check_ref_two(s7_pointer p, uint8_t expected_type, int32_t oth
   return(p);
 }
 
+static s7_pointer check_ref_prf(s7_pointer p, const char *func, int32_t line)
+{
+  uint8_t typ = unchecked_type(p);
+  if ((typ != T_PAIR) && (p != cur_sc->F))
+    complain("%s%s[%d]: not a pair or #f, but %s (%s)%s\n", p, func, line, typ);
+  return(p);
+}
+
 static s7_pointer check_ref_prt(s7_pointer p, const char *func, int32_t line)
 {
   uint8_t typ = unchecked_type(p);
@@ -5249,7 +5262,7 @@ static s7_pointer check_ref_pri(s7_pointer p, const char *func, int32_t line)
 {
   uint8_t typ = unchecked_type(p);
   if ((typ != T_INPUT_PORT) && (p != cur_sc->F))
-    complain("%s%s[%d]: not an input port, but %s (%s)%s\n", p, func, line, typ);
+    complain("%s%s[%d]: not an input port or #f, but %s (%s)%s\n", p, func, line, typ);
   return(p);
 }
 
@@ -5257,7 +5270,7 @@ static s7_pointer check_ref_pro(s7_pointer p, const char *func, int32_t line)
 {
   uint8_t typ = unchecked_type(p);
   if ((typ != T_OUTPUT_PORT) && (p != cur_sc->F))
-    complain("%s%s[%d]: not an output port, but %s (%s)%s\n", p, func, line, typ);
+    complain("%s%s[%d]: not an output port or #f, but %s (%s)%s\n", p, func, line, typ);
   return(p);
 }
 
@@ -6024,57 +6037,58 @@ static const char *make_type_name(s7_scheme *sc, const char *name, article_t art
 static const char *type_name_from_type(int32_t typ, article_t article)
 {
   /* if the type enum never changed, this could just be an array lookup, but it doesn't matter -- this function isn't called much */
+  bool bare = (article == NO_ARTICLE);
   switch (typ)
     {
-    case T_FREE:            return((article == NO_ARTICLE) ? "free-cell"         : "a free cell");
+    case T_FREE:            return((bare) ? "free-cell"         : "a free cell");
     case T_NIL:             return("nil");
-    case T_UNUSED:          return((article == NO_ARTICLE) ? "#<unused>"         : "the unused object");
-    case T_EOF:             return((article == NO_ARTICLE) ? "#<eof>"            : "the end-of-file object");
-    case T_UNSPECIFIED:     return((article == NO_ARTICLE) ? "#<unspecified>"    : "the unspecified object");
-    case T_UNDEFINED:       return((article == NO_ARTICLE) ? "undefined"         : "an undefined object");
+    case T_UNUSED:          return((bare) ? "#<unused>"         : "the unused object");
+    case T_EOF:             return((bare) ? "#<eof>"            : "the end-of-file object");
+    case T_UNSPECIFIED:     return((bare) ? "#<unspecified>"    : "the unspecified object");
+    case T_UNDEFINED:       return((bare) ? "undefined"         : "an undefined object");
     case T_BOOLEAN:         return("boolean");
-    case T_STRING:          return((article == NO_ARTICLE) ? "string"            : "a string");
-    case T_BYTE_VECTOR:     return((article == NO_ARTICLE) ? "byte-vector"       : "a byte-vector");
-    case T_SYMBOL:          return((article == NO_ARTICLE) ? "symbol"            : "a symbol");
-    case T_SYNTAX:          return((article == NO_ARTICLE) ? "syntax"            : "syntactic");
-    case T_PAIR:            return((article == NO_ARTICLE) ? "pair"              : "a pair");
-    case T_GOTO:            return((article == NO_ARTICLE) ? "goto"              : "a goto (from call-with-exit)");
-    case T_CONTINUATION:    return((article == NO_ARTICLE) ? "continuation"      : "a continuation");
+    case T_STRING:          return((bare) ? "string"            : "a string");
+    case T_BYTE_VECTOR:     return((bare) ? "byte-vector"       : "a byte-vector");
+    case T_SYMBOL:          return((bare) ? "symbol"            : "a symbol");
+    case T_SYNTAX:          return((bare) ? "syntax"            : "syntactic");
+    case T_PAIR:            return((bare) ? "pair"              : "a pair");
+    case T_GOTO:            return((bare) ? "goto"              : "a goto (from call-with-exit)");
+    case T_CONTINUATION:    return((bare) ? "continuation"      : "a continuation");
     case T_C_RST_NO_REQ_FUNCTION:
-    case T_C_FUNCTION:      return((article == NO_ARTICLE) ? "c-function"        : "a c-function");
-    case T_C_FUNCTION_STAR: return((article == NO_ARTICLE) ? "c-function*"       : "a c-function*");
-    case T_CLOSURE:         return((article == NO_ARTICLE) ? "function"          : "a function");
-    case T_CLOSURE_STAR:    return((article == NO_ARTICLE) ? "function*"         : "a function*");
-    case T_C_MACRO:         return((article == NO_ARTICLE) ? "c-macro"           : "a c-macro");
-    case T_C_POINTER:       return((article == NO_ARTICLE) ? "c-pointer"         : "a c-pointer");
-    case T_CHARACTER:       return((article == NO_ARTICLE) ? "character"         : "a character");
-    case T_VECTOR:          return((article == NO_ARTICLE) ? "vector"            : "a vector");
-    case T_INT_VECTOR:      return((article == NO_ARTICLE) ? "int-vector"        : "an int-vector");
-    case T_FLOAT_VECTOR:    return((article == NO_ARTICLE) ? "float-vector"      : "a float-vector");
-    case T_MACRO_STAR:      return((article == NO_ARTICLE) ? "macro*"            : "a macro*");
-    case T_MACRO:           return((article == NO_ARTICLE) ? "macro"             : "a macro");
-    case T_BACRO_STAR:      return((article == NO_ARTICLE) ? "bacro*"            : "a bacro*");
-    case T_BACRO:           return((article == NO_ARTICLE) ? "bacro"             : "a bacro");
-    case T_CATCH:           return((article == NO_ARTICLE) ? "catch"             : "a catch");
-    case T_STACK:           return((article == NO_ARTICLE) ? "stack"             : "a stack");
-    case T_DYNAMIC_WIND:    return((article == NO_ARTICLE) ? "dynamic-wind"      : "a dynamic-wind");
-    case T_HASH_TABLE:      return((article == NO_ARTICLE) ? "hash-table"        : "a hash-table");
-    case T_ITERATOR:        return((article == NO_ARTICLE) ? "iterator"          : "an iterator");
-    case T_LET:             return((article == NO_ARTICLE) ? "let"               : "a let");
-    case T_COUNTER:         return((article == NO_ARTICLE) ? "internal-counter"  : "an internal counter");
-    case T_RANDOM_STATE:    return((article == NO_ARTICLE) ? "random-state"      : "a random-state");
-    case T_SLOT:            return((article == NO_ARTICLE) ? "slot"              : "a slot (variable binding)");
-    case T_INTEGER:         return((article == NO_ARTICLE) ? "integer"           : "an integer");
-    case T_RATIO:           return((article == NO_ARTICLE) ? "ratio"             : "a ratio");
-    case T_REAL:            return((article == NO_ARTICLE) ? "real"              : "a real");
-    case T_COMPLEX:         return((article == NO_ARTICLE) ? "complex-number"    : "a complex number");
-    case T_BIG_INTEGER:     return((article == NO_ARTICLE) ? "big-integer"       : "a big integer");
-    case T_BIG_RATIO:       return((article == NO_ARTICLE) ? "big-ratio"         : "a big ratio");
-    case T_BIG_REAL:        return((article == NO_ARTICLE) ? "big-real"          : "a big real");
-    case T_BIG_COMPLEX:     return((article == NO_ARTICLE) ? "big-complex-number": "a big complex number");
-    case T_INPUT_PORT:      return((article == NO_ARTICLE) ? "input-port"        : "an input port");
-    case T_OUTPUT_PORT:     return((article == NO_ARTICLE) ? "output-port"       : "an output port");
-    case T_C_OBJECT:        return((article == NO_ARTICLE) ? "c-object"          : "a c_object");
+    case T_C_FUNCTION:      return((bare) ? "c-function"        : "a c-function");
+    case T_C_FUNCTION_STAR: return((bare) ? "c-function*"       : "a c-function*");
+    case T_CLOSURE:         return((bare) ? "function"          : "a function");
+    case T_CLOSURE_STAR:    return((bare) ? "function*"         : "a function*");
+    case T_C_MACRO:         return((bare) ? "c-macro"           : "a c-macro");
+    case T_C_POINTER:       return((bare) ? "c-pointer"         : "a c-pointer");
+    case T_CHARACTER:       return((bare) ? "character"         : "a character");
+    case T_VECTOR:          return((bare) ? "vector"            : "a vector");
+    case T_INT_VECTOR:      return((bare) ? "int-vector"        : "an int-vector");
+    case T_FLOAT_VECTOR:    return((bare) ? "float-vector"      : "a float-vector");
+    case T_MACRO_STAR:      return((bare) ? "macro*"            : "a macro*");
+    case T_MACRO:           return((bare) ? "macro"             : "a macro");
+    case T_BACRO_STAR:      return((bare) ? "bacro*"            : "a bacro*");
+    case T_BACRO:           return((bare) ? "bacro"             : "a bacro");
+    case T_CATCH:           return((bare) ? "catch"             : "a catch");
+    case T_STACK:           return((bare) ? "stack"             : "a stack");
+    case T_DYNAMIC_WIND:    return((bare) ? "dynamic-wind"      : "a dynamic-wind");
+    case T_HASH_TABLE:      return((bare) ? "hash-table"        : "a hash-table");
+    case T_ITERATOR:        return((bare) ? "iterator"          : "an iterator");
+    case T_LET:             return((bare) ? "let"               : "a let");
+    case T_COUNTER:         return((bare) ? "internal-counter"  : "an internal counter");
+    case T_RANDOM_STATE:    return((bare) ? "random-state"      : "a random-state");
+    case T_SLOT:            return((bare) ? "slot"              : "a slot (variable binding)");
+    case T_INTEGER:         return((bare) ? "integer"           : "an integer");
+    case T_RATIO:           return((bare) ? "ratio"             : "a ratio");
+    case T_REAL:            return((bare) ? "real"              : "a real");
+    case T_COMPLEX:         return((bare) ? "complex-number"    : "a complex number");
+    case T_BIG_INTEGER:     return((bare) ? "big-integer"       : "a big integer");
+    case T_BIG_RATIO:       return((bare) ? "big-ratio"         : "a big ratio");
+    case T_BIG_REAL:        return((bare) ? "big-real"          : "a big real");
+    case T_BIG_COMPLEX:     return((bare) ? "big-complex-number": "a big complex number");
+    case T_INPUT_PORT:      return((bare) ? "input-port"        : "an input port");
+    case T_OUTPUT_PORT:     return((bare) ? "output-port"       : "an output port");
+    case T_C_OBJECT:        return((bare) ? "c-object"          : "a c_object");
     }
   return(NULL);
 }
@@ -6088,23 +6102,13 @@ static s7_pointer find_let(s7_scheme *sc, s7_pointer obj)
     case T_C_OBJECT:
       return(c_object_let(obj));
     case T_C_POINTER:
-      if ((is_let(c_pointer_info(obj))) &&
-	  (c_pointer_info(obj) != sc->rootlet))
+      if (is_let(c_pointer_info(obj)))
 	return(c_pointer_info(obj));
-    case T_CONTINUATION: case T_GOTO:
-    case T_C_MACRO: case T_C_FUNCTION_STAR: case T_C_FUNCTION: case T_C_RST_NO_REQ_FUNCTION:
       return(sc->rootlet);
-      /* what about cload into local? there's no way for a c-func to get its definition env? (s7_define sets global from local_slot if env==shadow_rootlet)
-       *   (*libc* 'memcpy): memcpy, ((rootlet) 'memcpy): #<undefined>, (with-let (rootlet) memcpy): error (undefined), (with-let *libc* memcpy): memcpy
-       *   but how to get *libc* from (funclet (*libc* 'memcpy))
-       *   currently (*libc* 'sqrt) is #_sqrt (i.e. s7's) whereas (*libm* 'sqrt) is libm's (i.e. s7__sqrt in libm_s7.c) -- confusing
-       *   perhaps add a funclet field to c_proc_t?  All the define_function calls use sc->rootlet, which I think is sc->shadow_rootlet(?),
-       *   so we'd set the "let" field to the current notion of rootlet?  In any case, returning rootlet here is wrong, and including
-       *   everything in rootlet is also wrong.  cload currently uses s7_define for everything(?) so it passes cur_env.  So for all
-       *   those cases, we can save cur_env in c_proc_t.  s7_function_[set_]let(ffunc(?), cur_env).  (We're currently tacking on
-       *   initial_value by hand -- this will get ugly). s7_make_[typed|safe_]function_with_environment used by cload?
-       *   Can this let be GC'd if not explicitly protected?
-       */
+    case T_CONTINUATION: case T_GOTO:
+      return(sc->rootlet); /* ??? */
+    case T_C_MACRO: case T_C_FUNCTION_STAR: case T_C_FUNCTION: case T_C_RST_NO_REQ_FUNCTION: /* TODO: t_c_macro needs to be checked */
+      return(c_function_let(obj));
     }
   return(sc->nil);
 }
@@ -10408,7 +10412,7 @@ static inline s7_pointer g_simple_let_ref(s7_scheme *sc, s7_pointer args)
   return(let_ref_p_pp(sc, let_outlet(lt), sym));
 }
 
-static s7_pointer g_rootlet_ref(s7_scheme *sc, s7_pointer args) 
+static s7_pointer g_rootlet_ref(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer sym = cadr(args);
   return((is_slot(global_slot(sym))) ? global_value(sym) : sc->undefined);
@@ -10664,10 +10668,6 @@ static s7_pointer g_rootlet(s7_scheme *sc, s7_pointer unused)
   #define Q_rootlet s7_make_signature(sc, 1, sc->is_let_symbol)
   return(sc->rootlet);
 }
-/* as with the symbol-table, this function can lead to disaster -- user could
- *   clobber the let etc.  But we want it to be editable and augmentable,
- *   so I guess I'll leave it alone.  (See curlet|funclet as well).
- */
 
 s7_pointer s7_rootlet(s7_scheme *sc) {return(sc->rootlet);}
 
@@ -35097,7 +35097,7 @@ static void iterator_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 	      break;
 
 	    default:
-	      port_write_string(port)(sc, "(make-iterator ())", 18, port); 
+	      port_write_string(port)(sc, "(make-iterator ())", 18, port);
 	      break; /* c-object?? function? */
 	    }}
       else
@@ -46036,7 +46036,7 @@ static s7_pointer make_function(s7_scheme *sc, const char *name, s7_function f, 
   c_function_name(x) = name;            /* (procedure-name proc) => (format #f "~A" proc) */
   c_function_name_length(x) = safe_strlen(name);
   c_function_documentation(x) = (doc) ? make_semipermanent_c_string(sc, doc) : NULL;
-  c_function_signature(x) = sc->F;
+  c_function_set_signature(x, sc->F);
 
   c_function_min_args(x) = req;
   c_function_optional_args(x) = opt;    /* T_C_FUNCTION_STAR type may be set later, so T_Fst not usable here */
@@ -46047,6 +46047,7 @@ static s7_pointer make_function(s7_scheme *sc, const char *name, s7_function f, 
   c_function_opt_data(x) = NULL;
   c_function_marker(x) = NULL;
   c_function_symbol(x) = NULL;
+  c_function_set_let(x, sc->rootlet);
   return(x);
 }
 
@@ -46084,7 +46085,16 @@ s7_pointer s7_make_typed_function(s7_scheme *sc, const char *name, s7_function f
 {
   s7_pointer func = s7_make_function(sc, name, f, required_args, optional_args, rest_arg, doc);
   set_type_bit(func, T_SAFE_PROCEDURE);
-  if (signature) c_function_signature(func) = signature;
+  if (signature) c_function_set_signature(func, signature);
+  return(func);
+}
+
+s7_pointer s7_make_typed_function_with_environment(s7_scheme *sc, const char *name, s7_function f,
+						   s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc,
+						   s7_pointer signature, s7_pointer let)
+{
+  s7_pointer func = s7_make_typed_function(sc, name, f, required_args, optional_args, rest_arg, doc, signature);
+  c_function_set_let(func, let);
   return(func);
 }
 
@@ -46261,8 +46271,8 @@ static s7_pointer g_funclet(s7_scheme *sc, s7_pointer args)
 /* -------------------------------- s7_define_function and friends --------------------------------
  *
  * all c_func* are semipermanent, but they might be local: (let () (load "libm.scm" (curlet)) ...)
- *   but there's no way to tell in general that the let is not exported.
  */
+
 s7_pointer s7_define_function(s7_scheme *sc, const char *name, s7_function fnc,
 			      s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc)
 {
@@ -46322,7 +46332,7 @@ s7_pointer s7_define_unsafe_typed_function(s7_scheme *sc, const char *name, s7_f
   /* returns (string->symbol name), not the c_proc_t func */
   s7_pointer func = s7_make_function(sc, name, fnc, required_args, optional_args, rest_arg, doc);
   s7_pointer sym = make_symbol_with_strlen(sc, name);
-  if (signature) c_function_signature(func) = signature;
+  if (signature) c_function_set_signature(func, signature);
   s7_define(sc, sc->rootlet, sym, func);
   return(sym);
 }
@@ -46333,7 +46343,7 @@ s7_pointer s7_define_semisafe_typed_function(s7_scheme *sc, const char *name, s7
 {
   s7_pointer func = s7_make_function(sc, name, fnc, required_args, optional_args, rest_arg, doc);
   s7_pointer sym = make_symbol_with_strlen(sc, name);
-  if (signature) c_function_signature(func) = signature;
+  if (signature) c_function_set_signature(func, signature);
   set_is_semisafe(func);
   s7_define(sc, sc->rootlet, sym, func);
   return(sym);
@@ -46374,7 +46384,7 @@ s7_pointer s7_make_function_star(s7_scheme *sc, const char *name, s7_function fn
       c_function_call_args(func) = NULL;
       c_function_arg_names(func) = names;
       c_function_arg_defaults(func) = defaults;
-      c_func_set_simple_defaults(func);
+      c_func_set_simple_defaults(func);                  /* mark that the defaults need GC protection */
       /* (define* (f :allow-other-keys) 32) -> :allow-other-keys can't be the only parameter: (:allow-other-keys) */
 
       for (s7_int i = 0; i < n_args; p = cdr(p), i++)
@@ -46432,7 +46442,7 @@ static void define_function_star_1(s7_scheme *sc, const char *name, s7_function 
     func = s7_make_safe_function_star(sc, name, fnc, arglist, doc);
   else func = s7_make_function_star(sc, name, fnc, arglist, doc);
   s7_define(sc, sc->rootlet, make_symbol_with_strlen(sc, name), func);
-  if (signature) c_function_signature(func) = signature;
+  if (signature) c_function_set_signature(func, signature);
 }
 
 void s7_define_function_star(s7_scheme *sc, const char *name, s7_function fnc, const char *arglist, const char *doc)
@@ -47254,8 +47264,8 @@ s7_pointer s7_typed_dilambda(s7_scheme *sc,
 {
   s7_pointer get_func = s7_dilambda(sc, name, getter, get_req_args, get_opt_args, setter, set_req_args, set_opt_args, documentation);
   s7_pointer set_func = c_function_setter(get_func);
-  if (get_sig) c_function_signature(get_func) = get_sig;
-  if (set_sig) c_function_signature(set_func) = set_sig;
+  if (get_sig) c_function_set_signature(get_func, get_sig);
+  if (set_sig) c_function_set_signature(set_func, set_sig);
   return(get_func);
 }
 
@@ -70819,7 +70829,7 @@ static s7_pointer make_function_with_class(s7_scheme *sc, s7_pointer cls, const 
 {
   s7_pointer uf = s7_make_safe_function(sc, name, f, required_args, optional_args, rest_arg, NULL);
   s7_function_set_class(sc, uf, cls);
-  c_function_signature(uf) = c_function_signature(cls);
+  c_function_set_signature(uf, c_function_signature(cls));
   return(uf);
 }
 
@@ -70828,7 +70838,7 @@ static s7_pointer make_unsafe_function_with_class(s7_scheme *sc, s7_pointer cls,
 {
   s7_pointer uf = s7_make_function(sc, name, f, required_args, optional_args, rest_arg, NULL); /* was s7_make_safe_function! 14-Dec-20 */
   s7_function_set_class(sc, uf, cls);
-  c_function_signature(uf) = c_function_signature(cls);
+  c_function_set_signature(uf, c_function_signature(cls));
   return(uf);
 }
 
@@ -75362,7 +75372,7 @@ static bool check_tc_when(s7_scheme *sc, const s7_pointer name, int32_t vars, s7
 
 static bool check_tc_case(s7_scheme *sc, s7_pointer name, s7_pointer arg_names, s7_pointer body)
 {
-  /* vars == 1|2, opt1_any(clause) = key, has_tc(arg) = is tc call, opt2_any(clause) = result: has_tc(la arg) has_fx(val) or ((...)...) */
+  /* vars == 1|2|3, opt1_any(clause) = key, has_tc(arg) = is tc call, opt2_any(clause) = result: has_tc(la arg) has_fx(val) or ((...)...) */
   s7_pointer clauses;
   s7_int len, vars = proper_list_length(arg_names);
   bool got_else = false, results_fxable = true;
@@ -75397,9 +75407,10 @@ static bool check_tc_case(s7_scheme *sc, s7_pointer name, s7_pointer arg_names, 
 	    {
 	      s7_int local_vars = proper_list_length(cdar(result));
 	      if ((caar(result) == name) &&
-		  (((vars == 1) && (local_vars == 1)) || ((vars == 2) && (local_vars == 2))) &&
+		  (((vars == 1) && (local_vars == 1)) || ((vars == 2) && (local_vars == 2)) || ((vars == 3) && (local_vars == 3))) &&
 		  (is_fxable(sc, cadar(result))) &&
-		  ((vars == 1) || (is_fxable(sc, caddar(result)))))
+		  ((vars == 1) || (is_fxable(sc, caddar(result)))) &&
+		  ((vars <= 2) || (is_fxable(sc, car(cdddar(result))))))
 		{
 		  set_has_tc(car(result));
 		  set_opt2_any(clauses, car(result));
@@ -75418,10 +75429,10 @@ static bool check_tc_case(s7_scheme *sc, s7_pointer name, s7_pointer arg_names, 
 	}}
   if ((!got_else) || (!is_null(clauses)))
     return(false);
-  set_optimize_op(body, (vars == 1) ? OP_TC_CASE_LA : OP_TC_CASE_LAA);
+  set_optimize_op(body, (vars == 1) ? OP_TC_CASE_LA : ((vars == 2) ? OP_TC_CASE_LAA : OP_TC_CASE_L3A));
   set_opt3_arglen(cdr(body), len);
   fx_annotate_arg(sc, cdr(body), arg_names);
-  fx_tree(sc, cdr(body), car(arg_names), (vars == 1) ? NULL : cadr(arg_names), NULL, true);
+  fx_tree(sc, cdr(body), car(arg_names), (vars == 1) ? NULL : cadr(arg_names), (vars <= 2) ? NULL : caddr(arg_names), true);
   if (results_fxable) set_optimized(body);
   return(results_fxable);
 }
@@ -75445,7 +75456,7 @@ static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t vars, s7_point
 		  if ((is_fxable(sc, cadr(la))) &&
 		      (((vars == 1) && (is_null(cddr(la)))) ||
 		       ((vars == 2) && (is_pair(cddr(la))) && (is_null(cdddr(la))) && (is_fxable(sc, caddr(la)))) ||
-		       ((vars == 3) && (is_pair(cddr(la))) && (is_pair(cdddr(la))) && (is_null(cdr(cdddr(la)))) && 
+		       ((vars == 3) && (is_pair(cddr(la))) && (is_pair(cdddr(la))) && (is_null(cdr(cdddr(la)))) &&
 			(is_fxable(sc, caddr(la))) && (is_fxable(sc, cadddr(la))))))
 		    {
 		      bool zs_fxable = is_fxable(sc, cadr(clause1));
@@ -75466,7 +75477,7 @@ static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t vars, s7_point
 		      if ((is_fxable(sc, cadr(la))) &&
 			  (((vars == 1) && (is_null(cddr(la)))) ||
 			   ((vars == 2) && (is_pair(cddr(la))) && (is_null(cdddr(la))) && (is_fxable(sc, caddr(la)))) ||
-			   ((vars == 3) && (is_pair(cddr(la))) && (is_pair(cdddr(la))) && (is_null(cdr(cdddr(la)))) && 
+			   ((vars == 3) && (is_pair(cddr(la))) && (is_pair(cdddr(la))) && (is_null(cdr(cdddr(la)))) &&
 			    (is_fxable(sc, caddr(la))) && (is_fxable(sc, cadddr(la))))))
 			{
 			  bool zs_fxable = is_fxable(sc, car(else_clause));
@@ -75961,8 +75972,8 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 		    {
 		      if (((vars == 1) && (is_null(cddr(la)))) ||
 			  ((vars == 2) && (is_pair(cddr(la))) && (is_null(cdddr(la))) && (is_safe_fxable(sc, caddr(la)))) ||
-			  ((vars == 3) && 
-			   ((is_proper_list_4(sc, in_false)) || (is_proper_list_4(sc, in_true))) && 
+			  ((vars == 3) &&
+			   ((is_proper_list_4(sc, in_false)) || (is_proper_list_4(sc, in_true))) &&
 			   (is_safe_fxable(sc, caddr(la))) && (is_safe_fxable(sc, cadddr(la))) &&
 			   (((is_proper_list_4(sc, in_true)) && (car(in_true) == name) &&
 			     (is_fxable(sc, cadr(in_true))) && (is_safe_fxable(sc, caddr(in_true))) && (is_safe_fxable(sc, cadddr(in_true)))) ||
@@ -75986,9 +75997,9 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 			  fx_annotate_args(sc, cdr(la), args);      /* la arg(s) */
 			  if (vars == 3)
 			    {
-			      if (optimize_op(body) != OP_TC_IF_A_Z_IF_A_L3A_Z) 
+			      if (optimize_op(body) != OP_TC_IF_A_Z_IF_A_L3A_Z)
 				fx_annotate_args(sc, cdr(in_false), args);
-			      if (optimize_op(body) != OP_TC_IF_A_Z_IF_A_Z_L3A) 
+			      if (optimize_op(body) != OP_TC_IF_A_Z_IF_A_Z_L3A)
 				fx_annotate_args(sc, cdr(in_true), args);
 			    }
 			  if (optimize_op(body) != OP_TC_IF_A_Z_IF_A_L3A_L3A)
@@ -76056,7 +76067,7 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
     return(check_tc_cond(sc, name, vars, args, body));
 
   /* case */
-  if (((vars == 1) || (vars == 2)) &&
+  if (((vars >= 1) && (vars <= 3)) &&
       (car(body) == sc->case_symbol) &&
       (is_pair(cdr(body))) &&
       (is_fxable(sc, cadr(body))))
@@ -76154,7 +76165,7 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
 
 	    if ((!unstarred_lambda) && (is_pair(cleared_args)))
 	      {
-		cleared_args = proper_list_reverse_in_place(sc, cleared_args); 
+		cleared_args = proper_list_reverse_in_place(sc, cleared_args);
 		/* we need pars in decl order below, else (e.g.) fx_o out-of-date because args does not represent lambda args (as in its env) */
 		if (car(cleared_args) == func) cleared_args = cdr(cleared_args);
 	      }
@@ -86899,7 +86910,9 @@ static bool op_tc_case_la(s7_scheme *sc, s7_pointer code, int vars)
   /* opt1_any(clause) = key, has_tc(arg) = is tc call, opt2_any(clause) = result: has_tc(la arg) has_fx(val) or ((...)...) */
   #define case_clause_key(p) opt1_any(p)
   #define case_clause_result(p) opt2_any(p)
-  s7_pointer clauses = cddr(code), la_slot = let_slots(sc->curlet), endp, selp = cdr(code), laa_slot = (vars == 1) ? NULL : next_slot(la_slot);
+  s7_pointer clauses = cddr(code), la_slot = let_slots(sc->curlet), endp, selp = cdr(code);
+  s7_pointer laa_slot = (vars == 1) ? NULL : next_slot(la_slot);
+  s7_pointer l3a_slot = (vars <= 2) ? NULL : next_slot(laa_slot);
   s7_int len = opt3_arglen(cdr(code));
   if (len == 3)
     {
@@ -86917,6 +86930,7 @@ static bool op_tc_case_la(s7_scheme *sc, s7_pointer code, int vars)
 	    {
 	      slot_set_value(la_slot, fx_call(sc, cdr(endp)));
 	      if (vars > 1) slot_set_value(laa_slot, fx_call(sc, cddr(endp)));
+	      if (vars > 2) slot_set_value(l3a_slot, fx_call(sc, cdddr(endp)));
 	    }
 	  else break;
 	}}
@@ -86932,6 +86946,7 @@ static bool op_tc_case_la(s7_scheme *sc, s7_pointer code, int vars)
 	  {
 	    slot_set_value(la_slot, fx_call(sc, cdr(endp)));
 	    if (vars > 1) slot_set_value(laa_slot, fx_call(sc, cddr(endp)));
+	    if (vars > 2) slot_set_value(l3a_slot, fx_call(sc, cdddr(endp)));
 	  }
 	else break;
       }
@@ -93199,6 +93214,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_TC_IF_A_Z_LET_IF_A_Z_LAA: tick_tc(sc, sc->cur_op); if (op_tc_if_a_z_let_if_a_z_laa(sc, sc->code))           continue; goto EVAL;
 	case OP_TC_CASE_LA:               tick_tc(sc, sc->cur_op); if (op_tc_case_la(sc, sc->code, 1))                      continue; goto BEGIN;
 	case OP_TC_CASE_LAA:              tick_tc(sc, sc->cur_op); if (op_tc_case_la(sc, sc->code, 2))                      continue; goto BEGIN;
+	case OP_TC_CASE_L3A:              tick_tc(sc, sc->cur_op); if (op_tc_case_la(sc, sc->code, 3))                      continue; goto BEGIN;
 	case OP_TC_LET_COND:              tick_tc(sc, sc->cur_op); if (op_tc_let_cond(sc, sc->code))                        continue; goto EVAL;
 
 	case OP_RECUR_IF_A_A_opA_LAq:           wrap_recur_if_a_a_opa_laq(sc, true, true);         continue;
@@ -95739,7 +95755,7 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       sl_unsettable_error_nr(sc, sym);
 
     case SL_MAKE_FUNCTION:
-      if ((!is_any_closure(val)) && (val != sc->F)) 
+      if ((!is_any_closure(val)) && (val != sc->F))
 	starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "a Scheme function or #f", 23));
       if ((val != sc->F) && (!s7_is_aritable(sc, val, 2)))
 	error_nr(sc, sc->wrong_type_arg_symbol,
@@ -97790,7 +97806,7 @@ static void init_rootlet(s7_scheme *sc)
 #endif
   s7_define_function(sc, "s7-optimize", g_optimize, 1, 0, false, "short-term debugging aid");
   sc->c_object_set_function = s7_make_safe_function(sc, "#<c-object-setter>", g_c_object_set, 1, 0, true, "c-object setter");
-  /* c_function_signature(sc->c_object_set_function) = s7_make_circular_signature(sc, 2, 3, sc->T, sc->is_c_object_symbol, sc->T); */
+  /* c_function_set_signature(sc->c_object_set_function, s7_make_circular_signature(sc, 2, 3, sc->T, sc->is_c_object_symbol, sc->T)); */
 
   set_scope_safe(global_value(sc->call_with_input_string_symbol));
   set_scope_safe(global_value(sc->call_with_input_file_symbol));
@@ -98485,7 +98501,7 @@ s7_scheme *s7_init(void)
   s7_define_function(sc, "report-missed-calls", g_report_missed_calls, 0, 0, false, NULL); /* tc/recur tests in s7test.scm */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 933) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 934) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
   if (false) gdb_break();
 #endif
@@ -98921,7 +98937,7 @@ int main(int argc, char **argv)
  * need some print-length/print-elements distinction for vector/pair etc [which to choose if both set?]
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * t801 make-function: funcize the arg part, use dyn-unwind for result?? [like add_trace]
- * c_proc_t needs let field -- see find_let (also don't add to rootlet -- will need warnings/docs)
- * op_tc_case_la can have any number of tc's. need no else, int key support. op_tc_case_l3a?
+ * op_tc_case_la can have any number of tc's. need no else, int key support
  *   cond/if/when/etc could use has_tc for arbitrary cases? op_tc_cond_n(az-tc) etc
+ *   set_has_tc currently in case/cond (need if branches marked as well)
  */

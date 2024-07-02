@@ -26,18 +26,18 @@
 	A {text-decoration:none}
 	A:hover {text-decoration:underline}
 
-	A.def {font-weight: bold; 
-	       font-style: normal; 
-	       text-decoration:none; 
+	A.def {font-weight: bold;
+	       font-style: normal;
+	       text-decoration:none;
 	       text-color:black;
 	       }
 
         PRE.indented {padding-left: 1.0cm;}
 
-	DIV.indented {background-color: #F8F8F0; 
-	              padding-left: 0.5cm; 
-	              padding-right: 0.5cm; 
-		      padding-top: 0.5cm; 
+	DIV.indented {background-color: #F8F8F0;
+	              padding-left: 0.5cm;
+	              padding-right: 0.5cm;
+		      padding-top: 0.5cm;
 		      padding-bottom: 0.5cm;
 		      margin-bottom: 0.5cm;
 		      border: 1px solid gray;
@@ -46,10 +46,10 @@
 		      -webkit-border-radius: 20px;
 		      }
         DIV.small {font-size: small;
-	              padding-left: 0.5cm; 
-	              padding-right: 0.5cm; 
+	              padding-left: 0.5cm;
+	              padding-right: 0.5cm;
 		      padding-bottom: 0.5cm;
-                  }		      
+                  }
         DIV.header {margin-top: 60px;
 	            margin-bottom: 30px;
 	            border: 4px solid #00ff00; /* green */
@@ -84,7 +84,7 @@
 		      border-radius: 4px;
 		      -moz-border-radius: 4px;
 		      -webkit-border-radius: 4px;
-		      } 
+		      }
         DIV.smallseparator {margin-top: 10px;
 	               margin-bottom: 10px;
 	               border: 2px solid #00ff00; /* green */
@@ -95,10 +95,10 @@
 		      -moz-border-radius: 4px;
 		      -webkit-border-radius: 4px;
 		      text-align: center;
-		      } 
+		      }
         BODY.body {background-color: #ffffff;    /* white */
 	           margin-right: 20px;
-	           margin-left: 20px; 
+	           margin-left: 20px;
                    }
         DIV.listener {background-color: #f0f8ff;
 	              font-family: 'Monospace';
@@ -144,14 +144,14 @@ in libxm in the Snd tarball, or at ftp://ccrma-ftp.stanford.edu/pub/Lisp/libxm.t
 
 <p>Although it is a descendant of tinyScheme, s7 is closest as a Scheme dialect to Guile 1.8.
 I believe it is compatible with <a href="#s7vsr5rs">r5rs</a> and <a href="#r7rs">r7rs</a>:  you can just ignore all the additions discussed in this file.
-It has continuations, 
+It has continuations,
 ratios, complex numbers,
-macros, keywords, hash-tables, 
+macros, keywords, hash-tables,
 multiprecision arithmetic,
 generalized set!, unicode, and so on.
 It does not have syntax-rules or any of
 its friends, and it thinks there is no such thing
-as an inexact integer.  
+as an inexact integer.
 </p>
 
 <p>This file assumes you know about Scheme and all its problems,
@@ -164,7 +164,7 @@ macros, environments, and syntactic values.
 <blockquote>
 <div class="indented">
 <p>I originally used a small font for scholia, but now I have to squint
-to read that tiny text, so less-than-vital commentaries are shown in the normal font, but 
+to read that tiny text, so less-than-vital commentaries are shown in the normal font, but
 indented and on a sort of brownish background.
 </p>
 </div>
@@ -191,13 +191,13 @@ indented and on a sort of brownish background.
   <li><a href="#errors">errors</a>
   <li><a href="#autoload">autoload</a>
   <li><a href="#constants">define-constant</a>
-  <li><a href="#miscellanea">marvels and curiousities:</a> 
+  <li><a href="#miscellanea">marvels and curiousities:</a>
 
   <ul>
     <li><a href="#loadpath">*load-path*</a>, <a href="#featureslist">*features*</a>, <a href="#sharpreaders">*#readers*</a>,
     <li><a href="#makelist">make-list</a>, <a href="#charposition">char-position</a>, <a href="#keywords">keywords</a>
     <li><a href="#symboltable">symbol-table</a>, <a href="#s7help">help</a>, <a href="#s7gc">gc</a>, <a href="#equivalentp">equivalent?</a>
-    <li><a href="#expansion">define-expansion</a>, <a href="#s7env">*s7*</a>, <a href="#s7vsr5rs">r5rs</a>, <a href="#r7rs">r7rs</a>, 
+    <li><a href="#expansion">define-expansion</a>, <a href="#s7env">*s7*</a>, <a href="#s7vsr5rs">r5rs</a>, <a href="#r7rs">r7rs</a>,
     <li><a href="#profiling">profiling</a>, <a href="#legolambda">legolambda</a>, etc...
     </ul>
 
@@ -246,11 +246,11 @@ indented and on a sort of brownish background.
 
 <p>All numeric types, integers, ratios, reals, and complex numbers are supported.
 The basic integer and real
-types are defined in s7.h, defaulting to int64_t and double.  
+types are defined in s7.h, defaulting to int64_t and double.
 A ratio consists of two integers, a complex number consists of two reals.
 pi is predefined.
-s7 can be built with multiprecision support 
-for all types,  using the gmp, mpfr, and mpc libraries (set WITH_GMP to 1 in s7.c).  
+s7 can be built with multiprecision support
+for all types,  using the gmp, mpfr, and mpc libraries (set WITH_GMP to 1 in s7.c).
 If multiprecision arithmetic is
 enabled, the following functions are included: bignum, and bignum?, and the variable (*s7* 'bignum-precision).
 (*s7* 'bignum-precision) defaults to 128; it sets the number of bits each float takes.
@@ -269,7 +269,7 @@ pi automatically reflects the current (*s7* 'bignum-precision):
 </pre>
 
 <p>
-<em class=def id="bignump">bignum?</em> returns #t if its argument is a big number of some type; I use "bignum" 
+<em class=def id="bignump">bignum?</em> returns #t if its argument is a big number of some type; I use "bignum"
 for any big number, not just integers.  To create a big number,
 either include enough digits to overflow the default types, or use the <em class=def id="bignum">bignum</em> function.
 Its argument is either a number which it casts to a bignum, or a string representing the desired number:
@@ -285,7 +285,7 @@ Its argument is either a number which it casts to a bignum, or a string represen
 <p>For read-time bignums:
 </p>
 <pre class="indented">
-(set! *#readers* 
+(set! *#readers*
   (cons (cons #\B (lambda (str)
 	            (bignum (string-&gt;number (substring str 1)))))
         *#readers*))
@@ -294,7 +294,7 @@ Its argument is either a number which it casts to a bignum, or a string represen
 <p>and now #B123 is the reader equivalent of (bignum 123).
 </p>
 
-<blockquote> 
+<blockquote>
 <div class="indented">
 
 <p>In the non-gmp case, if s7 is built using doubles (s7_double in s7.h), the float "epsilon" is
@@ -339,7 +339,7 @@ but reals are limited by (*s7* 'bignum-precision).  This means, for example, tha
 &gt; (floor (+ 0.9999999995 (expt 2.0 23)))
 <em class="gray">8388609</em>
 </pre>
-</div> 
+</div>
 </blockquote>
 
 
@@ -375,7 +375,7 @@ Other math-related differences between s7 and r5rs:
 <li>lcm and gcd can take integer or ratio arguments.
 <li>log takes an optional second argument, the base.
 <li>'.' and an exponent can occur in a number in any base.
-<li>rationalize returns a ratio! 
+<li>rationalize returns a ratio!
 <li>case is significant in numbers, as elsewhere: #b0 is 0, but #B0 is an error.
 </ul>
 
@@ -457,7 +457,7 @@ Clisp and sbcl throw an error.  Everybody agrees that <code>(expt 0 0)</code> is
 that <code>(expt 0.0 0.0)</code> is 1.0.  But <code>(expt 0 0.0)</code> and <code>(expt 0.0 0)</code> return different
 results in Guile (1 and 1.0), both are 0.0 in s7, the first is an error in Clisp, but the second returns 1,
 and so on &mdash; what a mess!  This mess was made a lot worse than it needs to be when the IEEE decreed that
-0.0 equals -0.0, so we can't tell them apart, but that they produce different results:  
+0.0 equals -0.0, so we can't tell them apart, but that they produce different results:
 </p>
 
 <pre class="indented">
@@ -476,14 +476,14 @@ How can they be equal? In s7, the sign
 of -0.0 is ignored, and they really are equal.
 One other oddity: two floats can satisfy eq? and yet not be eqv?:
 <code>(eq? +nan.0 +nan.0)</code> might be #t (it is unspecified), but <code>(eqv? +nan.0 +nan.0)</code> is #f.
-The same problem afflicts memq and assq.  
+The same problem afflicts memq and assq.
 </p>
 </div>
 
 
 <div class="indented">
 
-<p>The <em class=def id="random">random</em> function takes a range and an optional state, and returns a number 
+<p>The <em class=def id="random">random</em> function takes a range and an optional state, and returns a number
 between zero and the range, of the same type as the range.  It is perfectly reasonable
 to use a range of 0, in which case random returns 0.
 <em class=def id="randomstate">random-state</em> creates a new random state from a seed.  If no seed is passed,
@@ -523,17 +523,17 @@ random-state-&gt;list, then to restart from that point, apply random-state to th
 
 <p>In the gmp s7, random calls gmp's random number generator.  There are
 also many generators in GSL (see libgsl.scm).  In the non-gmp s7, we use Marsaglia's MWC algorithm
-which I think is a good compromise between quality and speed.  If you're calling it more than 
+which I think is a good compromise between quality and speed.  If you're calling it more than
 a billion times, it is probably a good idea to reseed it.  The code I use for this in the auto-tester
 is:
 </p>
 <pre class="indented">
 (require libc.scm)
 (define (reseed)
-  (let ((seed (with-let *libc* 
+  (let ((seed (with-let *libc*
 		(let ((res (clock_gettime CLOCK_MONOTONIC)))
 		  (+ (* 1000000000 (cadr res)) (caddr res)))))
-	(carry (#(1791398085 1929682203 1683268614 1965537969 1675393560 1967773755 1517746329 
+	(carry (#(1791398085 1929682203 1683268614 1965537969 1675393560 1967773755 1517746329
                   1447497129 1655692410 1606218150 2051013963 1075433238 1557985959 1781943330
                   1893513180 1631296680 2131995753 2083801278 1873196400 1554115554)
 		(random 20))))
@@ -566,9 +566,9 @@ ratio does not mean it has to be a scheme ratio; the two notions are independent
 As I understand it, "inexact" originally meant "floating point", and "exact" meant integer or ratio of integers.
 But words have a life of their own.
 0.0 somehow became an "inexact" integer (although it can be represented exactly in floating
-point).  
+point).
 +inf.0 must be an integer &mdash;
-its fractional part is explicitly zero!  But +nan.0... 
+its fractional part is explicitly zero!  But +nan.0...
 And then there's:
 </p>
 
@@ -597,11 +597,11 @@ In one Scheme:
 </pre>
 
 <p>So I end up using the verbose <code>(floor (inexact-&gt;exact ...))</code> everywhere, and even
-then I have no guarantee that I'll get a legal vector index. 
+then I have no guarantee that I'll get a legal vector index.
 I have never seen any use made of the exact/inexact distinction &mdash; just
 wild flailing to try get around it.
 I think the whole idea is confused and useless, and leads
-to verbose and buggy code.  
+to verbose and buggy code.
 If we discard it,
 we can maintain backwards compatibility via:
 </p>
@@ -642,7 +642,7 @@ Speaking of #b and friends, what should <code>(string-&gt;number "#xffff" 2)</co
 <p><em class=def id="definestar">define*</em> and
  <em class=def id="lambdastar">lambda*</em>
 are extensions of define and lambda that make it easier
-to deal with optional, keyword, and rest arguments.  
+to deal with optional, keyword, and rest arguments.
 The syntax is very simple: every parameter to define* has a default value
 and is automatically available as a keyword argument.  The default value
 is either #f if unspecified, or given in a list whose first member is
@@ -659,7 +659,7 @@ The rest parameter is not available as a keyword argument.
 </pre>
 
 <p>Here the parameter "a" defaults to #f, "b" to 32, etc.
-When the function is called, 
+When the function is called,
 the parameter names are set from the values passed the function,
 then any unset parameters are bound to their default values, evaluated in left-to-right order.
 As the current argument list is scanned,  any name that occurs as a keyword, :arg for example where the parameter name is arg,
@@ -670,11 +670,11 @@ above as an example:
 </p>
 
 <pre class="indented">
-&gt; (hi 1) 
+&gt; (hi 1)
 <em class="gray">(1 32 "hi")</em>
-&gt; (hi :b 2 :a 3) 
+&gt; (hi :b 2 :a 3)
 <em class="gray">(3 2 "hi")</em>
-&gt; (hi 3 2 1) 
+&gt; (hi 3 2 1)
 <em class="gray">(3 2 1)</em>
 </pre>
 
@@ -695,12 +695,12 @@ To mark an argument as required, set its default value to a call on the error fu
 <div class="indented">
 <p>The combination of optional and keyword arguments is viewed with disfavor in the Lisp
 community, but the problem is in CL's implementation of the idea, not the idea itself.
-I've used the s7 style since around 1976, and have never found it confusing.  The mistake 
+I've used the s7 style since around 1976, and have never found it confusing.  The mistake
 in CL is to require the optional arguments if a keyword argument occurs, and to consider them as distinct from the
 keyword arguments.  So everyone forgets and puts a keyword where CL expects a required-optional
 argument.  CL then does something ridiculous, and the programmer stomps around shouting about keywords, but the fault lies with CL.
 If s7's way is considered too loose, one way to tighten it might be to insist that once a keyword
-is used, only keyword argument pairs can follow.  
+is used, only keyword argument pairs can follow.
 </p>
 </div>
 
@@ -708,14 +708,14 @@ is used, only keyword argument pairs can follow.
 <div class="indented">
 <p>A natural companion of lambda* is named let*.  In named let, the implicit function's
 arguments have initial values, but thereafter, each call requires the full set of arguments.
-Why not treat the initial values as default values? 
+Why not treat the initial values as default values?
 </p>
 
 <pre class="indented">
-&gt; (let* func ((i 1) (j 2)) 
+&gt; (let* func ((i 1) (j 2))
     (+ i j (if (&gt; i 0) (func (- i 1)) 0)))
 <em class="gray">5</em>
-&gt; (letrec ((func (lambda* ((i 1) (j 2)) 
+&gt; (letrec ((func (lambda* ((i 1) (j 2))
                    (+ i j (if (&gt; i 0) (func (- i 1)) 0)))))
     (func))
 <em class="gray">5</em>
@@ -732,9 +732,9 @@ have been evaluated (as in named let).
 </p>
 
 <pre class="indented">
-&gt; (defun foo (&amp;key (a 0) (b (+ a 4)) (c (+ a 7))) (list a b c)) 
+&gt; (defun foo (&amp;key (a 0) (b (+ a 4)) (c (+ a 7))) (list a b c))
 <em class="gray">FOO </em>
-&gt; (foo :b 2 :a 60) 
+&gt; (foo :b 2 :a 60)
 <em class="gray">(60 2 67) </em>
 </pre>
 
@@ -767,9 +767,9 @@ have been evaluated (as in named let).
 <p>Keywords (named arguments) also work in named let*:
 </p>
 <pre class="indented">
-&gt; (let* loop ((i 0) (j 0)) 
+&gt; (let* loop ((i 0) (j 0))
       (if (> i 3)
-          (+ i j) 
+          (+ i j)
           (loop :j 2 :i (+ i 1))))
 <em class="gray">6</em>
 </pre>
@@ -803,7 +803,7 @@ These problems arise in a case such as
 argument keyword: <code>(f :a :c)</code>, or make the default value a keyword:
 <code>(define* (f (a :c) ...))</code>, or set <code>(*s7* 'accept-all-keyword-arguments)</code>
 to some true value.
-See s7test.scm for many examples.  
+See s7test.scm for many examples.
 </p>
 
 <p>What if two functions share a keyword argument,
@@ -815,7 +815,7 @@ and one wants to call the other, passing both arguments to the wrapper?
 (define* (f2 a :rest b <em class=red>:allow-other-keys</em>)  ; the wrapper
   (+ a (apply f1 b)))
 (f2 :a 3 :a 4)                             ; 7, b='(:a 4)
-(let ((c :a)) 
+(let ((c :a))
   (f2 c 3 c 4))                            ; also 7
 </pre>
 
@@ -838,7 +838,7 @@ you can have more than one :rest parameter:
 </p>
 
 <pre class="indented">
-&gt; ((lambda* (:rest a :rest b) (map + a b)) 1 2 3 4 5) 
+&gt; ((lambda* (:rest a :rest b) (map + a b)) 1 2 3 4 5)
 <em class="gray">'(3 5 7 9)</em>
 </pre>
 
@@ -918,7 +918,7 @@ unknown key handling is not good, :allow-key-values?
 
 
 another amusing lambda* case:
-(call/cc 
+(call/cc
  (lambda* (a (b (call/cc (lambda (c) c)))) ; even with-baffle still a loop (legit)
    (b (call/cc (lambda (d) d)))))
 
@@ -936,15 +936,15 @@ another amusing lambda* case:
 
 
 <p>
-<em class=def id="definemacro">define-macro</em>, 
-<em class=def id="definemacrostar">define-macro*</em>, 
-<em class=def id="definebacro">define-bacro</em>, 
-<em class=def id="definebacrostar">define-bacro*</em>, 
+<em class=def id="definemacro">define-macro</em>,
+<em class=def id="definemacrostar">define-macro*</em>,
+<em class=def id="definebacro">define-bacro</em>,
+<em class=def id="definebacrostar">define-bacro*</em>,
 <em class=def id="macroexpand">macroexpand</em>,
-<em class=def id="gensym">gensym</em>, 
-<em class=def id="gensym?">gensym?</em>, and 
+<em class=def id="gensym">gensym</em>,
+<em class=def id="gensym?">gensym?</em>, and
 <em class=def id="macrop">macro?</em>
-implement the standard old-time macros.  
+implement the standard old-time macros.
 The anonymous versions (analogous to lambda and lambda*) are
 macro, macro*, bacro, and bacro*.
 See s7test.scm for many examples of macros including such perennial favorites as
@@ -953,8 +953,8 @@ loop, dotimes, do*, enum, pushnew, and defstruct.
 
 <pre class="indented">
 &gt; (define-macro (and-let* vars . body)
-    `(let () 
-       (and ,@(map (lambda (v) 
+    `(let ()
+       (and ,@(map (lambda (v)
                      `(define ,@v))
                    vars)
             (begin ,@body))))
@@ -1002,7 +1002,7 @@ giving the new symbol name's prefix.  gensym? returns #t if its argument is a sy
 
 <p>A macro is a first-class citizen of s7.  You can
 pass it as a function argument, apply it to a list, return it from a function,
-call it recursively, 
+call it recursively,
 and assign it to a variable.  You can even set its setter!
 </p>
 
@@ -1049,11 +1049,11 @@ and assign it to a variable.  You can even set its setter!
                   (pair? (cdr form))
                   (pair? (cadr form))
                   (macro? (symbol-&gt;value (caadr form))))
-	     (expand (apply macroexpand (list (cons (setter (symbol-&gt;value (caadr form))) 
+	     (expand (apply macroexpand (list (cons (setter (symbol-&gt;value (caadr form)))
 							 (append (cdadr form) (copy (cddr form))))))))
             (else (cons (expand (car form)) (expand (cdr form))))))))
 </pre>
-<p>This does not always handle bacros correctly because their expansion can depend on the run-time 
+<p>This does not always handle bacros correctly because their expansion can depend on the run-time
 state.
 </p>
 </div>
@@ -1062,14 +1062,14 @@ state.
 <div class="indented">
 
 <p>A bacro is a macro that expands its body and evaluates
-the result in the calling environment. 
+the result in the calling environment.
 </p>
 
 <pre class="indented">
 (define setf
   (let ((args (gensym))
         (name (gensym)))
-     (apply <em class=red>define-bacro</em> `((,name . ,args)        
+     (apply <em class=red>define-bacro</em> `((,name . ,args)
 			   (unless (null? ,args)
 			     (apply set! (car ,args) (cadr ,args) ())
 			     (apply setf (cddr ,args)))))))
@@ -1082,7 +1082,7 @@ variable.  Bacros expand in the calling environment, and a normal argument name
 might shadow something in that environment while the bacro is being expanded.
 Similarly, if you introduce bindings in the bacro expansion code, you need to
 keep track of which environment you want things to happen in.  Use with-let
-and gensym liberally.  
+and gensym liberally.
 stuff.scm has bacro-shaker which can find inadvertent name collisions,
 but it is flighty and easily confused.
 The calling environment itself is (outlet (curlet)) from within a bacro, so
@@ -1090,11 +1090,11 @@ The calling environment itself is (outlet (curlet)) from within a bacro, so
 
 <pre class="indented">
 (define-bacro (holler)
-  `(format *stderr* "(~S~{ ~S ~S~^~})~%" 
+  `(format *stderr* "(~S~{ ~S ~S~^~})~%"
 	   (let ((f (*function*)))
 	     (if (pair? f) (car f) f))
 	   (map (lambda (slot)
-		  (values (symbol-&gt;keyword (car slot)) (cdr slot)))		  
+		  (values (symbol-&gt;keyword (car slot)) (cdr slot)))
 		(map values ,(outlet (curlet))))))
 
 (define (f1 a b)
@@ -1113,7 +1113,7 @@ Since a bacro (normally) sheds its define-time environment:
   (let ((<em class=red>x</em> 2))
     (define-bacro (m a) `(+ ,a ,<em class=red>x</em>))))
 
-&gt; (call-bac 1) 
+&gt; (call-bac 1)
 <em class="red">error</em><em class="gray">: x: unbound variable</em>
 </pre>
 <p>
@@ -1127,37 +1127,37 @@ Here's a brief example of all four:
 </p>
 
 <pre class="indented">
-(let ((x 1) (y 2)) 
-  (define-bacro (bac1 a) 
+(let ((x 1) (y 2))
+  (define-bacro (bac1 a)
      `(+ ,x y ,a))        ; expand and eval in calling env
-  (let ((x 32) (y 64)) 
+  (let ((x 32) (y 64))
     (bac1 3)))            ; (with-let (inlet 'x 32 'y 64) (+ 32 y 3))
 -&gt; 99                     ;  with-let and inlet refer to <a href="#environments">environments</a>
 
 (let ((x 1) (y 2))        ; this is like define-macro
-  (define-bacro (bac2 a) 
+  (define-bacro (bac2 a)
     (with-let (sublet (funclet bac2) :a a)
       `(+ ,x y ,a)))      ; expand in definition env, eval in calling env
-  (let ((x 32) (y 64)) 
+  (let ((x 32) (y 64))
     (bac2 3)))            ; (with-let (inlet 'x 32 'y 64) (+ 1 y 3))
 -&gt; 68
 
 (let ((x 1) (y 2))
-  (define-bacro (bac3 a) 
+  (define-bacro (bac3 a)
     (let ((e (with-let (sublet (funclet bac3) :a a)
 	       `(+ ,x y ,a))))
       `(with-let ,(sublet (funclet bac3) :a a)
-	 ,e)))           ; expand and eval in definition env 
-  (let ((x 32) (y 64)) 
+	 ,e)))           ; expand and eval in definition env
+  (let ((x 32) (y 64))
     (bac3 3)))           ; (with-let (inlet 'x 1 'y 2) (+ 1 y 3))
 -&gt; 6
 
 (let ((x 1) (y 2))
-  (define-bacro (bac4 a) 
+  (define-bacro (bac4 a)
     (let ((e `(+ ,x y ,a)))
       `(with-let ,(sublet (funclet bac4) :a a)
 	 ,e)))           ; expand in calling env, eval in definition env
-  (let ((x 32) (y 64))     
+  (let ((x 32) (y 64))
     (bac4 3)))           ; (with-let (inlet 'x 1 'y 2) (+ 32 y 3))
 -&gt; 37
 </pre>
@@ -1168,7 +1168,7 @@ Here's a brief example of all four:
 
 <p>Backquote (quasiquote) in s7 is almost trivial.  Constants are unchanged, symbols are quoted,
 ",arg" becomes "arg", and ",@arg" becomes "(apply values arg)" &mdash; hooray for real multiple values!
-It's almost as easy to write the actual macro body as the backquoted version of it. 
+It's almost as easy to write the actual macro body as the backquoted version of it.
 </p>
 
 <pre class="indented">
@@ -1213,8 +1213,8 @@ As a last resort, use the explicit environment functions like let-ref and with-l
 </p>
 
 <pre class="indented">
-&gt; (define-macro (mac b) 
-    `(let ((a 12)) 
+&gt; (define-macro (mac b)
+    `(let ((a 12))
        (+ a ,b)))
 <em class="gray">mac</em>
 &gt; (let ((a 1) (+ *)) (mac a))
@@ -1223,14 +1223,14 @@ As a last resort, use the explicit environment functions like let-ref and with-l
 
 <p>This returns 144 because '+' has turned into '*', and 'a' is the internal 'a',
 not the argument 'a'.  We get <code>(* 12 12)</code> where we might have expected
-<code>(+ 12 1)</code>.  
-Starting with the '+' problem, 
+<code>(+ 12 1)</code>.
+Starting with the '+' problem,
 as long as the redefinition of '+' is local (that is, it happens after the macro definition), we can unquote the +:
 </p>
 
 <pre class="indented">
-&gt; (define-macro (mac b) 
-    `(let ((a 12)) 
+&gt; (define-macro (mac b)
+    `(let ((a 12))
        (,+ a ,b))) ; ,+ picks up the definition-time +
 <em class="gray">mac</em>
 &gt; (let ((a 1) (+ *)) (mac a))
@@ -1260,7 +1260,7 @@ because Scheme has no reserved words and only one name space.
 <em class="gray">-1</em>
 </pre>
 
-<p>Obviously macros are not the problem here.  Since 
+<p>Obviously macros are not the problem here.  Since
 we might be loading
 code written by others, it's sometimes hard to tell what names
 that code depends on or redefines.
@@ -1285,16 +1285,16 @@ or #_&lt;name&gt;.  That is, #_+ is a reader macro for <code>(with-let (unlet) +
 </p>
 
 <pre class="indented">
-&gt; (define-macro (mac b) 
-    `(<em class=red>#_let</em> ((a 12)) 
+&gt; (define-macro (mac b)
+    `(<em class=red>#_let</em> ((a 12))
        (<em class=red>#_+</em> a ,b))) ; #_+ and #_let are start-up values
 <em class="gray">mac</em>
 &gt; (let ((a 1) (+ *)) (mac a))
 <em class="gray">24                 ; (+ a a) where a is 12 and + is the start-up +</em>
 
 ;;; make + generic (there's a similar C-based example below)
-&gt; (define (+ . args) 
-    (if (null? args) 0 
+&gt; (define (+ . args)
+    (if (null? args) 0
         (apply (if (number? (car args)) <em class=red>#_+ #_string-append</em>) args)))
 <em class="gray">+</em>
 &gt; (+ 1 2)
@@ -1338,8 +1338,8 @@ national debt.  gensym is the standard approach:
 </p>
 
 <pre class="indented">
-&gt; (define-macro (mac b) 
-    (let ((var (<em class=red>gensym</em>))) 
+&gt; (define-macro (mac b)
+    (let ((var (<em class=red>gensym</em>)))
       `(#_let ((,var 12))
          (#_+ ,var ,b))))
 <em class="gray">mac</em>
@@ -1347,7 +1347,7 @@ national debt.  gensym is the standard approach:
 <em class="gray">13</em>
 
 ;; or use lambda:
-&gt; (define-macro (mac b) 
+&gt; (define-macro (mac b)
   `((lambda (b) (let ((a 12)) (#_+ a b))) ,b))
 <em class="gray">mac</em>
 &gt; (let ((a 1) (+ *)) (mac a))
@@ -1390,7 +1390,7 @@ control over the environment at any point:
 </pre>
 
 <p>Hygienic macros are trivial!  Who needs syntax-rules?
-Here's an example of the while macro in stuff.scm before and after 
+Here's an example of the while macro in stuff.scm before and after
 hygienification (using "exit" rather than "break"):
 </p>
 
@@ -1432,7 +1432,7 @@ toward the end of s7test.scm).
 <em class="gray">(2 1)</em>
 
 (define-macro (swap a b) ; here a and b can be any settable expressions
-  `(set! ,b (with-let (inlet 'e (curlet) 'tmp ,a) 
+  `(set! ,b (with-let (inlet 'e (curlet) 'tmp ,a)
 	      (with-let e (set! ,a ,b))
 	      tmp)))
 
@@ -1450,7 +1450,7 @@ toward the end of s7test.scm).
 (define-macro (rotate! . args)
   `(set! ,(args (- (length args) 1))
          (with-let (inlet 'e (curlet) 'tmp ,(car args))
-	   (with-let e 
+	   (with-let e
 	     ,@(map (lambda (a b) `(set! ,a ,b)) args (cdr args)))
 	   tmp)))
 
@@ -1474,7 +1474,7 @@ to be evaluated in its definition environment:
   (define-macro (mac-1 b)
     `(+ a ,b))         ; call-time "a" and "b"
   (let ((a 32))
-    (list (mac 1) 
+    (list (mac 1)
 	  (mac-1 1))))
 </pre>
 -->
@@ -1486,25 +1486,25 @@ to be evaluated in its definition environment:
   (define (f23 y) (+ y 1))          ; the first f23
   (define-macro (m1 x) `(f23 ,x))   ; picks up f23 from whatever the local env is where m1 is expanded
   (m1 3) ; 4
-  
+
   (let ((f23 (lambda (y) (+ y 2)))) ; the second f23
     (m1 3) ; 5
     (set! (symbol-initial-value :f23) f23))
     ;; this remembers the second f23 as #_:f23 or (symbol-initial-value :f23)
-  
+
   (define-macro (m2 x) `(,f23 ,x)) ; ",f23" picks up f23 from m2's definition-time environment
 
-  (define e1 #f)  
+  (define e1 #f)
   (let ((f23 (lambda (y) (+ y 3))))  ; the third f23
     (set! e1 (curlet))      ; save the environment holding the third f23
     (m2 3)) ; 4             ; y + 1 because at this point the definition env f23 is the first
-  
+
   (set! (symbol-initial-value 'f23) f23) ; #_f23 now refers to the first f23
   (set! f23 (lambda (y) (+ y 4)))        ; the fourth f23
-  
+
   (define-macro (m3 x) `((#_symbol-initial-value 'f23) ,x))
   ;; this picks up the first f23 by delaying the reference to it until evaluation time.
-  ;; Using `(#_f23 ,x) here will fail unless f23's symbol-initial-value is set at the top-level 
+  ;; Using `(#_f23 ,x) here will fail unless f23's symbol-initial-value is set at the top-level
   ;; because the reader only knows about global values:
 
   (define-macro (m4 x) `(#_f23 ,x))
@@ -1518,7 +1518,7 @@ to be evaluated in its definition environment:
 
   (define-macro (m6 x) `((,e1 'f23) ,x)) ; use e1 to get the third f23
   ;; more hygienic: set e1's symbol-initial-value to itself above, then use (#_symbol-initial-value 'e1) here
-  
+
   (let ((f23 (lambda (y) (+ y 5))))   ; the fifth f23
     (m1 3)   ; 8 = 3 + 5 from local (fifth) f23
     (m2 3)   ; 7 = 3 + 4 from definition environment f23 (the fourth)
@@ -1566,18 +1566,18 @@ to be evaluated in its definition environment:
 (define my-unless-2
   (let ((op1 (lambda (x) (not x))))
     (define-macro (_ condition . body)
-      `(with-let (inlet (unlet) (funclet my-unless-2) :condition ,condition) 
+      `(with-let (inlet (unlet) (funclet my-unless-2) :condition ,condition)
          ;; funclet above to get my-unless-2's version of op1
 	 (if (op1 condition) (begin ,@body))))))
 
 (let ((op1 (lambda (x) x)))
   (my-unless-2 #t (format #t "This should not be printed!\n"))
   (my-unless-2 #f (format #t "This should be printed!\n")))
-      
+
 (define my-unless-3
   (let ((op1 (lambda (x) x)))
     (define-macro (_ condition . body)
-      `(with-let (inlet (unlet) :condition ,condition :local-env (curlet)) 
+      `(with-let (inlet (unlet) :condition ,condition :local-env (curlet))
          ;; curlet to get run-time local version of op1
 	 (if ((with-let local-env op1) condition) (begin ,@body))))))
 
@@ -1586,7 +1586,7 @@ to be evaluated in its definition environment:
   (my-unless-3 #f (format #t "This should be printed!\n")))
 </pre>
 </div>
-</blockquote>      
+</blockquote>
 -->
 
 
@@ -1605,7 +1605,7 @@ to be evaluated in its definition environment:
   (let ((name (car name-and-args))
 	(args (cdr name-and-args)))
     `(define-macro ,name-and-args
-       (list 'with-let 
+       (list 'with-let
 	     (list 'inlet ,@(map (lambda (arg)
 				   (values (symbol-&gt;keyword arg) arg))
 				 args))
@@ -1710,7 +1710,7 @@ to be evaluated in its definition environment:
 </pre>
 
 <p>There are several kinds of setters, reflecting the many ways that set! can be called.
-First are the symbol setters: 
+First are the symbol setters:
 </p>
 
 <pre class="indented">
@@ -1721,12 +1721,12 @@ First are the symbol setters:
 <em class="gray">4</em>
 </pre>
 
-<p>Here the setter is a function that is called before the variable is set. 
+<p>Here the setter is a function that is called before the variable is set.
 It can take two or three arguments.  In the two argument case shown above,
 the first is the variable name (a symbol), and the second is the new-value.
 The variable is set to the value returned by the setter function.
 When s7 sees <code>(set! x 2)</code> above, it calls the setter which returns 4.
-So x is set to 4.  
+So x is set to 4.
 </p>
 <p>In some cases you need the environment that the variable lives in (to get its
 current value for example), so you can include that in the setter function parameter list:
@@ -1740,9 +1740,9 @@ current value for example), so you can include that in the setter function param
 <em class="gray">4</em>
 
 (define-macro (watch var) ; notification if 'var is set!
-  `(set! (setter ',var) 
+  `(set! (setter ',var)
       (lambda (s v e)
-	(format *stderr* "~S set! to ~S~A~%" s v 
+	(format *stderr* "~S set! to ~S~A~%" s v
                 (let ((func (with-let e (*function*))))
                   (if (eq? func #&lt;undefined&gt;) "" (format #f ", ~S" func))))
 	v)))
@@ -1754,7 +1754,7 @@ for a setter that insists the new value be an integer:
 </p>
 
 <pre class="indented">
-&gt; (let ((x 1)) 
+&gt; (let ((x 1))
     (set! (setter 'x) integer?)
     (set! x 3.14))
 <em class="red">error</em><em class="gray">: set! x: 3.14, is a real but should be an integer</em>
@@ -1778,12 +1778,12 @@ In this case, the setter function does the set! itself (unlike a symbol setter):
 &gt; (setter cadr)
 <em class="gray">#f</em>         ; by default cadr has no setter so (set! (cadr p) x) is an error
 &gt; (set! (setter cadr)  ; add a setter to cadr
-        (lambda (lst val) 
+        (lambda (lst val)
           (set! (car (cdr lst)) val)))
 <em class="gray">#&lt;lambda (lst val)&gt;</em>
 &gt; (procedure-source (setter cadr))
 <em class="gray">(lambda (lst val) (set! (car (cdr lst)) val))</em>
-&gt; (let ((lst (list 1 2 3))) 
+&gt; (let ((lst (list 1 2 3)))
     (set! (cadr lst) 4)
     lst)
 <em class="gray">(1 4 3)</em>
@@ -1815,13 +1815,13 @@ In this case, the setter function does the set! itself (unlike a symbol setter):
 
 <pre class="indented">
 &gt; (define f (let ((x 123))
-                 (dilambda (lambda () 
+                 (dilambda (lambda ()
                              x)
-		           (lambda (new-value) 
+		           (lambda (new-value)
                              (set! x new-value)))))
 <em class="gray">f</em>
 &gt; (f)
-<em class="gray">123</em> ; x = 123 
+<em class="gray">123</em> ; x = 123
 &gt; (set! (f) 32)
 <em class="gray">32</em>  ; now x = 32
 &gt; (f)
@@ -1854,14 +1854,14 @@ In this case, the setter function does the set! itself (unlike a symbol setter):
      (reverse (X-marks-the-spot () path)))
 
     `(<em class=red>dilambda</em>
-      (lambda (lst) 
+      (lambda (lst)
 	,body)
       (lambda (lst val)
 	(set! ,body val)))))
 
 &gt; ((c?r (a b (X))) '(1 2 (3 4) 5))
 <em class="gray">3</em>
-&gt; (let ((lst (list 1 2 (list 3 4) 5))) 
+&gt; (let ((lst (list 1 2 (list 3 4) 5)))
    (set! ((c?r (a b (X))) lst) 32)
    lst)
 <em class="gray">(1 2 (32 4) 5)</em>
@@ -1869,21 +1869,21 @@ In this case, the setter function does the set! itself (unlike a symbol setter):
 <em class="gray">(lambda (lst) (car (car (cdr (cdr lst)))))</em>
 &gt; ((c?r (a b . X)) '(1 2 (3 4) 5))
 <em class="gray">((3 4) 5)</em>
-&gt; (let ((lst (list 1 2 (list 3 4) 5))) 
+&gt; (let ((lst (list 1 2 (list 3 4) 5)))
    (set! ((c?r (a b . X)) lst) '(32))
    lst)
 <em class="gray">(1 2 32)</em>
 &gt; (procedure-source (c?r (a b . X)))
 <em class="gray">(lambda (lst) (cdr (cdr lst)))</em>
-&gt; ((c?r (((((a (b (c (d (e X)))))))))) '(((((1 (2 (3 (4 (5 6)))))))))) 
+&gt; ((c?r (((((a (b (c (d (e X)))))))))) '(((((1 (2 (3 (4 (5 6))))))))))
 <em class="gray">6</em>
-&gt; (let ((lst '(((((1 (2 (3 (4 (5 6))))))))))) 
-    (set! ((c?r (((((a (b (c (d (e X)))))))))) lst) 32) 
+&gt; (let ((lst '(((((1 (2 (3 (4 (5 6)))))))))))
+    (set! ((c?r (((((a (b (c (d (e X)))))))))) lst) 32)
     lst)
 <em class="gray">(((((1 (2 (3 (4 (5 32)))))))))</em>
 &gt; (procedure-source (c?r (((((a (b (c (d (e X)))))))))))
 <em class="gray">(lambda (lst) (car (cdr (car (cdr (car (cdr (car (cdr (car (cdr (car (car (car (car lst)))))))))))))))</em>
-</pre>	
+</pre>
 </div>
 
 <p>I may remove dilambda and dilambda? someday; they are trivial:
@@ -1909,7 +1909,7 @@ needs to handle both the inner arguments to the function and the new value.
 </pre>
 
 <p>A third type of setter handles vector element type and hash-table key and value types.
-These are described under <a href="#typedvectors">typed vectors</a> and 
+These are described under <a href="#typedvectors">typed vectors</a> and
 <a href="#typedhash">typed hash-tables</a>.
 </p>
 
@@ -1944,7 +1944,7 @@ These are described under <a href="#typedvectors">typed vectors</a> and
 	     (set-cdr! goto (car label))
 	     (error 'bad-goto "can't find label: ~S" name))))
      gotos)
-    
+
     (for-each
      (lambda (from)
        (let* ((name (cadr (cadar from)))
@@ -2064,8 +2064,8 @@ Here's a generic FFT:
 </p>
 <pre class="indented">
 (define (copy-into source dest) ; this is equivalent to (copy source dest)
-  (do ((i 0 (+ i 1))) 
-      ((= i (min (length source) (length dest))) 
+  (do ((i 0 (+ i 1)))
+      ((= i (min (length source) (length dest)))
        dest)
     (set! (dest i) (source i))))
 </pre>
@@ -2100,9 +2100,9 @@ And of course:
 </p>
 
 <pre class="indented">
-&gt; (let ((x (list 1 2))) 
-    (set! ((((lambda () (list x))) 0) 0) 3) 
-    x) 
+&gt; (let ((x (list 1 2)))
+    (set! ((((lambda () (list x))) 0) 0) 3)
+    x)
 <em class="gray">(3 2)</em>
 </pre>
 </div>
@@ -2114,7 +2114,7 @@ And of course:
 that they accept arguments of many types (leaving aside the numeric and type checking functions, take for example equal?, display,
 member, assoc, apply, eval, quasiquote, and values).  s7 extends that list with map, for-each, reverse,
 and length, and adds a few others such as copy, fill!, sort!, object-&gt;string, object-&gt;let, and append.
-newLisp takes a more radical approach than s7: it extends operators such as '&gt;' 
+newLisp takes a more radical approach than s7: it extends operators such as '&gt;'
 to compare strings and lists, as well as numbers.  In map and for-each, however, you can mix the argument
 types, so I'm not as attracted to making '&gt;' generic; you can't, for example, <code>(&gt; "hi" 32.1)</code>,
 or even <code>(&gt; 1 0+i)</code>.
@@ -2158,8 +2158,8 @@ it need not match the source in size or type.  The start and end indices refer t
 <em class="gray">(1 2 8 9 5)</em>
 </pre>
 
-<p><b>reverse!</b> is an in-place version of reverse.  That is, 
-it modifies the sequence passed to it in the process of reversing its contents.  
+<p><b>reverse!</b> is an in-place version of reverse.  That is,
+it modifies the sequence passed to it in the process of reversing its contents.
 If the sequence is a list, remember to use set!:
 <code>(set! p (reverse! p))</code>.  This is somewhat inconsistent with other cases,
 but historically, lisp programmers have treated the in-place reverse as the fast
@@ -2237,36 +2237,36 @@ arcane consequence for method writers: specialize make-iterator, not map or for-
 	 (and (not (eof-object? x)) x)))))
 </pre>
 
-<p>But of course a sequence might contain #&lt;eof&gt;! So to be really safe, use iterator-at-end? 
+<p>But of course a sequence might contain #&lt;eof&gt;! So to be really safe, use iterator-at-end?
 instead of eof-object?.
 </p>
 
-<p>The argument to make-iterator can also be a function or macro.  
+<p>The argument to make-iterator can also be a function or macro.
 In this case, to be acceptable to iterate, the closure's environment must have a
 variable named '+iterator+ with a non-#f value:
 </p>
 <pre class="indented">
 (define (make-circular-iterator obj)
   (let ((iter (make-iterator obj)))
-    (make-iterator 
+    (make-iterator
      (let ((+iterator+ #t))
        (lambda ()
-         (case (iter) 
+         (case (iter)
            ((#&lt;eof&gt;) ((set! iter (make-iterator obj))))
            (else)))))))
 </pre>
 <p>The +iterator+ variable is similar to the '+documentation+ variable used by documentation.
 It gives make-iterator some hope of catching inadvertent bogus function arguments that would
-otherwise cause an infinite loop.  But unfortunately it can escape and infect 
+otherwise cause an infinite loop.  But unfortunately it can escape and infect
 other functions:
 </p>
 <pre class="indented">
-(with-let (let ((<em class="red">+iterator+</em> #t)) 
+(with-let (let ((<em class="red">+iterator+</em> #t))
             (lambda () #&lt;eof&gt;))             ; we intended this to be our iterator
   (concatenate vector (lambda a (copy a)))) ; from stuff.scm
-  ;; (lambda a (copy a)) is also considered an iterator by map (in sequences-&gt;list) because 
+  ;; (lambda a (copy a)) is also considered an iterator by map (in sequences-&gt;list) because
   ;; the local +iterator+ is #t. "a" is () because there are no further arguments to
-  ;; concatenate, so (lambda a (copy a)) is generating infinitely many ()'s and this 
+  ;; concatenate, so (lambda a (copy a)) is generating infinitely many ()'s and this
   ;; code eventually dies with a heap overflow!
 </pre>
 
@@ -2292,7 +2292,7 @@ an integer as in the one dimensional case:
 <code>(vect i ...)</code> or <code>(vector-ref vect i ...)</code> return the given
 element, and <code>(set! (vect i ...) value)</code> and <code>(vector-set! vect i ... value)</code>
 set it.  vector-length (or just length) returns the total number of elements.
-vector-dimensions returns a list of the dimensions; vector-rank returns the length of this list, 
+vector-dimensions returns a list of the dimensions; vector-rank returns the length of this list,
 and vector-dimension returns the nth member of the list (the size of the nth dimension).
 </p>
 
@@ -2352,15 +2352,15 @@ s7_ints, s7_doubles, or unsigned bytes.
 (<em class=def id="bytevectortostring">byte-vector-&gt;string</em> str)
 
 (<em class=def id="subvector">subvector</em> vector start end dimensions)
-(<em class=def id="subvectorp">subvector?</em> obj) 
-(<em class=def id="subvectorvector">subvector-vector</em> obj) 
+(<em class=def id="subvectorp">subvector?</em> obj)
+(<em class=def id="subvectorvector">subvector-vector</em> obj)
 (<em class=def id="subvectorposition">subvector-position</em> obj)
 </pre>
 
 <p id="typedvectors">In addition to the dimension list mentioned above, make-vector accepts
 optional arguments giving the initial element and the element type. If the
 type is given, every attempt to set an element of the vector first calls
-the type function on the new value.  
+the type function on the new value.
 If the type function is omitted (or set to #t),
 no type checking is performed.
 If the type function is a closure (rather than a C-defined or built-in function),
@@ -2387,17 +2387,17 @@ match that type function.
 <em class="red">error</em><em class="gray">: vector-set! argument 3, 32, is an integer but should be a 10|12?</em>
 </pre>
 
-<p>To access a vector's elements with different dimensions than the original had, use 
+<p>To access a vector's elements with different dimensions than the original had, use
 <code>(subvector original-vector 0 (length original-vector) new-dimensions)</code>:
 </p>
 
 <pre class="indented">
-&gt; (let ((v1 #2d((1 2 3) (4 5 6)))) 
+&gt; (let ((v1 #2d((1 2 3) (4 5 6))))
     (let ((v2 (subvector v1))) ; flatten the original (1D is the default)
       v2))
 <em class="gray">#(1 2 3 4 5 6)</em>
-&gt; (let ((v1 #(1 2 3 4 5 6))) 
-    (let ((v2 (subvector v1 0 6 '(3 2)))) 
+&gt; (let ((v1 #(1 2 3 4 5 6)))
+    (let ((v2 (subvector v1 0 6 '(3 2))))
       v2))
 <em class="gray">#2d((1 2) (3 4) (5 6))</em>
 </pre>
@@ -2488,13 +2488,13 @@ the old subvector to the new:
 	  (let ((n (+ (state0 (- x 1) (- y 1))
 		      (state0    x    (- y 1))
 		      (state0 (+ x 1) (- y 1))
-		      (state0 (- x 1)    y)      
-		      (state0 (+ x 1)    y)      
+		      (state0 (- x 1)    y)
+		      (state0 (+ x 1)    y)
 		      (state0 (- x 1) (+ y 1))
 		      (state0    x    (+ y 1))
 		      (state0 (+ x 1) (+ y 1)))))
-	    (set! (state1 x y) 
-		  (if (or (= n 3) 
+	    (set! (state1 x y)
+		  (if (or (= n 3)
 			  (and (= n 2)
 			       (not (zero? (state0 x y)))))
 		      1 0)))))
@@ -2549,7 +2549,7 @@ you can use this same syntax with lists.
 &gt; (let ((L '((1 2 3) (4 5 6))))
     (L 1 0))              ; same as (list-ref (list-ref L 1) 0) or ((L 1) 0)
 <em class="gray">4</em>
-&gt; (let ((L '(((1 2 3) (4 5 6)) ((7 8 9) (10 11 12))))) 
+&gt; (let ((L '(((1 2 3) (4 5 6)) ((7 8 9) (10 11 12)))))
     (set! (L 1 0 2) 32)   ; same as (list-set! (list-ref (list-ref L 1) 0) 2 32) which is unreadable!
     L)
 <em class="gray">(((1 2 3) (4 5 6)) ((7 8 32) (10 11 12)))</em>
@@ -2559,7 +2559,7 @@ you can use this same syntax with lists.
 </p>
 
 <pre class="indented">
-&gt; (let ((V #(#(1 2 3) #(4 5 6)))) 
+&gt; (let ((V #(#(1 2 3) #(4 5 6))))
     (V 1 2))              ; same as (vector-ref (vector-ref V 1) 2) or ((V 1) 2)
 <em class="gray">6</em>
 &gt; (let ((V #2d((1 2 3) (4 5 6))))
@@ -2568,7 +2568,7 @@ you can use this same syntax with lists.
 </pre>
 
 <p>There's one difference between a vector-of-vectors and a multidimensional vector:
-in the latter case, you can't clobber one of the inner vectors. 
+in the latter case, you can't clobber one of the inner vectors.
 </p>
 
 <pre class="indented">
@@ -2624,7 +2624,7 @@ This also affects format and sort!:
 <pre class="indented">
 &gt; (format #f "~{~A~^ ~}" #2d((1 2) (3 4)))
 <em class="gray">"1 2 3 4"</em>
-&gt; (sort! #2d((1 4) (3 2)) &gt;) 
+&gt; (sort! #2d((1 4) (3 2)) &gt;)
 <em class="gray">#2d((4 3) (2 1))</em>
 </pre>
 
@@ -2640,9 +2640,9 @@ This also affects format and sort!:
 	(subvector (append a b) 0 8 '(4 2))
 	(subvector (append (a 0) (b 0) (a 1) (b 1)) 0 8 '(2 4))
 	(subvector (append (a 0) (b 0) (a 1) (b 1)) 0 8 '(4 2))))
-<em class="gray">(#2d((1 2 3 4) (5 6 7 8)) 
- #2d((1 2) (3 4) (5 6) (7 8)) 
- #2d((1 2 5 6) (3 4 7 8)) 
+<em class="gray">(#2d((1 2 3 4) (5 6 7 8))
+ #2d((1 2) (3 4) (5 6) (7 8))
+ #2d((1 2 5 6) (3 4 7 8))
  #2d((1 2) (5 6) (3 4) (7 8)))</em>
 </pre>
 
@@ -2659,7 +2659,7 @@ an arbitrary list of indices, ambiguities arise:
 </p>
 
 <pre class="indented">
-((lambda (x) x) "hi" 0) 
+((lambda (x) x) "hi" 0)
 ((lambda (x) (lambda (y) (+ x y))) 1 2)
 </pre>
 
@@ -2674,7 +2674,7 @@ as:
 </pre>
 
 <p>Add optional and rest arguments, and you can't tell who is supposed to
-take which arguments.  
+take which arguments.
 Currently, you can mix types with implicit indices, but if you implicitly
 call an element of a sequence that is a function
 that is not known to be "safe" (unproblematic) you'll get an error.
@@ -2729,7 +2729,7 @@ set its value to #f; to remove all keys, <code>(fill! table #f)</code>.
 <em class="gray">123</em>
 </pre>
 
-<p>hash-table (the function) parallels the functions vector, list, and string.  
+<p>hash-table (the function) parallels the functions vector, list, and string.
 Its arguments are
 the keys and values: <code>(hash-table 'a 1 'b 2)</code>.
 Implicit indexing gives multilevel hashes:
@@ -2752,7 +2752,7 @@ In this case the eqfunc argument is ignored (hash-code assumes equal? is in use)
 
 <div class="indented">
 
-<p>Since hash-tables accept the same applicable-object syntax that vectors use, we can 
+<p>Since hash-tables accept the same applicable-object syntax that vectors use, we can
 treat a hash-table as, for example, a sparse array:
 </p>
 
@@ -2771,7 +2771,7 @@ treat a hash-table as, for example, a sparse array:
 <div class="indented">
 
 <p>map and for-each accept hash-table arguments. On each iteration, the map or for-each function is passed
-an entry, <code>'(key . value)</code>, in whatever order the entries are encountered in the table. 
+an entry, <code>'(key . value)</code>, in whatever order the entries are encountered in the table.
 </p>
 
 <pre class="indented">
@@ -2818,7 +2818,7 @@ Otherwise, for example, you could use NaN as a key, but then never be able to ac
 <p>To implement read-time hash-tables using #h(...):
 </p>
 <pre>
-(set! *#readers* 
+(set! *#readers*
       (cons (cons #\h (lambda (str)
 			(and (string=? str "h") ; #h(...)
 			     (apply hash-table (read)))))
@@ -2830,10 +2830,10 @@ Otherwise, for example, you could use NaN as a key, but then never be able to ac
 <p>These can be made immutable by <code>(immutable! (apply...))</code>, or even better,
 </p>
 <pre>
-(let ((h (apply hash-table (read)))) 
+(let ((h (apply hash-table (read))))
   (if (&gt; (*s7* 'safety) 1) (immutable! h) h))
 </pre>
-</div>		  
+</div>
 
 
 <div class="indented">
@@ -2847,11 +2847,11 @@ Otherwise, for example, you could use NaN as a key, but then never be able to ac
 	   (or (,memo ,arg)                             ; check for saved value
 	       (set! (,memo ,arg) (begin ,@body)))))))) ; set! returns the new value
 
-&gt; (define (fib n) 
+&gt; (define (fib n)
   (if (&lt; n 2) n (+ (fib (- n 1)) (fib (- n 2)))))
 <em class="gray">fib</em>
-&gt; (define-memoized 
-   (memo-fib n) 
+&gt; (define-memoized
+   (memo-fib n)
      (if (&lt; n 2) n (+ (memo-fib (- n 1)) (memo-fib (- n 2)))))
 <em class="gray">memo-fib</em>
 &gt; (time (fib 34))         ; un-memoized time
@@ -2859,13 +2859,13 @@ Otherwise, for example, you could use NaN as a key, but then never be able to ac
 &gt; (time (memo-fib 34))    ; memoized time
 <em class="gray">3.200e-05</em>
 &gt; (outlet (funclet memo-fib))
-<em class="gray">(inlet '{memo}-18 (hash-table 
-    '(0 . 0) '(1 . 1) '(2 . 1) '(3 . 2) '(4 . 3) '(5 . 5) 
-    '(6 . 8) '(7 . 13) '(8 . 21) '(9 . 34) '(10 . 55) '(11 . 89) 
-    '(12 . 144) '(13 . 233) '(14 . 377) '(15 . 610) '(16 . 987) 
-    '(17 . 1597) '(18 . 2584) '(19 . 4181) '(20 . 6765) '(21 . 10946) 
-    '(22 . 17711) '(23 . 28657) '(24 . 46368) '(25 . 75025) '(26 . 121393) 
-    '(27 . 196418) '(28 . 317811) '(29 . 514229) '(30 . 832040) '(31 . 1346269) 
+<em class="gray">(inlet '{memo}-18 (hash-table
+    '(0 . 0) '(1 . 1) '(2 . 1) '(3 . 2) '(4 . 3) '(5 . 5)
+    '(6 . 8) '(7 . 13) '(8 . 21) '(9 . 34) '(10 . 55) '(11 . 89)
+    '(12 . 144) '(13 . 233) '(14 . 377) '(15 . 610) '(16 . 987)
+    '(17 . 1597) '(18 . 2584) '(19 . 4181) '(20 . 6765) '(21 . 10946)
+    '(22 . 17711) '(23 . 28657) '(24 . 46368) '(25 . 75025) '(26 . 121393)
+    '(27 . 196418) '(28 . 317811) '(29 . 514229) '(30 . 832040) '(31 . 1346269)
     '(32 . 2178309) '(33 . 3524578) '(34 . 5702887)))</em>
 </pre>
 <p>but the tail recursive version of fib is simpler and almost as fast as the memoized version,
@@ -2911,11 +2911,11 @@ return or set these functions.
     #t)
   (set! (<em class=red>hash-table-key-typer</em> H) keytyp)
   (set! (<em class=red>hash-table-value-typer</em> H) valtyp))
-  
+
 ;; now (H 'v1) can be set to anything
 ;;     (H 'v2) must be an integer between 0 and 32
 ;;     (H 'v3) is immutable (but setting it to #f will remove it from H)
-  
+
 &gt; (hash-table-set! H 'v1 11)
 11
 &gt;(hash-table-set! H 'v2 12)
@@ -2938,7 +2938,7 @@ return or set these functions.
 
 <p>An environment holds symbols and their values.  The global environment, for example,
 holds all the variables that are defined at the top level.
-Environments are first class (and applicable) objects in s7.  
+Environments are first class (and applicable) objects in s7.
 </p>
 
 <pre class="indented">
@@ -2958,7 +2958,7 @@ Environments are first class (and applicable) objects in s7.
 (<em class=def id="cutlet">cutlet</em> env . fields)    remove bindings from env
 
 (<em class=def id="letp">let?</em> obj)               #t if obj is an environment
-(<em class=def id="with-let">with-let</em> env . body)    evaluate body in the environment env 
+(<em class=def id="with-let">with-let</em> env . body)    evaluate body in the environment env
 (<em class=def id="outlet">outlet</em> env)             the environment that encloses the environment env (settable)
 (<em class=def id="lettolist">let-&gt;list</em> env)          return the environment bindings as a list of (symbol . value) cons's
 
@@ -2966,7 +2966,7 @@ Environments are first class (and applicable) objects in s7.
 (<em class=def id="openletp">openlet?</em> env)           #t is env is open
 (<em class=def id="coverlet">coverlet</em> env)           mark env as closed (undo an earlier openlet)
 
-(<em class=def id="objecttolet">object-&gt;let</em> obj)        return an environment containing information about obj 
+(<em class=def id="objecttolet">object-&gt;let</em> obj)        return an environment containing information about obj
 (<em class=def id="lettemporarily">let-temporarily</em> vars . body)
 </pre>
 
@@ -2987,8 +2987,8 @@ Environments are first class (and applicable) objects in s7.
 <em class="gray">(inlet 'a 1)</em>
 &gt; (let ((a 1)) (let ((b 2)) (outlet (curlet))))
 <em class="gray">(inlet 'a 1)</em>
-&gt; (let ((e (inlet 'a (inlet 'b 1 'c 2)))) (e 'a 'b)) ; in C terms, e-&gt;a-&gt;b 
-<em class="gray">1</em>  
+&gt; (let ((e (inlet 'a (inlet 'b 1 'c 2)))) (e 'a 'b)) ; in C terms, e-&gt;a-&gt;b
+<em class="gray">1</em>
 &gt; (let ((e (inlet 'a (inlet 'b 1 'c 2)))) (set! (e 'a 'b) 3) (e 'a 'b))
 <em class="gray">3</em>
 &gt; (define* (make-let (a 1) (b 2)) (sublet (rootlet) (curlet)))
@@ -3030,13 +3030,13 @@ of inlet is rootlet).
 Or better,
 </p>
 <pre class="indented">
-(define-macro (with-environs e . body) 
+(define-macro (with-environs e . body)
   `(apply let (map (lambda (a) (list (car a) (cdr a))) ,e) '(,@body)))
 </pre>
 <p>Or turning it around,</p>
 <pre>
 (define-macro (Let vars . body)
-  `(with-let (sublet (curlet) 
+  `(with-let (sublet (curlet)
 	       ,@(map (lambda (var)
 			(values (symbol-&gt;keyword (car var)) (cadr var)))
 		      vars))
@@ -3098,7 +3098,7 @@ This is similar to a let form inside another let.
 </pre>
 <p>
 To add the bindings directly to the environment,
-use <b>varlet</b>.  
+use <b>varlet</b>.
 Both accept environment other than the first as well as individual bindings,
 adding all the argument's bindings to the new environment.
 <b>inlet</b> is very similar, but normally omits the environment argument.
@@ -3111,7 +3111,7 @@ that environment's copy method.
 <p>To implement read-time lets using #let(...):
 </p>
 <pre>
-(set! *#readers* 
+(set! *#readers*
       (cons (cons #\l (lambda (str)
 			(and (string=? str "let") ; #let(...)
 			     (apply inlet (read)))))
@@ -3128,8 +3128,8 @@ local variable:
 <pre class="indented">
 (varlet (curlet)            ; import f1 and f2 into the current environment
   (let ((x 1))              ; x is our local variable
-    (define (f1 a) (+ a x)) 
-    (define (f2 b) (* b x)) 
+    (define (f1 a) (+ a x))
+    (define (f2 b) (* b x))
     (inlet 'f1 f1 'f2 f2))) ; export f1 and f2
 </pre>
 
@@ -3137,7 +3137,7 @@ local variable:
 </p>
 
 <pre class="indented">
-(define e (inlet 
+(define e (inlet
             'x (let ((local-x 3)) ; x's initial value
 		 (dilambda
 		   (lambda () local-x)
@@ -3175,16 +3175,16 @@ To ensure that some code sees the original built-in function definitions,
 wrap it in <code>(with-let (unlet) ...)</code>:
 </p>
 <pre class="indented">
-&gt; (let ((caar 123)) 
-    (+ caar (with-let (unlet) 
+&gt; (let ((caar 123))
+    (+ caar (with-let (unlet)
               (caar '((2) 3)))))
 <em class="gray">125</em>
 </pre>
-<p>Or perhaps better, to keep the current environment intact except for the 
+<p>Or perhaps better, to keep the current environment intact except for the
 changed built-ins:
 </p>
 <pre class="indented">
-&gt; (let ((x 1) 
+&gt; (let ((x 1)
         (display 3))
     (with-let (sublet (curlet) (unlet)) ; (curlet) picks up 'x, (unlet) the original 'display
       (display x)))
@@ -3198,7 +3198,7 @@ As mentioned in the macro section, #_&lt;name&gt; is a built-in reader macro
 for <code>(with-let (unlet) &lt;name&gt;)</code>,
 so for example, #_+ is the built-in + function, no matter what.
 (The environment of built-in functions
-that unlet accesses is not accessible from scheme code, so there's no way 
+that unlet accesses is not accessible from scheme code, so there's no way
 that those values can be clobbered).
 </p>
 
@@ -3206,7 +3206,7 @@ that those values can be clobbered).
 part of the outlet chain of a function, you'll probably get a segfault.
 Don't, for example, <code>(cutlet (outlet (funclet func) 'x))</code>
 where func refers to x in its body.  Similarly, don't mess up the
-outlet chain of a function (via (set! (outlet...))), and still 
+outlet chain of a function (via (set! (outlet...))), and still
 expect that function to do something reasonable. (I may remove cutlet someday).
 </p>
 <br>
@@ -3215,10 +3215,10 @@ expect that function to do something reasonable. (I may remove cutlet someday).
 
 <p>
 I think these functions can implement the notions of libraries,
-separate namespaces, or modules.  
+separate namespaces, or modules.
 Here's one way: first the library writer just writes his library.
 The normal user simply loads it.  The abnormal user worries about everything,
-so first he loads the library in a local let to make sure no bindings escape 
+so first he loads the library in a local let to make sure no bindings escape
 to pollute his code, and then he
 uses unlet to
 make sure that none of his bindings pollute the library code:
@@ -3227,7 +3227,7 @@ make sure that none of his bindings pollute the library code:
 <pre class="indented">
 (let ()
   (with-let (unlet)
-    (load "any-library.scm" (curlet)) 
+    (load "any-library.scm" (curlet))
     ;; by default load puts stuff in the global environment
     ...))
 </pre>
@@ -3289,7 +3289,7 @@ its top-level bindings are imported into the current environment:
 <!--
 (define-macro (safe-let! init end . body)
   `(with-let (#_inlet (unlet)
-	,@(#_map (#_lambda (b) 
+	,@(#_map (#_lambda (b)
 		 `(#_cons ',(#_car b) ,(#_cadr b)))
 	       init))
      ,@body
@@ -3356,8 +3356,8 @@ A slightly more complex example:
 </p>
 
 <pre class="indented">
-(let* ((e1 (openlet 
-	   (inlet 
+(let* ((e1 (openlet
+	   (inlet
 	    'x 3
 	    '* (lambda args
 		 (apply * (if (number? (car args))
@@ -3389,7 +3389,7 @@ Use let-ref-fallback and let-set-fallback instead, if possible.
 
 <p><b>object-&gt;let</b> returns an environment (more of a dictionary really) that
 contains details about its argument.  It
-is intended as a debugging aid, underlying a debugger's "inspect" for example. 
+is intended as a debugging aid, underlying a debugger's "inspect" for example.
 </p>
 
 <pre class="indented">
@@ -3415,7 +3415,7 @@ add information to the namespace created by <code>(object-&gt;let mark)</code>.
      (call-with-exit
       (lambda (return)
 	(do ((e e1 (outlet e))) ()
-	  (for-each 
+	  (for-each
 	   (lambda (slot)
 	     (if (equal? val (cdr slot))
 		 (return (car slot))))
@@ -3423,7 +3423,7 @@ add information to the namespace created by <code>(object-&gt;let mark)</code>.
 	  (if (eq? e (rootlet))
 	      (return #f)))))))
 
-&gt; (let ((a 1) (b "hi")) 
+&gt; (let ((a 1) (b "hi"))
     (value-&gt;symbol "hi"))
 <em class="gray">b</em>
 </pre>
@@ -3444,7 +3444,7 @@ add information to the namespace created by <code>(object-&gt;let mark)</code>.
 		       (* x 1.0)
 		       (error 'wrong-type-arg "fvector new value is not a real: ~A" x)))))
     (set! make-fvector
-	  (lambda* (len (init 0.0)) 
+	  (lambda* (len (init 0.0))
 	    (<em class=red>openlet</em>
 	     (inlet :v (make-vector len (-&gt;float init))
 	            :type type
@@ -3455,7 +3455,7 @@ add information to the namespace created by <code>(object-&gt;let mark)</code>.
     (set! fvector? (lambda (p)
 		     (and (let? p)
 			  (eq? (p 'type) type))))))
-  
+
 &gt; (define fv (make-fvector 32))
 <em class="gray">fv</em>
 &gt; fv
@@ -3474,7 +3474,7 @@ create a let that breaks that chain, we can use let-ref-fallback:
 
 <pre>
 (define lt (<em class=red>openlet</em> (inlet 'a 1
-                           'let-ref-fallback (lambda (e sym) 
+                           'let-ref-fallback (lambda (e sym)
 			                       ;; any other symbol is undefined
 					       #&lt;undefined&gt;))))
 &gt; (lt 'abs)
@@ -3524,9 +3524,9 @@ know the field names in advance,
 <p>Here's one way to add a method to a closure:
 </p>
 <pre class="indented">
-(define sf (openlet (let ((object-&gt;string (lambda (obj . arg) 
+(define sf (openlet (let ((object-&gt;string (lambda (obj . arg)
 				            "#&lt;secret function!&gt;")))
-	              (lambda (x) 
+	              (lambda (x)
 			(+ x 1)))))
 &gt; sf
 <em class="gray">#&lt;secret function!&gt;</em>
@@ -3553,7 +3553,7 @@ In s7, multiple values are spliced directly into the caller's argument list.
 &gt; ((lambda* ((a 1) (b 2)) (list a b)) (values :a 3))
 <em class="gray">(3 2)</em>
 
-(define-macro (call-with-values producer consumer) 
+(define-macro (call-with-values producer consumer)
   `(,consumer (,producer)))
 
 (define-macro (multiple-value-bind vars expr . body)
@@ -3580,7 +3580,7 @@ In s7, multiple values are spliced directly into the caller's argument list.
 
 <p>multiple-values are useful in several situations.  For example,
 <code>(if test (+ a b c) (+ a b d e))</code> can be written
-<code>(+ a b (if test c (values d e)))</code>. 
+<code>(+ a b (if test c (values d e)))</code>.
 There are a few special uses of multiple-values.
 First, you can use the values function to return any number of values, including 0,
 from map's function application:
@@ -3592,13 +3592,13 @@ from map's function application:
 &gt; (map values (list 1 2 3) (list 4 5 6))
 <em class="gray">(1 4 2 5 3 6)</em>
 
-(define (remove-if func lst) 
+(define (remove-if func lst)
   (map (lambda (x) (if (func x) (values) x)) lst))
 
-(define (pick-mappings func lst)          
+(define (pick-mappings func lst)
   (map (lambda (x) (or (func x) (values))) lst))
 
-(define (shuffle . args) 
+(define (shuffle . args)
   (apply map values args))
 
 &gt; (shuffle '(1 2 3) #(4 5 6) '(7 8 9))
@@ -3611,7 +3611,7 @@ from map's function application:
 <p>Second, a macro can return multiple values; these are evaluated and spliced,
 exactly like a normal macro,
 so you can use <code>(values '(define a 1) '(define b 2))</code> to
-splice multiple definitions at the macro invocation point.  
+splice multiple definitions at the macro invocation point.
 If an expansion returns (values), nothing is spliced in.  This is
 mostly useful in <a href="#readercond">reader-cond</a> and the #; reader, but
 unfortunately, it is tricky to use.  The reader only knows about things globally defined
@@ -3637,7 +3637,7 @@ so:
 <p>But this printout is just trying to be informative.  There is no multiple-values object
 in s7.  You can't <code>(set! x (values 1 2))</code>, for example.  The values function
 tells s7 that its arguments should be handled in a special way, and the multiple-value indication goes away
-as soon as the arguments are spliced into some caller's arguments.  
+as soon as the arguments are spliced into some caller's arguments.
 </p>
 
 <p id="listvalues">There are two helper functions for multiple values, apply-values and list-values,
@@ -3710,21 +3710,21 @@ an argument, s7 follows CL, and uses only the first of the values (this affects 
 
 
 <p><b><em class=def id="callwithexit">call-with-exit</em></b> is call/cc without the ability to jump back into the original context,
-similar to "return" in C.  This 
-is cleaner than call/cc, and much faster. 
+similar to "return" in C.  This
+is cleaner than call/cc, and much faster.
 </p>
 
 <pre class="indented">
-(define-macro (block . body) 
+(define-macro (block . body)
   ;; borrowed loosely from CL &mdash; predefine "return" as an escape
   `(<em class=red>call-with-exit</em> (lambda (return) ,@body)))
 
 (define-macro (while test . body)      ; while loop with predefined break and continue
   `(<em class=red>call-with-exit</em>
-    (lambda (break) 
+    (lambda (break)
       (let continue ()
 	(if (let () ,test)
-	    (begin 
+	    (begin
 	      (let () ,@body)
 	      (continue))
 	    (break))))))
@@ -3736,7 +3736,7 @@ is cleaner than call/cc, and much faster.
 	,@(do ((clause clauses (cdr clause))
 	       (new-clauses ()))
 	      ((null? clause) (reverse new-clauses))
-	    (set! new-clauses (cons `(,(caar clause) 
+	    (set! new-clauses (cons `(,(caar clause)
 				      ,@(cdar clause)
 				      ,@(map (lambda (nc)
 					       (apply values (cdr nc))) ; doubly spliced!
@@ -3749,14 +3749,14 @@ is cleaner than call/cc, and much faster.
    (lambda (quit)
      (apply for-each (lambda arglist
 		       (if (not (apply func arglist))
-			   (quit #&lt;unspecified&gt;))) 
+			   (quit #&lt;unspecified&gt;)))
 	    args))))
 
 (define (find-if f . args)  ; generic position-if is very similar
   (<em class=red>call-with-exit</em>
-   (lambda (return) 
-     (apply for-each (lambda main-args 
-		       (if (apply f main-args) 
+   (lambda (return)
+     (apply for-each (lambda main-args
+		       (if (apply f main-args)
 			   (apply return main-args)))
 	    args))))
 
@@ -3770,13 +3770,13 @@ is cleaner than call/cc, and much faster.
 The call-with-exit function's argument (the "continuation") is only valid
 within the call-with-exit function.  In call/cc, you can save it, then call it later
 to jump back, but if you try that with call-with-exit (from outside the call-with-exit function's body), you'll get an error.
-This is similar to trying to read from a closed input port. 
+This is similar to trying to read from a closed input port.
 </p>
 
 
 <p>The other side, so to speak, of call-with-exit, is <em class=def id="withbaffle">with-baffle</em>.
 Sometimes we need a normal call/cc, but want to make sure it is active
-only within a given block of code.  
+only within a given block of code.
 Normally, if a continuation gets away, there's no telling when it might wreak havoc on us.
 with-baffle blocks that &mdash; no continuation can jump into its body:
 </p>
@@ -3784,13 +3784,13 @@ with-baffle blocks that &mdash; no continuation can jump into its body:
 <pre class="indented">
 (let ((what's-for-breakfast ())
       (bad-dog 'fido))        ; bad-dog wonders what's for breakfast?
-  (<em class=red>with-baffle</em>                ; the syntax is (with-baffle . body)         
+  (<em class=red>with-baffle</em>                ; the syntax is (with-baffle . body)
    (set! what's-for-breakfast
 	 (call/cc
 	  (lambda (biscuit?)
 	    (set! bad-dog biscuit?) ; bad-dog smells a biscuit!
 	    'biscuit!))))
-  (if (eq? what's-for-breakfast 'biscuit!) 
+  (if (eq? what's-for-breakfast 'biscuit!)
       (bad-dog 'biscuit!))     ; now, outside the baffled block, bad-dog wants that biscuit!
   what's-for-breakfast)        ;   but s7 says "No!": baffled! ("continuation can't jump into with-baffle")
 </pre>
@@ -3805,8 +3805,8 @@ handler.  Here is a sketch of the situation:
 <pre class="indented">
 (catch #t
        (lambda ()
-         (let ((res (call/cc 
-                      (lambda (ok) 
+         (let ((res (call/cc
+                      (lambda (ok)
                         (error 'cerror "an error" ok)))))
            (display res) (newline)))
        (lambda args
@@ -3819,12 +3819,12 @@ handler.  Here is a sketch of the situation:
 
 <p>In a more general case, the error handler is separate from the
 catch body, and needs a way to distinguish a real continuation
-from a simple procedure.  
+from a simple procedure.
 </p>
 
 <pre class="indented">
 (define (continuable-error . args)
-  (call/cc 
+  (call/cc
    (lambda (continue)
      (apply error args))))
 
@@ -3839,7 +3839,7 @@ from a simple procedure.
   (let ((tag (caadr func)))
     `(catch ',tag
        (lambda ()
-	 (define-macro (,tag . body) 
+	 (define-macro (,tag . body)
 	   `(throw ',',tag ,@body))
 	 ,@(cddr func))
        (lambda (type info)
@@ -3915,7 +3915,7 @@ These can also be ~N or ~n in which case the numeric argument is read from the l
 
 <p>
 <code>(format #f ...)</code> simply returns the formatted string; <code>(format #t ...)</code>
-also sends the string to the current-output-port.  <code>(format () ...)</code> sends the output to 
+also sends the string to the current-output-port.  <code>(format () ...)</code> sends the output to
 the current-output-port without returning the string (this mimics the other IO routines
 such as display and newline).  Other built-in port choices are *stdout* and *stderr*.
 </p>
@@ -3933,7 +3933,7 @@ such as display and newline).  Other built-in port choices are *stdout* and *std
 </pre>
 
 <p>This also affects format.  In most Schemes, <code>(format #f "~X" 1.25)</code> is
-an error.  In CL, it is equivalent to using ~A which is perverse.  But 
+an error.  In CL, it is equivalent to using ~A which is perverse.  But
 </p>
 
 <pre class="indented">
@@ -3942,7 +3942,7 @@ an error.  In CL, it is equivalent to using ~A which is perverse.  But
 </pre>
 
 <p>and there's no obvious way to get the same effect from format unless we accept
-floats in the "~X" case.  So in s7, 
+floats in the "~X" case.  So in s7,
 </p>
 
 <pre class="indented">
@@ -4040,14 +4040,14 @@ port, not a boolean), and returns an empty string.  Then:
       (lambda (obj)
 	(if (pair? obj)
 	    (return
-	     (string-append 
-	      (apply objects->string 
+	     (string-append
+	      (apply objects->string
 		     (map (lambda (obj)
 			    (if (pair? obj)
 				(car obj)
 				obj))
 			  objs))
-	      (apply cycle->string 
+	      (apply cycle->string
 		     (map (lambda (obj)
 			    (if (pair? obj)
 				(cdr obj)
@@ -4091,17 +4091,17 @@ make-hook is:
     (apply lambda* args
       '(let ((result #&lt;unspecified&gt;))
          (let ((e (curlet)))
-	   (for-each (lambda (f) (f e)) body) 
+	   (for-each (lambda (f) (f e)) body)
            result))
        ())))
 </pre>
 
 <p>So the result of calling make-hook is a function (the lambda* that is applied to args above) that
-contains a list of functions, 'body.  
+contains a list of functions, 'body.
 Each function in that list takes one argument, the hook.
 Each time the hook itself is called, each of the body functions is called, and the value of 'result is returned.
 That variable, and each of the hook's arguments are accessible to the hook's internal
-functions by going through the environment passed to the internal functions.  This is a bit circuitous; 
+functions by going through the environment passed to the internal functions.  This is a bit circuitous;
 here's a sketch:
 </p>
 
@@ -4110,7 +4110,7 @@ here's a sketch:
 <em class="gray">h</em>
 &gt; (set! (hook-functions h)              ; this sets ((funclet h) 'body)
            (list (lambda (hook) 	; each hook internal function takes one argument, the environment
-                   (set! (hook 'result) ; this is the "result" variable above 
+                   (set! (hook 'result) ; this is the "result" variable above
                          (format #f "a: ~S, b: ~S" (hook 'a) (hook 'b))))))
 <em class="gray">(#&lt;lambda (hook)&gt;)</em>
 &gt; (h 1 2)                               ; this calls the hook's internal functions (just one in this case)
@@ -4188,18 +4188,18 @@ a procedure's environment.
 
 <p>
 <b>documentation</b> returns the documentation string associated with a procedure.  This is normally
-provided via the '+documentation+ variable in the function's environment.  If you'd rather, 
+provided via the '+documentation+ variable in the function's environment.  If you'd rather,
 you can treat the initial string in the function's body as documentation.
 </p>
 <pre class="indented">
-(define func 
+(define func
   (let ((+documentation+ "helpful info"))
      (lambda (a) a)))
 
 &gt; (documentation func)
 <em class="gray">"helpful info"</em>
 
-(define (cl-func) 
+(define (cl-func)
   "this is documentation"
   123)
 
@@ -4277,9 +4277,9 @@ in its closure:
 </p>
 
 <pre class="indented">
-&gt; (define f1 (let ((+documentation+ "helpful info") 
+&gt; (define f1 (let ((+documentation+ "helpful info")
                    (+signature+ '(boolean? real?)))
-                (lambda (x) 
+                (lambda (x)
                   (positive? x))))
 <em class="gray">f1</em>
 &gt; (documentation f1)
@@ -4295,7 +4295,7 @@ in its closure:
 &gt; (define f1 (let ((documentation (lambda (f) "helpful info"))
                    (signature (lambda (f) '(boolean? real?))))
                 (<em class=red>openlet</em>  ; openlet alerts s7 that f1 has methods
-                  (lambda (x) 
+                  (lambda (x)
                     (positive? x)))))
 &gt; (documentation f1)
 <em class="gray">"helpful info"</em>
@@ -4324,7 +4324,7 @@ in its closure:
 (define my-add
   (let ((<em class="red">tester</em> (lambda ()
 		  (if (not (= (my-add 2 3) 5))
-		      (format #t "oops: (myadd 2 3) -&gt; ~A~%" 
+		      (format #t "oops: (myadd 2 3) -&gt; ~A~%"
 			      (my-add 2 3))))))
     (lambda (x y)
       (- x y))))
@@ -4337,7 +4337,7 @@ in its closure:
 		       (testf (and (procedure? fv)
 				   ((funclet fv) '<em class="red">tester</em>))))
 		  (when (procedure? testf)  ; found one!
-		    (testf)))) 
+		    (testf))))
 	      st)))
 
 &gt; (auto-test)
@@ -4428,7 +4428,7 @@ are:
 </pre>
 
 <pre class="indented">
-&gt; (let ((result #f) 
+&gt; (let ((result #f)
         (p (<em class=red>open-output-string</em>)))
     (format p "this ~A ~C test ~D" "is" #\a 3)
     (set! result (<em class=red>get-output-string</em> p))
@@ -4446,15 +4446,15 @@ Other functions:
 <li>read-line: line-at-a-time reads, optional second argument #t to include the newline
 <li>read-string (r7rs)
 <li>current-error-port, set-current-error-port
-<li><em class=def id="portfilename">port-filename</em> and 
+<li><em class=def id="portfilename">port-filename</em> and
     <em class=def id="portlinenumber">port-line-number</em> (input ports)
 <li><em class=def id="portposition">port-position</em> (input port, settable)
 <li><em class=def id="portstring">port-string</em> (string port, settable)
-<li><em class=def id="portfile">port-file</em> 
+<li><em class=def id="portfile">port-file</em>
 </ul>
 
 <p>Use length to get the length in bytes of an input port's file or string.
-port-line-number is settable (for fancy *#readers*). 
+port-line-number is settable (for fancy *#readers*).
 <b>port-position</b> is the position in bytes of the reader in the port. It is settable.
 <b>port-string</b> is the string contents of a string port. It is also settable.
 <b>port-file</b> is intended for use with the *libc* library.  It returns a c-pointer
@@ -4523,10 +4523,10 @@ it returns that #&lt;eof&gt;.  But this is specific to read, not (for example) l
 <em class="gray">line 1
 line 2</em>
 
-(with-input-from-file "t234.scm" 
-  (lambda () 
-    (do ((c (read) (read))) 
-	((eof-object? c)) 
+(with-input-from-file "t234.scm"
+  (lambda ()
+    (do ((c (read) (read)))
+	((eof-object? c))
       (eval c))))
 <em class="gray">line 1</em>
 </pre>
@@ -4581,7 +4581,7 @@ the dumb "lambda".  Here are more useful examples:
     (let ((p (open-output-file name "a")))
       (display str p)
       (close-output-port p)))
-  (openlet 
+  (openlet
    (inlet :name name
 	  :format (lambda (p str . args) (logit (p 'name) (apply format #f str args)))
 	  :write (lambda (obj p)         (logit (p 'name) (object-&gt;string obj #t)))
@@ -4662,7 +4662,7 @@ via the error function, and can be trapped and dealt with via <em class=def id="
 <p>
 catch has 3 arguments: a tag indicating what error to catch (#t = anything),
 the code, a thunk, that the catch is protecting, and the function to call
-if a matching error occurs during the evaluation of the thunk.  
+if a matching error occurs during the evaluation of the thunk.
 The tag is matched to the error type with eq?.
 The error handler
 takes a rest argument which will hold whatever the error function chooses to pass it.
@@ -4678,7 +4678,7 @@ send that info to the current-error-port:
   (lambda ()
     (error 'oops))
   (lambda args
-    (format (current-error-port) "~A: ~A~%~A[~A]:~%~A~%" 
+    (format (current-error-port) "~A: ~A~%~A[~A]:~%~A~%"
       (car args)                        ; the error type
       (apply format #f (cadr args))     ; the error info
       (port-filename) (port-line-number); error file location
@@ -4698,10 +4698,10 @@ do that:
       (call-with-output-file outfile
 	(lambda (out)
 	  (<em class=red>catch</em> 'wrong-type-arg   ; s7 raises this error if write-char gets #&lt;eof&gt;
-	    (lambda () 
+	    (lambda ()
 	      (do () ()            ; read/write until #&lt;eof&gt;
 		(write-char (read-char in) out)))
-	    (lambda err 
+	    (lambda err
 	      outfile)))))))
 </pre>
 
@@ -4746,14 +4746,14 @@ then could easily (but maybe not efficiently) implement generic functions such a
 map-with-exit would be
 </p>
 <pre class="indented">
-(define (map-with-exit func . args) 
+(define (map-with-exit func . args)
   (let ((result ()))
     (call-with-exit
       (lambda (quit)
         (apply dynamic-map #f ; no init-func in this case
-               (lambda main-args 
-                 (apply func quit main-args)) 
-               (lambda (res) 
+               (lambda main-args
+                 (apply func quit main-args))
+               (lambda (res)
                  (set! result res))
                args)))
     result))
@@ -4769,7 +4769,7 @@ map-with-exit would be
     (catch 'division-by-zero
       (lambda ()
 	(catch 'wrong-type-arg
-	  (lambda () 
+	  (lambda ()
 	    (abs -1))
 	  (lambda args (format () "got a bad arg~%") -1)))
       (lambda args 0)))
@@ -4784,9 +4784,9 @@ map-with-exit would be
   (let ((base (cons 'lambda (cons () body))))
     (for-each (lambda (clause)
 	        (let ((tag (car clause)))
-	          (set! base `(lambda () 
+	          (set! base `(lambda ()
 			        (catch ',(or (eq? tag 'else) tag)
-			          ,base 
+			          ,base
 			          ,@(cdr clause))))))
 	      clauses)
     (caddr base)))
@@ -4811,7 +4811,7 @@ Along the same lines:
 (define (catch-member lst func err)
   (catch-if (lambda (tag) (member tag lst)) func err))
 
-(define-macro (catch* clauses . error) 
+(define-macro (catch* clauses . error)
   ;; try each clause until one evaluates without error, else error:
   ;;    (macroexpand (catch* ((+ 1 2) (- 3 4)) 'error))
   ;;    (catch #t (lambda () (+ 1 2)) (lambda args (catch #t (lambda () (- 3 4)) (lambda args 'error))))
@@ -4838,11 +4838,11 @@ Along the same lines:
 	      (...)
 	      (else (apply throw args))))))
       funks))))
--->       
+-->
 
 </blockquote>
 
-<p>When an error is encountered, and when s7 is interrupted via <a href="#beginhook">begin_hook</a>, 
+<p>When an error is encountered, and when s7 is interrupted via <a href="#beginhook">begin_hook</a>,
 (<em class=def id="owlet">owlet</em>) returns an environment that contains
 additional info about that error:
 </p>
@@ -4870,8 +4870,8 @@ To list all the local bindings from the error outward:
 </p>
 
 <pre class="indented">
-(do ((e (outlet (owlet)) (outlet e))) 
-    ((eq? e (rootlet))) 
+(do ((e (outlet (owlet)) (outlet e)))
+    ((eq? e (rootlet)))
   (format () "~{~A ~}~%" e))
 </pre>
 
@@ -4903,9 +4903,9 @@ Its arguments are named 'type and 'data.  It is called if there are no catches.
 </p>
 
 <pre class="indented">
-(set! (hook-functions *error-hook*) 
-      (list (lambda (hook) 
-              (apply format *stderr* (hook 'data)) 
+(set! (hook-functions *error-hook*)
+      (list (lambda (hook)
+              (apply format *stderr* (hook 'data))
               (newline *stderr*))))
 </pre>
 
@@ -4922,11 +4922,11 @@ otherwise you get an error.  lint.scm has an example.
 </p>
 
 <p><em class=def id="rootletredefinitionhook">*rootlet-redefinition-hook*</em> is called when
-a top-level variable is redefined (via define and friends, not set!). 
+a top-level variable is redefined (via define and friends, not set!).
 </p>
 <pre class="indented">
-(set! (hook-functions *rootlet-redefinition-hook*) 
-      (list (lambda (hook) 
+(set! (hook-functions *rootlet-redefinition-hook*)
+      (list (lambda (hook)
               (format *stderr* "~A ~A~%" (hook 'name) (hook 'value)))))
 </pre>
 <p>will print out the variable's name and the new value.
@@ -4935,7 +4935,7 @@ a top-level variable is redefined (via define and friends, not set!).
 
 <div class="indented">
 <p>The s7-built-in catch tags are 'wrong-type-arg, 'syntax-error, 'read-error, 'unbound-variable,
-'out-of-memory, 'wrong-number-of-args, 'format-error, 'out-of-range, 'division-by-zero, 'io-error, and 'bignum-error.  
+'out-of-memory, 'wrong-number-of-args, 'format-error, 'out-of-range, 'division-by-zero, 'io-error, and 'bignum-error.
 </p>
 </div>
 
@@ -4952,7 +4952,7 @@ loads that file; if a function, it is called with one argument, the current (cal
 </p>
 
 <pre class="indented">
-(autoload 'channel-distance "dsp.scm") 
+(autoload 'channel-distance "dsp.scm")
 ;; now if we subsequently call channel-distance but forget to load "dsp.scm" first,
 ;;   s7 loads "dsp.scm" itself, and uses its definition of channel-distance.
 ;;   The C-side equivalent is s7_autoload.
@@ -5021,14 +5021,14 @@ the locals themselves immutable:
 </p>
 <pre class="indented">
 (define (vars-immutable! L)
-  (with-let L 
+  (with-let L
     (for-each (lambda (f)
                 (immutable! (car f)))
               (curlet)))
   L)
 </pre>
 <p>Now <code>(vars-immutable! let)</code> makes it an error to set! any of the locals, but you
-can add locals to the let.  
+can add locals to the let.
 You can speed up evaluation by doing this because it tells the optimizer that the current entries in the let will not change.
 To completely petrify the let, <code>(immutable! (vars-immutable! let))</code>.
 To make a function's documentation immutable: <code>(with-let (funclet 'f2) (immutable! '+documentation+))</code>,
@@ -5056,12 +5056,12 @@ so local constants behave as you'd expect:
 <em class="gray">23</em>
 &gt; (func 1)                  ; here we're trying to shadow cvar
 <em class="red">error</em><em class="gray">: can't bind an immutable object: ((cvar (+ a 1)))</em>
-&gt; (let ((x 1)) 
+&gt; (let ((x 1))
      (define z (let ()
-                 (define-constant x 3) 
-                 (lambda (y) 
+                 (define-constant x 3)
+                 (lambda (y)
                    (let ((x y))  ; this x is the inner constant x
-                     x)))) 
+                     x))))
      (z 1))  ; so this is an error even though the outer x is not a constant
 <em class="red">error</em><em class="gray">: can't bind an immutable object: ((x y))</em>
 </pre>
@@ -5094,10 +5094,10 @@ is also passed (the weird argument order is an historical artifact).
     (set! (setter 'x) (lambda (s v) (if (integer? v) v x)))
     (set! (setter 'y) (lambda (s v) y))
     (set! (setter 'z) (lambda (s v) (format *stderr* "z ~A -&gt; ~A~%" z v) v))
-  
+
     (set! x 3.3) ; x does not change because 3.3 is not an integer
     (set! y 3.3) ; y does not change
-    (set! z 3.3) ; prints "z 3 -&gt; 3.3" 
+    (set! z 3.3) ; prints "z 3 -&gt; 3.3"
     (curlet)))
 
 &gt; e
@@ -5177,9 +5177,9 @@ the initial value:
 
 <p>
 <b><em class=def id="loadpath">*load-path*</em></b> is a list of directories to search when loading a file.
-<b><em class=def id="loadhook">*load-hook*</em></b> is a hook whose functions are called just before a file is loaded.  
+<b><em class=def id="loadhook">*load-hook*</em></b> is a hook whose functions are called just before a file is loaded.
 The hook function argument, named 'name, is the filename.
-While loading, port-filename and 
+While loading, port-filename and
 port-line-number of the current-input-port can tell you
 where you are in the file.  This data is also available after loading via <em class=def id="pairlinenumber">pair-line-number</em>
 and <em class=def id="pairfilename">pair-filename</em>.
@@ -5187,12 +5187,12 @@ and <em class=def id="pairfilename">pair-filename</em>.
 
 <pre class="indented">
 (set! (hook-functions *load-hook*)
-       (list (lambda (hook) 
+       (list (lambda (hook)
                (format () "loading ~S...~%" (hook 'name)))))
 
-(set! (hook-functions *load-hook*) 
-      (cons (lambda (hook) 
-              (format *stderr* "~A~%" 
+(set! (hook-functions *load-hook*)
+      (cons (lambda (hook)
+              (format *stderr* "~A~%"
                 (system (string-append "./snd lint.scm -e '(begin (lint \"" (hook 'name) "\") (exit))'") #t)))
             (hook-functions *load-hook*)))
 </pre>
@@ -5228,7 +5228,7 @@ at startup *features* is:
 
 <pre class="indented">
 &gt; *features*
-<em class="gray">(snd-20.0 snd20 snd audio snd-s7 snd-motif gsl alsa xm clm6 clm sndlib linux 
+<em class="gray">(snd-20.0 snd20 snd audio snd-s7 snd-motif gsl alsa xm clm6 clm sndlib linux
 autoload dlopen history complex-numbers system-extras overflow-checks ratio s7-8.11 s7)</em>
 &gt; (provided? 'gsl)
 <em class="gray">#t</em>
@@ -5274,7 +5274,7 @@ CLOS.  We can mimic this behavior:
 	    (transparent-memq 'c 'x ce)))))
 
 '((a) (b) #f)
-</pre>    
+</pre>
 </div>
 
 <!--
@@ -5300,7 +5300,7 @@ CLOS.  We can mimic this behavior:
 </p>
 
 <div class="indented">
-<p>Leaving aside this case and the booleans, #f and #t, you can specify your own handlers for 
+<p>Leaving aside this case and the booleans, #f and #t, you can specify your own handlers for
 tokens that start with "#".  <b><em class=def id="sharpreaders">*#readers*</em></b> is a list of pairs: <code>(char . func)</code>.
 "char" refers to the first character after the sharp sign (#). "func" is a function of
 one argument, the string that follows the #-sign up to the next delimiter.  "func" is called
@@ -5348,7 +5348,7 @@ rest.  Say we'd like #t&lt;number&gt; to interpret the number in base 12:
 </p>
 
 <pre class="indented">
-&gt; (set! *#readers* 
+&gt; (set! *#readers*
     (list (cons #\[ (lambda (str)
 		      (let ((h (make-hash-table)))
 		        (do ((c (read) (read)))
@@ -5385,10 +5385,10 @@ rest.  Say we'd like #t&lt;number&gt; to interpret the number in base 12:
 	    (error 'wrong-type-arg "strange #+ chooser: ~S~%" e)
 	    (begin      ; evaluate the #+(...) expression as in cond-expand
 	      (define (traverse tree)
-		(if (pair? tree)                                             
-		    (cons (traverse (car tree))                             
+		(if (pair? tree)
+		    (cons (traverse (car tree))
 			  (case (cdr tree) ((())) (else =&gt; traverse)))
-		    (if (memq tree '(and or not)) tree                 
+		    (if (memq tree '(and or not)) tree
 			(and (symbol? tree) (provided? tree)))))
 	      (if (eval (traverse e))
 		  expr
@@ -5477,7 +5477,7 @@ is considered to be a part of the symbol name.  A keyword is a constant that eva
 </p>
 
 <pre class="indented">
-(define-macro (defvar name value) 
+(define-macro (defvar name value)
   `(unless (defined? ',name)
      (define ,name ,value)))
 </pre>
@@ -5498,7 +5498,7 @@ Here we scan the symbol table looking for any function that doesn't have documen
 </p>
 
 <pre class="indented">
-(for-each 
+(for-each
    (lambda (sym)
      (if (<em class=red>defined?</em> sym)
          (let ((val (<em class=red>symbol-&gt;value</em> sym)))
@@ -5519,7 +5519,7 @@ Here we scan the symbol table looking for any function that doesn't have documen
 </p>
 
 <pre class="indented">
-(for-each 
+(for-each
   (lambda (sym)
     (if (<em class=red>defined?</em> sym)
 	(let ((val (<em class=red>symbol-&gt;value</em> sym)))
@@ -5592,7 +5592,7 @@ involve circular structures.  Will equal? be our friend?
 
 <p>No! We need an equality check that ignores epsilonic differences in real and
 complex numbers, and knows that NaNs are equal for all practical purposes.
-Leaving aside numbers, 
+Leaving aside numbers,
 closed ports are not equal, yet nothing can be done with them.
 #() is not equal to #2d().  And two closures are never equal, even if their
 arguments, environments, and bodies are equal.
@@ -5634,7 +5634,7 @@ define-macro, and (in normal use) the same result, but it is much faster because
 Similarly, <b>define-expansion*</b> defines a read-time macro*.
 (See also define-with-macros in s7test.scm for a way to expand macros in a function body at definition time).
 Since the reader knows almost nothing
-about the code it is reading, 
+about the code it is reading,
 you need to make sure the expansion is defined at the top level and that its name is unique.
 The reader does know about global variables, so:
 </p>
@@ -5663,7 +5663,7 @@ a (gasp!) f*xpr.  In fact:
 <pre>
 (define-macro (define-f*xpr name-and-args . body)
   `(define ,(car name-and-args)
-     (apply define-expansion 
+     (apply define-expansion
        (append (list (append (list (gensym)) ',(cdr name-and-args))) ',body))))
 
 &gt; (define-f*xpr (mac a) `(+ ,a 1))
@@ -5693,7 +5693,7 @@ You can do something similar with a normal macro, or make the indirection explic
 so if it does not see a list whose first element is a expansion name, it does
 not do anything special.  In the <code>(x a)</code> case above, the
 expansion happens when the code is evaluated, and the expansion result
-is simply returned, unevaluated.  
+is simply returned, unevaluated.
 </p>
 
 <p>You can also use macroexpand to cancel the evaluation of a macro's expansion:
@@ -5731,8 +5731,8 @@ the remainder of that clause is spliced into the code as if you had typed it fro
 <pre>
 (define-expansion (reader-if test true . false)
   (let ((test-val (eval test)))
-    (if test-val 
-	true 
+    (if test-val
+	true
 	(and (pair? false)
 	     (car false)))))
 </pre>
@@ -5774,7 +5774,7 @@ correct.  To clear out the current data, call clear-profile.
 
 <div class="separator"></div>
 <p id="s7env"><b>*s7*</b> is a let that gives access to some of s7's internal
-state: 
+state:
 </p>
 <pre class="indented">
 version                       a string describing the current s7: e.g. "s7 10.0, 13-Jan-2022"
@@ -5814,9 +5814,9 @@ symbol-printer                #f, a function to print symbols whose names contai
 make-function                 #f, a function that is called when a new function is created
 
 safety                        0 (see below)
-undefined-identifier-warnings #f 
-undefined-constant-warnings   #f 
-accept-all-keyword-arguments  #f 
+undefined-identifier-warnings #f
+undefined-constant-warnings   #f
+accept-all-keyword-arguments  #f
 autoloading?                  #t
 openlets                      #t, whether any let can be open globally (this overrides all openlets)
 expansions?                   #t, whether expansions are handled at read-time
@@ -5896,8 +5896,8 @@ and the returned value.
 
 
 <p><code>(*s7* 'stacktrace-defaults)</code> is a list of four integers and a boolean that tell the error
-handler how to format stacktrace information.  The four integers are: 
-how many frames to display, 
+handler how to format stacktrace information.  The four integers are:
+how many frames to display,
 how many columns are devoted to code display,
 how many columns are available for a line of data,
 and where to place comments.
@@ -5918,7 +5918,7 @@ The defaults are '(3 45 80 45 #t).
 <p>The standard time macro:</p>
 
 <pre class="indented">
-(define-macro (time expr) 
+(define-macro (time expr)
   `(let ((start (<em class="red">*s7* 'cpu-time</em>)))
      (let ((res (list ,expr))) ; expr might return multiple values
        (list (car res)
@@ -5929,21 +5929,21 @@ The defaults are '(3 45 80 45 #t).
 
 <pre class="indented">
 (define log10 (log (bignum 10)))
-(define bignum-precision (dilambda (lambda () 
-				     (<em class="red">*s7* 'bignum-precision</em>)) 
+(define bignum-precision (dilambda (lambda ()
+				     (<em class="red">*s7* 'bignum-precision</em>))
 				   (lambda (val)
 				     (set! (<em class="red">*s7* 'bignum-precision</em>) val)
 				     (set! log10 (log (bignum 10)))
 				     val)))
 </pre>
 
-<p>The stack, history and gc-protected-objects fields are intended for debugging.  Don't keep 
+<p>The stack, history and gc-protected-objects fields are intended for debugging.  Don't keep
 these hanging around and expect good things to happen!
 </p>
 
 <p>The *s7* field 'number-separator refers to what some languages call "numeric literal separator",
 a character that can appear in a number as a separator to make it more readable:  "123,321"
-as opposed to "123321".  If the compile time flag WITH_NUMBER_SEPARATOR is set, and 
+as opposed to "123321".  If the compile time flag WITH_NUMBER_SEPARATOR is set, and
 (*s7* 'number-separator) is not #\null (the default), then that character can appear anywhere
 in a number (as long as it is between two digits), and the reader will ignore it.  The *features*
 list will have the entry 'number-separator if s7 was compiled with WITH_NUMBER_SEPARATOR defined.
@@ -5971,9 +5971,9 @@ at argument type checks and so on.  See s7test.scm for examples.
 </pre>
 
 <p>
-c-object? returns #t is its argument is a c-object. 
+c-object? returns #t is its argument is a c-object.
 c-object-type returns the object's type tag (otherwise #f of course).  This tag is also the position
-of the object's type in the (*s7* 'c-types) list. 
+of the object's type in the (*s7* 'c-types) list.
 (*s7* 'c-types) returns a list of the types created by s7_make_c_type.
 </p>
 <p>
@@ -5981,15 +5981,15 @@ You can wrap up raw C pointers and
 pass them around in s7 code. The function c-pointer returns a wrapped pointer,
 and c-pointer? returns #t if passed one.  <code>(define NULL (c-pointer 0))</code>.
 If the type field is a symbol, it is used to check types in s7_c_pointer with_type.
-If the 'info field of a c-pointer is a let, that pointer can participate in 
+If the 'info field of a c-pointer is a let, that pointer can participate in
 the generic functions mechanism, much like a c-object:
 </p>
 <pre class="indented">
-&gt; (let ((ptr (c-pointer 1 'abc 
-                (inlet 'object-&gt;string 
+&gt; (let ((ptr (c-pointer 1 'abc
+                (inlet 'object-&gt;string
 		  (lambda (obj . args)
 		    (let ((lt (object-&gt;let obj)))
-		      (format #f "I am pointer ~A of type '~A!" 
+		      (format #f "I am pointer ~A of type '~A!"
 			      (lt 'c-pointer)        ; we need c-pointer-type etc
 			      (lt 'c-type))))))))
     (openlet ptr)
@@ -6099,7 +6099,7 @@ int main(int argc, char **argv)
 <li>letrec*, but without conviction.
 <li>set! and *-set! return the new value (modulo setter), not #&lt;unspecified&gt;.
 <li>define and its friends return the new value.
-<li>port-closed? 
+<li>port-closed?
 <li>list? means "pair or null", proper-list? is r5rs list?, float? = real and not rational, sequence? = length, byte? = unsigned byte.
 <!-- a vector can be a member of itself, and yet vector? returns #t, why is list? different; we even call it a circular list! -->
 <li>the default IO ports are named *stdin*, *stdout*, and *stderr*.
@@ -6122,7 +6122,7 @@ to <code>(#_gcd ...)</code> at s7's whim, if gcd has its original value at the t
 sees the expression using it.  A subsequent <code>(set! gcd +)</code> does not affect this optimized call.
 I think I could wave my hands and mumble about "aggressive lexical scope" or something, but actually the
 choice here is that speed trumps that ol' hobgoblin consistency.  If you want to change gcd to +, do it before
-loading code that calls gcd.  
+loading code that calls gcd.
 I think most Schemes handle macros this way: the macro call is replaced by its expansion using its current
 definition, and a later redefinition does not affect earlier uses.
 Guile behaves like s7:
@@ -6208,7 +6208,7 @@ a mistake and "fixed" it; now I'm having second thoughts).
 <li>omits set-current-output-port and set-current-input-port
 </ul>
 
-<p>With the move to s7_setter and s7_set_setter (setter in Scheme), 
+<p>With the move to s7_setter and s7_set_setter (setter in Scheme),
 dilambda and dilambda? have been reduced to trivial conveniences, so perhaps they can also be
 removed.
 </p>
@@ -6219,7 +6219,7 @@ the optimizer notices that the copy is not needed.  Copy almost works, but its s
 refer to the source, not the destination.  substring should be like subvector, but that is not backwards compatible.
 </p>
 
-<p>There are several less-than-ideal names.  
+<p>There are several less-than-ideal names.
 get-output-string should be current-output-string. write-char behaves like display, not write.
 provided? should be feature? or *features* should be *provisions*.
 list-ref, list-set!, and list-tail actually only apply to pairs.
@@ -6230,14 +6230,14 @@ The CL-inspired "log*" names such as logand look very old-fashioned.  Standard s
 for the name "bitwise*"; why not "integerwise" or "bytevectorwise"?  The "wise" business is just noise; are they thinking of The Hobbit?
 <code>(define & logand) (define | logior) (define ~ lognot)</code>, but ^ for logxor
 (as in C) is not ideal; ^ should be expt.  Finally, I think the notion of a current input or output port is
-a mistake: the IO functions should always get an explicit port.  
+a mistake: the IO functions should always get an explicit port.
 </p>
 
 <p>
 cond-expand is dumb and its name is dumber.
 Take libgsl.scm; different versions of the GSL library have different functions.  We need to know
 when we're building the FFI what GSL version we're dealing with.  It would be nuts to start pushing and checking dozens
-of library version symbols when all we actually want is <code>(&gt; version 23.19)</code>. 
+of library version symbols when all we actually want is <code>(&gt; version 23.19)</code>.
 In place of cond-expand, s7 uses <a href="#readercond">reader-cond</a>,
 so the read-time decision involves normal Scheme evaluation.
 </p>
@@ -6245,11 +6245,11 @@ so the read-time decision involves normal Scheme evaluation.
 
 <blockquote>
 <div class="indented">
-<p>In the section about cond-expand, the r7rs spec says "If none of the &lt;feature requirement&gt;s evaluate to #t, 
+<p>In the section about cond-expand, the r7rs spec says "If none of the &lt;feature requirement&gt;s evaluate to #t,
 then if there is an else clause, its &lt;expression&gt;s are included. Otherwise, the cond-expand has no effect."
 I read that to mean that <code>(begin 23 (cond-expand (surreals 1)))</code> should evaluate to 23,
 and <code>(abs -1 (cond-expand (surreals 1)))</code> should be 1.  Currently s7 returns #&lt;unspecified&gt; for the
-first, and an error, "abs: too many arguments: (abs -1 #&lt;unspecified&gt;)" for the second. 
+first, and an error, "abs: too many arguments: (abs -1 #&lt;unspecified&gt;)" for the second.
 reader-cond behaves in a way that fits the r7rs spec: <code>(begin 23 (reader-cond ((provided? 'surreals) 1)))</code>
 returns 23, and <code>(abs -1 (reader-cond ((provided? 'surreals) 1)))</code> returns 1, but these examples make
 me unhappy.  Even worse: <code>(define (f a (reader-cond ((provided? 'surreals) b))) a)</code> which adds
@@ -6272,13 +6272,13 @@ so if we allow <code>(begin)</code>, we should allow case clauses to have no exp
 In cond,
 the "implicit progn" (in CL terminology) includes the test expression, so a clause without a result returns
 the test result (if true of course).  In the case case, s7 returns the selector.
-<code>(case x ((0 1)))</code> is equivalent to <code>(case x ((0 1) =&gt; values))</code>, 
+<code>(case x ((0 1)))</code> is equivalent to <code>(case x ((0 1) =&gt; values))</code>,
 just as <code>(cond (A))</code> is equivalent to <code>(cond (A =&gt; values))</code>.
 One application is method lookup: <code>((case (obj 'abs) ((#&lt;undefined&gt;) abs) (else)) ...)</code>;
 we would otherwise have to save the lookup result or do it twice.
 This choice has a ripple
 effect on do: if no result is specified for do, s7 returns the test result.
-It also affects 
+It also affects
 hash-tables.  Currently hash-table-ref returns #f if the key is not in the table,
 mimicking assoc and aimed at cond with =&gt;, but if we also use case and #&lt;undefined&gt;,
 it seems more useful and maybe intuitive to mimic let-ref instead.  But if hash-table-ref returns
@@ -6321,7 +6321,7 @@ Better ideas are always welcome!
 
 <p>(<b><em class=def id="currentfunction">*function*</em></b>) returns the name (or name and location) of the function currently being called.
 <code>(define (example) (*function*))</code> returns <code>'example</code>.
-Here is an example using a bacro (to access the call-time environment) and an openlet to implement a probe; 
+Here is an example using a bacro (to access the call-time environment) and an openlet to implement a probe;
 it reports any operation that the probe participates in, using *function* to get the calling function name:
 </p>
 <pre class="indented">
@@ -6340,8 +6340,8 @@ it reports any operation that the probe participates in, using *function* to get
 							(probe-eval 'value)
 							arg))
 						  args)))
-			   (format *stderr* "(~S ~{~S~^ ~}) ; ~S~%" 
-                                   ,sym clean-args 
+			   (format *stderr* "(~S ~{~S~^ ~}) ; ~S~%"
+                                   ,sym clean-args
                                    (<em class=red>*function*</em> (outlet (outlet (curlet)))))
 			   (apply ,func clean-args))))))))))
      (symbol-table))
@@ -6354,9 +6354,9 @@ it reports any operation that the probe participates in, using *function* to get
 (call-any (probe-eval 42)) ; prints "(+ 42 21) ; call-any", returns 63
 </pre>
 <p>
-The second argument to *function* is the let from which to start searching for a function. 
+The second argument to *function* is the let from which to start searching for a function.
 In the example above, we start the search from the let outside the bacro, since we hope to find the bacro's caller.
-As a convenience, *function* takes an optional third argument specifying what information you want 
+As a convenience, *function* takes an optional third argument specifying what information you want
 about the current function. An example: <code>(*function* (curlet) 'name)</code>.
 <code>name</code> returns the name (a symbol) of the current function.
 <code>line</code> returns the function's definition line number.
@@ -6406,7 +6406,7 @@ evaluated but the key is not:
 
 <p>Similarly, in s7, vector constants do not have to be quoted.  A list constant is quoted
 to keep it from being evaluated, but
-#(1 2 3) is as unproblematic as "123" or 123. 
+#(1 2 3) is as unproblematic as "123" or 123.
 </p>
 
 <!-- there's another sense in which () is a constant: you can't apply it to anything. (() 0) -> error
@@ -6414,8 +6414,8 @@ to keep it from being evaluated, but
 
 <p>These examples bring up another odd corner of scheme: else.  In <code>(cond (else 1))</code>
 the 'else is evaluated (like any cond test), so its value might be #f; in <code>(case 0 (else 1))</code>
-it is not evaluated (like any case key), so it's just a symbol.  
-Since setters are local in s7, 
+it is not evaluated (like any case key), so it's just a symbol.
+Since setters are local in s7,
 someone can <code>(let ((else #f)) (cond (else 1)))</code> even if we protect the rootlet 'else.
 Of course, in scheme this kind of trouble is pervasive, so rather than make 'else a constant
 I think the best path is to use unlet:
@@ -6446,7 +6446,7 @@ Perhaps these simple examples will clarify s7's way of handling the apostrophe.
 </p>
 <pre class="indented">
 (syntax? #_quote) -> #t
-(syntax? 'quote) -> #f      ; the symbol quote 
+(syntax? 'quote) -> #f      ; the symbol quote
 (equal? quote #_quote) -> #t
 (equal? 'quote quote) -> #f ; quote is not self-evaluating
 (equal? 'quote #_quote) -> #f
@@ -6458,18 +6458,18 @@ Perhaps these simple examples will clarify s7's way of handling the apostrophe.
 
 <div class="indented">
 
-<p>s7 handles circular lists and vectors and dotted lists with its customary aplomb.  
-You can pass them to memq, or print them, for example; you can even evaluate them.  
+<p>s7 handles circular lists and vectors and dotted lists with its customary aplomb.
+You can pass them to memq, or print them, for example; you can even evaluate them.
 The print syntax is borrowed from CL:
 </p>
 
 <pre class="indented">
-&gt; (let ((lst (list 1 2 3))) 
-    (set! (cdr (cdr (cdr lst))) lst) 
+&gt; (let ((lst (list 1 2 3)))
+    (set! (cdr (cdr (cdr lst))) lst)
     lst)
 <em class="gray">#1=(1 2 3 . #1#)</em>
-&gt; (let* ((x (cons 1 2)) 
-         (y (cons 3 x))) 
+&gt; (let* ((x (cons 1 2))
+         (y (cons 3 x)))
     (list x y))
 <em class="gray">(#1=(1 . 2) (3 . #1#))</em>
 </pre>
@@ -6487,7 +6487,7 @@ then it is part of the language, and it doesn't look like the rest of the langua
     (lambda (str)
 
       (define (replace-syms lst)
-	;; walk through the new list, replacing our special keywords 
+	;; walk through the new list, replacing our special keywords
         ;;   with the associated locations
 
 	(define (replace-sym tree getter)
@@ -6516,21 +6516,21 @@ then it is part of the language, and it doesn't look like the rest of the langua
 		    (if (not known-vals)            ; save n so we know when we're done
 			(begin
 			  (set! known-vals ())
-			  (set! top-n n))) 
+			  (set! top-n n)))
 
 		    (if (char=? last-char #\=)      ; #n=
 			(and (eqv? (peek-char) #\() ; eqv? since peek-char can return #&lt;eof&gt;
 			    (let ((cur-val (assoc n known-vals)))
 			      ;; associate the number and the list it points to
 			      ;;    if cur-val, perhaps complain? (#n# redefined)
-			      (let ((lst (catch #t 
+			      (let ((lst (catch #t
 					   read
 					   (lambda args             ; a read error
 					     (set! known-vals #f)   ;   so clear our state
 					     (apply throw args))))) ;   and pass the error on up
 				(if cur-val
                                     (set! (cdr cur-val) lst)
-				    (set! known-vals 
+				    (set! known-vals
 					  (cons (set! cur-val (cons n lst)) known-vals))))
 
 			      (if (= n top-n)            ; replace our special keywords
@@ -6539,10 +6539,10 @@ then it is part of the language, and it doesn't look like the rest of the langua
 				    result)
 				  (cdr cur-val))))
 			                         ; #n=&lt;not a list&gt;?
-			;; else it's #n# &mdash; set a marker for now since we may not 
-			;;   have its associated value yet.  We use a symbol name that 
+			;; else it's #n# &mdash; set a marker for now since we may not
+			;;   have its associated value yet.  We use a symbol name that
                         ;;   string-&gt;number accepts.
-			(symbol-&gt;keyword 
+			(symbol-&gt;keyword
                           (symbol (number-&gt;string n) (string #\null) " "))))))
 		                                 ; #n&lt;not an integer&gt;?
 	    )))))                                ; #n&lt;something else&gt;?
@@ -6550,7 +6550,7 @@ then it is part of the language, and it doesn't look like the rest of the langua
 (do ((i 0 (+ i 1)))
     ((= i 10))
   ;; load up all the #n cases
-  (set! *#readers* 
+  (set! *#readers*
     (cons (cons (integer-&gt;char (+ i (char-&gt;integer #\0))) circular-list-reader)
           *#readers*)))
 <!-- ) -->
@@ -6589,7 +6589,7 @@ sequences in its argument, or nil.
 
 <pre class="indented">
 (define (for-each-permutation func vals)
-  ;; apply func to every permutation of vals: 
+  ;; apply func to every permutation of vals:
   ;;   (for-each-permutation (lambda args (format () "~{~A~^ ~}~%" args)) '(1 2 3))
   (define (pinner cur nvals len)
     (if (= len 1)
@@ -6599,7 +6599,7 @@ sequences in its argument, or nil.
           (let ((start nvals))
             (set! nvals (cdr nvals))
             (let ((cur1 (cons (car nvals) cur)))  ; add (car nvals) to our arg list
-              (set! (cdr start) (cdr nvals))      ; splice out that element and 
+              (set! (cdr start) (cdr nvals))      ; splice out that element and
               (pinner cur1 (cdr start) (- len 1)) ;   pass a smaller circle on down, "wheels within wheels"
               (set! (cdr start) nvals))))))       ; restore original circle
   (let ((len (length vals)))
@@ -6616,7 +6616,7 @@ sequences in its argument, or nil.
 that the variable is predefined.  It may occur unprotected in a macro, for
 example.  The "*" doesn't mean that the variable is special in the CL sense of dynamic scope,
 but some clear marker is needed for a global variable so that the programmer
-doesn't accidentally step on it.  
+doesn't accidentally step on it.
 </p>
 
 <p>Although a variable name's first character is more restricted, currently
@@ -6627,7 +6627,7 @@ would work, but that means that <code>'(1 ."hi")</code> is parsed as a 1 and the
 symbol <code>."hi"</code>, and <code>(string-set! x"hi")</code> is an error.
 The first character should not be #\#, #\', #\`, #\,, #\:, or any of those mentioned above,
 and some characters can't occur by themselves.  For example, "." is not a legal variable
-name, but ".." is. 
+name, but ".." is.
 These weird symbols have to be printed sometimes:
 </p>
 
@@ -6649,7 +6649,7 @@ In CL and some Schemes:
 <em class="gray">T</em>
 </pre>
 
-<p>This is clean, and has the weight of tradition behind it, but 
+<p>This is clean, and has the weight of tradition behind it, but
 I think I'll use "symbol" instead:
 </p>
 
@@ -6669,8 +6669,8 @@ making it possible to use odd names more widely:
 </p>
 
 <pre class="indented">
-(set! *#readers* 
-      (list (cons #\s 
+(set! *#readers*
+      (list (cons #\s
 		  (lambda (str)
 		    (let ((len (length str)))
 		      (and (string=? (substring str 0 7) "symbol<")
@@ -6716,7 +6716,7 @@ These symbols are not just an optimization of string comparison:
 </p>
 
 <pre class="indented">
-&gt; (define-macro (hi a) 
+&gt; (define-macro (hi a)
   (let ((funny-name (string-&gt;symbol ";")))
     `(let ((,funny-name ,a)) (+ 1 ,funny-name))))
 <em class="gray">hi</em>
@@ -6725,7 +6725,7 @@ These symbols are not just an optimization of string comparison:
 &gt; (macroexpand (hi 2))
 <em class="gray">(let ((; 2)) (+ 1 ;))</em>    ; for a good time, try (string #\")
 
-&gt; (define-macro (hi a) 
+&gt; (define-macro (hi a)
   (let ((funny-name (string-&gt;symbol "| e t c |")))
     `(let ((,funny-name ,a)) (+ 1 ,funny-name))))
 <em class="gray">hi</em>
@@ -6751,13 +6751,13 @@ These symbols are not just an optimization of string comparison:
 </p>
 
 <pre class="indented">
-&gt; (let ((progn begin)) 
-    (progn 
-      (define x 1) 
-      (set! x 3) 
+&gt; (let ((progn begin))
+    (progn
+      (define x 1)
+      (set! x 3)
       (+ x 4)))
 <em class="gray">7</em>
-&gt; (let ((function lambda)) 
+&gt; (let ((function lambda))
     ((function (a b) (list a b)) 3 4))
 <em class="gray">(3 4)</em>
 &gt; (apply begin '((define x 3) (+ x 2)))
@@ -6779,9 +6779,9 @@ These symbols are not just an optimization of string comparison:
 </p>
 
 <pre class="indented">
-(let* ((x 3) 
-       (arg '(x)) 
-       (body `((+ ,x x 1)))) 
+(let* ((x 3)
+       (arg '(x))
+       (body `((+ ,x x 1))))
   ((apply lambda arg body) 12)) ; "legolambda"?
 
 (define (engulph form)
@@ -6797,10 +6797,10 @@ These symbols are not just an optimization of string comparison:
   ((apply let '((x 32)) (list (procedure-source hi))) 12)) ; one function, many closures?
 
 (let ((ctr -1))  ; (enum zero one two) but without using a macro
-  (apply begin 
-    (map (lambda (symbol) 
-           (set! ctr (+ ctr 1)) 
-           (list 'define symbol ctr)) ; e.g. '(define zero 0) 
+  (apply begin
+    (map (lambda (symbol)
+           (set! ctr (+ ctr 1))
+           (list 'define symbol ctr)) ; e.g. '(define zero 0)
          '(zero one two)))
   (+ zero one two))
 </pre>
@@ -6812,7 +6812,7 @@ These symbols are not just an optimization of string comparison:
 &gt; (define-macro (enum . args)
     `(for-each define ',args (iota (length ',args))))
 <em class="gray">enum</em>
-&gt; (enum a b c) 
+&gt; (enum a b c)
 <em class="gray">#&lt;unspecified&gt;</em>
 &gt; b
 <em class="gray">1</em>
@@ -6861,8 +6861,8 @@ use a trailing null instead (mimicking apply* in some ancient lisps):
 </pre>
 
 <p>Scheme claims that it evaluates the car of an expression, then calls the
-result with the rest of the expression.  So <code>((if x + -) y z)</code> calls either 
-<code>(+ y z)</code> or <code>(- y z)</code> depending on x.  
+result with the rest of the expression.  So <code>((if x + -) y z)</code> calls either
+<code>(+ y z)</code> or <code>(- y z)</code> depending on x.
 But only s7, as far as I know, handles <code>((if x or and) y z)</code>.
 </p>
 
@@ -6883,7 +6883,7 @@ is also unlikely to work.
 <div class="indented">
 <p>Speaking of speed... It is widely believed
 that a Scheme with first class everything can't hope to compete with any
-"real" Scheme.  Humph I say.  Take this little example (which is not 
+"real" Scheme.  Humph I say.  Take this little example (which is not
 so misleading that I feel guilty about it):
 </p>
 <pre class="indented">
@@ -6920,7 +6920,7 @@ s7-postlude.scm can be empty.  My version of s7-prelude.scm is:
 </p>
 <pre>
 (define (this-scheme-implementation-name) "s7")
-(define exact-integer? integer?)	
+(define exact-integer? integer?)
 (define (exact-integer-sqrt i) (let ((sq (floor (sqrt i)))) (values sq (- i (* sq sq)))))
 (define inexact exact-&gt;inexact)
 (define exact inexact-&gt;exact)
@@ -6945,20 +6945,20 @@ Here are the diffs for the bench script:
 &gt;   s7               for s7
 406a409,421
 &gt; # Definitions specific to s7
-&gt; 
+&gt;
 &gt; s7_comp ()
 &gt; {
 &gt;     :
 &gt; }
-&gt; 
+&gt;
 &gt; s7_exec ()
 &gt; {
 &gt;     time ${S7} "$1" &lt; "$2"
 &gt; }
-&gt; 
+&gt;
 &gt; # -----------------------------------------------------------------------------
 940a957,966
-&gt; 
+&gt;
 &gt;         s7)    NAME='s7'
 &gt;                COMP=s7_comp
 &gt;                EXEC=s7_exec
@@ -6981,7 +6981,7 @@ gcc s7.c -o repl -DWITH_MAIN -I. -O2 -g -ldl -lm -Wl,-export-dynamic
 ;; tcc -o s7 s7.c -I. -lm -DWITH_MAIN -ldl -rdynamic -DWITH_C_LOADER
 </pre>
 <p>For timing tests, I add "-fomit-frame-pointer -funroll-loops -march=native".
-mus-config.h normally has 
+mus-config.h normally has
 </p>
 <pre>
 #define HAVE_COMPLEX_NUMBERS 1
@@ -7063,7 +7063,7 @@ the point it is defined.  However,
 </pre>
 
 <p>returns 2 in s7 because the x in y's function body is not evaluated
-until after the second x is defined.  
+until after the second x is defined.
 The define propagates backwards, but:
 <code>(list x (define x 0))</code>, or <code>(list x (begin (define x 0) x))</code>.
 </p>
@@ -7074,7 +7074,7 @@ The define propagates backwards, but:
 
 <p id="r7rs">The r7rs compatibility code is in r7rs.scm. I used to include it here, but
 as r7rs grew, this section got too large.  In general, all the conversion routines in
-r7rs are handled in s7 via generic functions, records are classes, and so on. 
+r7rs are handled in s7 via generic functions, records are classes, and so on.
 </p>
 </div>
 
@@ -7173,12 +7173,12 @@ int main(int argc, char **argv)
       char buffer[512];
       fprintf(stdout, "\n&gt; ");    /* prompt for input */
       fgets(buffer, 512, stdin);
-      if ((buffer[0] != '\n') || 
+      if ((buffer[0] != '\n') ||
 	  (strlen(buffer) &gt; 1))
 	{                         /* evaluate the input and print the result */
           char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
-	  <em class=red>s7_eval_c_string</em>(s7, response); 
+	  <em class=red>s7_eval_c_string</em>(s7, response);
 	}}
 }
 
@@ -7257,8 +7257,8 @@ static gboolean read_stdin(GIOChannel *source, GIOCondition condition, gpointer 
 GIOChannel *channel;
 channel = g_io_channel_unix_new(STDIN_FILENO);  /* watch stdin */
 stdin_id = g_io_add_watch_full(channel,         /* and call read_stdin above if input is noticed */
-			       G_PRIORITY_DEFAULT, 
-			       (GIOCondition)(G_IO_IN | G_IO_HUP | G_IO_ERR), 
+			       G_PRIORITY_DEFAULT,
+			       (GIOCondition)(G_IO_IN | G_IO_HUP | G_IO_ERR),
 			       <em class=red>read_stdin</em>, NULL, NULL);
 g_io_channel_unref(channel);
 </pre></div>
@@ -7280,14 +7280,14 @@ g_io_channel_unref(channel);
 int main(int argc, char **argv)
 {
   GetLine *gl = new_GetLine(500, 5000); /* The tecla line editor */
-  s7_scheme *s7 = s7_init();  
-  while (1) 
+  s7_scheme *s7 = s7_init();
+  while (1)
     {
       char *buffer;
       buffer = gl_get_line(gl, "&gt; ", NULL, 0);
-      if ((buffer[0] != '\n') || 
+      if ((buffer[0] != '\n') ||
 	  (strlen(buffer) &gt; 1))
-	{                            
+	{
           char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
@@ -7296,7 +7296,7 @@ int main(int argc, char **argv)
   gl = del_GetLine(gl);
 }
 
-/* 
+/*
  *   gcc -c s7.c -I. -O2 -g3
  *   gcc -o ex1 ex1.c s7.o -lm -I. -ltecla -ldl
  */
@@ -7315,9 +7315,9 @@ gcc -o nrepl s7.c -O2 -I. -Wl,-export-dynamic -lm -ldl -DWITH_MAIN -DWITH_NOTCUR
 <p id="beginhook">
 Common Lisp has something called "evalhook" that makes it possible
 to insert your own function into the eval loop.  In s7, we have a "begin_hook" which sits at the opening of many begin blocks
-(implicit or explicit).  begin_hook is a (C) function; 
-if it sets its bool argument to true, 
-s7 interrupts the current evaluation. 
+(implicit or explicit).  begin_hook is a (C) function;
+if it sets its bool argument to true,
+s7 interrupts the current evaluation.
 Here is a version of the REPL in which begin_hook watches for C-g to interrupt
 some long computation:
 </p>
@@ -7325,7 +7325,7 @@ some long computation:
 <blockquote>
 <div class="indented">
 <pre>
-/* terminal-based REPL, 
+/* terminal-based REPL,
  *    an expansion of the <a href="#repl">read-eval-print loop</a> program above.
  * type C-g to interrupt an evaluation.
  */
@@ -7381,7 +7381,7 @@ int main(int argc, char **argv)
       signal(SIGQUIT, sigcatch);
       signal(SIGTERM, sigcatch);
     }
-  s7 = s7_init();  
+  s7 = s7_init();
 
   if (argc == 2)
     {
@@ -7391,15 +7391,15 @@ int main(int argc, char **argv)
     }
   else
     {
-      while (1) 
+      while (1)
 	{
 	  fprintf(stdout, "\n&gt; ");
 	  fgets((char *)(buffer + type_ahead_point), 512 - type_ahead_point, stdin);
 	  type_ahead_point = 0;
 
-	  if ((buffer[0] != '\n') || 
+	  if ((buffer[0] != '\n') ||
 	      (strlen(buffer) &gt; 1))
-	    {                            
+	    {
               char response[1024];
 	      snprintf(response, 1024, "(write %s)", buffer);
 
@@ -7431,8 +7431,8 @@ int main(int argc, char **argv)
 
 static s7_pointer add1(s7_scheme *sc, s7_pointer args)
 {
-  /* all added functions have this form, args is a list, 
-   *    s7_car(args) is the first arg, etc 
+  /* all added functions have this form, args is a list,
+   *    s7_car(args) is the first arg, etc
    */
   if (<em class=red>s7_is_integer</em>(s7_car(args)))
     return(<em class=red>s7_make_integer</em>(sc, 1 + <em class=red>s7_integer</em>(s7_car(args))));
@@ -7455,9 +7455,9 @@ int main(int argc, char **argv)
       char buffer[512];
       fprintf(stdout, "\n&gt; ");        /* prompt for input */
       fgets(buffer, 512, stdin);
-      if ((buffer[0] != '\n') || 
+      if ((buffer[0] != '\n') ||
 	  (strlen(buffer) &gt; 1))
-	{                            
+	{
           char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response); /* evaluate input and write the result */
@@ -7493,18 +7493,18 @@ int main(int argc, char **argv)
 
   s7_define_variable(s7, "an-integer", s7_make_integer(s7, 1));
   s7_eval_c_string(s7, "(define (add1 a) (+ a 1))");
-  
-  fprintf(stderr, "an-integer: %lld\n", 
+
+  fprintf(stderr, "an-integer: %lld\n",
 	  s7_integer(<em class=red>s7_name_to_value</em>(s7, "an-integer")));
 
   <em class=red>s7_symbol_set_value</em>(s7, <em class=red>s7_make_symbol</em>(s7, "an-integer"), s7_make_integer(s7, 32));
 
-  fprintf(stderr, "now an-integer: %lld\n", 
+  fprintf(stderr, "now an-integer: %lld\n",
 	  s7_integer(<em class=red>s7_name_to_value</em>(s7, "an-integer")));
 
-  fprintf(stderr, "(add1 2): %lld\n", 
-	  s7_integer(<em class=red>s7_call</em>(s7, 
-			     s7_name_to_value(s7, "add1"), 
+  fprintf(stderr, "(add1 2): %lld\n",
+	  s7_integer(<em class=red>s7_call</em>(s7,
+			     s7_name_to_value(s7, "add1"),
 			     s7_cons(s7, s7_make_integer(s7, 2), s7_nil(s7)))));
 }
 
@@ -7552,31 +7552,31 @@ replace <code>(unless (defined?...))</code>.
 
 <div class="indented">
 <pre>
-int main(int argc, const char* argv[]) 
-{ 
-  initialiseJuce_NonGUI(); 
+int main(int argc, const char* argv[])
+{
+  initialiseJuce_NonGUI();
 
-  s7_scheme *s7 = s7_init(); 
-  if (!s7) 
-    { 
-      std::cout &lt;&lt;  "Can't start S7!\n"; 
-      return -1; 
-    } 
+  s7_scheme *s7 = s7_init();
+  if (!s7)
+    {
+      std::cout &lt;&lt;  "Can't start S7!\n";
+      return -1;
+    }
 
-  while (true) 
-    { 
-      s7_pointer val; 
-      std::string str; 
-      std::cout &lt;&lt; "\ns7&gt; "; 
-      std::getline(std::cin, str); 
-      val = s7_eval_c_string(s7, str.c_str()); 
-      std::cout &lt;&lt; s7_object_to_c_string(s7, val); 
-    } 
+  while (true)
+    {
+      s7_pointer val;
+      std::string str;
+      std::cout &lt;&lt; "\ns7&gt; ";
+      std::getline(std::cin, str);
+      val = s7_eval_c_string(s7, str.c_str());
+      std::cout &lt;&lt; s7_object_to_c_string(s7, val);
+    }
 
-  free(s7); 
-  std::cout &lt;&lt; "Bye!\n"; 
-  return 0; 
-} 
+  free(s7);
+  std::cout &lt;&lt; "Bye!\n";
+  return 0;
+}
 </pre></div>
 
 
@@ -7616,7 +7616,7 @@ int main(int argc, char **argv)
 {
   s7 = s7_init();                     /* initialize the interpreter */
   s7_xen_initialize(s7);              /* initialize the xen stuff (hooks and the xen s7 FFI used by sndlib) */
-  Init_sndlib();                      /* initialize sndlib with all the functions linked into s7 */  
+  Init_sndlib();                      /* initialize sndlib with all the functions linked into s7 */
 
   mus_error_set_handler(mus_error_to_s7); /* catch low-level errors and pass them to s7-error */
 
@@ -7625,9 +7625,9 @@ int main(int argc, char **argv)
       char buffer[512];
       fprintf(stdout, "\n&gt; ");        /* prompt for input */
       fgets(buffer, 512, stdin);
-      if ((buffer[0] != '\n') || 
+      if ((buffer[0] != '\n') ||
 	  (strlen(buffer) &gt; 1))
-	{                            
+	{
           char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response); /* evaluate input and write the result */
@@ -7688,7 +7688,7 @@ fm-violin
 	     (set! start (+ colon 1))))
 	 name))))
 
-(<em class=red>autoload</em> 'clm 
+(<em class=red>autoload</em> 'clm
   (lambda (e)
     (load (find-library "libsndlib.so") (inlet '(init_func . s7_init_sndlib)))
     (set! *features* (cons 'clm *features*))
@@ -7704,8 +7704,8 @@ as a note list computes:
 <pre class="indented">
 (define (clm-notehook . args)
   ;; assume second arg is begin time (first is instrument name)
-  (when (and (pair? args) 
-	     (pair? (cdr args)) 
+  (when (and (pair? args)
+	     (pair? (cdr args))
 	     (number? (cadr args)))
     (with-let (sublet (*repl* 'repl-let) :begin-time (cadr args))
       (let ((coords (cursor-coords))
@@ -7794,7 +7794,7 @@ static s7_pointer make_dax(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer is_dax(s7_scheme *sc, s7_pointer args)
 {
-  return(s7_make_boolean(sc, 
+  return(s7_make_boolean(sc,
 			 <em class=red>s7_is_c_object</em>(s7_car(args)) &amp;&amp;
 			 <em class=red>s7_c_object_type</em>(s7_car(args)) == dax_type_tag));
 }
@@ -7825,12 +7825,12 @@ static s7_pointer set_dax_data(s7_scheme *sc, s7_pointer args)
   return(o-&gt;data);
 }
 
-static s7_pointer dax_is_equal(s7_scheme *sc, s7_pointer args) 
+static s7_pointer dax_is_equal(s7_scheme *sc, s7_pointer args)
 {
   dax *d1, *d2;
   s7_pointer p1 = s7_car(args);
   s7_pointer p2 = s7_cadr(args);
-  if (p1 == p2) 
+  if (p1 == p2)
     return(s7_t(sc));
   if ((!s7_is_c_object(p2)) ||
       (s7_c_object_type(p2) != dax_type_tag))
@@ -7852,14 +7852,14 @@ int main(int argc, char **argv)
   s7_c_type_set_gc_mark(s7, dax_type_tag, mark_dax);
   s7_c_type_set_is_equal(s7, dax_type_tag, dax_is_equal);
   s7_c_type_set_to_string(s7, dax_type_tag, dax_to_string);
-  
+
   s7_define_function(s7, "make-dax", make_dax, 2, 0, false, "(make-dax x data) makes a new dax");
   s7_define_function(s7, "dax?", is_dax, 1, 0, false, "(dax? anything) returns #t if its argument is a dax object");
 
-  s7_define_variable(s7, "dax-x", 
+  s7_define_variable(s7, "dax-x",
                      <em class=red>s7_dilambda</em>(s7, "dax-x", dax_x, 1, 0, set_dax_x, 2, 0, "dax x field"));
 
-  s7_define_variable(s7, "dax-data", 
+  s7_define_variable(s7, "dax-data",
                      <em class=red>s7_dilambda</em>(s7, "dax-data", dax_data, 1, 0, set_dax_data, 2, 0, "dax data field"));
 
   while (1)
@@ -7867,9 +7867,9 @@ int main(int argc, char **argv)
       char buffer[512];
       fprintf(stdout, "\n%s ", listener_prompt(s7));
       fgets(buffer, 512, stdin);
-      if ((buffer[0] != '\n') || 
+      if ((buffer[0] != '\n') ||
 	  (strlen(buffer) &gt; 1))
-	{                            
+	{
           char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response); /* evaluate input and write the result */
@@ -7928,26 +7928,26 @@ static s7_pointer my_read(s7_scheme *sc, s7_read_t peek, s7_pointer port)
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7 = s7_init();  
+  s7_scheme *s7 = s7_init();
 
   <em class=red>s7_set_current_output_port</em>(s7, <em class=red>s7_open_output_function</em>(s7, my_print));
   s7_define_variable(s7, "io-port", <em class=red>s7_open_input_function</em>(s7, my_read));
 
-  while (1) 
+  while (1)
     {
       char buffer[512];
       fprintf(stdout, "\n&gt; ");
       fgets(buffer, 512, stdin);
-      if ((buffer[0] != '\n') || 
+      if ((buffer[0] != '\n') ||
 	  (strlen(buffer) &gt; 1))
-	{                            
+	{
           char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
 	}}
 }
 
-/* 
+/*
  *    &gt; (+ 1 2)
  *    <em class="gray">[3]</em>
  *    &gt; (display "hiho")
@@ -7979,7 +7979,7 @@ static void (listener_write)(s7_scheme *sc, uint8_t c, s7_pointer port)
 Then we define a Scheme-side variable, *listener-port*, to be a function port:
 </p>
 <pre class="indented">
-s7_define_variable_with_documentation(s7, "*listener-port*", 
+s7_define_variable_with_documentation(s7, "*listener-port*",
   s7_open_output_function(s7, listener_write), "port to write to Snd's listener");
 </pre>
 <p>
@@ -8023,7 +8023,7 @@ int main(int argc, char **argv)
   s7_scheme *s7 = s7_init();
 
   /* get built-in + and string-append */
-  old_add = s7_name_to_value(s7, "+");      
+  old_add = s7_name_to_value(s7, "+");
   old_string_append = s7_name_to_value(s7, "string-append");
 
   /* redefine "+" */
@@ -8034,9 +8034,9 @@ int main(int argc, char **argv)
       char buffer[512];
       fprintf(stdout, "\n&gt; ");
       fgets(buffer, 512, stdin);
-      if ((buffer[0] != '\n') || 
+      if ((buffer[0] != '\n') ||
 	  (strlen(buffer) &gt; 1))
-	{                            
+	{
           char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
@@ -8069,7 +8069,7 @@ static s7_pointer our_abs(s7_scheme *sc, s7_pointer args)
     {
       s7_pointer method = <em class=red>s7_method</em>(sc, x, s7_make_symbol(sc, "abs"));
       if (method == s7_undefined(sc))                       /* no method found, so raise an error */
-	s7_wrong_type_arg_error(sc, "abs", 1, x, "a real"); 
+	s7_wrong_type_arg_error(sc, "abs", 1, x, "a real");
       return(s7_apply_function(sc, method, args));          /*   else apply the method to the args */
     }
   return(s7_make_real(sc, (s7_double)fabs(s7_number_to_real(sc, x))));
@@ -8085,9 +8085,9 @@ int main(int argc, char **argv)
       char buffer[512];
       fprintf(stdout, "\n&gt; ");
       fgets(buffer, 512, stdin);
-      if ((buffer[0] != '\n') || 
+      if ((buffer[0] != '\n') ||
 	  (strlen(buffer) &gt; 1))
-	{                            
+	{
           char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
@@ -8132,16 +8132,16 @@ int main(int argc, char **argv)
       char buffer[512];
       fprintf(stdout, "\n&gt; ");
       fgets(buffer, 512, stdin);
-      if ((buffer[0] != '\n') || 
+      if ((buffer[0] != '\n') ||
 	  (strlen(buffer) &gt; 1))
-	{                            
+	{
           char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
 	}}
 }
 
-/* 
+/*
  *    &gt; (plus 2 3)
  *    <em class="gray">7</em>
  *    &gt; (plus :blue 3)
@@ -8188,16 +8188,16 @@ int main(int argc, char **argv)
       char buffer[512];
       fprintf(stdout, "\n&gt; ");
       fgets(buffer, 512, stdin);
-      if ((buffer[0] != '\n') || 
+      if ((buffer[0] != '\n') ||
 	  (strlen(buffer) &gt; 1))
-	{                            
+	{
           char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
 	}}
 }
 
-/* 
+/*
  *    &gt; (plus 2 3)
  *    <em class="gray">5</em>
  */
@@ -8238,9 +8238,9 @@ int main(int argc, char **argv)
       char buffer[512];
       fprintf(stdout, "\n&gt; ");
       fgets(buffer, 512, stdin);
-      if ((buffer[0] != '\n') || 
+      if ((buffer[0] != '\n') ||
 	  (strlen(buffer) &gt; 1))
-	{                            
+	{
           char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
@@ -8275,15 +8275,15 @@ int main(int argc, char **argv)
 #include "s7.h"
 
 static s7_scheme *s7;
-struct sigaction new_act, old_act;  
-  
-static void handle_sigint(int ignored)  
-{  
+struct sigaction new_act, old_act;
+
+static void handle_sigint(int ignored)
+{
   fprintf(stderr, "interrupted!\n");
   s7_symbol_set_value(s7, s7_make_symbol(s7, "*interrupt*"), <em class=red>s7_make_continuation</em>(s7)); /* save where we were interrupted */
-  sigaction(SIGINT, &amp;new_act, NULL);  
+  sigaction(SIGINT, &amp;new_act, NULL);
   s7_quit(s7);                             /* get out of the eval loop if possible */
-}  
+}
 
 static s7_pointer our_sleep(s7_scheme *sc, s7_pointer args)
 {
@@ -8296,15 +8296,15 @@ int main(int argc, char **argv)
 {
   s7 = s7_init();
   s7_define_function(s7, "sleep", our_sleep, 0, 0, false, "(sleep) sleeps");
-  s7_define_variable(s7, "*interrupt*", s7_f(s7)); 
+  s7_define_variable(s7, "*interrupt*", s7_f(s7));
   /* Scheme variable *interrupt* holds the continuation at the point of the interrupt */
 
   sigaction(SIGINT, NULL, &amp;old_act);
   if (old_act.sa_handler != SIG_IGN)
     {
-      memset(&amp;new_act, 0, sizeof(new_act));  
-      new_act.sa_handler = &amp;handle_sigint;  
-      sigaction(SIGINT, &amp;new_act, NULL);  
+      memset(&amp;new_act, 0, sizeof(new_act));
+      new_act.sa_handler = &amp;handle_sigint;
+      sigaction(SIGINT, &amp;new_act, NULL);
     }
 
   while (1)
@@ -8312,9 +8312,9 @@ int main(int argc, char **argv)
       char buffer[512];
       fprintf(stderr, "\n&gt; ");
       fgets(buffer, 512, stdin);
-      if ((buffer[0] != '\n') || 
+      if ((buffer[0] != '\n') ||
 	  (strlen(buffer) &gt; 1))
-	{                            
+	{
           char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
@@ -8359,7 +8359,7 @@ static s7_pointer scheme_set_notification(s7_scheme *sc, s7_pointer args)
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7 = s7_init();  
+  s7_scheme *s7 = s7_init();
 
   s7_define_function(s7, "notify-C", scheme_set_notification, 2, 0, false, "called if notified-var is set!");
   s7_define_variable(s7, "notified-var", s7_make_integer(s7, 0));
@@ -8373,15 +8373,15 @@ int main(int argc, char **argv)
     }
   else
     {
-      while (1) 
+      while (1)
 	{
           char buffer[512];
 	  fprintf(stdout, "\n&gt; ");
 	  fgets(buffer, 512, stdin);
-	  
-	  if ((buffer[0] != '\n') || 
+
+	  if ((buffer[0] != '\n') ||
 	      (strlen(buffer) &gt; 1))
-	    {                            
+	    {
               char response[1024];
 	      snprintf(response, 1024, "(write %s)", buffer);
 	      s7_eval_c_string(s7, response);
@@ -8418,7 +8418,7 @@ static s7_pointer func1(s7_scheme *sc, s7_pointer args)
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7 = s7_init();  
+  s7_scheme *s7 = s7_init();
   /* "func1" and "var1" will be placed in an anonymous environment,
    *   accessible from Scheme via the global variable "lib-exports"
    */
@@ -8426,10 +8426,10 @@ int main(int argc, char **argv)
   /* make a private environment for func1 and var1 below (this is our "namespace") */
   s7_gc_protect(s7, new_env);
 
-  s7_define(s7, <em class=red>new_env</em>, 
+  s7_define(s7, <em class=red>new_env</em>,
 	    s7_make_symbol(s7, "func1"),
 	    <em class=red>s7_make_function</em>(s7, "func1", func1, 1, 0, false, "func1 adds 1 to its argument"));
-  
+
   s7_define(s7, <em class=red>new_env</em>, s7_make_symbol(s7, "var1"), s7_make_integer(s7, 32));
   /* those two symbols are now defined in the new environment */
 
@@ -8444,15 +8444,15 @@ int main(int argc, char **argv)
     }
   else
     {
-      while (1) 
+      while (1)
 	{
           char buffer[512];
 	  fprintf(stdout, "\n&gt; ");
 	  fgets(buffer, 512, stdin);
-	  
-	  if ((buffer[0] != '\n') || 
+
+	  if ((buffer[0] != '\n') ||
 	      (strlen(buffer) &gt; 1))
-	    {                            
+	    {
               char response[1024];
 	      snprintf(response, 1024, "(write %s)", buffer);
 	      s7_eval_c_string(s7, response);
@@ -8472,21 +8472,21 @@ int main(int argc, char **argv)
  *     <em class="gray">33</em>
  *
  *     ;; or rename them to prepend "lib:"
- *     &gt; (define lib-env (apply sublet 
-                                (curlet) 
-                                (map (lambda (binding) 
-                                       (cons (string-&gt;symbol 
-                                               (string-append "lib:" (symbol-&gt;string (car binding)))) 
-                                             (cdr binding))) 
+ *     &gt; (define lib-env (apply sublet
+                                (curlet)
+                                (map (lambda (binding)
+                                       (cons (string-&gt;symbol
+                                               (string-append "lib:" (symbol-&gt;string (car binding))))
+                                             (cdr binding)))
                                      lib-exports)))
  *     <em class="gray">lib-env</em>
  *     &gt; (with-let lib-env (lib:func1 lib:var1))
  *     <em class="gray">33</em>
  *
  *     ;;; now for convenience, place "func1" in the global environment under the name "func2"
- *     &gt; (define func2 (cdadr lib-exports)) 
+ *     &gt; (define func2 (cdadr lib-exports))
  *     <em class="gray">func2</em>
- *     &gt; (func2 1)  
+ *     &gt; (func2 1)
  *     <em class="gray">2</em>
  */
 </pre></div>
@@ -8514,7 +8514,7 @@ static s7_pointer error_handler(s7_scheme *sc, s7_pointer args)
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7 = s7_init();  
+  s7_scheme *s7 = s7_init();
   bool with_error_hook = false;
   s7_define_function(s7, "error-handler", error_handler, 1, 0, false, "our error handler");
 
@@ -8524,15 +8524,15 @@ int main(int argc, char **argv)
                                     (error-handler                               \n\
                                       (apply format #f (hook 'data)))            \n\
                                     (set! (hook 'result) 'our-error))))");
-  while (1) 
+  while (1)
     {
       char buffer[512];
       fprintf(stdout, "\n&gt; ");
       fgets(buffer, 512, stdin);
-	  
-      if ((buffer[0] != '\n') || 
+
+      if ((buffer[0] != '\n') ||
 	  (strlen(buffer) &gt; 1))
-	{                            
+	{
 	  s7_pointer result;
 	  int gc_loc = -1;
 	  const char *errmsg = NULL;
@@ -8553,7 +8553,7 @@ int main(int argc, char **argv)
 
 	  /* if we got something, wrap it in "[]" */
 	  if ((errmsg) &amp;&amp; (*errmsg))
-	    fprintf(stdout, "[%s]", errmsg); 
+	    fprintf(stdout, "[%s]", errmsg);
 
 	  s7_close_output_port(s7, s7_current_error_port(s7));
 	  s7_set_current_error_port(s7, old_port);
@@ -8562,7 +8562,7 @@ int main(int argc, char **argv)
 	}}
 }
 
-/* 
+/*
  *   gcc -c s7.c -I. -g3
  *   gcc -o ex3 ex3.c s7.o -lm -I. -ldl
  *
@@ -8613,33 +8613,33 @@ static s7_pointer my_hook_function(s7_scheme *sc, s7_pointer args)
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7 = s7_init();  
+  s7_scheme *s7 = s7_init();
 
   /* define test_hook in C, test-hook in Scheme, arguments are named a and b */
   s7_pointer test_hook = <em class=red>s7_eval_c_string</em>(s7, "(make-hook 'a 'b)");
-  s7_define_constant(s7, "test-hook", test_hook); 
+  s7_define_constant(s7, "test-hook", test_hook);
 
   /* add my_hook_function to the test_hook function list */
-  <em class=red>s7_hook_set_functions</em>(s7, test_hook, 
-			s7_cons(s7, 
-				s7_make_function(s7, "my-hook-function", my_hook_function, 1, 0, false, "my hook-function"), 
+  <em class=red>s7_hook_set_functions</em>(s7, test_hook,
+			s7_cons(s7,
+				s7_make_function(s7, "my-hook-function", my_hook_function, 1, 0, false, "my hook-function"),
 				s7_hook_functions(s7, test_hook)));
-  while (1) 
+  while (1)
     {
       char buffer[512];
       fprintf(stdout, "\n&gt; ");
       fgets(buffer, 512, stdin);
-	  
-      if ((buffer[0] != '\n') || 
+
+      if ((buffer[0] != '\n') ||
 	  (strlen(buffer) &gt; 1))
-	{                            
+	{
           char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
 	}}
 }
 
-/* 
+/*
  *    &gt; test-hook
  *    <em class="gray">#&lt;lambda (hook)&gt;</em>
  *    &gt; (hook-functions test-hook)
@@ -8679,9 +8679,9 @@ double a_function(double an_arg)
   return(an_arg + 1.0);
 }
 
-static s7_pointer add_1(s7_scheme *sc, s7_pointer args) 
+static s7_pointer add_1(s7_scheme *sc, s7_pointer args)
 {
-  return(s7_make_integer(sc, s7_integer(s7_car(args)) + 1)); 
+  return(s7_make_integer(sc, s7_integer(s7_car(args)) + 1));
 }
 
 void init_ex(s7_scheme *sc);
@@ -8719,8 +8719,8 @@ static s7_pointer try(s7_scheme *sc, s7_pointer args)
       typedef double (*dl_func)(double arg);
       return(s7_make_real(sc, ((dl_func)<em class=red>func</em>)(s7_real(s7_cadr(args)))));
     }
-  return(s7_error(sc, s7_make_symbol(sc, "can't find function"), 
-		  s7_list(sc, 2, s7_make_string(sc, "loader error: ~S"), 
+  return(s7_error(sc, s7_make_symbol(sc, "can't find function"),
+		  s7_list(sc, 2, s7_make_string(sc, "loader error: ~S"),
 			         s7_make_string(sc, dlerror()))));
 }
 
@@ -8739,27 +8739,27 @@ static s7_pointer cload(s7_scheme *sc, s7_pointer args)
 	  ((dl_func)<em class=red>init_func</em>)(sc);  /* call the initialization function (init_ex above) */
 	  return(s7_t(sc));
 	}}
-  return(s7_error(sc, s7_make_symbol(sc, "load-error"), 
-		      s7_list(sc, 2, s7_make_string(sc, "loader error: ~S"), 
+  return(s7_error(sc, s7_make_symbol(sc, "load-error"),
+		      s7_list(sc, 2, s7_make_string(sc, "loader error: ~S"),
 			             s7_make_string(sc, dlerror()))));
 }
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7 = s7_init();  
+  s7_scheme *s7 = s7_init();
   s7_define_function(s7, "cload", cload, 2, 0, false, CLOAD_HELP);
-  s7_define_function(s7, "try", try, 2, 0, false, 
+  s7_define_function(s7, "try", try, 2, 0, false,
                          "(try name num) tries to call name in the shared library with the argument num.");
 
-  while (1) 
+  while (1)
     {
       char buffer[512];
       fprintf(stdout, "\n&gt; ");
       fgets(buffer, 512, stdin);
-	  
-      if ((buffer[0] != '\n') || 
+
+      if ((buffer[0] != '\n') ||
 	  (strlen(buffer) &gt; 1))
-	{                            
+	{
           char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
@@ -8919,33 +8919,33 @@ static s7_pointer big_add_1(s7_scheme *sc, s7_pointer args)
 
 int main(int argc, char **argv)
 {
-  s7_scheme *s7 = s7_init();  
+  s7_scheme *s7 = s7_init();
   s7_define_function(s7, "add-1", big_add_1, 1, 0, false, "(add-1 num) adds 1 to num");
 
-  while (1) 
+  while (1)
     {
       char buffer[512];
       fprintf(stdout, "\n&gt; ");
       fgets(buffer, 512, stdin);
-      if ((buffer[0] != '\n') || 
+      if ((buffer[0] != '\n') ||
 	  (strlen(buffer) &gt; 1))
-	{                            
+	{
           char response[1024];
 	  snprintf(response, 1024, "(write %s)", buffer);
 	  s7_eval_c_string(s7, response);
 	}}
 }
 
-/* 
+/*
  *   gcc -DWITH_GMP=1 -c s7.c -I. -O2 -g3
  *   gcc -DWITH_GMP=1 -o gmpex gmpex.c s7.o -I. -O2 -lm -ldl -lgmp -lmpfr -lmpc
  *
  *   gmpex
- *   &gt; (add-1 1)   
+ *   &gt; (add-1 1)
  *   2
  *   &gt; (add-1 2/3)
  *   5/3
- *   &gt; (add-1 1.4) 
+ *   &gt; (add-1 1.4)
  *   2.4
  *   &gt; (add-1 1.5+i)
  *   2.5+1i
@@ -9049,9 +9049,9 @@ replacing bare pointer numbers with their s7 value, wherever possible:
 
 <pre class="indented">
 (gdb) s7bt
-#0  0x000055555567f7ca in check_cell (p=<b>#&lt;lambda (lst ind)&gt;</b>, 
+#0  0x000055555567f7ca in check_cell (p=<b>#&lt;lambda (lst ind)&gt;</b>,
     func=0x5555559106e0 &lt;__FUNCTION__.10273&gt; "mark_slot", line=3976) at s7.c:28494
-#1  0x000055555567f84d in check_nref (p=<b>#&lt;lambda (lst ind)&gt;</b>, 
+#1  0x000055555567f84d in check_nref (p=<b>#&lt;lambda (lst ind)&gt;</b>,
     func=0x5555559106e0 &lt;__FUNCTION__.10273&gt; "mark_slot", line=3976) at s7.c:28507
 #2  0x0000555555563201 in mark_slot (p=<b>'list-ref #&lt;lambda (lst ind)&gt;</b>) at s7.c:3976
 #3  0x0000555555564ce0 in mark_let (env=<b>#&lt;mock-number-class&gt;</b>) at s7.c:4506
@@ -9143,9 +9143,9 @@ If you're using catch to handle errors, the error type is what catch looks for. 
 s7_wrong_type_arg_error call above could be:
 </p>
 <pre class="indented">
-s7_error(sc, s7_make_symbol(sc, "wrong-type-arg"), 
-             s7_list(sc, 3, s7_make_string(sc, "~S is a ~S, but should be a pair"), 
-                            s7_car(lst), 
+s7_error(sc, s7_make_symbol(sc, "wrong-type-arg"),
+             s7_list(sc, 3, s7_make_string(sc, "~S is a ~S, but should be a pair"),
+                            s7_car(lst),
                             s7_type_of(sc, s7_car(lst))));
 </pre>
 <p>s7_wrong_type_arg_error takes the name of the caller, the argument number, the argument itself,
@@ -9183,7 +9183,7 @@ of execution.
 <p>s7 has an internal debugger that checks everything for consistency.  If you're writing C code that
 calls the s7.h functions a lot, it is sometimes helpful to turn on this debugger by adding the
 -DS7_DEBUGGING=1 compiler flag.  s7 will run 10 to 20 times slower, but it will complain loudly
-about anything it doesn't expect.  
+about anything it doesn't expect.
 The internal debugger normally calls abort whenever it detects some error, so it's most convenient
 to run s7 in gdb if this flag is on.
 S7_DEBUGGING also provides various debugging functions that
@@ -9239,14 +9239,14 @@ GC protected if there is any chance the GC might run without
 an existing Scheme-level reference to it.  s7_gc_protect places the
 object in a vector that the GC always checks, returning the object's location
 in that table.  s7_gc_unprotect_at unprotects the object (removes it from the
-vector) using the location passed to it.  s7_gc_protected_at returns the object 
+vector) using the location passed to it.  s7_gc_protected_at returns the object
 at the given location.
 There is a built-in lag between the creation of a new object and its first possible GC
 (the lag time is set indirectly by GC_TEMPS_SIZE in s7.c), so you don't need to worry about
 very short term temps such as the arguments to s7_cons in:
 </p>
 <pre class="indented">
-s7_cons(s7, s7_make_real(s7, 3.14), 
+s7_cons(s7, s7_make_real(s7, 3.14),
             s7_cons(s7, s7_make_integer(s7, 123), s7_nil(s7)));
 </pre>
 <p>The protect_via_stack functions place the object on the s7 stack where it is
@@ -9276,11 +9276,11 @@ void s7_autoload_set_names(s7_scheme *sc, const char **names, s7_int size); snd-
 in which to place top-level objects.  Normally the file contains scheme code, but if WITH_C_LOADER is set when s7 is built, you can
 also load shared-object files.  If you load a shared-object file (a dynamically loadable library), the environment argument
 provides a way to pass in the initialization function (named 'init_func).  For example, the repl in s7.c needs access to
-libc's tcsetattr, so it looks for libc_s7.so (created by libc.scm).  If found, 
+libc's tcsetattr, so it looks for libc_s7.so (created by libc.scm).  If found,
 </p>
 <pre class="indented">
-  s7_load_with_environment(sc, "libc_s7.so", 
-    s7_inlet(sc, s7_list(sc, 2, s7_make_symbol(sc, "init_func"), 
+  s7_load_with_environment(sc, "libc_s7.so",
+    s7_inlet(sc, s7_list(sc, 2, s7_make_symbol(sc, "init_func"),
                                 s7_make_symbol(sc, "libc_s7_init")));
 </pre>
 <p>You can also include an 'init_args field to pass arguments to init_func.  Here's an example that
@@ -9318,10 +9318,10 @@ s7_pointer tlib_init(s7_scheme *sc, s7_pointer args)
 */
 </pre>
 <p>
-s7_load returns the last value produced during the load; so given "test.scm" with the contents: 
+s7_load returns the last value produced during the load; so given "test.scm" with the contents:
 </p>
 <pre class="indented">
-define (f x) (+ x 1)) 
+define (f x) (+ x 1))
 32
 </pre>
 <p>when we call s7_load:</p>
@@ -9340,7 +9340,7 @@ and treats it as if it were the contents of a file of scheme code.  So, unlike s
 multiple statements, and things like double-quote don't need to be quoted.  nrepl.c for example
 embeds the contents of nrepl.scm at compile time, then calls s7_load_c_string at program startup.  It also
 includes notcurses_s7.c.  The end result is a stand-alone program that doesn't need to load either nrepl.scm
-or notcurses_s7.so.  The "content" argument should be a null-terminated C string. The "bytes" argument 
+or notcurses_s7.so.  The "content" argument should be a null-terminated C string. The "bytes" argument
 is the contents length, not including the trailing null, as in strlen.  There are simple examples in ffitest.c.
 </p>
 
@@ -9410,12 +9410,12 @@ s7_pointer s7_call(s7_scheme *sc, s7_pointer func, s7_pointer args);
 s7_pointer s7_call_with_location(s7_scheme *sc, s7_pointer func, s7_pointer args, const char *caller, const char *file, s7_int line);
 s7_pointer s7_call_with_catch(s7_scheme *sc, s7_pointer tag, s7_pointer body, s7_pointer error_handler);
 
-s7_pointer s7_apply_1(s7_scheme *sc, s7_pointer args, s7_pointer (*f1)(s7_pointer a1)); 
+s7_pointer s7_apply_1(s7_scheme *sc, s7_pointer args, s7_pointer (*f1)(s7_pointer a1));
 s7_pointer s7_apply_n_1(s7_scheme *sc, s7_pointer args, s7_pointer (*f1)(s7_pointer a1));
 /* and many more passing 2 to 9 arguments */
 </pre>
 <p>These functions evaluate Scheme expressions, and call Scheme functions (which might be defined in C originally).
-s7_eval evaluates a list that represents Scheme code.  That is, 
+s7_eval evaluates a list that represents Scheme code.  That is,
 </p>
 <pre class="indented">
 s7_eval(sc, s7_cons(sc, s7_make_symbol(sc, "+"),
@@ -9462,55 +9462,58 @@ s7_pointer s7_define_constant(s7_scheme *sc, const char *name, s7_pointer value)
 s7_pointer s7_define_constant_with_documentation(s7_scheme *sc, const char *name, s7_pointer value, const char *help);
 s7_pointer s7_define_constant_with_environment(s7_scheme *sc, s7_pointer envir, const char *name, s7_pointer value);
 
-s7_pointer s7_define_function(s7_scheme *sc, const char *name, s7_function fnc, 
+s7_pointer s7_define_function(s7_scheme *sc, const char *name, s7_function fnc,
                               s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
-s7_pointer s7_define_safe_function(s7_scheme *sc, const char *name, s7_function fnc, 
+s7_pointer s7_define_safe_function(s7_scheme *sc, const char *name, s7_function fnc,
                                    s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
 s7_pointer s7_define_typed_function(s7_scheme *sc, const char *name, s7_function fnc,
-				    s7_int required_args, s7_int optional_args, bool rest_arg, 
+				    s7_int required_args, s7_int optional_args, bool rest_arg,
 				    const char *doc, s7_pointer signature);
 s7_pointer s7_define_unsafe_typed_function(s7_scheme *sc, const char *name, s7_function fnc,
-					   s7_int required_args, s7_int optional_args, bool rest_arg, 
+					   s7_int required_args, s7_int optional_args, bool rest_arg,
 					   const char *doc, s7_pointer signature);
 s7_pointer s7_define_semisafe_typed_function(s7_scheme *sc, const char *name, s7_function fnc,
 					     s7_int required_args, s7_int optional_args, bool rest_arg,
 					     const char *doc, s7_pointer signature);
 
-void s7_define_function_star(s7_scheme *sc, const char *name, s7_function fnc, 
+void s7_define_function_star(s7_scheme *sc, const char *name, s7_function fnc,
                              const char *arglist, const char *doc);
-void s7_define_safe_function_star(s7_scheme *sc, const char *name, s7_function fnc, 
+void s7_define_safe_function_star(s7_scheme *sc, const char *name, s7_function fnc,
                                   const char *arglist, const char *doc);
-void s7_define_typed_function_star(s7_scheme *sc, const char *name, s7_function fnc, 
+void s7_define_typed_function_star(s7_scheme *sc, const char *name, s7_function fnc,
                                    const char *arglist, const char *doc, s7_pointer signature);
 
-s7_pointer s7_define_macro(s7_scheme *sc, const char *name, s7_function fnc, 
+s7_pointer s7_define_macro(s7_scheme *sc, const char *name, s7_function fnc,
                            s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
 
 /* s7_make* functions return a function */
-s7_pointer s7_make_function(s7_scheme *sc, const char *name, s7_function fnc, 
+s7_pointer s7_make_function(s7_scheme *sc, const char *name, s7_function fnc,
                             s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
-s7_pointer s7_make_safe_function(s7_scheme *sc, const char *name, s7_function fnc, 
+s7_pointer s7_make_safe_function(s7_scheme *sc, const char *name, s7_function fnc,
                                  s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
-s7_pointer s7_make_typed_function(s7_scheme *sc, const char *name, s7_function f, 
-				  s7_int required_args, s7_int optional_args, bool rest_arg, 
+s7_pointer s7_make_typed_function(s7_scheme *sc, const char *name, s7_function f,
+				  s7_int required_args, s7_int optional_args, bool rest_arg,
                                   const char *doc, s7_pointer signature);
+s7_pointer s7_make_typed_function_with_environment(s7_scheme *sc, const char *name, s7_function f,
+				  s7_int required_args, s7_int optional_args, bool rest_arg,
+                                  const char *doc, s7_pointer signature, s7_pointer envir);
 
-s7_pointer s7_make_function_star(s7_scheme *sc, const char *name, s7_function fnc, 
+s7_pointer s7_make_function_star(s7_scheme *sc, const char *name, s7_function fnc,
                                  const char *arglist, const char *doc);
-s7_pointer s7_make_safe_function_star(s7_scheme *sc, const char *name, s7_function fnc, 
+s7_pointer s7_make_safe_function_star(s7_scheme *sc, const char *name, s7_function fnc,
                                  const char *arglist, const char *doc);
 
 bool s7_is_dilambda(s7_pointer obj);
-s7_pointer s7_dilambda(s7_scheme *sc, 
+s7_pointer s7_dilambda(s7_scheme *sc,
 		       const char *name,
-		       s7_pointer (*getter)(s7_scheme *sc, s7_pointer args), 
+		       s7_pointer (*getter)(s7_scheme *sc, s7_pointer args),
 		       s7_int get_req_args, s7_int get_opt_args,
 		       s7_pointer (*setter)(s7_scheme *sc, s7_pointer args),
 		       s7_int set_req_args, s7_int set_opt_args,
 		       const char *documentation);
-s7_pointer s7_typed_dilambda(s7_scheme *sc, 
+s7_pointer s7_typed_dilambda(s7_scheme *sc,
 		       const char *name,
-		       s7_pointer (*getter)(s7_scheme *sc, s7_pointer args), 
+		       s7_pointer (*getter)(s7_scheme *sc, s7_pointer args),
 		       s7_int get_req_args, s7_int get_opt_args,
 		       s7_pointer (*setter)(s7_scheme *sc, s7_pointer args),
 		       s7_int set_req_args, s7_int set_opt_args,
@@ -9556,7 +9559,7 @@ s7_make_function creates (and returns) a Scheme function object from the s7_func
 An s7_function is a C function of the form <code>s7_pointer func(s7_scheme *sc, s7_pointer args)</code>.
 The new function's name is 'name', it requires 'required_args' arguments,
 it can accept 'optional_args' other arguments, and if 'rest_arg' is true, it accepts
-a "rest" argument (a list of all the trailing arguments).  
+a "rest" argument (a list of all the trailing arguments).
 The function's documentation is 'doc'.
 </p>
 <p>Leaving aside the value returned, s7_define_function is the same as s7_make_function, but it also adds 'name' (as a symbol) to the
@@ -9647,7 +9650,7 @@ s7_is_aritable returns true if the object can accept that number of args.
 </p>
 
 <p>s7_signature is the object's <a href="#signature">signature</a>, a list of types (symbols like 'integer?) giving return and argument types.
-For a function defined in C, s7_make_signature and s7_make_circular_signature create the signature that is then 
+For a function defined in C, s7_make_signature and s7_make_circular_signature create the signature that is then
 associated with the function via s7_define_typed_function and its friends.
 In s7.c g_is_zero (the function that implements zero?) uses:
 </p>
@@ -9712,9 +9715,9 @@ void s7_mark(s7_pointer p);
 and s7test.scm for several progressively more complicated examples.
 C-objects in Scheme usually correspond to an instance of a struct in C which you want to access from Scheme.
 The normal sequence is: define a new c-type via s7_make_c_type, call s7_c_type_set* to specialize its behavior,
-then to wrap a C object, call s7_make_c_object. 
+then to wrap a C object, call s7_make_c_object.
 s7_make_c_type takes an arbitrary name, used in object-&gt;string to identify the object, and returns an s7_int, the "type"
-mentioned in many of the other functions. 
+mentioned in many of the other functions.
 </p>
 <p>s7_c_type_set_free sets the function that is called by the GC when a Scheme c-object is garbage-collected.
 You normally use this to free the associated C value (the instance of the struct).  To get that value,
@@ -9750,8 +9753,8 @@ In Snd, marks can be passed into Scheme; the setup code is:
 <pre class="indented">
   static s7_pointer g_mark_methods;
   ...
-  g_mark_methods = s7_openlet(s7, 
-                     s7_inlet(s7, s7_list(s7, 2, s7_make_symbol(s7, "object-&gt;let"), 
+  g_mark_methods = s7_openlet(s7,
+                     s7_inlet(s7, s7_list(s7, 2, s7_make_symbol(s7, "object-&gt;let"),
                                                  mark_to_let_func)));
   s7_gc_protect(s7, g_mark_methods);
   xen_mark_tag = s7_make_c_type(s7, "&lt;mark&gt;");
@@ -9786,16 +9789,16 @@ bool s7_flush_output_port(s7_scheme *sc, s7_pointer p); /* false=flush lost data
 const char *s7_port_filename(s7_scheme *sc, s7_pointer x);
 s7_int s7_port_line_number(s7_scheme *sc, s7_pointer p);
 
-s7_pointer s7_open_input_file(s7_scheme *sc, const char *name, const char *mode);  
-s7_pointer s7_open_output_file(s7_scheme *sc, const char *name, const char *mode); 
+s7_pointer s7_open_input_file(s7_scheme *sc, const char *name, const char *mode);
+s7_pointer s7_open_output_file(s7_scheme *sc, const char *name, const char *mode);
 
-s7_pointer s7_open_input_string(s7_scheme *sc, const char *input_string);  
+s7_pointer s7_open_input_string(s7_scheme *sc, const char *input_string);
 s7_pointer s7_open_output_string(s7_scheme *sc);
 const char *s7_get_output_string(s7_scheme *sc, s7_pointer out_port);
 s7_pointer s7_output_string(s7_scheme *sc, s7_pointer out_port);
 
 typedef enum {S7_READ, S7_READ_CHAR, S7_READ_LINE, S7_PEEK_CHAR, S7_IS_CHAR_READY, S7_NUM_READ_CHOICES} s7_read_t;
-s7_pointer s7_open_output_function(s7_scheme *sc, void (*function)(s7_scheme *sc, uint8_t c, s7_pointer port));  
+s7_pointer s7_open_output_function(s7_scheme *sc, void (*function)(s7_scheme *sc, uint8_t c, s7_pointer port));
 s7_pointer s7_open_input_function(s7_scheme *sc, s7_pointer (*function)(s7_scheme *sc, s7_read_t read_choice, s7_pointer port));
 
 s7_pointer s7_read_char(s7_scheme *sc, s7_pointer port);
@@ -9805,7 +9808,7 @@ s7_pointer s7_write(s7_scheme *sc, s7_pointer obj, s7_pointer port);
 s7_pointer s7_display(s7_scheme *sc, s7_pointer obj, s7_pointer port);
 void s7_newline(s7_scheme *sc, s7_pointer port);
 const char *s7_format(s7_scheme *sc, s7_pointer args);
-s7_pointer s7_object_to_string(s7_scheme *sc, s7_pointer arg, bool use_write);       
+s7_pointer s7_object_to_string(s7_scheme *sc, s7_pointer arg, bool use_write);
 char *s7_object_to_c_string(s7_scheme *sc, s7_pointer obj);
 
 s7_pointer s7_current_input_port(s7_scheme *sc);
@@ -9844,7 +9847,7 @@ uint8_t c;
 port = s7_open_input_function(sc, my_read);
 gc_loc = s7_gc_protect(sc, port);
 c = s7_character(s7_read_char(sc, p1)); /* my_read "peek" == S7_READ_CHAR */
-if (last_c != '0') 
+if (last_c != '0')
    fprintf(stderr, "c: %c\n", c);
 s7_gc_unprotect_at(sc, gc_loc);
 </pre>
@@ -9902,10 +9905,10 @@ immediately recognize (i.e. a generator), it looks for a mus-copy method, and
 if found, Snd calls it:
 </p>
 <pre class="indented">
-s7_pointer func; 
+s7_pointer func;
 func = s7_method(s7, gen, s7_make_symbol(s7, "mus-copy"));
 if (func != s7_undefined(s7))
-  return(s7_apply_function(s7, func, s7_list(s7, 1, gen))); 
+  return(s7_apply_function(s7, func, s7_list(s7, 1, gen)));
 </pre>
 <p>The object searched can be anything that has an associated let: a c-object,
 a function or macro, a c-pointer, or of course a let.
@@ -9921,7 +9924,7 @@ the previous curlet.
 <p>s7_shadow_rootlet and s7_set_shadow_rootlet make it easier to import a let into rootlet.  This is also aimed
 at code that is defining lots of functions and variables, using the default functions like s7_define_variable
 that place things in the rootlet, but the code actually wants all those objects stored
-in a let other than rootlet.  
+in a let other than rootlet.
 </p>
 <pre class="indented">
 s7_pointer cur_env, old_shadow;
@@ -9932,7 +9935,7 @@ s7_set_shadow_rootlet(sc, old_shadow);
 </pre>
 <p>s7_set_shadow_rootlet returns the previous shadow rootlet,
 so this turns the current environment into a shadow rootlet while defining functions, then restores
-the old rootlet. 
+the old rootlet.
 Similarly notcurses_s7.c places everything in the *notcurses* let,
 but uses s7_set_shadow_rootlet to make these available in scheme as if they were in the rootlet:
 </p>
@@ -9987,7 +9990,7 @@ s7_for_each_symbol_name and s7_for_each_symbol traverse the symbol
 table, calling "symbol_func" on each symbol.  symbol_func is a boolean function that
 takes as arguments the symbol name and the void* data pointer.  The latter can carry
 along whatever state your function needs.  s7_for_each_symbol_name also includes some
-s7 constants like #f. 
+s7 constants like #f.
 </p>
 <p>The C declaration above says s7_for_each_symbol is a C function that returns a boolean,
 and takes three arguments, an s7_scheme* pointer, a function (symbol_func), and a void* pointer
@@ -9998,15 +10001,15 @@ Sketched in scheme, it might be:
 </p>
 <pre class="indented">
 (define (s7_for_each_symbol s7 symbol_func data)
-  (call-with-exit 
+  (call-with-exit
     (lambda (return)
-      (for-each 
+      (for-each
         (lambda (symbol-name)
           (if (symbol_func symbol-name data)
               (return #t)))
         (symbol-table))
       #f)))
-</pre>            
+</pre>
 <p>An example is snd-completion.c.
 </p>
 
@@ -10058,7 +10061,7 @@ s7_pointer s7_make_big_ratio(s7_scheme *sc, mpq_t *val);
 s7_pointer s7_make_big_real(s7_scheme *sc, mpfr_t *val);
 s7_pointer s7_make_big_complex(s7_scheme *sc, mpc_t *val);
 </pre>
-<p>Most of these correspond to the obvious scheme functions, so I'll 
+<p>Most of these correspond to the obvious scheme functions, so I'll
 only touch on the less-obvious cases.
 s7_make_mutable_real returns a real number object whose value can be changed directly.
 In snd-sig.c, for example, we have a C procedure that applies a scheme function to
@@ -10140,8 +10143,8 @@ s7_int s7_vector_rank(s7_pointer vect);
 s7_int s7_vector_dimension(s7_pointer vec, s7_int dim);
 s7_pointer *s7_vector_elements(s7_pointer vec);
 s7_int s7_vector_dimensions(s7_pointer vec, s7_int *dims, s7_int dims_size);
-s7_int s7_vector_offsets(s7_pointer vec, s7_int *offs, s7_int offs_size);   
- 
+s7_int s7_vector_offsets(s7_pointer vec, s7_int *offs, s7_int offs_size);
+
 void s7_vector_fill(s7_scheme *sc, s7_pointer vec, s7_pointer obj);
 s7_pointer s7_vector_copy(s7_scheme *sc, s7_pointer old_vect);
 s7_pointer s7_vector_to_list(s7_scheme *sc, s7_pointer vect);
@@ -10213,10 +10216,10 @@ s7_pointer s7_c_pointer_type(s7_pointer p);
 </pre>
 <p>These functions are equivalent to s7's c-pointer?, c-pointer, and c-pointer-type.
 C-pointers in s7 are aimed primarily at passing uninterpreted C pointers through
-s7 from one C function to another.  
+s7 from one C function to another.
 The "type" field can hold a type
 indication, useful in debugging.  s7_c_pointer_of_type checks that the c-pointer's
-type field matches the type passed as the second argument. As a convenience, 
+type field matches the type passed as the second argument. As a convenience,
 s7_c_pointer_with_type combines s7_c_pointer with s7_is_c_pointer_of_type,
 calling s7_error if the types don't match.
 Nothing else in s7 assumes the type field is actually a type symbol, so you
@@ -10239,11 +10242,11 @@ s7_pointer s7_make_permanent_string(s7_scheme *sc, const char *str);
 s7_pointer s7_make_semipermanent_string(s7_scheme *sc, const char *str);
 s7_int s7_string_length(s7_pointer str);
 </pre>
-<p>These handle s7 strings.  s7_is_string corresponds to scheme's string?, 
+<p>These handle s7 strings.  s7_is_string corresponds to scheme's string?,
 and s7_string_length to scheme's string-length. s7_string returns the scheme string's value as a C string.
 Don't free the returned string!  s7_make_string takes a C string, and returns its scheme
 equivalent.  s7_make_string_with_length is the same, but it is faster because you pass the
-new string's length (s7_make_string has to use strlen).  
+new string's length (s7_make_string has to use strlen).
 s7_make_permanent_string returns a scheme string that is not in the heap; it will never be GC'd or freed by s7.
 s7_make_semipermanent_string is similar, but the string will be freed if you call s7_free.
 s7_make_string_wrapper creates a temporary string.  This saves the overhead of getting a free cell
@@ -10261,7 +10264,7 @@ uint8_t s7_character(s7_pointer p);
 s7_pointer s7_make_character(s7_scheme *sc, uint8_t c);
 </pre>
 
-<p>s7_is_character is equivalent to character?.  s7_character returns the unsigned char held by the s7 object p, 
+<p>s7_is_character is equivalent to character?.  s7_character returns the unsigned char held by the s7 object p,
 and s7_make_character returns an s7 object holding the unsigned char c.
 </p>
 
@@ -10271,8 +10274,8 @@ and s7_make_character returns an s7 object holding the unsigned char c.
 <pre class="indented">
 bool s7_is_hash_table(s7_pointer p);
 s7_pointer s7_make_hash_table(s7_scheme *sc, s7_int size);
-s7_pointer s7_hash_table_ref(s7_scheme *sc, s7_pointer table, s7_pointer key);   
-s7_pointer s7_hash_table_set(s7_scheme *sc, s7_pointer table, s7_pointer key, s7_pointer value);  
+s7_pointer s7_hash_table_ref(s7_scheme *sc, s7_pointer table, s7_pointer key);
+s7_pointer s7_hash_table_set(s7_scheme *sc, s7_pointer table, s7_pointer key, s7_pointer value);
 </pre>
 <p>These functions are the C-side equivalent of hash-table?, make-hash-table, hash-table-ref,
 and hash-table-set!.
@@ -10343,7 +10346,7 @@ s7_pfunc s7_optimize(s7_scheme *sc, s7_pointer expr);
 
 <p>
 These functions tell s7 to call a foreign function directly, without any scheme-related
-overhead.  The function to be called in this manner needs to take the form of one of the s7_*_t functions in s7.h.  
+overhead.  The function to be called in this manner needs to take the form of one of the s7_*_t functions in s7.h.
 For example,
 one way to call + is to pass it two s7_double arguments and get an s7_double back.  This is the
 s7_d_dd_t function (the first letter gives the return type, the rest give successive argument types,
@@ -10357,7 +10360,7 @@ wrapping up the result as an s7 object.
 <p>Here is an example of using these functions; more extensive examples are in clm2xen.c in sndlib, and in s7.c.
 </p>
 <pre class="indented">
-static s7_pointer g_plus_one(s7_scheme *sc, s7_pointer args) 
+static s7_pointer g_plus_one(s7_scheme *sc, s7_pointer args)
 {
   return(s7_make_integer(sc, s7_integer(s7_car(args)) + 1));
 }
@@ -10368,16 +10371,16 @@ s7_define_safe_function(sc, "plus1", g_plus_one, 1, 0, false, "");
 s7_set_i_i_function(sc, s7_name_to_value(sc, "plus1"), plus_one);
 </pre>
 <p>s7_define_safe_function defines a Scheme function "plus1",
-telling the optimizer that this function is safe.  
-A safe function does not push anything on the s7 stack, and treats the arglist 
-passed to it as immutable and temporary (that is, it just grabs the arguments from 
-the list).  A few s7_* functions are unsafe, and that makes anything that calls 
+telling the optimizer that this function is safe.
+A safe function does not push anything on the s7 stack, and treats the arglist
+passed to it as immutable and temporary (that is, it just grabs the arguments from
+the list).  A few s7_* functions are unsafe, and that makes anything that calls
 them also unsafe.  If the optimizer knows a function is safe, it can use prebuilt
-lists to pass the arguments (saving in the GC), and can combine it in various 
+lists to pass the arguments (saving in the GC), and can combine it in various
 ways with other stuff.  If an unsafe function handles its argument list safely,
 declare it with s7_define_semisafe_typed_function.
 If the safe function knows its return and argument
-types, there is another level of optimization that can call it without 
+types, there is another level of optimization that can call it without
 setting up an arglist or "unboxing" values, basically a direct call in C.
 In this example, the s7_set_i_i_function call
 tells the optimizer that if plus1 is seen in a context where the optimizer
@@ -10391,7 +10394,7 @@ if you need them.
 <p>By the way, to optimize scheme code (for speed), first use functions: the optimizer
 ignores anything else at the top level.  Then perhaps check lint.scm and the profiler.
 Don't use something dumb like call/cc.  Avoid append.  Use iteration, not recursion.
-Perhaps take the hot spot and do it in C.  callgrind might also be helpful, but it 
+Perhaps take the hot spot and do it in C.  callgrind might also be helpful, but it
 can be hard to map from callgrind output to the original scheme code.
 </p>
 <p>s7_optimize is the third-level optimizer.  It is a bit hard to explain,
@@ -10430,12 +10433,12 @@ s7_optimize can also be used to take advantage of the direct
 C function calls mentioned above:
 </p>
 <pre class="indented">
-static s7_pointer g_d_func(s7_scheme *sc, s7_pointer args) 
+static s7_pointer g_d_func(s7_scheme *sc, s7_pointer args)
 {
   /* a normal C-defined s7 function that simply returns (scheme) 1.0 */
   return(s7_make_real(sc, 1.0));
 }
-static s7_double opt_d_func(void) 
+static s7_double opt_d_func(void)
 {
   /* a version of g_d_func that returns (C) 1.0 */
   return(1.0);
@@ -10505,10 +10508,10 @@ s7_dynamic_wind is dynamic-wind in C.  The parameters "init", "body", and "finis
 the same as in scheme (i.e. #f or a thunk).  s7_make_continuation is call/cc; there
 is an <a href="#signal">example</a> above.
 s7_values is values, s7_copy is copy, s7_fill is fill!, s7_type_of is type-of, s7_is_syntax
-is syntax?. 
+is syntax?.
 </p>
 <p>s7_is_multiple_value returns true if its argument (a list) is the result of
-calling values or s7_values.  (values) returns a special object that is eq? to 
+calling values or s7_values.  (values) returns a special object that is eq? to
 #&lt;unspecified&gt; but not C == to it (that is, there are two things in s7 that
 represent the unspecified object, one being the result of calling values with no
 arguments).  (values obj) returns obj, which is not considered a multiple-value.
@@ -10531,7 +10534,7 @@ static s7_pointer vals(s7_scheme *s, s7_pointer args)
   return(s7_values(s, args));
 }
 
-int main(int argc, char **argv) 
+int main(int argc, char **argv)
 {
   s7_scheme *s = s7_init();
   s7_define_function(s, "vals", vals, 0, 0, true, NULL);
@@ -10569,7 +10572,7 @@ int main(int argc, char **argv)
 <p>
 libc.scm, libgsl.scm, libm.scm, libdl.scm, notcurses_s7.c, libutf8proc.scm, and libgdbm.scm tie the associated
 libraries into s7.
-gdbinit has some gdb commands for s7. 
+gdbinit has some gdb commands for s7.
 </p>
 
 
@@ -10584,7 +10587,7 @@ involved in (dynamically) linking C entities into s7.
 </pre>
 
 <p>For example, <code>(c-define '(double j0 (double)) "m" "math.h")</code>
-links the C math library function j0 into s7 under the name m:j0, 
+links the C math library function j0 into s7 under the name m:j0,
 passing it a double argument and getting a double result (a real in s7).
 </p>
 
@@ -10613,7 +10616,7 @@ Each description has the form:
 
 <p>where each entry is a symbol, and C names are used throughout.  So, in the j0
 example above, <code>(double j0 (double))</code> says we want access to j0, it returns
-a C double, and it takes one argument, also a C double.  s7 tries to figure out 
+a C double, and it takes one argument, also a C double.  s7 tries to figure out
 what the corresponding s7 type is, but in tricky cases, you should tell it
 by replacing the bare type name with a list: <code>(C-type underlying-C-type)</code>.  For example,
 the Snd function set_graph_style takes an (enum) argument of type graph_style_t.
@@ -10652,9 +10655,9 @@ Here are some examples:
 
 <pre class="indented">
 ;;; various math library functions
-(c-define '((double j0 (double)) 
-            (double j1 (double)) 
-            (double erf (double)) 
+(c-define '((double j0 (double))
+            (double j1 (double))
+            (double erf (double))
             (double erfc (double))
             (double lgamma (double)))
           "m" "math.h")
@@ -10667,11 +10670,11 @@ Here are some examples:
 
 ;;; file-exists? and delete-file
 (define file-exists? (let () ; define F_OK and access only within this let
-                       (c-define '((int F_OK) (int access (char* int))) "" "unistd.h") 
+                       (c-define '((int F_OK) (int access (char* int))) "" "unistd.h")
                        (lambda (arg) (= (access arg F_OK) 0))))
 
-(define delete-file (let () 
-                      (c-define '(int unlink (char*)) "" "unistd.h") 
+(define delete-file (let ()
+                      (c-define '(int unlink (char*)) "" "unistd.h")
                       (lambda (file) (= (unlink file) 0)))) ; 0=success
 
 
@@ -10683,10 +10686,10 @@ Here are some examples:
 (c-define '(snd_info* any_selected_sound ()) "" "snd.h" "-I.")
 (c-define '(void select_channel (snd_info* int)) "" "snd.h" "-I.")
 
-(c-define '(((graph_style_t int) (GRAPH_LINES GRAPH_DOTS GRAPH_FILLED GRAPH_DOTS_AND_LINES GRAPH_LOLLIPOPS)) 
-            (void set_graph_style ((graph_style_t int)))) 
+(c-define '(((graph_style_t int) (GRAPH_LINES GRAPH_DOTS GRAPH_FILLED GRAPH_DOTS_AND_LINES GRAPH_LOLLIPOPS))
+            (void set_graph_style ((graph_style_t int))))
           "" "snd.h" "-I.")
-   
+
 
 ;;; getcwd, strftime
 (c-define '(char* getcwd (char* size_t)) "" "unistd.h")
@@ -10698,11 +10701,11 @@ Here are some examples:
                 (list 'size_t 'strftime (list 'char* 'size_t 'char* (symbol "struct tm*"))))
           "" "time.h")
 
-&gt; (let ((p (calloc 1 8)) 
+&gt; (let ((p (calloc 1 8))
         (str (make-string 32)))
-    (time p) 
+    (time p)
     (strftime str 32 "%a %d-%b-%Y %H:%M %Z" (localtime p))
-    (free p) 
+    (free p)
     str)
 <em class="gray">"Sat 11-Aug-2012 08:55 PDT\x00      "</em>
 
@@ -10756,7 +10759,7 @@ This collides with (for example) the widespread use of "-", rather than "_" in S
 I have found it much more straightforward to stick with one name.  In cases like
 libgsl there are thousands of names, all documented at great length
 by the C name. Anyone who wants to use these functions has to start with the C name.
-If they are forced to fuss with some annoying Schemely translation of it, 
+If they are forced to fuss with some annoying Schemely translation of it,
 the only sane response is: "forget it! I'll do it in C".
 </p>
 
@@ -10769,7 +10772,7 @@ the only sane response is: "forget it! I'll do it in C".
 
     ;; the rest of the function body exists in the *libc* environment, with the
     ;;   function parameters in-file and out-file imported, so, for example,
-    ;;   (open ...) below calls the libc function open.  
+    ;;   (open ...) below calls the libc function open.
 
     (let ((infd (open in-file O_RDONLY 0)))
       (if (= infd -1)
@@ -10791,13 +10794,13 @@ the only sane response is: "forget it! I'll do it in C".
 
 (define (glob-&gt;list pattern)
   (with-let (sublet *libc* :pattern pattern)
-    (let ((g (glob.make))) 
-      (glob pattern 0 g) 
-      (let ((res (glob.gl_pathv g))) 
-	(globfree g) 
+    (let ((g (glob.make)))
+      (glob pattern 0 g)
+      (let ((res (glob.gl_pathv g)))
+	(globfree g)
 	res))))
 
-;; now (load "*.scm") is (for-each load (glob-&gt;list "*.scm")) 
+;; now (load "*.scm") is (for-each load (glob-&gt;list "*.scm"))
 
 ;; a couple regular expression examples
 (with-let (sublet *libc*)
@@ -10830,11 +10833,11 @@ the only sane response is: "forget it! I'll do it in C".
 	   (evl (gsl_vector_complex_alloc len))
 	   (evc (gsl_matrix_complex_alloc len len))
 	   (w (gsl_eigen_nonsymmv_alloc len)))
-      
+
       (gsl_eigen_nonsymmv m evl evc w)
       (gsl_eigen_nonsymmv_free w)
       (gsl_eigen_nonsymmv_sort evl evc GSL_EIGEN_SORT_ABS_DESC)
-      
+
       (let ((vals (make-vector len)))
 	(do ((i 0 (+ i 1)))
 	    ((= i len))
@@ -10847,7 +10850,7 @@ the only sane response is: "forget it! I'll do it in C".
 </div>
 
 <p>We can use gdbm (or better yet, mdb), the :readable argument to object-&gt;string, and
-the fallback methods in the environments to create name-spaces (lets) with billions of 
+the fallback methods in the environments to create name-spaces (lets) with billions of
 thread-safe local variables, which can be saved and communicated between s7 runs:
 </p>
 <div class="indented" id="libgdbm">
@@ -10856,27 +10859,27 @@ thread-safe local variables, which can be saved and communicated between s7 runs
 
 (with-let *libgdbm*
 
-  (define *db* 
-    (openlet 
-     (inlet :file (gdbm_open "test.gdbm" 1024 GDBM_NEWDB #o664 
+  (define *db*
+    (openlet
+     (inlet :file (gdbm_open "test.gdbm" 1024 GDBM_NEWDB #o664
 		    (lambda (str) (format *stderr* "gdbm error: ~S~%" str)))
 
 	    :let-ref-fallback (lambda (obj sym)
 				(eval-string (gdbm_fetch (obj 'file) (symbol-&gt;string sym))))
-	    
+
 	    :let-set-fallback (lambda (obj sym val)
 				 (gdbm_store (obj 'file)
 					     (symbol-&gt;string sym)
 					     (object-&gt;string val :readable)
 					     GDBM_REPLACE)
 				 val)
-	    
+
 	    :make-iterator (lambda (obj)
 			     (let ((key #f)
 				   (length (lambda (obj) (expt 2 20))))
 			       (#_make-iterator
                                 (let ((+iterator+ #t))
-				  (openlet 
+				  (openlet
 				   (lambda ()
 				     (if key
 				         (set! key (gdbm_nextkey (obj 'file) (cdr key)))
@@ -10889,7 +10892,7 @@ thread-safe local variables, which can be saved and communicated between s7 runs
   (set! (*db* 'str) "123") ; add a variable named 'str with the value "123"
   (set! (*db* 'int) 432)
 
-  (with-let *db* 
+  (with-let *db*
     (+ int (length str)))    ; -&gt; 435
   (map values *db*)          ; -&gt; '((str . "123") (int . 432))
 
@@ -10923,7 +10926,7 @@ A pattern can be:
 <li>#&lt;label&gt;          expr must match the value saved under "label"
 <li>#&lt;...&gt;            skip exprs covered by the ellipsis
 <li>#&lt;label:...&gt;      skip as above, saved skipped exprs under "label" as a quoted list.
-<li>                  a pattern can have any number of labelled ellipses overall, 
+<li>                  a pattern can have any number of labelled ellipses overall,
 <li>                  but just one unnamed ellipsis, and only one ellipsis per pair or vector
 <li>#&lt;label,func:...&gt; a labelled ellipsis which matches if (func expr); expr is the ellipsis list,
 <li>                  label is not optional in this case
@@ -10949,9 +10952,9 @@ A pattern can be:
 
 (define (palindrome? x)
   (case* x
-    ((() (#&lt;&gt;)) 
+    ((() (#&lt;&gt;))
      #t)
-    (((#&lt;start:&gt; #&lt;middle:...&gt; #&lt;start&gt;)) 
+    (((#&lt;start:&gt; #&lt;middle:...&gt; #&lt;start&gt;))
      (palindrome? #&lt;middle&gt;))
     (else #f)))
 </pre>
@@ -10989,7 +10992,7 @@ The *s7* field 'debug controls when these are active, and to what extent.
 (trace) adds such tracing to every subsequently defined function or macro.
 (<em class="emdef">untrace</em>) turns off tracing; (untrace func) turns off tracing in func.
 Similarly (<em class="emdef">break</em> func) places a breakpoint at the start of func,
-(<em class="emdef">unbreak</em> func) removes it.  (unbreak) removes all breakpoints. 
+(<em class="emdef">unbreak</em> func) removes it.  (unbreak) removes all breakpoints.
 When a breakpoint is encountered, you are placed in a repl at
 that point; type C-q to continue.  To trace a variable, use
 (<em class="emdef">watch</em> var). watch reports whenever var is set! and
@@ -11004,12 +11007,12 @@ is 2, s7 adds tracepoints to any subsequently defined (i.e. named) functions and
 If (*s7* 'debug) is 3, unnamed functions are also traced.
 If any tracing is enabled, you can get a C-style stacktrace by
 setting (<em class="emdef">debug-stack</em>) to a vector, then
-call (<em class="emdef">show-debug-stack</em>) to see the calls. 
+call (<em class="emdef">show-debug-stack</em>) to see the calls.
 </p>
 
 <p>
 Besides debug-stack, debug.scm also defines the convenience functions
-<em class="emdef">debug-function</em>, <em class="emdef">debug-port</em>, and 
+<em class="emdef">debug-function</em>, <em class="emdef">debug-port</em>, and
 <em class="emdef">debug-repl</em>.  debug-port is the debugger's
 output port, debug-repl drops into a repl at a breakpoint, and debug-function
 provides a way to customize the debugger's behavior.
@@ -11121,8 +11124,8 @@ I'll treat repl.scm first, then discuss how nrepl differs from it.
 
 <p>repl.scm implements a repl using vt100 codes and libc.scm.  It includes
 symbol and filename completion, a history buffer, paren matching,
-indentation, multi-line edits, and a debugger window.  
-To move around in the history buffer, use M-p, M-n or M-. (C-p and C-n are used to move the cursor in the current expression).  
+indentation, multi-line edits, and a debugger window.
+To move around in the history buffer, use M-p, M-n or M-. (C-p and C-n are used to move the cursor in the current expression).
 You can change the keymap or the prompt; all the repl functions are
 accessible through the *repl* environment.  One field is 'repl-let which
 gives you access to all the repl's internal variables and functions.
@@ -11187,16 +11190,16 @@ you can also type shell commands just as in a shell:
 </pre>
 
 <p>In most cases, these are handled through *unbound-variable-hook*, checked using "command -v", then passed
-to the underlying shell via the system function. 
+to the underlying shell via the system function.
 </p>
 
 <p>The prompt is set by the function (*repl* 'prompt).  It gets one argument,
 the current line number, and should set the prompt string and its length.
 </p>
 <pre class="indented">
-(set! (*repl* 'prompt) (lambda (num) 
+(set! (*repl* 'prompt) (lambda (num)
 			 (with-let (*repl* 'repl-let)
-			   (set! prompt-string "scheme&gt; ") 
+			   (set! prompt-string "scheme&gt; ")
 			   (set! prompt-length (length prompt-string)))))
 </pre>
 <p>or, to use the red lambda example mentioned earlier:
@@ -11234,7 +11237,7 @@ is the number shown in the prompt.
 
 <p>To access the meta keys (in the keymap), use a string:
 <code>((*repl* 'keymap) (string #\escape #\p))</code>; this is Meta-p which normally accesses
-the history buffer.  
+the history buffer.
 </p>
 
 <p>You can call the repl from other code, poke around in the current environment (or whatever),
@@ -11251,7 +11254,7 @@ then return to the caller:
       (dynamic-wind
 	  (lambda ()
 	    (set! (*repl* 'top-level-let) e)
-	    (set! ((*repl* 'keymap) C-q)       
+	    (set! ((*repl* 'keymap) C-q)
 		  (lambda (c)
 		    (set! ((*repl* 'repl-let) 'all-done) #t))))
 	  (lambda ()
@@ -11283,9 +11286,9 @@ x: 32
 <p>Another possibility:
 </p>
 <pre class="indented">
-(set! (hook-functions *error-hook*) 
-      (list (lambda (hook) 
-              (apply format *stderr* (hook 'data)) 
+(set! (hook-functions *error-hook*)
+      (list (lambda (hook)
+              (apply format *stderr* (hook 'data))
               (newline *stderr*)
 	      (drop-into-repl (owlet)))))
 </pre>
