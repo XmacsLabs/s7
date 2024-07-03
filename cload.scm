@@ -641,7 +641,7 @@
 		 (opt-args    (if (> (length f) 4) (f 4) 0))
 		 (sig         (and (> (length f) 5) (f 5))))
 	     (format p "~%  s7_define(sc, cur_env,~%            fsym = s7_make_symbol(sc, ~S),~%" scheme-name)
-	     (format p "            ffunc = s7_make_typed_function(sc, ~S, ~A, ~D, ~D, false, ~S, ~A));~%"
+	     (format p "            ffunc = s7_make_typed_function_with_environment(sc, ~S, ~A, ~D, ~D, false, ~S, ~A, cur_env));~%"
 		     scheme-name
 		     base-name
 		     num-args

@@ -11416,8 +11416,7 @@ static bool tree_is_cyclic_1(s7_scheme *sc, s7_pointer tree)
 	{
 	  int32_t old_top = sc->tree_pointers_top, result;
 	  result = tree_is_cyclic_or_has_pairs(sc, car(p));
-	  if ((result == TREE_CYCLIC) ||
-	      (tree_is_cyclic_1(sc, car(p))))
+	  if ((result == TREE_CYCLIC) || (tree_is_cyclic_1(sc, car(p))))
 	    return(true);
 	  for (int32_t i = old_top; i < sc->tree_pointers_top; i++)
 	    tree_clear_collected(sc->tree_pointers[i]);
@@ -34588,10 +34587,10 @@ static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_writ
 	    port_write_string(port)(sc, string_value(p), string_length(p), port);
 	  return;
 	}}
-  if (obj == sc->rootlet)    {port_write_string(port)(sc, "(rootlet)", 9, port); return;}
+  if (obj == sc->rootlet) {port_write_string(port)(sc, "(rootlet)", 9, port); return;}
   if (obj == sc->starlet) {port_write_string(port)(sc, "*s7*", 4, port);      return;}
-  /* if (is_unlet(obj))      {port_write_string(port)(sc, "(unlet)", 7, port);   return;} */ /* this is the let created by (unlet), not sc->unlet_entries */
-  if (sc->short_print)       {port_write_string(port)(sc, "#<let>", 6, port);    return;}
+  /* if (is_unlet(obj))   {port_write_string(port)(sc, "(unlet)", 7, port);   return;} */ /* this is the let created by (unlet), not sc->unlet_entries */
+  if (sc->short_print)    {port_write_string(port)(sc, "#<let>", 6, port);    return;}
 
   /* circles can happen here:
    *    (let () (let ((b (curlet))) (curlet))):    #<let 'b #<let>>
@@ -37607,7 +37606,6 @@ void s7_list_to_array(s7_scheme *sc, s7_pointer list, s7_pointer *array, int32_t
 static inline s7_int tree_len_1(s7_scheme *sc, s7_pointer p)
 {
   s7_int sum;
-  if ((S7_DEBUGGING) && (tree_is_cyclic(sc, p))) {fprintf(stderr, "%s[%d]: tree is cyclic\n", __func__, __LINE__); abort();}
   for (sum = 0; is_pair(p); p = cdr(p))
     {
       s7_pointer cp = car(p);
@@ -37654,8 +37652,7 @@ static s7_int tree_leaves_i_7p(s7_scheme *sc, s7_pointer p)
 {
   if (!is_list(p))
     sole_arg_wrong_type_error_nr(sc, sc->tree_leaves_symbol, p, a_list_string);
-  if ((sc->safety > NO_SAFETY) &&
-      (tree_is_cyclic(sc, p)))
+  if ((sc->safety > NO_SAFETY) && (tree_is_cyclic(sc, p)))
     error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "tree-leaves: tree is cyclic: ~S", 31), p));
   return(tree_len(sc, p));
 }
@@ -37712,8 +37709,7 @@ bool s7_tree_memq(s7_scheme *sc, s7_pointer sym, s7_pointer tree)
 {
   if (sym == tree) return(true);
   if (!is_pair(tree)) return(false);
-  if ((sc->safety > NO_SAFETY) &&
-      (tree_is_cyclic(sc, tree)))
+  if ((sc->safety > NO_SAFETY) && (tree_is_cyclic(sc, tree)))
     error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "tree-memq: tree is cyclic: ~S", 29), tree));
   return(tree_memq_1(sc, sym, tree));
 }
@@ -37800,8 +37796,7 @@ static s7_pointer tree_set_memq_syms_direct(s7_scheme *sc, s7_pointer syms, s7_p
     wrong_type_error_nr(sc, sc->tree_set_memq_symbol, 2, tree, a_list_string);
   if (is_null(tree)) return(sc->F);
   if (is_quote(car(tree))) return(sc->F);
-  if ((sc->safety > NO_SAFETY) &&
-      (tree_is_cyclic(sc, tree)))
+  if ((sc->safety > NO_SAFETY) && (tree_is_cyclic(sc, tree)))
     error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "tree-set-memq: tree is cyclic: ~S", 33), tree));
   clear_symbol_list(sc);
   for (s7_pointer p = syms; is_pair(p); p = cdr(p))
@@ -37864,8 +37859,7 @@ static s7_pointer g_tree_count(s7_scheme *sc, s7_pointer args)
       if (is_null(tree)) return(int_zero);
       wrong_type_error_nr(sc, sc->tree_count_symbol, 2, tree, a_list_string);
     }
-  if ((sc->safety > NO_SAFETY) &&
-      (tree_is_cyclic(sc, tree)))
+  if ((sc->safety > NO_SAFETY) && (tree_is_cyclic(sc, tree)))
     error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "tree-count: tree is cyclic: ~S", 30), tree));
   if (is_null(cddr(args)))
     return(make_integer(sc, tree_count(sc, obj, tree, 0)));
@@ -74894,7 +74888,7 @@ static body_t body_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer body, bool
 	  result = min_body(result, form_is_safe(sc, func, car(p), (at_end) && (is_null(cdr(p)))));
 	  if (result == UNSAFE_BODY) return(UNSAFE_BODY);
 	}
-      if (p != body)
+      if (p != body) /* checking for cycles -- this can happen (t101-1.scm) */
 	{
 	  if (follow) {sp = cdr(sp); if (p == sp) return(UNSAFE_BODY);}
 	  follow = (!follow);
@@ -76117,6 +76111,7 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
       sc->not_tc = false;
       sc->got_rec = false;
       sc->rec_tc_args = -1;
+      /* I think cyclic code has already been caught in check_lambda et al */
       result = ((is_symbol(func)) && (symbol_is_in_list(sc, func))) ? UNSAFE_BODY : body_is_safe(sc, func, body, true);  /* (define (f f)...) */
       clear_symbol_list(sc);
 
@@ -76215,8 +76210,7 @@ static int32_t check_lambda(s7_scheme *sc, s7_pointer form, bool opt)
   s7_pointer code, body;
   int32_t arity = 0;
 
-  if ((sc->safety > NO_SAFETY) &&
-      (tree_is_cyclic(sc, form)))
+  if ((sc->safety > NO_SAFETY) && (tree_is_cyclic(sc, form))) /* this can happen (3 examples in s7test) */
     error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "lambda: body is cyclic: ~S", 26), form));
 
   code = cdr(form);
@@ -76274,8 +76268,7 @@ static inline s7_pointer op_lambda_unchecked(s7_scheme *sc, s7_pointer code)
 static void check_lambda_star(s7_scheme *sc)
 {
   s7_pointer code = cdr(sc->code);
-  if ((sc->safety > NO_SAFETY) &&
-      (tree_is_cyclic(sc, sc->code)))
+  if ((sc->safety > NO_SAFETY) && (tree_is_cyclic(sc, sc->code)))
     error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "lambda*: body is cyclic: ~S", 27), sc->code));
 
   if ((!is_pair(code)) ||
@@ -84934,8 +84927,7 @@ static void apply_syntax(s7_scheme *sc)                    /* -------- syntactic
       len = s7_list_length(sc, sc->args);
       if (len == 0)
 	syntax_error_nr(sc, "attempt to evaluate a circular list: ~S", 39, sc->args);
-      if ((sc->safety > NO_SAFETY) &&
-	  (tree_is_cyclic(sc, sc->args)))
+      if ((sc->safety > NO_SAFETY) && (tree_is_cyclic(sc, sc->args)))
 	error_nr(sc, sc->syntax_error_symbol,
 		 set_elist_3(sc, wrap_string(sc, "apply ~S: body is circular: ~S", 30), sc->code, sc->args));
     }
@@ -88177,6 +88169,7 @@ static bool op_tc_if_a_z_let_if_a_z_laa(s7_scheme *sc, s7_pointer code)
 static bool op_tc_let_cond(s7_scheme *sc, s7_pointer code)
 {
   bool read_case;
+  s7_int args = opt3_arglen(cdr(code));
   s7_pointer result;
   s7_pointer outer_let = sc->curlet;
   s7_pointer slots = let_slots(outer_let);
@@ -88195,37 +88188,21 @@ static bool op_tc_let_cond(s7_scheme *sc, s7_pointer code)
       let_var = lookup(sc, cadr(let_var));
     }
   /* in the named let no-var case slots may contain the let name (it's the funclet) */
-
-  if (opt3_arglen(cdr(code)) == 0) /* (loop) etc -- no args */
+  if (args < 2)
     while (true)
-      {
-	for (s7_pointer p = cond_body; is_pair(p); p = cdr(p))
-	  if (fx_call(sc, car(p)) != sc->F)
-	    {
-	      result = cdar(p);
-	      if (!has_tc(result))
-		goto TC_LET_COND_DONE;
-	      set_curlet(sc, outer_let);
-	      slot_set_value(let_slot, letf(sc, let_var));
-	      set_curlet(sc, inner_let);
-	      break;
-	    }}
-  else
-    if (opt3_arglen(cdr(code)) == 1)
-      while (true)
-	for (s7_pointer p = cond_body; is_pair(p); p = cdr(p))
-	  if (fx_call(sc, car(p)) != sc->F)
-	    {
-	      result = cdar(p);
-	      if (!has_tc(result))
-		goto TC_LET_COND_DONE;
+      for (s7_pointer p = cond_body; is_pair(p); p = cdr(p))
+	if (fx_call(sc, car(p)) != sc->F)
+	  {
+	    result = cdar(p);
+	    if (!has_tc(result))
+	      goto TC_LET_COND_DONE;
+	    if (args == 1)
 	      slot_set_value(slots, fx_call(sc, cdar(result))); /* arg to recursion */
-	      set_curlet(sc, outer_let);
-	      slot_set_value(let_slot, letf(sc, let_var));   /* inner let var */
-	      set_curlet(sc, inner_let);
-	      break;
-	    }
-
+	    set_curlet(sc, outer_let);
+	    slot_set_value(let_slot, letf(sc, let_var));   /* inner let var */
+	    set_curlet(sc, inner_let);
+	    break;
+	  }
   let_set_has_pending_value(outer_let);
   read_case = ((letf == read_char_p_p) && (is_input_port(let_var)) && (is_string_port(let_var)) && (!port_is_closed(let_var)));
   while (true)
@@ -93381,9 +93358,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	EVAL_ARGS:	          /* first time, value = op, args = nil, code is args */
 	  if (is_pair(sc->code))  /* evaluate current arg -- must check for pair here, not sc->nil (improper list as args) */
 	    {
-	      if ((sc->safety > NO_SAFETY) &&
-		  (!is_safety_checked(sc->code)))
-		{
+	      if ((sc->safety > NO_SAFETY) && (!is_safety_checked(sc->code)))
+		{ /* this can happen */
 		  if (tree_is_cyclic(sc, sc->code))
 		    syntax_error_nr(sc, "attempt to evaluate a circular list: ~A", 39, sc->code);
 		  set_safety_checked(sc->code);
@@ -94331,7 +94307,10 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	}
 
       /* this code is reached from OP_CLEAR_OPTS and many others where the optimization has turned out to be incorrect, search for !c_function_is_ok -> break */
+      if ((S7_DEBUGGING) && (tree_is_cyclic(sc, sc->code))) fprintf(stderr, "%s[%d]: cyclic %s\n", __func__, __LINE__, display(sc->code)); /* never hit? */
+#if 0
       if (!tree_is_cyclic(sc, sc->code))
+#endif
 	clear_all_optimizations(sc, sc->code);
 
     UNOPT:
@@ -98939,5 +98918,6 @@ int main(int argc, char **argv)
  * t801 make-function: funcize the arg part, use dyn-unwind for result?? [like add_trace]
  * op_tc_case_la can have any number of tc's. need no else, int key support
  *   cond/if/when/etc could use has_tc for arbitrary cases? op_tc_cond_n(az-tc) etc
- *   set_has_tc currently in case/cond (need if branches marked as well)
+ *   set_has_tc currently in case/cond (need if branches marked as well) tc_let_cond? in check_tc_let without the let
+ * let_to_port ignores print_length? no, it's the number of fields to print
  */
