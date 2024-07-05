@@ -1789,22 +1789,22 @@ static void init_types(void)
 {
   for (int32_t i = 0; i < NUM_TYPES; i++)
     {
-      t_number_p[i] = false;
-      t_small_real_p[i] = false;
-      t_real_p[i] = false;
-      t_rational_p[i] = false;
-      t_simple_p[i] = false;
-      t_structure_p[i] = false;
-      t_any_macro_p[i] = false;
       t_any_closure_p[i] = false;
-      t_has_closure_let[i] = false;
-      t_sequence_p[i] = false;
-      t_mappable_p[i] = false;
-      t_vector_p[i] = false;
+      t_any_macro_p[i] = false;
       t_applicable_p[i] = false;
-      t_procedure_p[i] = false;
-      t_macro_setter_p[i] = false;
+      t_has_closure_let[i] = false;
       t_immutable_p[i] = true;
+      t_macro_setter_p[i] = false;
+      t_mappable_p[i] = false;
+      t_number_p[i] = false;
+      t_procedure_p[i] = false;
+      t_rational_p[i] = false;
+      t_real_p[i] = false;
+      t_sequence_p[i] = false;
+      t_simple_p[i] = false;
+      t_small_real_p[i] = false;
+      t_structure_p[i] = false;
+      t_vector_p[i] = false;
 #if S7_DEBUGGING
       t_freeze_p[i] = false;
       t_ext_p[i] = false;
@@ -6037,58 +6037,58 @@ static const char *make_type_name(s7_scheme *sc, const char *name, article_t art
 static const char *type_name_from_type(int32_t typ, article_t article)
 {
   /* if the type enum never changed, this could just be an array lookup, but it doesn't matter -- this function isn't called much */
-  bool bare = (article == NO_ARTICLE);
+  bool no_article = (article == NO_ARTICLE);
   switch (typ)
     {
-    case T_FREE:            return((bare) ? "free-cell"         : "a free cell");
+    case T_FREE:            return((no_article) ? "free-cell"         : "a free cell");
     case T_NIL:             return("nil");
-    case T_UNUSED:          return((bare) ? "#<unused>"         : "the unused object");
-    case T_EOF:             return((bare) ? "#<eof>"            : "the end-of-file object");
-    case T_UNSPECIFIED:     return((bare) ? "#<unspecified>"    : "the unspecified object");
-    case T_UNDEFINED:       return((bare) ? "undefined"         : "an undefined object");
+    case T_UNUSED:          return((no_article) ? "#<unused>"         : "the unused object");
+    case T_EOF:             return((no_article) ? "#<eof>"            : "the end-of-file object");
+    case T_UNSPECIFIED:     return((no_article) ? "#<unspecified>"    : "the unspecified object");
+    case T_UNDEFINED:       return((no_article) ? "undefined"         : "an undefined object");
     case T_BOOLEAN:         return("boolean");
-    case T_STRING:          return((bare) ? "string"            : "a string");
-    case T_BYTE_VECTOR:     return((bare) ? "byte-vector"       : "a byte-vector");
-    case T_SYMBOL:          return((bare) ? "symbol"            : "a symbol");
-    case T_SYNTAX:          return((bare) ? "syntax"            : "syntactic");
-    case T_PAIR:            return((bare) ? "pair"              : "a pair");
-    case T_GOTO:            return((bare) ? "goto"              : "a goto (from call-with-exit)");
-    case T_CONTINUATION:    return((bare) ? "continuation"      : "a continuation");
+    case T_STRING:          return((no_article) ? "string"            : "a string");
+    case T_BYTE_VECTOR:     return((no_article) ? "byte-vector"       : "a byte-vector");
+    case T_SYMBOL:          return((no_article) ? "symbol"            : "a symbol");
+    case T_SYNTAX:          return((no_article) ? "syntax"            : "syntactic");
+    case T_PAIR:            return((no_article) ? "pair"              : "a pair");
+    case T_GOTO:            return((no_article) ? "goto"              : "a goto (from call-with-exit)");
+    case T_CONTINUATION:    return((no_article) ? "continuation"      : "a continuation");
     case T_C_RST_NO_REQ_FUNCTION:
-    case T_C_FUNCTION:      return((bare) ? "c-function"        : "a c-function");
-    case T_C_FUNCTION_STAR: return((bare) ? "c-function*"       : "a c-function*");
-    case T_CLOSURE:         return((bare) ? "function"          : "a function");
-    case T_CLOSURE_STAR:    return((bare) ? "function*"         : "a function*");
-    case T_C_MACRO:         return((bare) ? "c-macro"           : "a c-macro");
-    case T_C_POINTER:       return((bare) ? "c-pointer"         : "a c-pointer");
-    case T_CHARACTER:       return((bare) ? "character"         : "a character");
-    case T_VECTOR:          return((bare) ? "vector"            : "a vector");
-    case T_INT_VECTOR:      return((bare) ? "int-vector"        : "an int-vector");
-    case T_FLOAT_VECTOR:    return((bare) ? "float-vector"      : "a float-vector");
-    case T_MACRO_STAR:      return((bare) ? "macro*"            : "a macro*");
-    case T_MACRO:           return((bare) ? "macro"             : "a macro");
-    case T_BACRO_STAR:      return((bare) ? "bacro*"            : "a bacro*");
-    case T_BACRO:           return((bare) ? "bacro"             : "a bacro");
-    case T_CATCH:           return((bare) ? "catch"             : "a catch");
-    case T_STACK:           return((bare) ? "stack"             : "a stack");
-    case T_DYNAMIC_WIND:    return((bare) ? "dynamic-wind"      : "a dynamic-wind");
-    case T_HASH_TABLE:      return((bare) ? "hash-table"        : "a hash-table");
-    case T_ITERATOR:        return((bare) ? "iterator"          : "an iterator");
-    case T_LET:             return((bare) ? "let"               : "a let");
-    case T_COUNTER:         return((bare) ? "internal-counter"  : "an internal counter");
-    case T_RANDOM_STATE:    return((bare) ? "random-state"      : "a random-state");
-    case T_SLOT:            return((bare) ? "slot"              : "a slot (variable binding)");
-    case T_INTEGER:         return((bare) ? "integer"           : "an integer");
-    case T_RATIO:           return((bare) ? "ratio"             : "a ratio");
-    case T_REAL:            return((bare) ? "real"              : "a real");
-    case T_COMPLEX:         return((bare) ? "complex-number"    : "a complex number");
-    case T_BIG_INTEGER:     return((bare) ? "big-integer"       : "a big integer");
-    case T_BIG_RATIO:       return((bare) ? "big-ratio"         : "a big ratio");
-    case T_BIG_REAL:        return((bare) ? "big-real"          : "a big real");
-    case T_BIG_COMPLEX:     return((bare) ? "big-complex-number": "a big complex number");
-    case T_INPUT_PORT:      return((bare) ? "input-port"        : "an input port");
-    case T_OUTPUT_PORT:     return((bare) ? "output-port"       : "an output port");
-    case T_C_OBJECT:        return((bare) ? "c-object"          : "a c_object");
+    case T_C_FUNCTION:      return((no_article) ? "c-function"        : "a c-function");
+    case T_C_FUNCTION_STAR: return((no_article) ? "c-function*"       : "a c-function*");
+    case T_CLOSURE:         return((no_article) ? "function"          : "a function");
+    case T_CLOSURE_STAR:    return((no_article) ? "function*"         : "a function*");
+    case T_C_MACRO:         return((no_article) ? "c-macro"           : "a c-macro");
+    case T_C_POINTER:       return((no_article) ? "c-pointer"         : "a c-pointer");
+    case T_CHARACTER:       return((no_article) ? "character"         : "a character");
+    case T_VECTOR:          return((no_article) ? "vector"            : "a vector");
+    case T_INT_VECTOR:      return((no_article) ? "int-vector"        : "an int-vector");
+    case T_FLOAT_VECTOR:    return((no_article) ? "float-vector"      : "a float-vector");
+    case T_MACRO_STAR:      return((no_article) ? "macro*"            : "a macro*");
+    case T_MACRO:           return((no_article) ? "macro"             : "a macro");
+    case T_BACRO_STAR:      return((no_article) ? "bacro*"            : "a bacro*");
+    case T_BACRO:           return((no_article) ? "bacro"             : "a bacro");
+    case T_CATCH:           return((no_article) ? "catch"             : "a catch");
+    case T_STACK:           return((no_article) ? "stack"             : "a stack");
+    case T_DYNAMIC_WIND:    return((no_article) ? "dynamic-wind"      : "a dynamic-wind");
+    case T_HASH_TABLE:      return((no_article) ? "hash-table"        : "a hash-table");
+    case T_ITERATOR:        return((no_article) ? "iterator"          : "an iterator");
+    case T_LET:             return((no_article) ? "let"               : "a let");
+    case T_COUNTER:         return((no_article) ? "internal-counter"  : "an internal counter");
+    case T_RANDOM_STATE:    return((no_article) ? "random-state"      : "a random-state");
+    case T_SLOT:            return((no_article) ? "slot"              : "a slot (variable binding)");
+    case T_INTEGER:         return((no_article) ? "integer"           : "an integer");
+    case T_RATIO:           return((no_article) ? "ratio"             : "a ratio");
+    case T_REAL:            return((no_article) ? "real"              : "a real");
+    case T_COMPLEX:         return((no_article) ? "complex-number"    : "a complex number");
+    case T_BIG_INTEGER:     return((no_article) ? "big-integer"       : "a big integer");
+    case T_BIG_RATIO:       return((no_article) ? "big-ratio"         : "a big ratio");
+    case T_BIG_REAL:        return((no_article) ? "big-real"          : "a big real");
+    case T_BIG_COMPLEX:     return((no_article) ? "big-complex-number": "a big complex number");
+    case T_INPUT_PORT:      return((no_article) ? "input-port"        : "an input port");
+    case T_OUTPUT_PORT:     return((no_article) ? "output-port"       : "an output port");
+    case T_C_OBJECT:        return((no_article) ? "c-object"          : "a c_object");
     }
   return(NULL);
 }
@@ -7424,55 +7424,55 @@ static void mark_free(s7_pointer p)
 
 static void init_mark_functions(void)
 {
-  mark_function[T_FREE]                = mark_free;
-  mark_function[T_UNDEFINED]           = just_mark;
-  mark_function[T_EOF]                 = mark_noop;
-  mark_function[T_UNSPECIFIED]         = mark_noop;
-  mark_function[T_NIL]                 = mark_noop;
-  mark_function[T_UNUSED]              = mark_noop;
-  mark_function[T_BOOLEAN]             = mark_noop;
-  mark_function[T_SYNTAX]              = mark_noop;
-  mark_function[T_CHARACTER]           = mark_noop;
-  mark_function[T_SYMBOL]              = mark_noop; /* this changes to just_mark when gensyms are in the heap */
-  mark_function[T_STRING]              = just_mark;
-  mark_function[T_INTEGER]             = just_mark;
-  mark_function[T_RATIO]               = just_mark;
-  mark_function[T_REAL]                = just_mark;
-  mark_function[T_COMPLEX]             = just_mark;
+  mark_function[T_BACRO]               = mark_closure;
+  mark_function[T_BACRO_STAR]          = mark_closure;
+  mark_function[T_BIG_COMPLEX]         = just_mark;
   mark_function[T_BIG_INTEGER]         = just_mark;
   mark_function[T_BIG_RATIO]           = just_mark;
   mark_function[T_BIG_REAL]            = just_mark;
-  mark_function[T_BIG_COMPLEX]         = just_mark;
-  mark_function[T_RANDOM_STATE]        = just_mark;
-  mark_function[T_GOTO]                = just_mark;
-  mark_function[T_OUTPUT_PORT]         = just_mark; /* changed to mark_output_port if output function ports are active */
-  mark_function[T_C_MACRO]             = just_mark;
-  mark_function[T_C_POINTER]           = mark_c_pointer;
-  mark_function[T_C_FUNCTION]          = just_mark;
-  mark_function[T_C_FUNCTION_STAR]     = just_mark; /* changes to mark_c_proc_star if defaults involve an expression */
-  mark_function[T_C_RST_NO_REQ_FUNCTION] = just_mark;
-  mark_function[T_PAIR]                = mark_pair;
+  mark_function[T_BOOLEAN]             = mark_noop;
+  mark_function[T_BYTE_VECTOR]         = just_mark;
+  mark_function[T_CATCH]               = mark_catch;
+  mark_function[T_CHARACTER]           = mark_noop;
   mark_function[T_CLOSURE]             = mark_closure;
   mark_function[T_CLOSURE_STAR]        = mark_closure;
+  mark_function[T_COMPLEX]             = just_mark;
   mark_function[T_CONTINUATION]        = mark_continuation;
-  mark_function[T_INPUT_PORT]          = mark_input_port;
-  mark_function[T_VECTOR]              = mark_vector; /* this changes if subvector created (similarly below) */
-  mark_function[T_INT_VECTOR]          = mark_int_or_float_vector;
-  mark_function[T_FLOAT_VECTOR]        = mark_int_or_float_vector;
-  mark_function[T_BYTE_VECTOR]         = just_mark;
-  mark_function[T_MACRO]               = mark_closure;
-  mark_function[T_BACRO]               = mark_closure;
-  mark_function[T_MACRO_STAR]          = mark_closure;
-  mark_function[T_BACRO_STAR]          = mark_closure;
+  mark_function[T_COUNTER]             = mark_counter;
+  mark_function[T_C_FUNCTION]          = just_mark;
+  mark_function[T_C_FUNCTION_STAR]     = just_mark; /* changes to mark_c_proc_star if defaults involve an expression */
+  mark_function[T_C_MACRO]             = just_mark;
   mark_function[T_C_OBJECT]            = mark_c_object;
-  mark_function[T_CATCH]               = mark_catch;
+  mark_function[T_C_POINTER]           = mark_c_pointer;
+  mark_function[T_C_RST_NO_REQ_FUNCTION] = just_mark;
   mark_function[T_DYNAMIC_WIND]        = mark_dynamic_wind;
+  mark_function[T_EOF]                 = mark_noop;
+  mark_function[T_FLOAT_VECTOR]        = mark_int_or_float_vector;
+  mark_function[T_FREE]                = mark_free;
+  mark_function[T_GOTO]                = just_mark;
   mark_function[T_HASH_TABLE]          = mark_hash_table;
+  mark_function[T_INPUT_PORT]          = mark_input_port;
+  mark_function[T_INTEGER]             = just_mark;
+  mark_function[T_INT_VECTOR]          = mark_int_or_float_vector;
   mark_function[T_ITERATOR]            = mark_iterator;
   mark_function[T_LET]                 = mark_let;
-  mark_function[T_STACK]               = mark_stack;
-  mark_function[T_COUNTER]             = mark_counter;
+  mark_function[T_MACRO]               = mark_closure;
+  mark_function[T_MACRO_STAR]          = mark_closure;
+  mark_function[T_NIL]                 = mark_noop;
+  mark_function[T_OUTPUT_PORT]         = just_mark; /* changed to mark_output_port if output function ports are active */
+  mark_function[T_PAIR]                = mark_pair;
+  mark_function[T_RANDOM_STATE]        = just_mark;
+  mark_function[T_RATIO]               = just_mark;
+  mark_function[T_REAL]                = just_mark;
   mark_function[T_SLOT]                = mark_slot;
+  mark_function[T_STACK]               = mark_stack;
+  mark_function[T_STRING]              = just_mark;
+  mark_function[T_SYMBOL]              = mark_noop; /* this changes to just_mark when gensyms are in the heap */
+  mark_function[T_SYNTAX]              = mark_noop;
+  mark_function[T_UNDEFINED]           = just_mark;
+  mark_function[T_UNSPECIFIED]         = mark_noop;
+  mark_function[T_UNUSED]              = mark_noop;
+  mark_function[T_VECTOR]              = mark_vector; /* this changes if subvector created (similarly below) */
 }
 
 static void mark_op_stack(s7_scheme *sc)
@@ -29216,12 +29216,7 @@ static void function_write_char(s7_scheme *sc, uint8_t c, s7_pointer port)
   /* sc->args = sc->nil; */
   (*(port_output_function(port)))(sc, c, port);
   unstack_with(sc, OP_NO_VALUES);
-#if 1
   memcpy((void *)sc, (void *)(sc->stack_end), 3 * sizeof(s7_pointer)); /* code/let/args */
-#else
-  sc->code = stack_end_code(sc);
-  sc->args = stack_end_args(sc);
-#endif
 }
 
 static Inline void inline_file_write_char(s7_scheme *sc, uint8_t c, s7_pointer port)
@@ -29367,12 +29362,7 @@ static void function_display(s7_scheme *sc, const char *s, s7_pointer port)
   for (; *s; s++)
     (*(port_output_function(port)))(sc, *s, port);
   unstack_with(sc, OP_NO_VALUES);
-#if 1
   memcpy((void *)sc, (void *)(sc->stack_end), 3 * sizeof(s7_pointer)); /* code/let/args */
-#else
-  sc->code = stack_end_code(sc); /* sc->curlet = stack_end_let(sc) */
-  sc->args = stack_end_args(sc);
-#endif
 }
 
 static void function_write_string(s7_scheme *sc, const char *str, s7_int len, s7_pointer pt)
@@ -29382,12 +29372,7 @@ static void function_write_string(s7_scheme *sc, const char *str, s7_int len, s7
   for (s7_int i = 0; i < len; i++)
     (*(port_output_function(pt)))(sc, str[i], pt);
   unstack_with(sc, OP_NO_VALUES);
-#if 1
   memcpy((void *)sc, (void *)(sc->stack_end), 3 * sizeof(s7_pointer)); /* code/let/args */
-#else
-  sc->code = stack_end_code(sc);
-  sc->args = stack_end_args(sc);
-#endif
 }
 
 static void stdout_display(s7_scheme *sc, const char *s, s7_pointer port) {if (s) fputs(s, stdout);}
@@ -31109,9 +31094,6 @@ s7_pointer s7_load_with_environment(s7_scheme *sc, const char *filename, s7_poin
   declare_jump_info();
   TRACK(sc);
   if (e == sc->starlet) return(NULL);
-#if (!DISABLE_DEPRECATED)
-  if (e == sc->nil) e = sc->rootlet; /* this is a leftover from the days when () -> rootlet */
-#endif
   if (!is_let(e)) s7_warn(sc, 128, "third argument (the let) to s7_load_with_environment is not a let");
 #if WITH_C_LOADER
   port = load_shared_object(sc, filename, e);
@@ -31151,9 +31133,6 @@ s7_pointer s7_load_c_string_with_environment(s7_scheme *sc, const char *content,
   declare_jump_info();
   TRACK(sc);
 
-#if (!DISABLE_DEPRECATED)
-  if (e == sc->nil) e = sc->rootlet; /* this is a leftover from the days when () -> rootlet */
-#endif
   if (content[bytes] != 0)
     error_nr(sc, make_symbol(sc, "bad-data", 8), set_elist_1(sc, wrap_string(sc, "s7_load_c_string content is not terminated", 42)));
   port = open_input_string(sc, content, bytes);
@@ -35614,56 +35593,56 @@ static void stack_to_port(s7_scheme *sc, const s7_pointer obj, s7_pointer port, 
 static void init_display_functions(void)
 {
   for (int32_t i = 0; i < 256; i++) display_functions[i] = display_fallback;
-  display_functions[T_FLOAT_VECTOR] = float_vector_to_port;
-  display_functions[T_INT_VECTOR] =   int_vector_to_port;
-  display_functions[T_BYTE_VECTOR] =  byte_vector_to_port;
-  display_functions[T_VECTOR] =       vector_to_port;
-  display_functions[T_PAIR] =         pair_to_port;
-  display_functions[T_HASH_TABLE] =   hash_table_to_port;
-  display_functions[T_ITERATOR] =     iterator_to_port;
-  display_functions[T_LET] =          let_to_port;
-  display_functions[T_BOOLEAN] =      unique_to_port;
-  display_functions[T_NIL] =          unique_to_port;
-  display_functions[T_UNUSED] =       unique_to_port;
-  display_functions[T_UNSPECIFIED] =  unique_to_port;
-  display_functions[T_UNDEFINED] =    undefined_to_port;
-  display_functions[T_EOF] =          eof_to_port;
-  display_functions[T_INPUT_PORT] =   input_port_to_port;
-  display_functions[T_OUTPUT_PORT] =  output_port_to_port;
-  display_functions[T_COUNTER] =      counter_to_port;
-  display_functions[T_STACK] =        stack_to_port;
-  display_functions[T_INTEGER] =      integer_to_port;
-  display_functions[T_RATIO] =        number_to_port;
-  display_functions[T_REAL] =         number_to_port;
-  display_functions[T_COMPLEX] =      number_to_port;
+  display_functions[T_BACRO] =        macro_to_port;
+  display_functions[T_BACRO_STAR] =   macro_to_port;
 #if WITH_GMP
+  display_functions[T_BIG_COMPLEX] =  big_number_to_port;
   display_functions[T_BIG_INTEGER] =  big_number_to_port;
   display_functions[T_BIG_RATIO] =    big_number_to_port;
   display_functions[T_BIG_REAL] =     big_number_to_port;
-  display_functions[T_BIG_COMPLEX] =  big_number_to_port;
 #endif
-  display_functions[T_SYMBOL] =       symbol_to_port;
-  display_functions[T_SYNTAX] =       syntax_to_port;
-  display_functions[T_STRING] =       string_to_port;
+  display_functions[T_BOOLEAN] =      unique_to_port;
+  display_functions[T_BYTE_VECTOR] =  byte_vector_to_port;
+  display_functions[T_CATCH] =        catch_to_port;
   display_functions[T_CHARACTER] =    character_to_port;
   display_functions[T_CLOSURE] =      closure_to_port;
   display_functions[T_CLOSURE_STAR] = closure_to_port;
-  display_functions[T_MACRO] =        macro_to_port;
-  display_functions[T_MACRO_STAR] =   macro_to_port;
-  display_functions[T_BACRO] =        macro_to_port;
-  display_functions[T_BACRO_STAR] =   macro_to_port;
-  display_functions[T_C_RST_NO_REQ_FUNCTION] = c_function_to_port;
+  display_functions[T_COMPLEX] =      number_to_port;
+  display_functions[T_CONTINUATION] = continuation_to_port;
+  display_functions[T_COUNTER] =      counter_to_port;
   display_functions[T_C_FUNCTION] =   c_function_to_port;
   display_functions[T_C_FUNCTION_STAR] = c_function_to_port;
   display_functions[T_C_MACRO] =      c_macro_to_port;
-  display_functions[T_C_POINTER] =    c_pointer_to_port;
-  display_functions[T_RANDOM_STATE] = random_state_to_port;
-  display_functions[T_CONTINUATION] = continuation_to_port;
-  display_functions[T_GOTO] =         goto_to_port;
-  display_functions[T_CATCH] =        catch_to_port;
-  display_functions[T_DYNAMIC_WIND] = dynamic_wind_to_port;
   display_functions[T_C_OBJECT] =     c_object_to_port;
+  display_functions[T_C_POINTER] =    c_pointer_to_port;
+  display_functions[T_C_RST_NO_REQ_FUNCTION] = c_function_to_port;
+  display_functions[T_DYNAMIC_WIND] = dynamic_wind_to_port;
+  display_functions[T_EOF] =          eof_to_port;
+  display_functions[T_FLOAT_VECTOR] = float_vector_to_port;
+  display_functions[T_GOTO] =         goto_to_port;
+  display_functions[T_HASH_TABLE] =   hash_table_to_port;
+  display_functions[T_INPUT_PORT] =   input_port_to_port;
+  display_functions[T_INTEGER] =      integer_to_port;
+  display_functions[T_INT_VECTOR] =   int_vector_to_port;
+  display_functions[T_ITERATOR] =     iterator_to_port;
+  display_functions[T_LET] =          let_to_port;
+  display_functions[T_MACRO] =        macro_to_port;
+  display_functions[T_MACRO_STAR] =   macro_to_port;
+  display_functions[T_NIL] =          unique_to_port;
+  display_functions[T_OUTPUT_PORT] =  output_port_to_port;
+  display_functions[T_PAIR] =         pair_to_port;
+  display_functions[T_RANDOM_STATE] = random_state_to_port;
+  display_functions[T_RATIO] =        number_to_port;
+  display_functions[T_REAL] =         number_to_port;
   display_functions[T_SLOT] =         internal_slot_to_port;
+  display_functions[T_STACK] =        stack_to_port;
+  display_functions[T_STRING] =       string_to_port;
+  display_functions[T_SYMBOL] =       symbol_to_port;
+  display_functions[T_SYNTAX] =       syntax_to_port;
+  display_functions[T_UNDEFINED] =    undefined_to_port;
+  display_functions[T_UNSPECIFIED] =  unique_to_port;
+  display_functions[T_UNUSED] =       unique_to_port;
+  display_functions[T_VECTOR] =       vector_to_port;
 }
 
 static void object_to_port_with_circle_check_1(s7_scheme *sc, s7_pointer vr, s7_pointer port, use_write_t use_write, shared_info_t *ci)
@@ -47576,29 +47555,29 @@ static s7_pointer b_simple_setter(s7_scheme *sc, int32_t typer, s7_pointer args)
 
 /* these are for the simplified setter designation: (let ((x 1)) (set! (setter 'x) integer?) (set! x 3.14)) -> error */
 
+static s7_pointer b_is_boolean_setter(s7_scheme *sc, s7_pointer args)      {return(b_simple_setter(sc, T_BOOLEAN, args));}
+static s7_pointer b_is_byte_vector_setter(s7_scheme *sc, s7_pointer args)  {return(b_simple_setter(sc, T_BYTE_VECTOR, args));}
+static s7_pointer b_is_c_object_setter(s7_scheme *sc, s7_pointer args)     {return(b_simple_setter(sc, T_C_OBJECT, args));}
+static s7_pointer b_is_c_pointer_setter(s7_scheme *sc, s7_pointer args)    {return(b_simple_setter(sc, T_C_POINTER, args));}
+static s7_pointer b_is_char_setter(s7_scheme *sc, s7_pointer args)         {return(b_simple_setter(sc, T_CHARACTER, args));}
+static s7_pointer b_is_continuation_setter(s7_scheme *sc, s7_pointer args) {return(b_simple_setter(sc, T_CONTINUATION, args));}
+static s7_pointer b_is_eof_object_setter(s7_scheme *sc, s7_pointer args)   {return(b_simple_setter(sc, T_EOF, args));}
+static s7_pointer b_is_float_vector_setter(s7_scheme *sc, s7_pointer args) {return(b_simple_setter(sc, T_FLOAT_VECTOR, args));}
+static s7_pointer b_is_goto_setter(s7_scheme *sc, s7_pointer args)         {return(b_simple_setter(sc, T_GOTO, args));}
+static s7_pointer b_is_hash_table_setter(s7_scheme *sc, s7_pointer args)   {return(b_simple_setter(sc, T_HASH_TABLE, args));}
+static s7_pointer b_is_input_port_setter(s7_scheme *sc, s7_pointer args)   {return(b_simple_setter(sc, T_INPUT_PORT, args));}
+static s7_pointer b_is_int_vector_setter(s7_scheme *sc, s7_pointer args)   {return(b_simple_setter(sc, T_INT_VECTOR, args));}
+static s7_pointer b_is_iterator_setter(s7_scheme *sc, s7_pointer args)     {return(b_simple_setter(sc, T_ITERATOR, args));}
+static s7_pointer b_is_let_setter(s7_scheme *sc, s7_pointer args)          {return(b_simple_setter(sc, T_LET, args));}
+static s7_pointer b_is_null_setter(s7_scheme *sc, s7_pointer args)         {return(b_simple_setter(sc, T_NIL, args));}
+static s7_pointer b_is_output_port_setter(s7_scheme *sc, s7_pointer args)  {return(b_simple_setter(sc, T_OUTPUT_PORT, args));}
+static s7_pointer b_is_pair_setter(s7_scheme *sc, s7_pointer args)         {return(b_simple_setter(sc, T_PAIR, args));}
+static s7_pointer b_is_random_state_setter(s7_scheme *sc, s7_pointer args) {return(b_simple_setter(sc, T_RANDOM_STATE, args));}
+static s7_pointer b_is_string_setter(s7_scheme *sc, s7_pointer args)       {return(b_simple_setter(sc, T_STRING, args));}
 static s7_pointer b_is_symbol_setter(s7_scheme *sc, s7_pointer args)       {return(b_simple_setter(sc, T_SYMBOL, args));}
 static s7_pointer b_is_syntax_setter(s7_scheme *sc, s7_pointer args)       {return(b_simple_setter(sc, T_SYNTAX, args));}
-static s7_pointer b_is_let_setter(s7_scheme *sc, s7_pointer args)          {return(b_simple_setter(sc, T_LET, args));}
-static s7_pointer b_is_iterator_setter(s7_scheme *sc, s7_pointer args)     {return(b_simple_setter(sc, T_ITERATOR, args));}
-static s7_pointer b_is_c_pointer_setter(s7_scheme *sc, s7_pointer args)    {return(b_simple_setter(sc, T_C_POINTER, args));}
-static s7_pointer b_is_input_port_setter(s7_scheme *sc, s7_pointer args)   {return(b_simple_setter(sc, T_INPUT_PORT, args));}
-static s7_pointer b_is_output_port_setter(s7_scheme *sc, s7_pointer args)  {return(b_simple_setter(sc, T_OUTPUT_PORT, args));}
-static s7_pointer b_is_eof_object_setter(s7_scheme *sc, s7_pointer args)   {return(b_simple_setter(sc, T_EOF, args));}
-static s7_pointer b_is_random_state_setter(s7_scheme *sc, s7_pointer args) {return(b_simple_setter(sc, T_RANDOM_STATE, args));}
-static s7_pointer b_is_char_setter(s7_scheme *sc, s7_pointer args)         {return(b_simple_setter(sc, T_CHARACTER, args));}
-static s7_pointer b_is_string_setter(s7_scheme *sc, s7_pointer args)       {return(b_simple_setter(sc, T_STRING, args));}
-static s7_pointer b_is_float_vector_setter(s7_scheme *sc, s7_pointer args) {return(b_simple_setter(sc, T_FLOAT_VECTOR, args));}
-static s7_pointer b_is_int_vector_setter(s7_scheme *sc, s7_pointer args)   {return(b_simple_setter(sc, T_INT_VECTOR, args));}
-static s7_pointer b_is_byte_vector_setter(s7_scheme *sc, s7_pointer args)  {return(b_simple_setter(sc, T_BYTE_VECTOR, args));}
-static s7_pointer b_is_hash_table_setter(s7_scheme *sc, s7_pointer args)   {return(b_simple_setter(sc, T_HASH_TABLE, args));}
-static s7_pointer b_is_continuation_setter(s7_scheme *sc, s7_pointer args) {return(b_simple_setter(sc, T_CONTINUATION, args));}
-static s7_pointer b_is_null_setter(s7_scheme *sc, s7_pointer args)         {return(b_simple_setter(sc, T_NIL, args));}
-static s7_pointer b_is_pair_setter(s7_scheme *sc, s7_pointer args)         {return(b_simple_setter(sc, T_PAIR, args));}
-static s7_pointer b_is_boolean_setter(s7_scheme *sc, s7_pointer args)      {return(b_simple_setter(sc, T_BOOLEAN, args));}
 static s7_pointer b_is_undefined_setter(s7_scheme *sc, s7_pointer args)    {return(b_simple_setter(sc, T_UNDEFINED, args));}
 static s7_pointer b_is_unspecified_setter(s7_scheme *sc, s7_pointer args)  {return(b_simple_setter(sc, T_UNSPECIFIED, args));}
-static s7_pointer b_is_c_object_setter(s7_scheme *sc, s7_pointer args)     {return(b_simple_setter(sc, T_C_OBJECT, args));}
-static s7_pointer b_is_goto_setter(s7_scheme *sc, s7_pointer args)         {return(b_simple_setter(sc, T_GOTO, args));}
 
 #define b_setter(sc, typer, args, str, len)	\
   do {						\
@@ -47609,23 +47588,23 @@ static s7_pointer b_is_goto_setter(s7_scheme *sc, s7_pointer args)         {retu
     return(cadr(args));							\
   } while (0)
 
-static s7_pointer b_is_number_setter(s7_scheme *sc, s7_pointer args)      {b_setter(sc, s7_is_complex, args, "a number", 8);}
-static s7_pointer b_is_complex_setter(s7_scheme *sc, s7_pointer args)     {b_setter(sc, s7_is_complex, args, "a number", 8);}
-static s7_pointer b_is_gensym_setter(s7_scheme *sc, s7_pointer args)      {b_setter(sc, is_gensym, args, "a gensym", 8);}
-static s7_pointer b_is_keyword_setter(s7_scheme *sc, s7_pointer args)     {b_setter(sc, is_symbol_and_keyword, args, "a keyword", 9);}
-static s7_pointer b_is_openlet_setter(s7_scheme *sc, s7_pointer args)     {b_setter(sc, has_methods, args, "an open let", 11);}
-static s7_pointer b_is_macro_setter(s7_scheme *sc, s7_pointer args)       {b_setter(sc, is_any_macro, args, "a macro", 7);}
-static s7_pointer b_is_integer_setter(s7_scheme *sc, s7_pointer args)     {b_setter(sc, s7_is_integer, args, "an integer", 10);}
 static s7_pointer b_is_byte_setter(s7_scheme *sc, s7_pointer args)        {b_setter(sc, is_byte, args, "an unsigned byte", 16);}
-static s7_pointer b_is_real_setter(s7_scheme *sc, s7_pointer args)        {b_setter(sc, is_real, args, "a real", 6);}
-static s7_pointer b_is_float_setter(s7_scheme *sc, s7_pointer args)       {b_setter(sc, is_t_real, args, "a float", 7);}
-static s7_pointer b_is_rational_setter(s7_scheme *sc, s7_pointer args)    {b_setter(sc, is_rational, args, "a rational", 10);}
-static s7_pointer b_is_list_setter(s7_scheme *sc, s7_pointer args)        {b_setter(sc, is_list, args, "a list", 6);}
-static s7_pointer b_is_vector_setter(s7_scheme *sc, s7_pointer args)      {b_setter(sc, is_any_vector, args, "a vector", 8);}
-static s7_pointer b_is_procedure_setter(s7_scheme *sc, s7_pointer args)   {b_setter(sc, is_any_procedure, args, "a procedure", 11);}
+static s7_pointer b_is_complex_setter(s7_scheme *sc, s7_pointer args)     {b_setter(sc, s7_is_complex, args, "a number", 8);}
 static s7_pointer b_is_dilambda_setter(s7_scheme *sc, s7_pointer args)    {b_setter(sc, s7_is_dilambda, args, "a dilambda", 10);}
+static s7_pointer b_is_float_setter(s7_scheme *sc, s7_pointer args)       {b_setter(sc, is_t_real, args, "a float", 7);}
+static s7_pointer b_is_gensym_setter(s7_scheme *sc, s7_pointer args)      {b_setter(sc, is_gensym, args, "a gensym", 8);}
+static s7_pointer b_is_integer_setter(s7_scheme *sc, s7_pointer args)     {b_setter(sc, s7_is_integer, args, "an integer", 10);}
+static s7_pointer b_is_keyword_setter(s7_scheme *sc, s7_pointer args)     {b_setter(sc, is_symbol_and_keyword, args, "a keyword", 9);}
+static s7_pointer b_is_list_setter(s7_scheme *sc, s7_pointer args)        {b_setter(sc, is_list, args, "a list", 6);}
+static s7_pointer b_is_macro_setter(s7_scheme *sc, s7_pointer args)       {b_setter(sc, is_any_macro, args, "a macro", 7);}
+static s7_pointer b_is_number_setter(s7_scheme *sc, s7_pointer args)      {b_setter(sc, s7_is_complex, args, "a number", 8);}
+static s7_pointer b_is_openlet_setter(s7_scheme *sc, s7_pointer args)     {b_setter(sc, has_methods, args, "an open let", 11);}
+static s7_pointer b_is_procedure_setter(s7_scheme *sc, s7_pointer args)   {b_setter(sc, is_any_procedure, args, "a procedure", 11);}
+static s7_pointer b_is_rational_setter(s7_scheme *sc, s7_pointer args)    {b_setter(sc, is_rational, args, "a rational", 10);}
+static s7_pointer b_is_real_setter(s7_scheme *sc, s7_pointer args)        {b_setter(sc, is_real, args, "a real", 6);}
 static s7_pointer b_is_sequence_setter(s7_scheme *sc, s7_pointer args)    {b_setter(sc, is_sequence, args, "a sequence", 10);}
 static s7_pointer b_is_subvector_setter(s7_scheme *sc, s7_pointer args)   {b_setter(sc, is_subvector, args, "a subvector", 11);}
+static s7_pointer b_is_vector_setter(s7_scheme *sc, s7_pointer args)      {b_setter(sc, is_any_vector, args, "a vector", 8);}
 static s7_pointer b_is_weak_hash_table_setter(s7_scheme *sc, s7_pointer args) {b_setter(sc, is_weak_hash_table, args, "a weak hash-table", 17);}
 
 static s7_pointer b_is_proper_list_setter(s7_scheme *sc, s7_pointer args)
@@ -49182,74 +49161,75 @@ static bool random_state_equal(s7_scheme *sc, s7_pointer x, s7_pointer y, shared
 static void init_equals(void)
 {
   for (int32_t i = 0; i < NUM_TYPES; i++) {equals[i] = eq_equal; equivalents[i] = eq_equal;}
-  equals[T_SYMBOL] =            eq_equal;
-  equals[T_C_POINTER] =         c_pointer_equal;
-  equals[T_UNSPECIFIED] =       unspecified_equal;
-  equals[T_UNDEFINED] =         undefined_equal;
-  equals[T_STRING] =            string_equal;
-  equals[T_SYNTAX] =            syntax_equal;
-  equals[T_C_OBJECT] =          c_objects_are_equal;
-  equals[T_RANDOM_STATE] =      random_state_equal;
-  equals[T_ITERATOR] =          iterator_equal;
-  equals[T_INPUT_PORT] =        port_equal;
-  equals[T_OUTPUT_PORT] =       port_equal;
-  equals[T_MACRO] =             closure_equal;
-  equals[T_MACRO_STAR] =        closure_equal;
   equals[T_BACRO] =             closure_equal;
   equals[T_BACRO_STAR] =        closure_equal;
-  equals[T_CLOSURE] =           closure_equal;
-  equals[T_CLOSURE_STAR] =      closure_equal;
-  equals[T_HASH_TABLE] =        hash_table_equal;
-  equals[T_LET] =               let_equal;
-  equals[T_PAIR] =              pair_equal;
-  equals[T_VECTOR] =            vector_equal;
-  equals[T_INT_VECTOR] =        int_vector_equal;
-  equals[T_BYTE_VECTOR] =       byte_vector_equal;
-  equals[T_FLOAT_VECTOR] =      float_vector_equal;
-  equals[T_INTEGER] =           integer_equal;
-  equals[T_RATIO] =             fraction_equal;
-  equals[T_REAL] =              real_equal;
-  equals[T_COMPLEX] =           complex_equal;
 #if WITH_GMP
+  equals[T_BIG_COMPLEX] =       big_complex_equal;
   equals[T_BIG_INTEGER] =       big_integer_equal;
   equals[T_BIG_RATIO] =         big_ratio_equal;
   equals[T_BIG_REAL] =          big_real_equal;
-  equals[T_BIG_COMPLEX] =       big_complex_equal;
 #endif
-  equivalents[T_SYMBOL] =       symbol_equivalent;
-  equivalents[T_C_POINTER] =    c_pointer_equivalent;
-  equivalents[T_UNSPECIFIED] =  unspecified_equal;
-  equivalents[T_UNDEFINED] =    undefined_equal;
-  equivalents[T_STRING] =       string_equal;
-  equivalents[T_SYNTAX] =       syntax_equal;
-  equivalents[T_C_OBJECT] =     c_objects_are_equivalent;
-  equivalents[T_RANDOM_STATE] = random_state_equal;
-  equivalents[T_ITERATOR] =     iterator_equivalent;
-  equivalents[T_INPUT_PORT] =   port_equivalent;
-  equivalents[T_OUTPUT_PORT] =  port_equivalent;
-  equivalents[T_MACRO] =        closure_equivalent;
-  equivalents[T_MACRO_STAR] =   closure_equivalent;
+  equals[T_BYTE_VECTOR] =       byte_vector_equal;
+  equals[T_CLOSURE] =           closure_equal;
+  equals[T_CLOSURE_STAR] =      closure_equal;
+  equals[T_COMPLEX] =           complex_equal;
+  equals[T_C_OBJECT] =          c_objects_are_equal;
+  equals[T_C_POINTER] =         c_pointer_equal;
+  equals[T_FLOAT_VECTOR] =      float_vector_equal;
+  equals[T_HASH_TABLE] =        hash_table_equal;
+  equals[T_INPUT_PORT] =        port_equal;
+  equals[T_INTEGER] =           integer_equal;
+  equals[T_INT_VECTOR] =        int_vector_equal;
+  equals[T_ITERATOR] =          iterator_equal;
+  equals[T_LET] =               let_equal;
+  equals[T_MACRO] =             closure_equal;
+  equals[T_MACRO_STAR] =        closure_equal;
+  equals[T_OUTPUT_PORT] =       port_equal;
+  equals[T_PAIR] =              pair_equal;
+  equals[T_RANDOM_STATE] =      random_state_equal;
+  equals[T_RATIO] =             fraction_equal;
+  equals[T_REAL] =              real_equal;
+  equals[T_STRING] =            string_equal;
+  equals[T_SYMBOL] =            eq_equal;
+  equals[T_SYNTAX] =            syntax_equal;
+  equals[T_UNDEFINED] =         undefined_equal;
+  equals[T_UNSPECIFIED] =       unspecified_equal;
+  equals[T_VECTOR] =            vector_equal;
+
   equivalents[T_BACRO] =        closure_equivalent;
   equivalents[T_BACRO_STAR] =   closure_equivalent;
-  equivalents[T_CLOSURE] =      closure_equivalent;
-  equivalents[T_CLOSURE_STAR] = closure_equivalent;
-  equivalents[T_HASH_TABLE] =   hash_table_equivalent;
-  equivalents[T_LET] =          let_equivalent;
-  equivalents[T_PAIR] =         pair_equivalent;
-  equivalents[T_VECTOR] =       vector_equivalent;
-  equivalents[T_INT_VECTOR] =   vector_equivalent;
-  equivalents[T_FLOAT_VECTOR] = vector_equivalent;
-  equivalents[T_BYTE_VECTOR] =  vector_equivalent;
-  equivalents[T_INTEGER] =      integer_equivalent;
-  equivalents[T_RATIO] =        fraction_equivalent;
-  equivalents[T_REAL] =         real_equivalent;
-  equivalents[T_COMPLEX] =      complex_equivalent;
 #if WITH_GMP
+  equivalents[T_BIG_COMPLEX] =  big_complex_equivalent;
   equivalents[T_BIG_INTEGER] =  big_integer_equivalent;
   equivalents[T_BIG_RATIO] =    big_ratio_equivalent;
   equivalents[T_BIG_REAL] =     big_real_equivalent;
-  equivalents[T_BIG_COMPLEX] =  big_complex_equivalent;
 #endif
+  equivalents[T_BYTE_VECTOR] =  vector_equivalent;
+  equivalents[T_CLOSURE] =      closure_equivalent;
+  equivalents[T_CLOSURE_STAR] = closure_equivalent;
+  equivalents[T_COMPLEX] =      complex_equivalent;
+  equivalents[T_C_OBJECT] =     c_objects_are_equivalent;
+  equivalents[T_C_POINTER] =    c_pointer_equivalent;
+  equivalents[T_FLOAT_VECTOR] = vector_equivalent;
+  equivalents[T_HASH_TABLE] =   hash_table_equivalent;
+  equivalents[T_INPUT_PORT] =   port_equivalent;
+  equivalents[T_INTEGER] =      integer_equivalent;
+  equivalents[T_INT_VECTOR] =   vector_equivalent;
+  equivalents[T_ITERATOR] =     iterator_equivalent;
+  equivalents[T_LET] =          let_equivalent;
+  equivalents[T_MACRO] =        closure_equivalent;
+  equivalents[T_MACRO_STAR] =   closure_equivalent;
+  equivalents[T_OUTPUT_PORT] =  port_equivalent;
+  equivalents[T_PAIR] =         pair_equivalent;
+  equivalents[T_RANDOM_STATE] = random_state_equal;
+  equivalents[T_RATIO] =        fraction_equivalent;
+  equivalents[T_REAL] =         real_equivalent;
+  equivalents[T_STRING] =       string_equal;
+  equivalents[T_SYMBOL] =       symbol_equivalent;
+  equivalents[T_SYNTAX] =       syntax_equal;
+  equivalents[T_UNDEFINED] =    undefined_equal;
+  equivalents[T_UNSPECIFIED] =  unspecified_equal;
+  equivalents[T_VECTOR] =       vector_equivalent;
 }
 
 bool s7_is_equal(s7_scheme *sc, s7_pointer x, s7_pointer y) {return((*(equals[type(x)]))(sc, x, y, NULL));}
@@ -52910,25 +52890,25 @@ static catch_function_t catchers[NUM_OPS];
 static void init_catchers(void)
 {
   for (int32_t i = 0; i < NUM_OPS; i++) catchers[i] = NULL;
-  catchers[OP_CATCH_ALL] =          catch_all_function;
-  catchers[OP_CATCH_2] =            catch_2_function;
-  catchers[OP_CATCH_1] =            catch_1_function;
-  catchers[OP_CATCH] =              catch_1_function;
-  catchers[OP_DYNAMIC_WIND] =       catch_dynamic_wind_function;
-  catchers[OP_DYNAMIC_UNWIND] =     catch_dynamic_unwind_function;
-  catchers[OP_GET_OUTPUT_STRING] =  catch_out_function;
-  catchers[OP_UNWIND_OUTPUT] =      catch_out_function;
-  catchers[OP_UNWIND_INPUT] =       catch_in_function;
-  catchers[OP_READ_DONE] =          catch_read_function;      /* perhaps an error during (read) */
-  catchers[OP_EVAL_STRING] =        catch_eval_function;
   catchers[OP_BARRIER] =            catch_barrier_function;
+  catchers[OP_CATCH] =              catch_1_function;
+  catchers[OP_CATCH_1] =            catch_1_function;
+  catchers[OP_CATCH_2] =            catch_2_function;
+  catchers[OP_CATCH_ALL] =          catch_all_function;
   catchers[OP_DEACTIVATE_GOTO] =    catch_goto_function;
-  catchers[OP_LET_TEMP_DONE] =      catch_let_temporarily_function;
-  catchers[OP_LET_TEMP_UNWIND] =    catch_let_temp_unwind_function;
-  catchers[OP_LET_TEMP_S7_UNWIND] = catch_let_temp_s7_unwind_function;
-  catchers[OP_LET_TEMP_S7_DIRECT_UNWIND] = catch_let_temp_s7_direct_unwind_function;
+  catchers[OP_DYNAMIC_UNWIND] =     catch_dynamic_unwind_function;
+  catchers[OP_DYNAMIC_WIND] =       catch_dynamic_wind_function;
   catchers[OP_ERROR_HOOK_QUIT] =    catch_error_hook_function;
+  catchers[OP_EVAL_STRING] =        catch_eval_function;
+  catchers[OP_GET_OUTPUT_STRING] =  catch_out_function;
+  catchers[OP_LET_TEMP_DONE] =      catch_let_temporarily_function;
+  catchers[OP_LET_TEMP_S7_DIRECT_UNWIND] = catch_let_temp_s7_direct_unwind_function;
+  catchers[OP_LET_TEMP_S7_UNWIND] = catch_let_temp_s7_unwind_function;
+  catchers[OP_LET_TEMP_UNWIND] =    catch_let_temp_unwind_function;
   catchers[OP_MAP_UNWIND] =         catch_map_unwind_function;
+  catchers[OP_READ_DONE] =          catch_read_function;      /* perhaps an error during (read) */
+  catchers[OP_UNWIND_INPUT] =       catch_in_function;
+  catchers[OP_UNWIND_OUTPUT] =      catch_out_function;
 }
 
 /* -------------------------------- throw -------------------------------- */
@@ -54167,55 +54147,55 @@ static inline bool gen_type_match(s7_scheme *sc, s7_pointer val, uint8_t typ)  /
 
 static void init_typers(s7_scheme *sc)
 {
-  sc->type_to_typers[T_FREE] =                sc->F;
-  sc->type_to_typers[T_PAIR] =                sc->is_pair_symbol;
-  sc->type_to_typers[T_NIL] =                 sc->is_null_symbol;
-  sc->type_to_typers[T_UNUSED] =              sc->F;
-  sc->type_to_typers[T_EOF] =                 sc->is_eof_object_symbol;
-  sc->type_to_typers[T_UNDEFINED] =           sc->is_undefined_symbol;
-  sc->type_to_typers[T_UNSPECIFIED] =         sc->is_unspecified_symbol;
-  sc->type_to_typers[T_BOOLEAN] =             sc->is_boolean_symbol;
-  sc->type_to_typers[T_CHARACTER] =           sc->is_char_symbol;
-  sc->type_to_typers[T_SYMBOL] =              sc->is_symbol_symbol;      /* and keyword? */
-  sc->type_to_typers[T_SYNTAX] =              sc->is_syntax_symbol;
-  sc->type_to_typers[T_INTEGER] =             sc->is_integer_symbol;
-  sc->type_to_typers[T_RATIO] =               sc->is_rational_symbol;
-  sc->type_to_typers[T_REAL] =                sc->is_float_symbol;
-  sc->type_to_typers[T_COMPLEX] =             sc->is_complex_symbol;
+  sc->type_to_typers[T_BACRO] =               sc->is_macro_symbol;
+  sc->type_to_typers[T_BACRO_STAR] =          sc->is_macro_symbol;
+  sc->type_to_typers[T_BIG_COMPLEX] =         sc->is_complex_symbol;
   sc->type_to_typers[T_BIG_INTEGER] =         sc->is_integer_symbol;
   sc->type_to_typers[T_BIG_RATIO] =           sc->is_rational_symbol;
   sc->type_to_typers[T_BIG_REAL] =            sc->is_float_symbol;
-  sc->type_to_typers[T_BIG_COMPLEX] =         sc->is_complex_symbol;
-  sc->type_to_typers[T_STRING] =              sc->is_string_symbol;
+  sc->type_to_typers[T_BOOLEAN] =             sc->is_boolean_symbol;
   sc->type_to_typers[T_BYTE_VECTOR] =         sc->is_byte_vector_symbol;
-  sc->type_to_typers[T_C_OBJECT] =            sc->is_c_object_symbol;
-  sc->type_to_typers[T_VECTOR] =              sc->is_vector_symbol;
-  sc->type_to_typers[T_INT_VECTOR] =          sc->is_int_vector_symbol;
-  sc->type_to_typers[T_FLOAT_VECTOR] =        sc->is_float_vector_symbol;
   sc->type_to_typers[T_CATCH] =               sc->F;
-  sc->type_to_typers[T_DYNAMIC_WIND] =        sc->F;
-  sc->type_to_typers[T_HASH_TABLE] =          sc->is_hash_table_symbol;
-  sc->type_to_typers[T_LET] =                 sc->is_let_symbol;
-  sc->type_to_typers[T_ITERATOR] =            sc->is_iterator_symbol;
-  sc->type_to_typers[T_STACK] =               sc->F;
-  sc->type_to_typers[T_COUNTER] =             sc->F;
-  sc->type_to_typers[T_SLOT] =                sc->F;
-  sc->type_to_typers[T_C_POINTER] =           sc->is_c_pointer_symbol;
-  sc->type_to_typers[T_OUTPUT_PORT] =         sc->is_output_port_symbol;
-  sc->type_to_typers[T_INPUT_PORT] =          sc->is_input_port_symbol;
-  sc->type_to_typers[T_RANDOM_STATE] =        sc->is_random_state_symbol;
-  sc->type_to_typers[T_GOTO] =                sc->is_goto_symbol;
-  sc->type_to_typers[T_CONTINUATION] =        sc->is_continuation_symbol;
+  sc->type_to_typers[T_CHARACTER] =           sc->is_char_symbol;
   sc->type_to_typers[T_CLOSURE] =             sc->is_procedure_symbol;
   sc->type_to_typers[T_CLOSURE_STAR] =        sc->is_procedure_symbol;
-  sc->type_to_typers[T_C_MACRO] =             sc->is_macro_symbol;
-  sc->type_to_typers[T_MACRO] =               sc->is_macro_symbol;
-  sc->type_to_typers[T_MACRO_STAR] =          sc->is_macro_symbol;
-  sc->type_to_typers[T_BACRO] =               sc->is_macro_symbol;
-  sc->type_to_typers[T_BACRO_STAR] =          sc->is_macro_symbol;
+  sc->type_to_typers[T_COMPLEX] =             sc->is_complex_symbol;
+  sc->type_to_typers[T_CONTINUATION] =        sc->is_continuation_symbol;
+  sc->type_to_typers[T_COUNTER] =             sc->F;
   sc->type_to_typers[T_C_FUNCTION] =          sc->is_procedure_symbol;
   sc->type_to_typers[T_C_FUNCTION_STAR] =     sc->is_procedure_symbol;
+  sc->type_to_typers[T_C_MACRO] =             sc->is_macro_symbol;
+  sc->type_to_typers[T_C_OBJECT] =            sc->is_c_object_symbol;
+  sc->type_to_typers[T_C_POINTER] =           sc->is_c_pointer_symbol;
   sc->type_to_typers[T_C_RST_NO_REQ_FUNCTION] = sc->is_procedure_symbol;
+  sc->type_to_typers[T_DYNAMIC_WIND] =        sc->F;
+  sc->type_to_typers[T_EOF] =                 sc->is_eof_object_symbol;
+  sc->type_to_typers[T_FLOAT_VECTOR] =        sc->is_float_vector_symbol;
+  sc->type_to_typers[T_FREE] =                sc->F;
+  sc->type_to_typers[T_GOTO] =                sc->is_goto_symbol;
+  sc->type_to_typers[T_HASH_TABLE] =          sc->is_hash_table_symbol;
+  sc->type_to_typers[T_INPUT_PORT] =          sc->is_input_port_symbol;
+  sc->type_to_typers[T_INTEGER] =             sc->is_integer_symbol;
+  sc->type_to_typers[T_INT_VECTOR] =          sc->is_int_vector_symbol;
+  sc->type_to_typers[T_ITERATOR] =            sc->is_iterator_symbol;
+  sc->type_to_typers[T_LET] =                 sc->is_let_symbol;
+  sc->type_to_typers[T_MACRO] =               sc->is_macro_symbol;
+  sc->type_to_typers[T_MACRO_STAR] =          sc->is_macro_symbol;
+  sc->type_to_typers[T_NIL] =                 sc->is_null_symbol;
+  sc->type_to_typers[T_OUTPUT_PORT] =         sc->is_output_port_symbol;
+  sc->type_to_typers[T_PAIR] =                sc->is_pair_symbol;
+  sc->type_to_typers[T_RANDOM_STATE] =        sc->is_random_state_symbol;
+  sc->type_to_typers[T_RATIO] =               sc->is_rational_symbol;
+  sc->type_to_typers[T_REAL] =                sc->is_float_symbol;
+  sc->type_to_typers[T_SLOT] =                sc->F;
+  sc->type_to_typers[T_STACK] =               sc->F;
+  sc->type_to_typers[T_STRING] =              sc->is_string_symbol;
+  sc->type_to_typers[T_SYMBOL] =              sc->is_symbol_symbol;      /* and keyword? */
+  sc->type_to_typers[T_SYNTAX] =              sc->is_syntax_symbol;
+  sc->type_to_typers[T_UNDEFINED] =           sc->is_undefined_symbol;
+  sc->type_to_typers[T_UNSPECIFIED] =         sc->is_unspecified_symbol;
+  sc->type_to_typers[T_UNUSED] =              sc->F;
+  sc->type_to_typers[T_VECTOR] =              sc->is_vector_symbol;
 }
 
 s7_pointer s7_type_of(s7_scheme *sc, s7_pointer arg) {return(sc->type_to_typers[type(arg)]);}
@@ -75367,6 +75347,7 @@ static bool check_tc_when(s7_scheme *sc, const s7_pointer name, int32_t vars, s7
 static bool check_tc_case(s7_scheme *sc, s7_pointer name, s7_pointer arg_names, s7_pointer body)
 {
   /* vars == 1|2|3, opt1_any(clause) = key, has_tc(arg) = is tc call, opt2_any(clause) = result: has_tc(la arg) has_fx(val) or ((...)...) */
+  /*   it might be useful to add int keys and no-else-clause */
   s7_pointer clauses;
   s7_int len, vars = proper_list_length(arg_names);
   bool got_else = false, results_fxable = true;
@@ -75426,7 +75407,7 @@ static bool check_tc_case(s7_scheme *sc, s7_pointer name, s7_pointer arg_names, 
   set_optimize_op(body, (vars == 1) ? OP_TC_CASE_LA : ((vars == 2) ? OP_TC_CASE_LAA : OP_TC_CASE_L3A));
   set_opt3_arglen(cdr(body), len);
   fx_annotate_arg(sc, cdr(body), arg_names);
-  fx_tree(sc, cdr(body), car(arg_names), (vars == 1) ? NULL : cadr(arg_names), (vars <= 2) ? NULL : caddr(arg_names), false);
+  fx_tree(sc, cdr(body), car(arg_names), (vars == 1) ? NULL : cadr(arg_names), (vars <= 2) ? NULL : caddr(arg_names), false); /* check_tc limits vars to <= 3 */
   if (results_fxable) set_optimized(body);
   return(results_fxable);
 }
@@ -79560,14 +79541,16 @@ static opcode_t fixup_macro_d(s7_scheme *sc, opcode_t op, s7_pointer mac)
 static inline bool op_macro_d(s7_scheme *sc, uint8_t typ)
 {
   sc->value = lookup(sc, car(sc->code));
-  if (type(sc->value) != typ)                 /* for-each (etc) called a macro before, now it's something else -- a very rare case */
-    return(unknown_any(sc, sc->value, sc->code));
-
+  if (type(sc->value) != typ)                     /* for-each (etc) called a macro before, now it's something else -- a very rare case */
+    return(unknown_any(sc, sc->value, sc->code)); /*   see m4 in tmac.scm, macro -> macro* could be handled in place: call apply_macro_star_1(sc) */
+#if 0 /* 4-Jul-24 -- I can't find a case where this copy is needed */
   /* it's probably safer to always copy the list here, but that costs 4-5% in tmac, whereas this costs 3% -- maybe not worth the code? */
   if (closure_arity(sc->value) <= 0)
     sc->args = copy_proper_list(sc, cdr(sc->code));
   else sc->args = cdr(sc->code);
-
+#else
+  sc->args = cdr(sc->code);
+#endif
   sc->code = sc->value;                       /* the macro */
   check_stack_size(sc);                       /* (define-macro (f) (f)) (f) */
   push_stack_op_let(sc, OP_EVAL_MACRO);
@@ -87015,6 +86998,20 @@ static s7_pointer fx_tc_case_la(s7_scheme *sc, s7_pointer arg)
   return(sc->value);
 }
 
+static s7_pointer fx_tc_case_laa(s7_scheme *sc, s7_pointer arg)
+{
+  tick_tc(sc, OP_TC_CASE_LAA);
+  op_tc_case_la(sc, arg, 2);
+  return(sc->value);
+}
+
+static s7_pointer fx_tc_case_l3a(s7_scheme *sc, s7_pointer arg)
+{
+  tick_tc(sc, OP_TC_CASE_L3A);
+  op_tc_case_la(sc, arg, 3);
+  return(sc->value);
+}
+
 static bool op_tc_z(s7_scheme *sc, s7_pointer expr)
 {
   if (has_fx(expr))
@@ -87968,6 +87965,15 @@ static s7_pointer fx_tc_if_a_z_if_a_z_l3a(s7_scheme *sc, s7_pointer arg)
   return(sc->value);
 }
 
+static s7_pointer fx_tc_if_a_z_if_a_l3a_z(s7_scheme *sc, s7_pointer arg)
+{
+  tick_tc(sc, OP_TC_IF_A_Z_IF_A_L3A_Z);
+  op_tc_if_a_z_if_a_z_l3a(sc, arg, false);
+  sc->rec_p1 = sc->unused;
+  sc->rec_p2 = sc->unused;
+  return(sc->value);
+}
+
 static bool op_tc_let_if_a_z_la(s7_scheme *sc, s7_pointer code)
 {
   s7_pointer body = caddr(code);
@@ -88386,6 +88392,12 @@ static bool op_tc_cond_n(s7_scheme *sc, s7_pointer code)
   return(false);
 }
 
+static s7_pointer fx_tc_cond_n(s7_scheme *sc, s7_pointer arg)
+{
+  tick_tc(sc, OP_TC_COND_N);
+  op_tc_cond_n(sc, arg);
+  return(sc->value);
+}
 
 #define RECUR_INITIAL_STACK_SIZE 1024
 
@@ -92224,8 +92236,8 @@ static bool op_unknown_aa(s7_scheme *sc)
 
     case T_PAIR:       return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_PAIR_REF_AA));
     case T_HASH_TABLE: return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_HASH_TABLE_REF_AA));
-    case T_MACRO:      return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
-    case T_MACRO_STAR: return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
+    case T_BACRO: case T_MACRO:           return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
+    case T_BACRO_STAR: case T_MACRO_STAR: return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
 
     default: break;
     }
@@ -92351,8 +92363,8 @@ static bool op_unknown_na(s7_scheme *sc)
 	}
       break;
 
-    case T_MACRO:      return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
-    case T_MACRO_STAR: return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
+    case T_BACRO: case T_MACRO:           return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
+    case T_BACRO_STAR: case T_MACRO_STAR: return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
       /* implicit vector doesn't happen */
 
     default: break;
@@ -92444,8 +92456,8 @@ static bool op_unknown_np(s7_scheme *sc)
 	}
       break;
 
-    case T_MACRO:      return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
-    case T_MACRO_STAR: return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
+    case T_BACRO: case T_MACRO:           return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
+    case T_BACRO_STAR: case T_MACRO_STAR: return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
     }
   return(unknown_unknown(sc, sc->code, OP_CLEAR_OPTS));
 }
@@ -95973,13 +95985,15 @@ static void init_starlet_immutable_field(void)
   starlet_immutable_field[SL_CATCHES] = true;
   starlet_immutable_field[SL_CPU_TIME] = true;
   starlet_immutable_field[SL_C_TYPES] = true;
-  starlet_immutable_field[SL_FILE_NAMES] = true;
   starlet_immutable_field[SL_FILENAMES] = true;
+  starlet_immutable_field[SL_FILE_NAMES] = true;
   starlet_immutable_field[SL_FREE_HEAP_SIZE] = true;
   starlet_immutable_field[SL_GC_FREED] = true;
-  starlet_immutable_field[SL_GC_TOTAL_FREED] = true;
   starlet_immutable_field[SL_GC_PROTECTED_OBJECTS] = true;
+  starlet_immutable_field[SL_GC_TOTAL_FREED] = true;
+  starlet_immutable_field[SL_MAJOR_VERSION] = true;
   starlet_immutable_field[SL_MEMORY_USAGE] = true;
+  starlet_immutable_field[SL_MINOR_VERSION] = true;
   starlet_immutable_field[SL_MOST_NEGATIVE_FIXNUM] = true;
   starlet_immutable_field[SL_MOST_POSITIVE_FIXNUM] = true;
   starlet_immutable_field[SL_ROOTLET_SIZE] = true;
@@ -95987,8 +96001,6 @@ static void init_starlet_immutable_field(void)
   starlet_immutable_field[SL_STACK_SIZE] = true;
   starlet_immutable_field[SL_STACK_TOP] = true;
   starlet_immutable_field[SL_VERSION] = true;
-  starlet_immutable_field[SL_MAJOR_VERSION] = true;
-  starlet_immutable_field[SL_MINOR_VERSION] = true;
 }
 
 #define NUM_INTEGER_WRAPPERS 4
@@ -96304,12 +96316,16 @@ static void init_fx_function(void)
   fx_function[OP_TC_COND_A_Z_A_LAA_Z] = fx_tc_cond_a_z_a_laa_z;
   fx_function[OP_TC_IF_A_Z_IF_A_L3A_L3A] = fx_tc_if_a_z_if_a_l3a_l3a;
   fx_function[OP_TC_IF_A_Z_IF_A_Z_L3A] = fx_tc_if_a_z_if_a_z_l3a;
+  fx_function[OP_TC_IF_A_Z_IF_A_L3A_Z] = fx_tc_if_a_z_if_a_l3a_z;
   fx_function[OP_TC_CASE_LA] = fx_tc_case_la;
+  fx_function[OP_TC_CASE_LAA] = fx_tc_case_laa;
+  fx_function[OP_TC_CASE_L3A] = fx_tc_case_l3a;
   fx_function[OP_TC_OR_A_AND_A_A_L3A] = fx_tc_or_a_and_a_a_l3a;
   fx_function[OP_TC_LET_IF_A_Z_LA] = fx_tc_let_if_a_z_la;
   fx_function[OP_TC_LET_IF_A_Z_LAA] = fx_tc_let_if_a_z_laa;
   fx_function[OP_TC_LET_WHEN_LAA] = fx_tc_let_when_laa;
   fx_function[OP_TC_LET_COND] = fx_tc_let_cond;
+  fx_function[OP_TC_COND_N] = fx_tc_cond_n;
   fx_function[OP_TC_COND_A_Z_A_LAA_LAA] = fx_tc_cond_a_z_a_laa_laa;
   fx_function[OP_TC_WHEN_LA] = fx_tc_when_la;
   fx_function[OP_TC_WHEN_LAA] = fx_tc_when_laa;
@@ -97841,9 +97857,6 @@ static void init_rootlet(s7_scheme *sc)
   sc->unquote_symbol =               make_symbol(sc, "unquote", 7);
 #endif
   sc->qq_append_symbol =             defun("<list*>",           qq_append,		2, 0, false); /* occurs via quasiquote only as #_<list*> */
-#if (!DISABLE_DEPRECATED)
-  defun("[list*]", qq_append, 2, 0, false);
-#endif
   sc->apply_values_symbol =          unsafe_defun("apply-values", apply_values,         0, 1, false);
   sc->list_values_symbol =           defun("list-values",       list_values,            0, 0, true);
 
@@ -98957,9 +98970,9 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* --------------------------------------------------------------
+/* ----------------------------------------------------
  *           19.0   21.0   22.0   23.0   24.0   24.5
- * --------------------------------------------------------------
+ * ----------------------------------------------------
  * tpeak      148    114    108    105    102    103
  * tref      1081    687    463    459    464    410
  * index            1016    973    967    972    971
@@ -98972,33 +98985,33 @@ int main(int argc, char **argv)
  * dup              3788   2492   2239   2097   1995
  * thook     7651   ----   2590   2030   2046   2007
  * tread            2421   2419   2408   2405   2244
- * tcopy            5546   2539   2375   2386   2341
- * titer     3657   2842   2641   2509   2449   2443  2458 [op_tc_case_la]
- * trclo     8031   2574   2454   2445   2449   2453
+ * tcopy            5546   2539   2375   2386   2348
+ * trclo     8031   2574   2454   2445   2449   2442
+ * titer     3657   2842   2641   2509   2449   2458
  * tmat             3042   2524   2578   2590   2515
- * tload                   3046   2404   2566   2516
+ * tload                   3046   2404   2566   2546
  * fbench    2933   2583   2460   2430   2478   2573
  * tsort     3683   3104   2856   2804   2858   2858
- * tio              3752   3683   3620   3583   3127
+ * tio              3752   3683   3620   3583   3122
  * tobj             3970   3828   3577   3508   3450
- * teq              4045   3536   3486   3544   3595
- * tmac             3873   3033   3677   3677   3615
+ * tmac             3873   3033   3677   3677   3512
+ * teq              4045   3536   3486   3544   3591
  * tclo      6362   4735   4390   4384   4474   4342
- * tcase            4793   4439   4430   4439   4417
+ * tcase            4793   4439   4430   4439   4402
  * tlet      11.0   6974   5609   5980   5965   4498
  * tfft             7729   4755   4476   4536   4541
  * tstar            5923   5519   4449   4550   4548
  * tmap             8774   4489   4541   4586   4590
- * tshoot           5447   5183   5055   5034   5059
+ * tshoot           5447   5183   5055   5034   4854
  * tform            5348   5307   5316   5084   5094
  * tstr      10.0   6342   5488   5162   5180   5177
  * tnum             6013   5433   5396   5409   5432
- * tgsl             7802   6373   6282   6208   6181  6230 [gsl??]
+ * tgsl             7802   6373   6282   6208   6230
  * tari      15.0   12.7   6827   6543   6278   6183
  * tlist     9219   7546   6558   6240   6300   6312
  * tset                           6260   6364   6325
  * trec      19.6   6980   6599   6656   6658   6490
- * tleft     11.9   9479   7291   7080   7080   6622
+ * tleft     12.2   9753   7537   7331   7331   6811
  * tmisc                          7614   7115   7128
  * tlamb                          8003   7941   7925
  * tgc              11.1   8177   7857   7986   8007
@@ -99010,15 +99023,11 @@ int main(int argc, char **argv)
  * timp             24.4   20.0   19.6   19.7   15.6
  * tmv              21.9   21.1   20.7   20.6   17.4
  * calls            37.5   37.0   37.5   37.1   37.2
- * sg                      55.9   55.8   55.4   55.3  55.6
+ * sg                      55.9   55.8   55.4   55.6
  * tbig            175.8  156.5  148.1  146.2  146.1
- * --------------------------------------------------------------
+ * ----------------------------------------------------
  *
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
- * need some print-length/print-elements distinction for vector/pair/let etc [which to choose if both set?]
- *   or perhaps: print-length means number of elements, and string is made up of chars?
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
- * op_tc_case_la need no else, int key support
- * op_tc_cond_n tested (t802)
  */
