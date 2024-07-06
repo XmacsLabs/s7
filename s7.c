@@ -3116,7 +3116,7 @@ static void check_set_cdr(s7_pointer p, s7_pointer Val, const char *func, int32_
 #define set_unsafe_optimize_op(P, Q)   do {set_unsafely_optimized(P); set_optimize_op(P, Q);} while (0)
 
 #define is_symbol(p)                   (type(p) == T_SYMBOL)
-#define is_normal_symbol(p)            ((is_symbol(p)) && (!is_keyword(p)))
+#define is_normal_symbol(p)            ((is_symbol(p)) && (!is_keyword(p)))  /* ((full_type(p) & (0xff | T_KEYWORD)) == T_SYMBOL) is exactly the same speed */
 #define is_safe_symbol(p)              ((is_symbol(p)) && (is_slot(s7_slot(sc, p))))
 #define symbol_name_cell(p)            T_Str((T_Sym(p))->object.sym.name)
 #define symbol_set_name_cell(p, S)     (T_Sym(p))->object.sym.name = T_Str(S)
@@ -68989,8 +68989,8 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 	  set_no_cell_opt(body);
 	  set_curlet(sc, old_e);
 	}}
-  if ((!is_closure_star(f)) && /* for simplicity in op_for_each_2 (otherwise we need to check for default arg) */
-      (is_null(cdr(body))) &&
+
+  if ((is_null(cdr(body))) &&
       (is_pair(seq)))
     {
       s7_pointer c = inline_make_counter(sc, seq);
@@ -69401,7 +69401,8 @@ static Inline bool inline_op_for_each_2(s7_scheme *sc) /* called once in eval, l
   else push_stack_direct(sc, OP_FOR_EACH_3);
   if (counter_capture(c) != sc->capture_let_counter)
     {
-      set_curlet(sc, inline_make_let_with_slot(sc, closure_let(sc->code), car(closure_args(sc->code)), car(lst)));
+      s7_pointer pars = closure_args(sc->code);
+      set_curlet(sc, inline_make_let_with_slot(sc, closure_let(sc->code), (is_pair(car(pars))) ? caar(pars) : car(pars), car(lst)));
       counter_set_let(c, sc->curlet);
       counter_set_slots(c, let_slots(sc->curlet));
       counter_set_capture(c, sc->capture_let_counter);
@@ -69528,13 +69529,7 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* 
       set_no_cell_opt(body);
       set_curlet(sc, old_e);
     }
-  if (is_closure_star(f))
-    {
-      sc->z = make_iterators(sc, sc->map_symbol, set_plist_2(sc, sc->nil, seq));
-      push_stack(sc, OP_MAP, inline_make_counter(sc, sc->z), f);
-      sc->z = sc->unused;
-      return(sc->nil);
-    }
+
   if ((is_null(cdr(body))) &&
       (is_pair(seq)))
     {
@@ -69542,6 +69537,7 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* 
       push_stack(sc, OP_MAP_2, inline_make_counter(sc, seq), f);
       return(sc->unspecified);
     }
+
   if (!is_iterator(seq))
     {
       if (!is_mappable(seq))
@@ -69876,7 +69872,8 @@ static bool op_map_1(s7_scheme *sc)
   push_stack_direct(sc, OP_MAP_GATHER_1);
   if (counter_capture(args) != sc->capture_let_counter)
     {
-      set_curlet(sc, inline_make_let_with_slot(sc, closure_let(code), car(closure_args(code)), x));
+      s7_pointer pars = closure_args(code);
+      set_curlet(sc, inline_make_let_with_slot(sc, closure_let(code), (is_pair(car(pars))) ? caar(pars) : car(pars), x));
       counter_set_let(args, sc->curlet);
       counter_set_slots(args, let_slots(sc->curlet));
       counter_set_capture(args, sc->capture_let_counter);
@@ -69927,7 +69924,8 @@ static bool op_map_2(s7_scheme *sc) /* possibly inline lg */
 
   if (counter_capture(c) != sc->capture_let_counter)
     {
-      set_curlet(sc, inline_make_let_with_slot(sc, closure_let(code), car(closure_args(code)), x));
+      s7_pointer pars = closure_args(code);
+      set_curlet(sc, inline_make_let_with_slot(sc, closure_let(code), (is_pair(car(pars))) ? caar(pars) : car(pars), x));
       counter_set_let(c, sc->curlet);
       counter_set_slots(c, let_slots(sc->curlet));
       counter_set_capture(c, sc->capture_let_counter);
@@ -70019,19 +70017,18 @@ static s7_pointer op_safe_c_pc_mv(s7_scheme *sc, s7_pointer args)
   if (is_null(p))
     sc->args = set_plist_3(sc, car(sc->value), cadr(sc->value), sc->args);
   else
-    {
-      if (is_null(cdr(p)))
-	sc->args = set_plist_4(sc, car(sc->value), cadr(sc->value), car(p), sc->args);
-      else             /* sc->args = pair_append(sc, sc->value, list_1(sc, sc->args)); */ /* not plist! sc->value is not reusable */
-	{
-	  s7_pointer lst, val = sc->args;
-	  s7_int len = proper_list_length(p);
-	  sc->args = safe_list_if_possible(sc, len + 3);
-	  use_safe = (!in_heap(sc->args));
-	  lst = sc->args;
-	  for (s7_pointer p = sc->value; is_pair(p); p = cdr(p), lst = cdr(lst)) set_car(lst, car(p));
-	  set_car(lst, val);
-	}}
+    if (is_null(cdr(p)))
+      sc->args = set_plist_4(sc, car(sc->value), cadr(sc->value), car(p), sc->args);
+    else             /* sc->args = pair_append(sc, sc->value, list_1(sc, sc->args)); */ /* not plist! sc->value is not reusable */
+      {
+	s7_pointer lst, val = sc->args;
+	s7_int len = proper_list_length(p);
+	sc->args = safe_list_if_possible(sc, len + 3);
+	use_safe = (!in_heap(sc->args));
+	lst = sc->args;
+	for (s7_pointer p = sc->value; is_pair(p); p = cdr(p), lst = cdr(lst)) set_car(lst, car(p));
+	set_car(lst, val);
+      }
   sc->code = c_function_base(opt1_cfunc(sc->code));
   if (type(sc->code) == T_C_FUNCTION)
     sc->value = apply_c_function_unopt(sc, sc->code, sc->args);
@@ -70052,19 +70049,18 @@ static s7_pointer op_safe_c_ps_mv(s7_scheme *sc, s7_pointer args)  /* (define (h
   if (is_null(p))
     sc->args = set_plist_3(sc, car(sc->value), cadr(sc->value), val);
   else
-    {
-      if (is_null(cdr(p)))
-	sc->args = set_plist_4(sc, car(sc->value), cadr(sc->value), car(p), val);
-      else                   /* sc->args = pair_append(sc, sc->value, list_1(sc, val)); */
-	{
-	  s7_pointer lst;
-	  s7_int len = proper_list_length(p);
-	  sc->args = safe_list_if_possible(sc, len + 3); /* sc->args is not clobbered by fx_call (below) */
-	  use_safe = (!in_heap(sc->args));
-	  lst = sc->args;
-	  for (s7_pointer p = sc->value; is_pair(p); p = cdr(p), lst = cdr(lst)) set_car(lst, car(p));
-	  set_car(lst, val);
-	}}
+    if (is_null(cdr(p)))
+      sc->args = set_plist_4(sc, car(sc->value), cadr(sc->value), car(p), val);
+    else                   /* sc->args = pair_append(sc, sc->value, list_1(sc, val)); */
+      {
+	s7_pointer lst;
+	s7_int len = proper_list_length(p);
+	sc->args = safe_list_if_possible(sc, len + 3); /* sc->args is not clobbered by fx_call (below) */
+	use_safe = (!in_heap(sc->args));
+	lst = sc->args;
+	for (s7_pointer p = sc->value; is_pair(p); p = cdr(p), lst = cdr(lst)) set_car(lst, car(p));
+	set_car(lst, val);
+      }
   sc->code = c_function_base(opt1_cfunc(sc->code));
   if (type(sc->code) == T_C_FUNCTION)
     sc->value = apply_c_function_unopt(sc, sc->code, sc->args);
@@ -70087,23 +70083,22 @@ static s7_pointer op_safe_c_pa_mv(s7_scheme *sc, s7_pointer args)
       sc->args = set_plist_3(sc, val1, val2, val3);
     }
   else
-    {
-      if (is_null(cdr(p)))
-	{
-	  s7_pointer val1 = car(sc->value), val2 = cadr(sc->value), val3 = car(p);
-	  s7_pointer val4 = fx_call(sc, cddr(sc->code));
-	  sc->args = set_plist_4(sc, val1, val2, val3, val4);
-	}
-      else
-	{
-	  s7_pointer lst;
-	  s7_int len = proper_list_length(p);
-	  sc->args = safe_list_if_possible(sc, len + 3); /* sc->args is not clobbered by fx_call (below) */
-	  use_safe = (!in_heap(sc->args));
-	  lst = sc->args;
-	  for (s7_pointer p = sc->value; is_pair(p); p = cdr(p), lst = cdr(lst)) set_car(lst, car(p));
-	  set_car(lst, fx_call(sc, cddr(sc->code)));
-	}}
+    if (is_null(cdr(p)))
+      {
+	s7_pointer val1 = car(sc->value), val2 = cadr(sc->value), val3 = car(p);
+	s7_pointer val4 = fx_call(sc, cddr(sc->code));
+	sc->args = set_plist_4(sc, val1, val2, val3, val4);
+      }
+    else
+      {
+	s7_pointer lst;
+	s7_int len = proper_list_length(p);
+	sc->args = safe_list_if_possible(sc, len + 3); /* sc->args is not clobbered by fx_call (below) */
+	use_safe = (!in_heap(sc->args));
+	lst = sc->args;
+	for (s7_pointer p = sc->value; is_pair(p); p = cdr(p), lst = cdr(lst)) set_car(lst, car(p));
+	set_car(lst, fx_call(sc, cddr(sc->code)));
+      }
   sc->code = c_function_base(opt1_cfunc(sc->code));
   if (type(sc->code) == T_C_FUNCTION)
     sc->value = apply_c_function_unopt(sc, sc->code, sc->args);
@@ -70577,7 +70572,7 @@ static s7_pointer g_list_values(s7_scheme *sc, s7_pointer args)
       if (!checked) /* (!tree_has_definers(sc, args)) seems to work, reduces copy_tree calls slightly, but costs more than it saves in tgen */
 	{
 	  for (s7_pointer p = args; is_pair(p); p = cdr(p)) /* embedded list can be immutable, so we need to copy (sigh) */
-	    if (is_immutable_pair(p))
+	    if (is_immutable_pair(p))                       /* immutable if unheaped sometimes! (tset.scm typed-let) */
 	      return(copy_proper_list(sc, args));
 	  return(args);
 	}
@@ -98997,17 +98992,17 @@ int main(int argc, char **argv)
  * tmac             3873   3033   3677   3677   3512
  * teq              4045   3536   3486   3544   3591
  * tclo      6362   4735   4390   4384   4474   4342
+ * tmap             8774   4489   4541   4586   4384
  * tcase            4793   4439   4430   4439   4402
  * tlet      11.0   6974   5609   5980   5965   4498
  * tfft             7729   4755   4476   4536   4541
  * tstar            5923   5519   4449   4550   4548
- * tmap             8774   4489   4541   4586   4590
  * tshoot           5447   5183   5055   5034   4854
  * tform            5348   5307   5316   5084   5094
  * tstr      10.0   6342   5488   5162   5180   5177
  * tnum             6013   5433   5396   5409   5432
- * tgsl             7802   6373   6282   6208   6230
  * tari      15.0   12.7   6827   6543   6278   6183
+ * tgsl             7802   6373   6282   6208   6230
  * tlist     9219   7546   6558   6240   6300   6312
  * tset                           6260   6364   6325
  * trec      19.6   6980   6599   6656   6658   6490
@@ -99030,4 +99025,5 @@ int main(int argc, char **argv)
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
+ * clo in loop: lookup, hop, unhop at end
  */

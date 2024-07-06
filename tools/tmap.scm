@@ -460,6 +460,10 @@
 
 
 (define gsize 1000000)
+(define glst (make-list gsize ()))
+(define gfv (make-float-vector gsize 1.0))
+(define giv (make-int-vector gsize 1))
+(define gv (make-vector gsize ()))
 
 (define (g1 lst)
   (for-each (lambda* (p)
@@ -467,35 +471,15 @@
 		  (display 'oops)))
 	    lst))
 
-(define glst (make-list gsize ()))
-(g1 glst)
-
-(define (g2 v)
-  (for-each (lambda* (p)
-	      (if (integer? p)
-		  (display 'oops)))
-	    v))
-
-(define gfv (make-float-vector gsize 1.0))
-(g2 gfv)
-
 (define (g3 v)
   (for-each (lambda* (p)
 	      (if (pair? p)
 		  (display 'oops)))
 	    v))
-
-(define giv (make-int-vector gsize 1))
+(g1 glst)
+(g1 gfv)
 (g3 giv)
-
-(define (g4 v)
-  (for-each (lambda* (p)
-	      (if (integer? p)
-		  (display 'oops)))
-	    v))
-
-(define gv (make-vector gsize ()))
-(g4 gv)
+(g1 gv)
 
 (define (g5 lst)
   (for-each (lambda* (p)
@@ -510,15 +494,6 @@
 	     (display 'oops)
              0))
        lst))
-(g11 glst)
-
-(define (g12 v)
-  (map (lambda* (p)
-	 (if (integer? p)
-	     (display 'oops)
-             0))
-       v))
-(g12 gfv)
 
 (define (g13 v)
   (map (lambda* (p)
@@ -526,15 +501,11 @@
 	     (display 'oops)
              0))
        v))
-(g13 giv)
 
-(define (g14 v)
-  (map (lambda* (p)
-	 (if (integer? p)
-	     (display 'oops)
-             0))
-       v))
-(g14 gv)
+(g11 glst)
+(g11 gfv)
+(g13 giv)
+(g11 gv)
 
 (define (g15 lst)
   (map (lambda* (p)
