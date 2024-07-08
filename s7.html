@@ -4475,9 +4475,7 @@ the upper limit on how many elements of a sequence are printed by object-&gt;str
 When running s7 behind a GUI, you often want input to come from and output to go to
 arbitrary widgets. The function ports provide a way to redirect IO in C.  See <a href="#functionportexample">below</a>
 for an example.
-</p>
-
-<p>The function ports call a function rather than reading or writing the data to a string or file.
+The function ports call a function rather than reading or writing the data to a string or file.
 See nrepl.scm and s7test.scm for examples.  The function-port function is accessible as
 <code>((object-&gt;let function-port) 'function)</code>.  These ports are even more esoteric than
 their C-side cousins.  An example that traps current-ouput-port output:

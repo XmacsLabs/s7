@@ -3564,9 +3564,8 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define closure_map_list(p)            (T_Pair((T_Clo(p))->object.func.setter))
 #define closure_set_map_list(p, Val)   (T_Clo(p))->object.func.setter = T_Pair(Val)
 #define closure_setter_or_map_list(p)  (T_Clo(p)->object.func.setter)
-/* closure_map_list refers to a cyclic list detector in map; since in this case map makes a new closure for its own use,
- *   closure_map_list doesn't collide with closure_setter.
- */
+#define closure_set_setter_or_map_list(p, Val) T_Clo(p)->object.func.setter = Val
+/* closure_map_list refers to a cyclic list detector in map */
 
 #define CLOSURE_ARITY_NOT_SET          0x40000000
 #define MAX_ARITY                      0x20000000
@@ -11469,7 +11468,7 @@ static s7_pointer copy_closure(s7_scheme *sc, s7_pointer fnc)
   new_cell(sc, x, full_type(fnc) & (~T_COLLECTED)); /* I'm paranoid about that is_collected bit */
   closure_set_args(x, closure_args(fnc));
   closure_set_body(x, body);
-  closure_set_setter(x, closure_setter(fnc));
+  closure_set_setter_or_map_list(x, closure_setter_or_map_list(fnc));
   closure_set_arity(x, closure_arity(fnc));
   closure_set_let(x, closure_let(fnc));
   return(x);
@@ -12415,7 +12414,9 @@ static void call_with_exit(s7_scheme *sc)
 
   if (!call_exit_active(sc->code))
     error_nr(sc, sc->invalid_exit_function_symbol,
-	     set_elist_1(sc, wrap_string(sc, "call-with-exit exit procedure called outside its block", 54)));
+	     (is_symbol(call_exit_name(sc->code))) ? 
+	       set_elist_2(sc, wrap_string(sc, "call-with-exit exit procedure, ~A, called outside its block", 59), call_exit_name(sc->code)) :
+	       set_elist_1(sc, wrap_string(sc, "call-with-exit exit procedure called outside its block", 54)));
 
   call_exit_active(sc->code) = false;
   new_stack_top = call_exit_goto_loc(sc->code);
@@ -12423,8 +12424,11 @@ static void call_with_exit(s7_scheme *sc)
 
   /* look for dynamic-wind in the stack section that we are jumping out of */
   i = stack_top(sc) - 1;
+  /* op is entirely op_deactivate_goto tgc, for_each_2|3 tcase, dox_step_o texit, lots of ops s7test.scm */
+  /* if (stack_op(sc->stack, i) == OP_DEACTIVATE_GOTO) {call_exit_active(stack_args(sc->stack, i)) = false; goto SET_VALUE;} saves >54 in tgc */
+
   do {
-    switch (stack_op(sc->stack, i)) /* avoidable if we group these ops at the end and use op< */
+    switch (stack_op(sc->stack, i)) /* the hit rate here is good; exiters[op] slowed us down! (see tmp) tgc/texit slower, tcase faster */
       {
       case OP_DYNAMIC_WIND:
 	{
@@ -81149,7 +81153,7 @@ static s7_pointer fx_implicit_vector_ref_a(s7_scheme *sc, s7_pointer arg)
   return(vector_ref_1(sc, v, set_plist_1(sc, x)));
 }
 
-static bool op_implicit_vector_ref_aa(s7_scheme *sc) /* if Inline 70 in concordance */
+static bool op_implicit_vector_ref_aa(s7_scheme *sc) /* tnum/tmat, neither uses fx case if available (see tmp) */
 {
   s7_pointer x, y, code;
   s7_pointer v = lookup_checked(sc, car(sc->code));
@@ -99025,5 +99029,5 @@ int main(int argc, char **argv)
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
- * clo in loop: lookup, hop, unhop at end
+ * clo in loop: lookup, hop, unhop at end: t803
  */
