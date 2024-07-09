@@ -1383,7 +1383,7 @@ struct s7_scheme {
              fv_ref_2, fv_ref_3, fv_set_3, fv_set_unchecked, iv_ref_2, iv_ref_3, iv_set_3, bv_ref_2, bv_ref_3, bv_set_3, vector_2, vector_3,
              list_0, list_1, list_2, list_3, list_4, list_set_i, hash_table_ref_2, hash_table_2, list_ref_at_0, list_ref_at_1, list_ref_at_2,
              format_f, format_no_column, format_just_control_string, format_as_objstr, values_uncopied, int_log2, unlet_disabled, unlet_ref, outlet_unlet,
-             memq_2, memq_3, memq_4, memq_any, tree_set_memq_syms, simple_inlet, sublet_curlet, profile_out, simple_list_values,
+             memq_2, memq_3, memq_4, memq_any, tree_set_memq_syms, simple_inlet, sublet_curlet, profile_out, simple_list_values, restore_setter,
              simple_let_ref, simple_let_set, sv_unlet_ref, unlet_set, rootlet_ref, geq_2, add_i_random, is_defined_in_rootlet, is_defined_in_unlet;
 
   s7_pointer multiply_2, invert_1, invert_x, divide_2, divide_by_2, max_2, min_2, max_3, min_3,
@@ -12235,6 +12235,11 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
 	  break;
 
 	case OP_DYNAMIC_UNWIND:
+	  /* why doesn't this call dynamic_unwind(sc, stack_code(sc->stack, i), stack_args(sc->stack, i)) ?
+	   *   I think I was using this op for tracing (hence the sc->value inclusion) -- groan... This should be called if it isn't tracing!
+	   *   trace-out (called in debug.scm via (dynamic-unwind trace-out e) is a closure -- maybe if a c_function, call it? or not trace-out?
+	   *   or even better, do trace-out differently.
+	   */
 	case OP_DYNAMIC_UNWIND_PROFILE:
 	  set_stack_op(sc->stack, i, OP_GC_PROTECT);
 	  break;
@@ -47622,8 +47627,10 @@ static s7_pointer b_is_proper_list_setter(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer lambda_setter(s7_scheme *sc, s7_pointer p)
 {
-  if (is_any_procedure(closure_setter(p)))                /* setter already known */
+  if (is_any_procedure(closure_setter_or_map_list(p)))        /* setter already known */
     return(closure_setter(p));
+  if (is_pair(closure_setter_or_map_list(p)))  /* it's a map_list masquerading as a setter */
+    return(sc->F);
   if (!closure_no_setter(p))
     {
       s7_pointer f = funclet_entry(sc, p, sc->local_setter_symbol); /* look for +setter+, save value as closure_setter(p) */
@@ -47720,6 +47727,9 @@ static s7_pointer g_setter(s7_scheme *sc, s7_pointer args)
 }
 
 s7_pointer s7_setter(s7_scheme *sc, s7_pointer obj) {return(setter_p_pp(sc, obj, sc->curlet));}
+
+static s7_pointer g_restore_setter(s7_scheme *sc, s7_pointer args) {closure_set_setter(caar(args), cadar(args)); return(cadar(args));}
+/* see dynamic_unwind below -- it passes us list_2(sc, stack_args, sc->value) so we ignore cadr(args) */
 
 
 /* -------------------------------- set-setter -------------------------------- */
@@ -51523,8 +51533,8 @@ static s7_pointer closure_to_let(s7_scheme *sc, s7_pointer obj)
 	  s7_varlet(sc, let, sc->line_symbol, make_integer(sc, let_line(flet)));
 	}}
 
-  if (closure_setter(obj) != sc->F)
-    s7_varlet(sc, let, sc->local_setter_symbol, closure_setter(obj));
+  if (closure_setter_or_map_list(obj) != sc->F)
+    s7_varlet(sc, let, sc->local_setter_symbol, closure_setter_or_map_list(obj));
 
   if (!sc->source_symbol)
     sc->source_symbol = make_symbol(sc, "source", 6);
@@ -68162,13 +68172,28 @@ static bool int_optimize_1(s7_scheme *sc, s7_pointer expr)
 	}}
   else
     {
+#if 0
+      /* if (is_closure(s_func)) and body is one expr and safe, we could pull out the body, substitute pars for args, int_optimize that */
+      /*    check for simple args and no definers/binders first (can't int-optimize them anyway) */
+      if ((is_closure(s_func)) && (is_safe_closure(s_func)) && (!no_cell_opt(expr)))
+	{
+	  s7_pointer body = closure_body(s_func);
+	  if ((is_null(cdr(body))) && (is_pair(car(body))))   /* this hits every test in s7test! */
+	    {
+	      if (caar(body) != sc->let_symbol)
+		fprintf(stderr, "%s %s\n", display(body), display(expr));
+	      /* see s7test (f3 123) -- expansion can lead to funclet confusion -- same in macros? but this would not be int_optimizable */
+	      /* timing tests don't get many useful hits */
+	    }}
+#endif
+
       if ((is_macro(s_func)) && (!no_cell_opt(expr)))
 	{
 	  s7_pointer body = closure_body(s_func);
 	  if ((is_null(cdr(body))) && (is_pair(car(body))) &&
 	      ((caar(body) == sc->list_symbol) || (caar(body) == sc->list_values_symbol) || (caar(body) == initial_value(sc->list_values_symbol))))
 	    {
-	      s7_pointer result = s7_macroexpand(sc, s_func, cdar(expr));
+	      s7_pointer result = s7_macroexpand(sc, s_func, cdar(expr)); /* cdar(expr) = arglist */
 	      if (result == sc->F) return_false(sc, car_x);
 	      return(int_optimize(sc, set_plist_1(sc, result)));
 	    }}
@@ -68416,7 +68441,7 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
 	    return_true(sc, car_x);
 	}
       if (is_macro(s_func))
-	return_false(sc, car_x); /* macroexpand+cell_optimize here restarts the optimize process */
+	return_false(sc, car_x); /* macroexpand+cell_optimize here restarts the optimize process (this refers to int|float_optimize macro expansion) */
       if (!s_slot) return_false(sc, car_x);
 #if OPT_PRINT
       {
@@ -69537,6 +69562,16 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* 
   if ((is_null(cdr(body))) &&
       (is_pair(seq)))
     {
+      /* here we need to check for a setter, and if any, push with dynamic-unwind, then restore later.
+       *   (let ((hk (make-hook 'x))) (define (func) (map hk (list 0 6))) (set! (setter hk) (lambda (y) y)) (func))
+       */
+      if (is_any_procedure(closure_setter_or_map_list(f))) /* should we restore #f? */
+	{
+	  /* fprintf(stderr, "%s[%d]: clobbering setter: %s, setter: %s, f: %s\n", __func__, __LINE__, display(body), display(closure_setter(f)), display(f)); */
+	  push_stack(sc, OP_DYNAMIC_UNWIND, list_2(sc, f, closure_setter(f)), sc->restore_setter);
+	  /* the passed list will be car(args) when dynamic_unwind calls (f . args) */
+	  /* all this complexity because there is no place to store the "slow" version of seq for circular list checks */
+	}
       closure_set_map_list(f, seq);
       push_stack(sc, OP_MAP_2, inline_make_counter(sc, seq), f);
       return(sc->unspecified);
@@ -69800,7 +69835,6 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 	    if (is_closure_star(f))
 	      return(g_map_closure(sc, f, cadr(args)));
 
-	    /* don't go to OP_MAP_2 here! It assumes no recursion */
 	    sc->z = (!is_iterator(cadr(args))) ? s7_make_iterator(sc, cadr(args)) : cadr(args);
 	    push_stack(sc, OP_MAP_1, inline_make_counter(sc, sc->z), f);
 	    sc->z = sc->unused;
@@ -71163,6 +71197,9 @@ static void init_choosers(s7_scheme *sc)
   /* list-values */
   f = set_function_chooser(sc->list_values_symbol, list_values_chooser);
   sc->simple_list_values = make_function_with_class(sc, f, "list-values", g_simple_list_values, 0, 0, true);
+
+  sc->restore_setter = make_function(sc, "<restore-setter>", g_restore_setter, 1, 0, false, "map closure-setter restoration", 
+				     alloc_pointer(sc), alloc_semipermanent_function(sc));
 }
 
 
@@ -80698,9 +80735,9 @@ static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer 
     case T_MACRO:   case T_MACRO_STAR:
     case T_BACRO:   case T_BACRO_STAR:
     case T_CLOSURE: case T_CLOSURE_STAR:
-      if (is_c_function(closure_setter(obj)))
+      if (is_c_function(closure_setter_or_map_list(obj)))
 	return(pair3_cfunc(sc, obj, closure_setter(obj), arg, value));
-      sc->code = closure_setter(obj);
+      sc->code = closure_setter_or_map_list(obj);
       sc->args = (needs_copied_args(sc->code)) ? list_2(sc, arg, value) : set_plist_2(sc, arg, value);
       return(true); /* goto APPLY; */
 
@@ -80876,9 +80913,9 @@ static bool set_pair4(s7_scheme *sc, s7_pointer obj, s7_pointer index1, s7_point
     case T_MACRO:   case T_MACRO_STAR:
     case T_BACRO:   case T_BACRO_STAR:
     case T_CLOSURE: case T_CLOSURE_STAR:
-      if (is_c_function(closure_setter(obj)))
+      if (is_c_function(closure_setter_or_map_list(obj)))
 	return(pair4_cfunc(sc, obj, closure_setter(obj), index1, index2, value));
-      sc->code = closure_setter(obj);
+      sc->code = closure_setter_or_map_list(obj);
       sc->args = (needs_copied_args(sc->code)) ? list_3(sc, index1, index2, value) : set_plist_3(sc, index1, index2, value);
       return(true); /* goto APPLY; */
 
@@ -81700,8 +81737,8 @@ static goto_t set_implicit_c_function(s7_scheme *sc, s7_pointer fnc)  /* (let ((
 
 static goto_t set_implicit_closure(s7_scheme *sc, s7_pointer fnc)
 {
-  s7_pointer setter = closure_setter(fnc);  /* (set! (fnc ind...) val), sc->code = ((fnc ind...) val) */
-  if ((setter == sc->F) && (!closure_no_setter(fnc))) /* maybe closure_setter hasn't been set yet: see fset3 in s7test.scm */
+  s7_pointer setter = closure_setter_or_map_list(fnc);  /* (set! (fnc ind...) val), sc->code = ((fnc ind...) val) */
+  if ((setter == sc->F) && (!is_pair(setter)) && (!closure_no_setter(fnc))) /* maybe closure_setter hasn't been set yet: see fset3 in s7test.scm */
     setter = setter_p_pp(sc, fnc, sc->curlet);
   if (!is_t_procedure(setter))
     {
@@ -99029,5 +99066,5 @@ int main(int argc, char **argv)
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
- * clo in loop: lookup, hop, unhop at end: t803
+ * clo in loop: lookup, hop, unhop at end: t803, int_optimize_1 68177
  */
