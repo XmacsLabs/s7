@@ -47,18 +47,19 @@
 
       (define trace-out
 	(let ((funcname #f))
-	  (lambda (e val)              ; report value returned
-	    (let-temporarily (((*s7* 'history-enabled) #f))
-	      (set! *debug-spaces* (max 0 (- *debug-spaces* 2)))
-	      (let-temporarily (((*s7* 'openlets) #f)) ; val local object->string might cause an infinite loop
-		(format *debug-port* "~NC  -> ~S" (min *debug-spaces* *debug-max-spaces*) #\space val))
+	  (lambda (args val)              ; report value returned
+	    (let ((e (car args)))
+	      (let-temporarily (((*s7* 'history-enabled) #f))
+		(set! *debug-spaces* (max 0 (- *debug-spaces* 2)))
+		(let-temporarily (((*s7* 'openlets) #f)) ; val local object->string might cause an infinite loop
+		  (format *debug-port* "~NC  -> ~S" (min *debug-spaces* *debug-max-spaces*) #\space val))
 
-	      (set! funcname (*function* e :name))
-	      (when (symbol? funcname)
-		(let ((sig (signature (symbol->value funcname e))))   ; check result type, if a signature exists
-		  (when (and (pair? sig)
-			     (not ((symbol->value (car sig)) val)))
-		    (format *debug-port* ", result is not ~S" (car sig))))))
+		(set! funcname (*function* e :name))
+		(when (symbol? funcname)
+		  (let ((sig (signature (symbol->value funcname e))))   ; check result type, if a signature exists
+		    (when (and (pair? sig)
+			       (not ((symbol->value (car sig)) val)))
+		      (format *debug-port* ", result is not ~S" (car sig)))))))
 
 	    (*debug-end-output* *debug-port*)
 	    val)))
@@ -142,7 +143,6 @@
 
 		     (newline *debug-port*)))
 	      (set! *debug-spaces* (+ *debug-spaces* 2))))
-
 	  (dynamic-unwind trace-out e)))))
 
   (define debug-port (dilambda

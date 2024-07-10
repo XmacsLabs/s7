@@ -2523,6 +2523,7 @@ static void init_types(void)
 #define T_HAS_METHODS                  (1 << (16 + 14))
 #define T_MID_HAS_METHODS              (1 << 14)
 #define has_methods(p)                 has_mid_type_bit(T_Exs(p), T_MID_HAS_METHODS) /* display slot hits T_Ext here */
+#define has_methods_unchecked(p)       has_mid_type_bit(p, T_MID_HAS_METHODS)
 #define is_openlet(p)                  has_mid_type_bit(T_Let(p), T_MID_HAS_METHODS)
 #define has_active_methods(sc, p)      ((has_mid_type_bit(T_Ext(p), T_MID_HAS_METHODS)) && (sc->has_openlets)) /* g_char #<eof> */
 #define set_has_methods(p)             set_mid_type_bit(T_Met(p), T_MID_HAS_METHODS)
@@ -3688,7 +3689,7 @@ const char *display(s7_pointer obj);
 const char *display(s7_pointer obj)
 {
   const char *res;
-  if (!has_methods(obj))
+  if (!has_methods_unchecked(obj))
     return(string_value(s7_object_to_string(cur_sc, obj, false)));
   clear_type_bit(obj, T_HAS_METHODS); /* clear_has_methods calls T_Met -> check_ref_met */
   res = string_value(s7_object_to_string(cur_sc, obj, false));
@@ -3696,7 +3697,7 @@ const char *display(s7_pointer obj)
   return(res);
 }
 #else
-#define display(Obj)    string_value(s7_object_to_string(cur_sc, Obj, false))
+#define display(Obj) string_value(s7_object_to_string(cur_sc, Obj, false))
 #endif
 #define display_truncated(Obj) string_value(object_to_string_truncated(cur_sc, Obj))
 
@@ -4797,7 +4798,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj)
 						   " ?7?")) : "",
 	  /* bit 16 */
 	  ((full_typ & T_UNSAFE_DO) != 0) ?      ((is_pair(obj)) ? " unsafe-do" :
-						  ((is_let(obj)) ? " dox_slot1" :
+						  ((is_let(obj)) ? " dox-slot1" :
 						   " ?8?")) : "",
 	  /* bit 17 */
 	  ((full_typ & T_COLLECTED) != 0) ?      " collected" : "",
@@ -8263,10 +8264,13 @@ static void push_stack_1(s7_scheme *sc, opcode_t op, s7_pointer args, s7_pointer
       if (sc->stop_at_error) abort();
     }
   if (sc->stack_end >= sc->stack_resize_trigger)
-    fprintf(stderr, "%s%s[%d] from %s: stack resize skipped, stack at %u of %u %s%s\n",
-	    bold_text, func, line, op_names[op],
-	    (uint32_t)((intptr_t)(sc->stack_end - sc->stack_start)),
-	    sc->stack_size, display_truncated(code), unbold_text);
+    {
+      fprintf(stderr, "%s%s[%d] from %s: stack resize skipped, stack at %u of %u %s%s\n",
+	      bold_text, func, line, op_names[op],
+	      (uint32_t)((intptr_t)(sc->stack_end - sc->stack_start)),
+	      sc->stack_size, display_truncated(code), unbold_text);
+      s7_show_stack(sc);
+    }
   if (sc->stack_end != end)
     fprintf(stderr, "%s[%d]: stack changed in push_stack\n", func, line);
   if (op >= NUM_OPS)
@@ -8454,7 +8458,8 @@ void s7_show_full_stack(s7_scheme *sc)
       if (s7_is_valid(sc, stack_args(sc->stack, i)))
 	fprintf(stderr, "args: %s, ", display_truncated(stack_args(sc->stack, i)));
       if ((stack_op(sc->stack, i) != OP_GC_PROTECT) && (s7_is_valid(sc, stack_let(sc->stack, i)))) /* this probably won't work */
-	fprintf(stderr, "let: %s, ", display_truncated(stack_let(sc->stack, i)));
+	fprintf(stderr, "let: %s", display_truncated(stack_let(sc->stack, i)));
+      fprintf(stderr, "\n");
     }
   sc->stop_at_error = old_stop;
 }
@@ -12185,6 +12190,7 @@ s7_pointer s7_make_continuation(s7_scheme *sc)
 static void let_temp_done(s7_scheme *sc, s7_pointer args, s7_pointer let);
 static void let_temp_unwind(s7_scheme *sc, s7_pointer slot, s7_pointer new_value);
 static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val);
+static s7_pointer dynamic_unwind(s7_scheme *sc, s7_pointer func, s7_pointer e);
 
 static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
 {
@@ -12235,11 +12241,12 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
 	  break;
 
 	case OP_DYNAMIC_UNWIND:
-	  /* why doesn't this call dynamic_unwind(sc, stack_code(sc->stack, i), stack_args(sc->stack, i)) ?
-	   *   I think I was using this op for tracing (hence the sc->value inclusion) -- groan... This should be called if it isn't tracing!
-	   *   trace-out (called in debug.scm via (dynamic-unwind trace-out e) is a closure -- maybe if a c_function, call it? or not trace-out?
-	   *   or even better, do trace-out differently.
-	   */
+	  {
+	    s7_pointer func = stack_code(sc->stack, i);
+	    s7_pointer args = stack_args(sc->stack, i);
+	    if ((is_pair(cdr(args))) && (is_pair(cddr(args))) && (caddr(args) == sc->T))
+	      dynamic_unwind(sc, func, args);
+	  }
 	case OP_DYNAMIC_UNWIND_PROFILE:
 	  set_stack_op(sc->stack, i, OP_GC_PROTECT);
 	  break;
@@ -12411,7 +12418,6 @@ static bool op_implicit_continuation_a(s7_scheme *sc)
 
 /* -------------------------------- call-with-exit -------------------------------- */
 static void pop_input_port(s7_scheme *sc);
-static s7_pointer dynamic_unwind(s7_scheme *sc, s7_pointer func, s7_pointer e);
 
 static void call_with_exit(s7_scheme *sc)
 {
@@ -33149,7 +33155,11 @@ static /* inline */ void symbol_to_port(s7_scheme *sc, s7_pointer obj, s7_pointe
        */
       if (is_any_procedure(sc->symbol_printer)) /* we see P_WRITE here */
 	{
-	  s7_pointer res = s7_call(sc, sc->symbol_printer, set_plist_1(sc, obj)); /* res should be a string */
+	  s7_pointer printer = sc->symbol_printer;
+	  s7_pointer res;
+	  sc->symbol_printer = sc->F; /* avoid infinite recursion */
+	  res = s7_call(sc, printer, set_plist_1(sc, obj)); /* res should be a string */
+	  sc->symbol_printer = printer;
 	  if (!is_string(res))
 	    error_nr(sc, sc->wrong_type_arg_symbol,
 		     set_elist_2(sc, wrap_string(sc, "(*s7* 'symbol-printer) should return a string: ~S", 49), res));
@@ -52274,26 +52284,28 @@ static s7_pointer make_profile_info(s7_scheme *sc)
 
 
 /* -------------------------------- dynamic-unwind -------------------------------- */
-static s7_pointer dynamic_unwind(s7_scheme *sc, s7_pointer func, s7_pointer e)
+static s7_pointer dynamic_unwind(s7_scheme *sc, s7_pointer func, s7_pointer args)
 {
-  if ((S7_DEBUGGING) && (is_multiple_value(sc->value)))
-    fprintf(stderr, "%s[%d]: unexpected multiple-value! %s %s %s\n", __func__, __LINE__, display(func), display(e), display(sc->value));
-  return(s7_apply_function(sc, func, set_plist_2(sc, e, sc->value))); /* s7_apply_function returns sc->value */
+  return(s7_apply_function(sc, func, set_plist_2(sc, args, sc->value))); /* s7_apply_function returns sc->value */
 }
 
 static s7_pointer g_dynamic_unwind(s7_scheme *sc, s7_pointer args)
 {
   #define H_dynamic_unwind "(dynamic-unwind func arg) pushes func and arg on the stack, then (func arg) is called when the stack unwinds."
-  #define Q_dynamic_unwind s7_make_signature(sc, 3, sc->is_procedure_symbol, sc->is_procedure_symbol, sc->T)
+  #define Q_dynamic_unwind s7_make_signature(sc, 4, sc->is_procedure_symbol, sc->is_procedure_symbol, sc->T, sc->is_boolean_symbol)
 
   s7_pointer func = car(args);
+  s7_pointer dw_call = sc->F;
+  if (is_pair(cddr(args))) dw_call = (caddr(args));
+  if (!is_boolean(dw_call))
+    wrong_type_error_nr(sc, sc->dynamic_unwind_symbol, 2, dw_call, a_boolean_string);
   if (((is_closure(func)) && (closure_arity_to_int(sc, func) == 2)) ||
       ((is_c_function(func)) && (c_function_is_aritable(func, 2))) ||
       ((is_closure_star(func)) && (closure_star_arity_to_int(sc, func) == 2)) ||
       ((is_c_function_star(func)) && (c_function_max_args(func) == 2)))
-    swap_stack(sc, OP_DYNAMIC_UNWIND, func, cadr(args));
+    swap_stack(sc, OP_DYNAMIC_UNWIND, func, copy_proper_list(sc, cdr(args)));
   else wrong_type_error_nr(sc, sc->dynamic_unwind_symbol, 1, func, wrap_string(sc, "a procedure of two arguments", 28));
-  return(cadr(args));
+  return(cadr(args)); /* ?? */
 }
 
 
@@ -69566,12 +69578,9 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* 
        *   (let ((hk (make-hook 'x))) (define (func) (map hk (list 0 6))) (set! (setter hk) (lambda (y) y)) (func))
        */
       if (is_any_procedure(closure_setter_or_map_list(f))) /* should we restore #f? */
-	{
-	  /* fprintf(stderr, "%s[%d]: clobbering setter: %s, setter: %s, f: %s\n", __func__, __LINE__, display(body), display(closure_setter(f)), display(f)); */
-	  push_stack(sc, OP_DYNAMIC_UNWIND, list_2(sc, f, closure_setter(f)), sc->restore_setter);
-	  /* the passed list will be car(args) when dynamic_unwind calls (f . args) */
-	  /* all this complexity because there is no place to store the "slow" version of seq for circular list checks */
-	}
+	push_stack(sc, OP_DYNAMIC_UNWIND, list_3(sc, f, closure_setter(f), sc->T), sc->restore_setter);
+      /* the passed list will be car(args) when dynamic_unwind calls (f . args) */
+      /* all this complexity because there is no place to store the "slow" version of seq for circular list checks */
       closure_set_map_list(f, seq);
       push_stack(sc, OP_MAP_2, inline_make_counter(sc, seq), f);
       return(sc->unspecified);
@@ -81738,7 +81747,7 @@ static goto_t set_implicit_c_function(s7_scheme *sc, s7_pointer fnc)  /* (let ((
 static goto_t set_implicit_closure(s7_scheme *sc, s7_pointer fnc)
 {
   s7_pointer setter = closure_setter_or_map_list(fnc);  /* (set! (fnc ind...) val), sc->code = ((fnc ind...) val) */
-  if ((setter == sc->F) && (!is_pair(setter)) && (!closure_no_setter(fnc))) /* maybe closure_setter hasn't been set yet: see fset3 in s7test.scm */
+  if ((setter == sc->F) && (!closure_no_setter(fnc)))   /* maybe closure_setter hasn't been set yet: see fset3 in s7test.scm */
     setter = setter_p_pp(sc, fnc, sc->curlet);
   if (!is_t_procedure(setter))
     {
@@ -92669,7 +92678,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
     TOP_NO_POP:
       if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "  %s (%d), code: %s\n", op_names[sc->cur_op], (int)(sc->cur_op), display_truncated(sc->code)));
-
+      
       /* it is only slightly faster to use labels as values (computed gotos) here. In my timing tests (June-2018), the best case speedup was in titer.scm
        *    callgrind numbers 4808 to 4669; another good case was tread.scm: 2410 to 2386.  Most timings were a draw.  computed-gotos-s7.c has the code,
        *    macroized so it will work if such gotos aren't available.  I think I'll stick with a switch statement.
@@ -97875,7 +97884,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->for_each_symbol =              semisafe_defun("for-each",	for_each,		2, 0, true);
   sc->map_symbol =                   semisafe_defun("map",	map,			2, 0, true);
   sc->dynamic_wind_symbol =          semisafe_defun("dynamic-wind", dynamic_wind,       3, 0, false);
-  sc->dynamic_unwind_symbol =        semisafe_defun("dynamic-unwind", dynamic_unwind,   2, 0, false);
+  sc->dynamic_unwind_symbol =        semisafe_defun("dynamic-unwind", dynamic_unwind,   2, 1, false);
   sc->catch_symbol =                 semisafe_defun("catch",	catch,			3, 0, false);
   sc->throw_symbol =                 unsafe_defun("throw",	throw,			1, 0, true);
   sc->error_symbol =                 unsafe_defun("error",	error,			1, 0, true); /* was 0,0 -- 1-Aug-22 */
@@ -99067,4 +99076,7 @@ int main(int argc, char **argv)
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * clo in loop: lookup, hop, unhop at end: t803, int_optimize_1 68177
+ *   t803 -> tclo, map hook t725?, t804 -> s7test
+ * update repl.py at ccrma
+ * resize_heap_fraction < 0.74 causes trouble?, new_cell at 9290 fixes the bug.
  */
