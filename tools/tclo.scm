@@ -208,17 +208,155 @@
 
 
 ;;; --------------------------------
-(define* (f2 x y)
+(define* (ff2 x y)
   (or (null? x)
       (and (symbol? (car x))
-	   (f2 (cdr x) (+ y 1)))))
+	   (ff2 (cdr x) (+ y 1)))))
 
-(define (test2 lst)
+(define (testff2 lst)
   (do ((i 0 (+ i 1)))
       ((= i 100000))
-    (f2 lst 0)))
+    (ff2 lst 0)))
 
-(test2 (make-list 10 'a))
+(testff2 (make-list 10 'a))
+
+;;; --------------------------------
+
+
+(define xlen 1000000)
+
+(define (xf size)
+  (do ((i 0 (+ i 1)))
+      ((= i size))
+    (xf1 i)))
+
+(define (xf1 x)
+  (unless (integer? x)
+    (error 'wrong-type-arg "f1: ~S is ~A but should be an integer" x (type-of x)))
+  (+ x 1))
+
+;(xf xlen)
+;; 197 eval+g_add_x1+lookup op_safe_closure_s
+
+
+(define (xf2 size)
+  (define (xf3 x)
+    (unless (integer? x)
+      (error 'wrong-type-arg "f3: ~S is ~A but should be an integer" x (type-of x)))
+    (+ x 1))
+  (do ((i 0 (+ i 1)))
+      ((= i size))
+    (xf3 i)))
+
+;(xf2 xlen)
+;; 197 exactly like xf+xf1
+
+
+(define (xf4 func size)
+  (do ((i 0 (+ i 1)))
+      ((= i size))
+    (func i)))
+
+;(xf4 xf1 xlen)
+;; 196
+
+;(xf4 (lambda (x) (+ x 1)) xlen)
+;; 167
+
+;(xf4 (macro (x) `(+ ,x 1)) xlen)
+;; 15! opt_dotimes+opt_i_ii_sc_add!!
+
+;(xf4 (macro (x) `(display (+ ,x 1))) 10)  ; this form does not collapse
+;(xf4 (macro (x) `(* 2 (+ ,x 1))) 10)      ; this does collapse (it stays in i_ii_ok?)
+
+(define-macro (xm1 x) `(+ ,x 1))
+;(xf4 xm1 xlen)
+;; 15! as above
+
+;; so macro is ca 10 times faster than function -- need to evert func?
+;;   optimizer func->body tieing arg to outer
+;; macros are expanded at opt time in int|float_optimize
+
+;(xf4 (lambda (x) (display (+ x 1) #f)) xlen)
+;; 192!
+
+(define (xf5 size)
+  (do ((i 0 (+ i 1)))
+      ((= i size))
+    (+ i 1))) ; the everted form
+
+;(xf5 xlen)
+;; 15 as above
+
+
+(define (xg size)
+  (do ((i 0 (+ i 1)))
+      ((= i size))
+    (xg1 i)))
+
+(define (xg1 x)
+  (+ x 1))
+
+;(xg xlen)
+;; 88 eval+fx_safe_closure_s_to_add1 via op_safe_closure_s_to_sc
+
+;(xf4 xg1 xlen)
+;; 253 which looks about right
+
+
+(define xg2 (let ((xg3 (lambda (x) 
+		       (+ x 1))))
+	     (lambda (size)
+	       (do ((i 0 (+ i 1)))
+		   ((= i size))
+		 (xg3 i)))))
+
+;(xg2 xlen)
+;; 167 eval+add_x1+gc+lookup op_closure_s_o
+
+
+(define (xh size)
+  (do ((i 0 (+ i 1)))
+      ((= i size))
+    (xh1 i)))
+
+(define (xh1 x)
+  (eval '(+ x 1) (curlet)))
+
+;(xh xlen)
+;; 457 eval+gc+add_p_pp+g_eval+reverse_in_place_unchecked!+g_add, hop_c=curlet, op_c_ap=g_eval op_closure_s_o + eval_args
+
+
+
+(define (xg3 x)
+  (+ x x))
+
+(define (xg4 size)
+  (do ((i 0 (+ i 1)))
+      ((= i size))
+    (xg3 i)))
+
+;(xg4 xlen)
+;; 168 eval+closure_is_ok_1 op_safe_closure_s_a
+
+
+(define (xtest)
+  (xf xlen)
+  (xf2 xlen)
+  (xf4 xf1 xlen)
+  (xf4 (lambda (x) (+ x 1)) xlen)
+  (xf4 (macro (x) `(+ ,x 1)) xlen)
+  (xf4 xm1 xlen)
+  (xf4 (lambda (x) (display (+ x 1) #f)) xlen)
+  (xf5 xlen)
+  (xg xlen)
+  (xf4 xg1 xlen)
+  (xg2 xlen)
+  (xg4 xlen)
+  (xh xlen))
+
+(xtest)
+
 
 ;;; --------------------------------
 (when (> (*s7* 'profile) 0)

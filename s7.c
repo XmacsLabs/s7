@@ -33157,7 +33157,7 @@ static /* inline */ void symbol_to_port(s7_scheme *sc, s7_pointer obj, s7_pointe
 	{
 	  s7_pointer printer = sc->symbol_printer;
 	  s7_pointer res;
-	  sc->symbol_printer = sc->F; /* avoid infinite recursion */
+	  sc->symbol_printer = sc->F; /* avoid infinite recursion, but what if error in printer so this is not restored? */
 	  res = s7_call(sc, printer, set_plist_1(sc, obj)); /* res should be a string */
 	  sc->symbol_printer = printer;
 	  if (!is_string(res))
@@ -71207,8 +71207,7 @@ static void init_choosers(s7_scheme *sc)
   f = set_function_chooser(sc->list_values_symbol, list_values_chooser);
   sc->simple_list_values = make_function_with_class(sc, f, "list-values", g_simple_list_values, 0, 0, true);
 
-  sc->restore_setter = make_function(sc, "<restore-setter>", g_restore_setter, 1, 0, false, "map closure-setter restoration", 
-				     alloc_pointer(sc), alloc_semipermanent_function(sc));
+  sc->restore_setter = s7_make_function(sc, "<restore-setter>", g_restore_setter, 1, 0, false, "map closure-setter restoration");
 }
 
 
@@ -77206,6 +77205,7 @@ static bool op_let_1(s7_scheme *sc)
       return(true);
     }
   id = let_id(sc->curlet);
+  check_free_heap_size(sc, 1024); /* all the slots below are unchecked */
   if (is_pair(y))
     {
       s7_pointer args = cdr(y), last_slot, x = car(sc->code);
@@ -99028,38 +99028,38 @@ int main(int argc, char **argv)
  * s7test           1831   1818   1829   1830   1855
  * lt        2222   2172   2150   2185   1950   1911
  * dup              3788   2492   2239   2097   1995
- * thook     7651   ----   2590   2030   2046   2007
+ * thook     7651   ----   2590   2030   2046   2004
  * tread            2421   2419   2408   2405   2244
  * tcopy            5546   2539   2375   2386   2348
- * trclo     8031   2574   2454   2445   2449   2442
+ * trclo     8031   2574   2454   2445   2449   2438
  * titer     3657   2842   2641   2509   2449   2458
  * tmat             3042   2524   2578   2590   2515
- * tload                   3046   2404   2566   2546
+ * tload                   3046   2404   2566   2549
  * fbench    2933   2583   2460   2430   2478   2573
  * tsort     3683   3104   2856   2804   2858   2858
  * tio              3752   3683   3620   3583   3122
- * tobj             3970   3828   3577   3508   3450
+ * tobj             3970   3828   3577   3508   3453
  * tmac             3873   3033   3677   3677   3512
  * teq              4045   3536   3486   3544   3591
- * tclo      6362   4735   4390   4384   4474   4342
  * tmap             8774   4489   4541   4586   4384
- * tcase            4793   4439   4430   4439   4402
+ * tcase            4793   4439   4430   4439   4378
  * tlet      11.0   6974   5609   5980   5965   4498
  * tfft             7729   4755   4476   4536   4541
  * tstar            5923   5519   4449   4550   4548
- * tshoot           5447   5183   5055   5034   4854
+ * tshoot           5447   5183   5055   5034   4850
  * tform            5348   5307   5316   5084   5094
- * tstr      10.0   6342   5488   5162   5180   5177
+ * tstr      10.0   6342   5488   5162   5180   5194 [op_let_1]
  * tnum             6013   5433   5396   5409   5432
  * tari      15.0   12.7   6827   6543   6278   6183
+ * tset                           6260   6364   6213
  * tgsl             7802   6373   6282   6208   6230
- * tlist     9219   7546   6558   6240   6300   6312
- * tset                           6260   6364   6325
+ * tlist     9219   7546   6558   6240   6300   6308
  * trec      19.6   6980   6599   6656   6658   6490
  * tleft     12.2   9753   7537   7331   7331   6811
  * tmisc                          7614   7115   7128
- * tlamb                          8003   7941   7925
- * tgc              11.1   8177   7857   7986   8007
+ * tclo             8025   7645   8809   7770   7701
+ * tlamb                          8003   7941   7910
+ * tgc              11.1   8177   7857   7986   8014 [op_let_1]
  * thash            11.7   9734   9479   9526   9251
  * cb        12.9   11.0   9658   9564   9609   9647
  * tmap-hash                                    10.3
@@ -99068,15 +99068,12 @@ int main(int argc, char **argv)
  * timp             24.4   20.0   19.6   19.7   15.6
  * tmv              21.9   21.1   20.7   20.6   17.4
  * calls            37.5   37.0   37.5   37.1   37.2
- * sg                      55.9   55.8   55.4   55.6
+ * sg                      55.9   55.8   55.4   55.5
  * tbig            175.8  156.5  148.1  146.2  146.1
  * ----------------------------------------------------
  *
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
- * clo in loop: lookup, hop, unhop at end: t803, int_optimize_1 68177
- *   t803 -> tclo, map hook t725?, t804 -> s7test
- * update repl.py at ccrma
- * resize_heap_fraction < 0.74 causes trouble?, new_cell at 9290 fixes the bug.
+ * clo in loop: lookup, hop, unhop at end: t803
  */
