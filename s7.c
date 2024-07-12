@@ -2640,7 +2640,6 @@ static void init_types(void)
 #define T_MACLET                       T_DEFINER
 #define is_maclet(p)                   has_high_type_bit(T_Let(p), T_MACLET)
 #define set_maclet(p)                  set_high_type_bit(T_Let(p), T_MACLET)
-/* this marks a maclet */
 
 #define T_HAS_FX                       T_DEFINER
 #define set_has_fx(p)                  set_high_type_bit(T_Pair(p), T_HAS_FX)
@@ -3987,12 +3986,13 @@ static void try_to_call_gc(s7_scheme *sc);
   static char *describe_type_bits(s7_scheme *sc, s7_pointer obj);
 #endif
 
-static s7_pointer wrapped_integer(s7_scheme *sc) /* wrap_integer without small_int possibility -- usable as a mutable integer for example */
+static s7_pointer wrap_mutable_integer(s7_scheme *sc, s7_int x) /* wrap_integer without small_int possibility -- usable as a mutable integer for example */
 {
   s7_pointer p = car(sc->integer_wrappers);
 #if S7_DEBUGGING
   if ((full_type(p) & (~T_GC_MARK)) != (T_INTEGER | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
 #endif
+  set_integer(p, x);
   sc->integer_wrappers = cdr(sc->integer_wrappers);
   return(p);
 }
@@ -4009,8 +4009,6 @@ static s7_pointer wrap_integer(s7_scheme *sc, s7_int x)
   sc->integer_wrappers = cdr(sc->integer_wrappers);
   return(p);
 }
-
-#define wrapped_real(Sc) wrap_real(Sc, 0.0) /* here (unlike above) we don't need to protect against getting a built-in real */
 
 static s7_pointer wrap_real(s7_scheme *sc, s7_double x)
 {
@@ -32147,7 +32145,7 @@ static s7_pointer c_object_iterate(s7_scheme *sc, s7_pointer obj)
   p = iterator_sequence(obj);
   cur = iterator_current(obj);
   set_car(cur, p);
-  set_car(cdr(cur), make_integer(sc, iterator_position(obj))); /* perhaps wrap_integer, c_object_ref->c_object_getter is c_function in scheme? */
+  set_car(cdr(cur), make_integer(sc, iterator_position(obj))); /* perhaps wrap_mutable_integer, c_object_ref->c_object_getter is c_function in scheme? */
   result = (*(c_object_ref(sc, p)))(sc, cur); /* used to save/restore sc->x|z here */
   iterator_position(obj)++;
   if (result == ITERATOR_END)
@@ -49408,12 +49406,12 @@ static s7_pointer string_getter(s7_scheme *sc, s7_pointer str, s7_int loc)
 
 static s7_pointer c_object_setter(s7_scheme *sc, s7_pointer obj, s7_int loc, s7_pointer val)
 {
-  return((*(c_object_set(sc, obj)))(sc, with_list_t3(obj, wrap_integer(sc, loc), val))); /* was make_integer 14-Nov-23 */
+  return((*(c_object_set(sc, obj)))(sc, with_list_t3(obj, wrap_mutable_integer(sc, loc), val))); /* was make_integer 14-Nov-23 */
 }
 
 static s7_pointer c_object_getter(s7_scheme *sc, s7_pointer obj, s7_int loc)
 {
-  return((*(c_object_ref(sc, obj)))(sc, set_plist_2(sc, obj, wrap_integer(sc, loc)))); /* was make_integer 14-Nov-23 */
+  return((*(c_object_ref(sc, obj)))(sc, set_plist_2(sc, obj, wrap_mutable_integer(sc, loc)))); /* was make_integer 14-Nov-23 */
 }
 
 static s7_pointer let_setter(s7_scheme *sc, s7_pointer e, s7_int loc, s7_pointer val)
@@ -49583,8 +49581,8 @@ static s7_pointer copy_c_object_to_same_type(s7_scheme *sc, s7_pointer dest, s7_
   if ((is_safe_c_function(c_object_getf(sc, source))) &&
       (is_safe_c_function(c_object_setf(sc, dest)))) /* maybe not worth the extra code */
     {
-      s7_pointer mi = wrapped_integer(sc);
-      s7_pointer mj = wrapped_integer(sc);
+      s7_pointer mi = wrap_mutable_integer(sc, 0);
+      s7_pointer mj = wrap_mutable_integer(sc, 0);
       set_car(sc->t3_1, dest);
       set_car(sc->t3_2, mj);
       for (s7_int i = source_start, j = dest_start; i < dest_end; i++, j++)
@@ -51104,7 +51102,7 @@ static s7_pointer c_obj_to_list(s7_scheme *sc, s7_pointer obj) /* "c_object_to_l
 
   result = make_list(sc, len, sc->nil);
   sc->temp7 = result;
-  zc = wrapped_integer(sc); /* was make_mutable_integer 17-Nov-23 */
+  zc = wrap_mutable_integer(sc, 0); /* was make_mutable_integer 17-Nov-23 */
   z = list_2_unchecked(sc, obj, zc);
   gc_z = gc_protect_1(sc, z);
   x = result;
@@ -68910,7 +68908,7 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 		if ((len > MUTLIM) &&
 		    (!tree_has_setters(sc, body)))
 		  {
-		    s7_pointer sv = wrapped_real(sc); /* make_mutable_real(sc, 0.0) 16-Nov-23 */
+		    s7_pointer sv = wrap_real(sc, 0.0); /* maybe make_mutable_real(sc, 0.0)? */
 		    slot_set_value(slot, sv);
 		    if (func == opt_float_any_nv)
 		      {
@@ -68939,7 +68937,7 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 		  if ((len > MUTLIM) &&
 		      (!tree_has_setters(sc, body)))
 		    {
-		      s7_pointer sv = wrapped_integer(sc); /* make_mutable_integer(sc, 0) */
+		      s7_pointer sv = wrap_mutable_integer(sc, 0); /* make_mutable_integer? -- can we assume c_funcs won't use wrappers? */
 		      slot_set_value(slot, sv);
 		      /* since there are no setters, the inner step is also mutable if there is one.
 		       *    func=opt_cell_any_nv, sc->opts[0]->v[0].fp(sc->opts[0]) fp=opt_do_1 -> mutable version
@@ -69256,7 +69254,7 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
       s7_function func;
       s7_pointer iters;
 
-      s7_p_p_t fp = s7_p_p_function(f);
+      s7_p_p_t fp = s7_p_p_function(f); /* s7_b_p_t would work if we could cast it, and others (return value is discarded) */
       if ((fp) && (len == 1))
 	{
 	  if (is_pair(cadr(args)))
@@ -69278,7 +69276,7 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
 	      s7_int vlen = vector_length(v);
 	      if (is_float_vector(v))
 		{
-		  s7_pointer rl = wrapped_real(sc); /* make_mutable_real(sc, 0.0) */
+		  s7_pointer rl = wrap_real(sc, 0.0); /* maybe make_mutable_real(sc, 0.0) -- not sure this is safe */
 		  sc->temp7 = rl;
 		  for (s7_int i = 0; i < vlen; i++)
 		    {
@@ -69288,7 +69286,7 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
 	      else
 		if (is_int_vector(v))
 		  {
-		    s7_pointer iv = wrapped_integer(sc); /* make_mutable_integer(sc, 0) */
+		    s7_pointer iv = wrap_mutable_integer(sc, 0); /* make_mutable_integer? */
 		    sc->temp7 = iv;
 		    for (s7_int i = 0; i < vlen; i++)
 		      {
@@ -89840,16 +89838,16 @@ static bool op_x_sc(s7_scheme *sc, s7_pointer f)
 {
   s7_pointer code = sc->code;
   if (((type(f) == T_C_FUNCTION) && (c_function_is_aritable(f, 2))) ||
-      ((type(f) == T_C_RST_NO_REQ_FUNCTION) &&	(c_function_max_args(f) >= 2)))
-    { /* ((L 'abs) x 0.0001) where 'abs is '* in timp.scm */
+      ((type(f) == T_C_RST_NO_REQ_FUNCTION) && (c_function_max_args(f) >= 2))) /* ((L 'abs) x 0.0001) where 'abs is '* in timp.scm */
+    {
       if (!needs_copied_args(f))
 	{
 	  sc->value = c_function_call(f)(sc, set_plist_2(sc, lookup_checked(sc, cadr(code)), caddr(code)));
 	  return(true);
 	}
       sc->args = list_2(sc, lookup_checked(sc, cadr(code)), caddr(code));
-      sc->code = f;
-      return(false); /* goto APPLY */
+      sc->value = c_function_call(f)(sc, sc->args);
+      return(true);
     }
   if (!is_applicable(f))
     apply_error_nr(sc, f, cdr(code));
@@ -89867,8 +89865,8 @@ static bool op_x_aa(s7_scheme *sc, s7_pointer f)
 {
   s7_pointer code = sc->code;
   if (((type(f) == T_C_FUNCTION) && (c_function_is_aritable(f, 2))) ||
-      ((type(f) == T_C_RST_NO_REQ_FUNCTION) &&	(c_function_max_args(f) >= 2)))
-    { /* ((L 'abs) x 0.0001) where 'abs is '* in timp.scm */
+      ((type(f) == T_C_RST_NO_REQ_FUNCTION) && (c_function_max_args(f) >= 2))) /* ((L 'abs) x 0.0001) where 'abs is '* in timp.scm */
+    {
       if (!needs_copied_args(f))
 	{
 	  sc->value = c_function_call(f)(sc, with_list_t2(fx_call(sc, cdr(code)), fx_call(sc, cddr(code))));
@@ -89876,8 +89874,8 @@ static bool op_x_aa(s7_scheme *sc, s7_pointer f)
 	}
       sc->args = fx_call(sc, cddr(code));
       sc->args = list_2(sc, sc->value = fx_call(sc, cdr(code)), sc->args);
-      sc->code = f;
-      return(false); /* goto APPLY */
+      sc->value = c_function_call(f)(sc, sc->args);
+      return(true);
     }
   if (!is_applicable(f))
     apply_error_nr(sc, f, cdr(code));
@@ -92586,13 +92584,14 @@ static bool closure_np_is_ok_1(s7_scheme *sc, s7_pointer code)
   return(false);
 }
 
-/* 20-Junu-24 calls=closure_is_*, misses=symbol_ctr != 1
-   s7test: calls: 974814,  misses: 550785, full: calls: 11433106, misses: 6406461
-   tlet:   calls: 3600032, misses: 1900012
-   tlamb:  calls: 33000005,misses: 11999999
-   tset:   calls: 1329500, misses: 998
-   lt:     calls: 1374000, misses: 232936
-   tmat:   calls: 222206, misses: 0 (tobj, tsort, tform, tread, tfft, thash, etc)
+/* 20-Jun-24 calls=closure_is_*, misses=symbol_ctr != 1
+   s7test: calls: 974814,   misses: 550785
+   full:   calls: 11433106, misses: 6406461
+   tlet:   calls: 3600032,  misses: 1900012
+   tlamb:  calls: 33000005, misses: 11999999
+   tset:   calls: 1329500,  misses: 998
+   lt:     calls: 1374000,  misses: 232936
+   tmat:   calls: 222206,   misses: 0 (tobj, tsort, tform, tread, tfft, thash, etc)
    so symbol_ctr==1 is valuable
  */
 
@@ -92973,7 +92972,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_CL_FA:  if (!cl_function_is_ok(sc, sc->code)) break;
 	case HOP_CL_FA: op_cl_fa(sc); continue;                        /* op_c_fs was not faster if fx_s below */
 	case OP_MAP_FOR_EACH_FA:  op_map_for_each_fa(sc); continue;    /* here only if for-each or map + one seq */
-	case OP_MAP_FOR_EACH_FAA: op_map_for_each_faa(sc); continue;   /* here only if for-each or map + twp seqs */
+	case OP_MAP_FOR_EACH_FAA: op_map_for_each_faa(sc); continue;   /* here only if for-each or map + two seqs */
 
 
 	  /* unsafe c_functions */
@@ -93291,7 +93290,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	  op_any_closure_np_end(sc);
 	  goto EVAL;
 
-	case OP_ANY_CLOSURE_SYM: if (!check_closure_sym(sc, 1)) break; /* (lambda args ...) */
+	case OP_ANY_CLOSURE_SYM: if (!check_closure_sym(sc, 1)) break;   /* (lambda args ...) */
 	case HOP_ANY_CLOSURE_SYM: op_any_closure_sym(sc); goto BEGIN;
 	case OP_ANY_CLOSURE_A_SYM: if (!check_closure_sym(sc, 2)) break; /* (lambda (a . args) ...) */
 	case HOP_ANY_CLOSURE_A_SYM: op_any_closure_a_sym(sc); goto BEGIN;
@@ -93568,6 +93567,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_APPLY:
 	  if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "  %s[%d]: op_apply %s (%s) to %s\n", __func__, __LINE__,
 						display_truncated(sc->code), s7_type_names[type(sc->code)], display_truncated(sc->args)));
+	  /* pulling out T_C_FUNCTION (to avoid the switch) does not gain anything in the timing tests */
 	  switch (type(sc->code))
 	    {
 	    case T_C_FUNCTION:          sc->value = apply_c_function(sc, sc->code, sc->args); continue;
@@ -94479,9 +94479,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
       if (is_pair(sc->code))
 	{
 	  s7_pointer carc = T_Ext(car(sc->code));
-	  if (is_symbol(carc))
+	  if (is_symbol(carc))                        /* car is a symbol, sc->code a list */
 	    {
-	      /* car is a symbol, sc->code a list */
 	      if (is_syntactic_symbol(carc))
 		{
 		  sc->cur_op = (opcode_t)symbol_syntax_op_checked(sc->code);
@@ -94489,7 +94488,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 		  goto TOP_NO_POP;
 		}
 	      sc->value = lookup_global(sc, carc);
-	      set_optimize_op(sc->code, OP_PAIR_SYM);	  /* mostly stuff outside functions (unopt) */
+	      set_optimize_op(sc->code, OP_PAIR_SYM); /* mostly stuff outside functions (unopt) */
 	      goto EVAL_ARGS_TOP;
 	    }
 	  if (is_pair(carc))                          /* ((if x y z) a b) etc */
@@ -94497,14 +94496,14 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	      if (eval_car_pair(sc)) goto TOP_NO_POP;
 	      goto EVAL;
 	    }
-	  if (is_syntax(carc)) /* here we can get syntax objects like quote */
+	  if (is_syntax(carc))                        /* here we can get syntax objects like quote */
 	    {
 	      sc->cur_op = syntax_opcode(carc);
 	      pair_set_syntax_op(sc->code, sc->cur_op);
 	      goto TOP_NO_POP;
 	    }
 	  /* car is the function/sequence to be applied, or (for example) a syntax variable like quote that has been used locally */
-	  set_optimize_op(sc->code, OP_PAIR_ANY);        /* usually an error: (#\a) etc, might be (#(0) 0) */
+	  set_optimize_op(sc->code, OP_PAIR_ANY);     /* usually an error: (#\a) etc, might be (#(0) 0) */
 	  sc->value = carc;
 	  goto EVAL_ARGS_TOP;
 	}
@@ -99028,7 +99027,7 @@ int main(int argc, char **argv)
  * s7test           1831   1818   1829   1830   1855
  * lt        2222   2172   2150   2185   1950   1911
  * dup              3788   2492   2239   2097   1995
- * thook     7651   ----   2590   2030   2046   2004
+ * thook     7651   ----   2590   2030   2046   2004  2009 [g_for_each_closure]
  * tread            2421   2419   2408   2405   2244
  * tcopy            5546   2539   2375   2386   2348
  * trclo     8031   2574   2454   2445   2449   2438
@@ -99041,7 +99040,7 @@ int main(int argc, char **argv)
  * tobj             3970   3828   3577   3508   3453
  * tmac             3873   3033   3677   3677   3512
  * teq              4045   3536   3486   3544   3591
- * tmap             8774   4489   4541   4586   4384
+ * tmap             8774   4489   4541   4586   4384  4409 [same]
  * tcase            4793   4439   4430   4439   4378
  * tlet      11.0   6974   5609   5980   5965   4498
  * tfft             7729   4755   4476   4536   4541
@@ -99075,5 +99074,4 @@ int main(int argc, char **argv)
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
- * clo in loop: lookup, hop, unhop at end: t803
  */

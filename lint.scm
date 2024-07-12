@@ -5239,20 +5239,20 @@
 						     ((gcd) (eq? op2 'lcm))
 						     ((lcm) (eq? op2 'gcd))
 						     (else #f)))
-					      (list 'abs (cons '* (cdr arg1))))    ; (* (gcd a b) (lcm a b)) -> (abs (* a b)) but only if 2 args?
+					      (list 'abs (cons '* (cdr arg1))))  ; (* (gcd a b) (lcm a b)) -> (abs (* a b)) but only if 2 args?
 
-					     ((and (eq? op1 'exp)         ; (* (exp a) (exp b)) -> (exp (+ a b))
+					     ((and (eq? op1 'exp)                ; (* (exp a) (exp b)) -> (exp (+ a b))
 						   (eq? op2 'exp))
 					      (list 'exp (list '+ (cadr arg1) (cadr arg2))))
 
-					     ((and (eq? op1 'sqrt)                ; (* (sqrt x) (sqrt y)) -> (sqrt (* x y))??
+					     ((and (eq? op1 'sqrt)               ; (* (sqrt x) (sqrt y)) -> (sqrt (* x y))??
 						   (eq? op2 'sqrt))
 					      (list 'sqrt (list '* (cadr arg1) (cadr arg2))))
 
 					     ((not (and (eq? op1 'expt) (eq? op2 'expt)))
 					      (cons '* val))
 
-					     ((equal? (cadr arg1) (cadr arg2)) ; (* (expt x y) (expt x z)) -> (expt x (+ y z))
+					     ((equal? (cadr arg1) (cadr arg2))   ; (* (expt x y) (expt x z)) -> (expt x (+ y z))
 					      (list 'expt (cadr arg1) (list '+ (caddr arg1) (caddr arg2))))
 
 					     ((equal? (caddr arg1) (caddr arg2)) ; (* (expt x y) (expt z y)) -> (expt (* x z) y)

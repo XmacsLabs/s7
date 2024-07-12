@@ -715,7 +715,7 @@
 (define-constant imfv (immutable! (float-vector 0 1 2)))
 (define-constant imfv2 (immutable! #r2d((1 2 3) (4 5 6))))
 (define-constant imfv3 (immutable! #r3d(((1 2 3) (1 2 4)) ((1 2 5) (1 2 6)) ((1 2 7) (1 2 8)))))
-(define-constant imi (immutable! (inlet 'a 3 'b 2)))
+(define-constant imi (immutable! (let ((a 3) (b 2)) (immutable! 'a) (immutable! 'b) (curlet))))
 (define-constant ilt (immutable! (openlet (inlet 'let-ref-fallback (lambda (e sym) #<undefined>)))))
 
 (define-constant imh (immutable! (let ((H (make-hash-table 8 #f (cons symbol? integer?)))) (set! (H 'a) 1) (set! (H 'b) 2) H)))
@@ -739,13 +739,13 @@
 (define-constant vvvi (let ((v (make-vector '(2 2)))) (set! (v 0 0) "asd") (set! (v 0 1) #r(4 5 6)) (set! (v 1 0) '(1 2 3)) (set! (v 1 1) 32) (immutable! v)))
 (define-constant vvvf (immutable! (vector abs log sin)))
 
-(define big-let (let ((e (inlet)))
+(define-constant big-let (let ((e (inlet)))
 		  (let-temporarily (((*s7* 'print-length) 80))
 		    (do ((i 0 (+ i 1)))
 			((= i 100))
 		      (varlet e (symbol "abc" (number->string i)) i)))
 		  (immutable! e)))
-(define big-hash (let ((e (hash-table)))
+(define-constant big-hash (let ((e (hash-table)))
 		   (let-temporarily (((*s7* 'print-length) 80))
 		     (do ((i 0 (+ i 1)))
 			 ((= i 100))
@@ -797,8 +797,7 @@
 (define max-stack (*s7* 'stack-top))
 (define last-error-type #f)
 (define old-definee #f)
-(define-constant L0 (let ((a 1)) (immutable! 'a) (curlet)))
-(immutable! L0)
+(define-constant L0 (immutable! (let ((a 1)) (immutable! 'a) (curlet))))
 
 (define (tp val) ; omits trailing " if val long and already a string
   (let ((str (object->string val)))
@@ -940,7 +939,7 @@
 			  ;'eval ; -- can't use if signature (circular program) or (make-list (max-list-len))
 			  'checked-eval
 			  ;'immutable! ;-- lots of complaints that are hard to reproduce
-			  'checked-procedure-source
+			  'checked-procedure-source 'procedure-arglist
 			  ;'owlet ;too many uninteresting diffs
 			  ;'gc  ; slower? and can be trouble if called within an expression
 			  ;'reader-cond ;-- cond test clause can involve unbound vars: (null? i) for example, and the bugs of eval-time reader-cond are too annoying
@@ -1320,8 +1319,8 @@
 
 		    "(let loop ((i 2)) (if (> i 0) (loop (- i 1)) i))"
 
-		    ;"(rootlet)" ; why was this commented out? -- very verbose useless diffs
-		    ;"(unlet)"
+		    "(rootlet)" ; why was this commented out? -- very verbose useless diffs
+		    "(unlet)"
 		    "(let? (curlet))"
 		    ;"*s7*"     ;variable
 
@@ -1487,6 +1486,10 @@
                     (lambda (s) (string-append "(list (let ((old #f)) (dynamic-wind (lambda () (set! old (*s7* 'openlets)) (set! (*s7* 'openlets) #f)) (lambda () " s ") (lambda () (set! (*s7* 'openlets) old)))))")))
 	      (list (lambda (s) (string-append "(list (let () (let-temporarily (((*s7* 'safety) 1)) " s ")))"))
                     (lambda (s) (string-append "(list (let ((old #f)) (dynamic-wind (lambda () (set! old (*s7* 'safety))) (lambda () " s ") (lambda () (set! (*s7* 'safety) old)))))")))
+
+	      (list (lambda (s) (string-append "(map Hk (list " s "))"))
+		    (lambda (s) (string-append "(map _dilambda_ (list " s "))")))
+
 	      ;; perhaps function port (see _rd3_ for open-input-string), gmp?
 	      ))
 
