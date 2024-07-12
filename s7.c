@@ -77182,7 +77182,7 @@ static bool op_let_1(s7_scheme *sc)
 	  else
 	    {
 	      check_stack_size(sc);
-	      push_stack(sc, OP_LET1, sc->args, cdr(sc->code));
+	      push_stack(sc, OP_LET1, sc->args, cdr(sc->code)); /* come back here */
 	      sc->code = car(x);
 	      return(false); /* goto EVAL */
 	    }
@@ -77249,7 +77249,7 @@ static bool op_let(s7_scheme *sc)
     }
   sc->args = sc->nil;
   /* value: (((i 0)) (+ i 1)), code: ((i 0)) */
-  return(op_let_1(sc)); /* sc->code == vars */
+  return(op_let_1(sc)); /* sc->code == vars, sc->value = original sc->code */
 }
 
 static bool op_let_unchecked(s7_scheme *sc)     /* not named, but has vars, called from eval if looping via op_let->op_let_1 + unopt'd args */
@@ -77267,7 +77267,7 @@ static bool op_let_unchecked(s7_scheme *sc)     /* not named, but has vars, call
       return(false); /* goto EVAL */
     }
   sc->code = cdr(code);
-  return(op_let_1(sc));
+  return(op_let_1(sc)); /* sc->args preset with code */
 }
 
 static bool op_named_let(s7_scheme *sc)
@@ -77275,7 +77275,7 @@ static bool op_named_let(s7_scheme *sc)
   sc->args = sc->nil;
   sc->value = cdr(sc->code);
   sc->code = cadr(sc->value);
-  return(op_let_1(sc));
+  return(op_let_1(sc));  /* sc->args is ()? */
 }
 
 static void op_named_let_no_vars(s7_scheme *sc)
@@ -84817,8 +84817,11 @@ static goto_t op_dotimes_p(s7_scheme *sc)
   return(goto_eval);
 }
 
+#define SLOTS_AS_ARGS true
+
 static bool op_do_init_1(s7_scheme *sc)
 {
+  /* initially from do_unchecked, sc->args=(), sc->value=sc->code, sc->code=vars */
   while (true)  /* at start, first value is the loop (for GC protection?), returning sc->value is the next value */
     {
       s7_pointer init;
@@ -99074,4 +99077,5 @@ int main(int argc, char **argv)
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
+ * check 2000 for indents
  */
