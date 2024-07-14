@@ -1988,6 +1988,7 @@ static void init_types(void)
   #define T_Bgz(P) check_ref_one(P, T_BIG_COMPLEX,       __func__, __LINE__, "sweep", NULL)
   #define T_CMac(P) check_ref_one(P, T_C_MACRO,          __func__, __LINE__, NULL, NULL)
   #define T_Cat(P) check_ref_one(P, T_CATCH,             __func__, __LINE__, NULL, NULL)
+  #define T_CFn(P) check_ref_cfn(P,                      __func__, __LINE__)
   #define T_Chr(P) check_ref_one(P, T_CHARACTER,         __func__, __LINE__, NULL, NULL)
   #define T_Clo(P) check_ref_clo(P,                      __func__, __LINE__)                /* has closure let */
   #define T_Cmp(P) check_ref_one(P, T_COMPLEX,           __func__, __LINE__, NULL, NULL)
@@ -2050,6 +2051,7 @@ static void init_types(void)
   #define T_Bgz(P)  P
   #define T_CMac(P) P
   #define T_Cat(P)  P
+  #define T_CFn(P)  P
   #define T_Chr(P)  P
   #define T_Clo(P)  P
   #define T_Cmp(P)  P
@@ -2559,7 +2561,7 @@ static void init_types(void)
 
 #define T_BOOL_FUNCTION                T_MID_ITER_OK
 #define is_bool_function(p)            has_mid_type_bit(T_Prc(p), T_BOOL_FUNCTION)
-#define set_is_bool_function(p)        set_mid_type_bit(T_Fnc(p), T_BOOL_FUNCTION)
+#define set_is_bool_function(p)        set_mid_type_bit(T_CFn(p), T_BOOL_FUNCTION)
 
 #define T_SYMBOL_FROM_SYMBOL           T_MID_ITER_OK
 #define is_symbol_from_symbol(p)       has_mid_type_bit(T_Sym(p), T_SYMBOL_FROM_SYMBOL)
@@ -2614,8 +2616,8 @@ static void init_types(void)
 #define clear_is_typed_hash_table(p)   clear_high_type_bit(T_Hsh(p), T_TYPED_HASH_TABLE)
 
 #define T_BOOL_SETTER                  T_HAS_LET_FILE
-#define c_function_has_bool_setter(p)  has_high_type_bit(T_Fnc(p), T_BOOL_SETTER)
-#define c_function_set_has_bool_setter(p) set_high_type_bit(T_Fnc(p), T_BOOL_SETTER)
+#define c_function_has_bool_setter(p)  has_high_type_bit(T_CFn(p), T_BOOL_SETTER)
+#define c_function_set_has_bool_setter(p) set_high_type_bit(T_CFn(p), T_BOOL_SETTER)
 
 #define T_REST_SLOT                    T_HAS_LET_FILE
 #define is_rest_slot(p)                has_high_type_bit(T_Slt(p), T_REST_SLOT)
@@ -2631,8 +2633,8 @@ static void init_types(void)
 #define T_DEFINER                      (1 << 2)
 #define is_definer(p)                  has_high_type_bit(T_Sym(p), T_DEFINER)
 #define set_is_definer(p)              set_high_type_bit(T_Sym(p), T_DEFINER)
-#define is_func_definer(p)             has_high_type_bit(T_Fnc(p), T_DEFINER)
-#define set_func_is_definer(p)         do {set_high_type_bit(T_Fnc(initial_value(p)), T_DEFINER); set_high_type_bit(T_Sym(p), T_DEFINER);} while (0)
+#define is_func_definer(p)             has_high_type_bit(T_CFn(p), T_DEFINER)
+#define set_func_is_definer(p)         do {set_high_type_bit(T_CFn(initial_value(p)), T_DEFINER); set_high_type_bit(T_Sym(p), T_DEFINER);} while (0)
 #define is_syntax_definer(p)           has_high_type_bit(T_Syn(p), T_DEFINER)
 #define set_syntax_is_definer(p)       do {set_high_type_bit(T_Syn(initial_value(p)), T_DEFINER); set_high_type_bit(T_Sym(p), T_DEFINER);} while (0)
 /* this marks "definers" like define and define-macro */
@@ -2666,8 +2668,8 @@ static void init_types(void)
 /* this marks "binders" like let */
 
 #define T_SEMISAFE                     T_BINDER
-#define is_semisafe(p)                 has_high_type_bit(T_Fnc(p), T_SEMISAFE)
-#define set_is_semisafe(p)             set_high_type_bit(T_Fnc(p), T_SEMISAFE)
+#define is_semisafe(p)                 has_high_type_bit(T_CFn(p), T_SEMISAFE)
+#define set_is_semisafe(p)             set_high_type_bit(T_CFn(p), T_SEMISAFE)
 
 /* #define T_TREE_COLLECTED            T_FULL_BINDER */
 #define T_SHORT_TREE_COLLECTED         T_BINDER
@@ -2718,8 +2720,8 @@ static void init_types(void)
 #define has_simple_elements(p)         has_high_type_bit(T_Nvc(p), T_SIMPLE_ELEMENTS)
 #define set_has_simple_elements(p)     set_high_type_bit(T_Nvc(p), T_SIMPLE_ELEMENTS)
 #define clear_has_simple_elements(p)   clear_high_type_bit(T_Nvc(p), T_SIMPLE_ELEMENTS)
-#define c_function_has_simple_elements(p)     has_high_type_bit(T_Fnc(p), T_SIMPLE_ELEMENTS)
-#define c_function_set_has_simple_elements(p) set_high_type_bit(T_Fnc(p), T_SIMPLE_ELEMENTS)
+#define c_function_has_simple_elements(p)     has_high_type_bit(T_CFn(p), T_SIMPLE_ELEMENTS)
+#define c_function_set_has_simple_elements(p) set_high_type_bit(T_CFn(p), T_SIMPLE_ELEMENTS)
 /* c_func case here refers to boolean? et al -- structure element type declaration that ensures a simple object */
 
 #define T_SIMPLE_KEYS                  T_SIMPLE_ELEMENTS
@@ -2936,7 +2938,7 @@ static void init_types(void)
 #define opt1_fast(P)                   T_Lst(opt1(P,                OPT1_FAST))
 #define set_opt1_fast(P, X)            set_opt1(P, T_Pair(X),       OPT1_FAST)
 #define opt1_cfunc(P)                  T_Exs(opt1(P,                OPT1_CFUNC))
-#define set_opt1_cfunc(P, X)           set_opt1(P, T_Fnc(X),       OPT1_CFUNC)
+#define set_opt1_cfunc(P, X)           set_opt1(P, T_CFn(X),        OPT1_CFUNC)
 #define opt1_lambda_unchecked(P)       opt1(P,                      OPT1_LAMBDA) /* can be free/null? from s7_call? */
 #define opt1_lambda(P)                 T_Clo(opt1(P,                OPT1_LAMBDA))
 #define set_opt1_lambda(P, X)          set_opt1(P, T_Clo(X),        OPT1_LAMBDA)
@@ -3471,7 +3473,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define is_c_function_star(f)          (type(f) == T_C_FUNCTION_STAR)
 #define is_any_c_function(f)           (type(f) >= T_C_FUNCTION_STAR)
 #define is_safe_c_function(f)          ((is_c_function(f)) && (is_safe_procedure(f)))
-#define c_function_data(f)             (T_Fnc(f))->object.fnc.c_proc
+#define c_function_data(f)             (T_Fnc(f))->object.fnc.c_proc               /* not T_CFn -- this also applies to T_C_MACROs */
 #define c_function_call(f)             (T_Fnc(f))->object.fnc.ff
 #define c_function_min_args(f)         (T_Fnc(f))->object.fnc.required_args
 #define c_function_optional_args(f)    (T_Fnc(f))->object.fnc.optional_args
@@ -3486,16 +3488,16 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define c_function_set_setter(f, Val)  c_function_data(f)->setter = T_Prc(Val)
 #define c_function_class(f)            c_function_data(f)->id                      /* uint32_t */
 #define c_function_chooser(f)          c_function_data(f)->chooser
-#define c_function_base(f)             T_Fnc(c_function_data(f)->generic_ff)
-#define c_function_set_base(f, Val)    c_function_data(f)->generic_ff = T_Fnc(Val)
+#define c_function_base(f)             T_CFn(c_function_data(f)->generic_ff)
+#define c_function_set_base(f, Val)    c_function_data(f)->generic_ff = T_CFn(Val)
 #define c_function_marker(f)           c_function_data(f)->cam.marker              /* the mark function for the vector (mark_vector_1 etc) */
 #define c_function_set_marker(f, Val)  c_function_data(f)->cam.marker = Val
 #define c_function_symbol(f)           c_function_data(f)->sam.c_sym               /* symbol or NULL */
 #define c_function_let(f)              T_Let(c_function_data(f)->let)
 #define c_function_set_let(f, Val)     c_function_data(f)->let = T_Let(Val)
 
-#define c_function_bool_setter(f)      c_function_data(f)->dam.bool_setter
-#define c_function_set_bool_setter(f, Val) c_function_data(f)->dam.bool_setter = T_Fnc(Val)
+#define c_function_bool_setter(f)      T_CFn(c_function_data(f)->dam.bool_setter)
+#define c_function_set_bool_setter(f, Val) c_function_data(f)->dam.bool_setter = T_CFn(Val)
 
 #define c_function_arg_defaults(f)     c_function_data(T_Fst(f))->dam.arg_defaults /* array of s7_pointer */
 #define c_function_call_args(f)        c_function_data(T_Fst(f))->cam.call_args    /* pair or NULL */
@@ -5290,10 +5292,17 @@ static s7_pointer check_ref_clo(s7_pointer p, const char *func, int32_t line)
   return(p);
 }
 
+static s7_pointer check_ref_cfn(s7_pointer p, const char *func, int32_t line)
+{
+  uint8_t typ = unchecked_type(p);
+  if (typ < T_C_FUNCTION_STAR) complain("%s%s[%d]: not a c-function (type < T_C_FUNCTION_STAR, from T_CFn), but %s (%s)%s\n", p, func, line, typ);
+  return(p);
+}
+
 static s7_pointer check_ref_fnc(s7_pointer p, const char *func, int32_t line)
 {
   uint8_t typ = unchecked_type(p);
-  if (typ < T_C_MACRO) complain("%s%s[%d]: not a c function or macro (type < T_C_MACRO, from T_Fnc), but %s (%s)%s\n", p, func, line, typ);
+  if (typ < T_C_MACRO) complain("%s%s[%d]: not a c-function or c-macro (type < T_C_MACRO, from T_Fnc), but %s (%s)%s\n", p, func, line, typ);
   return(p);
 }
 
@@ -80788,7 +80797,6 @@ static bool op_set_opsaq_a(s7_scheme *sc)        /* (set! (symbol fxable) fxable
 {
   s7_pointer index, value, code = cdr(sc->code);
   s7_pointer obj = lookup_checked(sc, caar(code));
-  bool result;
   if (could_be_macro_setter(obj))
     {
       s7_pointer setf = setter_p_pp(sc, obj, sc->curlet);
@@ -80804,14 +80812,12 @@ static bool op_set_opsaq_a(s7_scheme *sc)        /* (set! (symbol fxable) fxable
     index = cadar(code);   /* if obj is a c_macro, surely we don't want to evaluate cdar(code)? */
   else index = fx_call(sc, cdar(code));
   set_gc_protected2(sc, index);
-  result = set_pair3(sc, obj, index, value);
+  return(set_pair3(sc, obj, index, value));
   /* set_pair3 can assume goto apply as above, and can push the setter on the stack preparing to goto apply, but that means
-   *   we can't blithely unstack_gc_protect.  So if result is true, we leave the stack alone. This code somehow hits the bug:
-   *   (set! (setter #_list) for-each) (set! (#_list (#_list 1 2)) (inlet))
-   *   but I can't find the magic triggering context.
+   *   we can't blithely unstack_gc_protect.
+   *   (set! (setter for-each) map) (define (func) (set! (for-each (make-vector '(2 3 4) 1)) (vector-append))) (func) (func)
+   *   set_pair3 -> pair3_cfunc which returns false even if it invokes map so we have no way to tell whether we can unstack.
    */
-  if (!result) unstack_gc_protect(sc);
-  return(result);
 }
 
 static inline bool op_set_opsaq_p(s7_scheme *sc)
@@ -84816,8 +84822,6 @@ static goto_t op_dotimes_p(s7_scheme *sc)
   sc->code = caddr(code);
   return(goto_eval);
 }
-
-#define SLOTS_AS_ARGS true
 
 static bool op_do_init_1(s7_scheme *sc)
 {
@@ -90270,11 +90274,10 @@ static bool op_any_c_np_mv(s7_scheme *sc)
 {
   /* we're looping through fp cases here, so sc->value can be non-mv after the first */
   if (collect_np_args(sc, OP_ANY_C_NP_MV, (is_multiple_value(sc->value)) ? revappend(sc, sc->value, sc->args) : cons(sc, sc->value, sc->args)))
-    return(true);
+    return(true); /* goto EVAL */
   sc->args = proper_list_reverse_in_place(sc, sc->args);
-  sc->code = pop_op_stack(sc);
-  sc->code = c_function_base(opt1_cfunc(sc->code));
-  return(false);
+  sc->code = c_function_base(opt1_cfunc(pop_op_stack(sc)));
+  return(false); /* goto APPLY */
 }
 
 static void op_any_closure_np(s7_scheme *sc)
@@ -93573,7 +93576,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	  /* pulling out T_C_FUNCTION (to avoid the switch) does not gain anything in the timing tests */
 	  switch (type(sc->code))
 	    {
-	    case T_C_FUNCTION:          sc->value = apply_c_function(sc, sc->code, sc->args); continue;
+	    case T_C_FUNCTION:          sc->value = apply_c_function(sc, sc->code, sc->args); continue; /* only call so it does get inlined */
 	    case T_C_RST_NO_REQ_FUNCTION: apply_c_rst_no_req_function(sc); continue;
 	    case T_C_FUNCTION_STAR:     apply_c_function_star(sc);      continue;
 	    case T_CONTINUATION:        call_with_current_continuation(sc); continue;
@@ -99050,7 +99053,7 @@ int main(int argc, char **argv)
  * tstar            5923   5519   4449   4550   4548
  * tshoot           5447   5183   5055   5034   4850
  * tform            5348   5307   5316   5084   5094
- * tstr      10.0   6342   5488   5162   5180   5194 [op_let_1]
+ * tstr      10.0   6342   5488   5162   5180   5194
  * tnum             6013   5433   5396   5409   5432
  * tari      15.0   12.7   6827   6543   6278   6183
  * tset                           6260   6364   6213
@@ -99061,7 +99064,7 @@ int main(int argc, char **argv)
  * tmisc                          7614   7115   7128
  * tclo             8025   7645   8809   7770   7701
  * tlamb                          8003   7941   7910
- * tgc              11.1   8177   7857   7986   8014 [op_let_1]
+ * tgc              11.1   8177   7857   7986   8014
  * thash            11.7   9734   9479   9526   9251
  * cb        12.9   11.0   9658   9564   9609   9647
  * tmap-hash                                    10.3
@@ -99077,5 +99080,4 @@ int main(int argc, char **argv)
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
- * check 2000 for indents
  */
