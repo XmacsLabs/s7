@@ -1781,7 +1781,6 @@ static bool t_any_macro_p[NUM_TYPES], t_any_closure_p[NUM_TYPES], t_has_closure_
 static bool t_mappable_p[NUM_TYPES], t_sequence_p[NUM_TYPES], t_vector_p[NUM_TYPES];
 static bool t_procedure_p[NUM_TYPES], t_applicable_p[NUM_TYPES], t_macro_setter_p[NUM_TYPES];
 #if S7_DEBUGGING
-static bool t_freeze_p[NUM_TYPES]; /* free_cell sanity check */
 static bool t_ext_p[NUM_TYPES], t_exs_p[NUM_TYPES];    /* make sure internal types don't leak out */
 #endif
 
@@ -1806,7 +1805,6 @@ static void init_types(void)
       t_structure_p[i] = false;
       t_vector_p[i] = false;
 #if S7_DEBUGGING
-      t_freeze_p[i] = false;
       t_ext_p[i] = false;
       t_exs_p[i] = false;
 #endif
@@ -1912,19 +1910,6 @@ static void init_types(void)
   t_immutable_p[T_RANDOM_STATE] = false;
 
 #if S7_DEBUGGING
-  t_freeze_p[T_STRING] = true;
-  t_freeze_p[T_VECTOR] = true; t_freeze_p[T_FLOAT_VECTOR] = true; t_freeze_p[T_INT_VECTOR] = true; t_freeze_p[T_BYTE_VECTOR] = true;
-  t_freeze_p[T_UNDEFINED] = true;
-  t_freeze_p[T_C_OBJECT] = true;
-  t_freeze_p[T_HASH_TABLE] = true;
-  t_freeze_p[T_C_FUNCTION] = true; t_freeze_p[T_C_FUNCTION_STAR] = true; t_freeze_p[T_C_RST_NO_REQ_FUNCTION] = true;
-  t_freeze_p[T_CONTINUATION] = true;
-  t_freeze_p[T_INPUT_PORT] = true; t_freeze_p[T_OUTPUT_PORT] = true;
-#if WITH_GMP
-  t_freeze_p[T_BIG_INTEGER] = true; t_freeze_p[T_BIG_RATIO] = true; t_freeze_p[T_BIG_REAL] = true; t_freeze_p[T_BIG_COMPLEX] = true;
-  t_freeze_p[T_RANDOM_STATE] = true;
-#endif
-
   t_ext_p[T_UNUSED] = true;
   t_ext_p[T_STACK] = true;
   t_ext_p[T_SLOT] = true;
@@ -1988,7 +1973,7 @@ static void init_types(void)
   #define T_Bgz(P) check_ref_one(P, T_BIG_COMPLEX,       __func__, __LINE__, "sweep", NULL)
   #define T_CMac(P) check_ref_one(P, T_C_MACRO,          __func__, __LINE__, NULL, NULL)
   #define T_Cat(P) check_ref_one(P, T_CATCH,             __func__, __LINE__, NULL, NULL)
-  #define T_CFn(P) check_ref_cfn(P,                      __func__, __LINE__)
+  #define T_CFn(P) check_ref_cfn(P,                      __func__, __LINE__)                /* c-functions (not c-macro) */
   #define T_Chr(P) check_ref_one(P, T_CHARACTER,         __func__, __LINE__, NULL, NULL)
   #define T_Clo(P) check_ref_clo(P,                      __func__, __LINE__)                /* has closure let */
   #define T_Cmp(P) check_ref_one(P, T_COMPLEX,           __func__, __LINE__, NULL, NULL)
@@ -8016,45 +8001,12 @@ static void add_semipermanent_let_or_slot(s7_scheme *sc, s7_pointer obj)
   sc->semipermanent_lets = g;
 }
 
-#if S7_DEBUGGING
-static const char *type_name_from_type(int32_t typ, article_t article);
-
-#define free_cell(Sc, P) free_cell_1(Sc, P, __LINE__)
-static void free_cell_1(s7_scheme *sc, s7_pointer p, int32_t line)
-#else
-static void free_cell(s7_scheme *sc, s7_pointer p)
-#endif
-{ /* this can make a big difference: 474 in snd-test! */
-#if S7_DEBUGGING
-  /* anything that needs gc_list attention should not be freed here */
-  uint8_t typ = unchecked_type(p);
-  gc_list_t *gp = sc->opt1_funcs;
-
-  if ((t_freeze_p[typ]) || ((typ == T_SYMBOL) && (is_gensym(p))))
-    fprintf(stderr, "free_cell of %s?\n", type_name_from_type(typ, NO_ARTICLE));
-  if ((t_any_closure_p[typ]) && (gp->loc > 0))
-    for (s7_int i = 0; i < gp->loc; i++)
-      if (gp->list[i] == p)
-	fprintf(stderr, "opt1_funcs free_cell of %s?\n", type_name_from_type(typ, NO_ARTICLE));
-  gp = sc->weak_refs;
-  if (gp->loc > 0)
-    for (s7_int i = 0; i < gp->loc; i++)
-      if (gp->list[i] == p)
-	fprintf(stderr, "weak refs free_cell of %s?\n", type_name_from_type(typ, NO_ARTICLE));
-
-  p->debugger_bits = 0;
-  p->explicit_free_line = line;
-#endif
-  clear_type(p);
-  (*(sc->free_heap_top++)) = p;
-}
-
 static inline s7_pointer petrify(s7_scheme *sc, s7_pointer x)
 {
   int64_t loc = heap_location(sc, x);
   s7_pointer p = (s7_pointer)alloc_big_pointer(sc, loc);
   sc->heap[loc] = p;
-  free_cell(sc, p);
+  (*(sc->free_heap_top++)) = p;
   unheap(sc, x);        /* set_immutable(x); */ /* if there are GC troubles, this might catch them? */
   return(x);
 }
@@ -8068,7 +8020,7 @@ static void remove_gensym_from_heap(s7_scheme *sc, s7_pointer x) /* x known to b
 {
   int64_t loc = heap_location(sc, x);
   sc->heap[loc] = (s7_pointer)alloc_big_pointer(sc, loc);
-  free_cell(sc, sc->heap[loc]);
+  (*(sc->free_heap_top++)) = sc->heap[loc];
 #if S7_DEBUGGING
   x->gc_func = func; /* main culprit in s7test/t725 is (essentially) (symbol->keyword (gensym)) */
   x->gc_line = line;
@@ -12241,7 +12193,6 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
 			dynamic_wind_state(x) = DWIND_FINISH;
 			if (dynamic_wind_out(x) != sc->F)
 			  sc->value = s7_call(sc, dynamic_wind_out(x), sc->nil);
-			/* free_cell is unsafe here and below */
 		      }}
 		else let_temp_done(sc, stack_args(sc->stack, i), T_Let(stack_let(sc->stack, i)));
 	      }}
@@ -30068,11 +30019,6 @@ static const port_functions_t input_string_functions =
 static s7_pointer open_input_string(s7_scheme *sc, const char *input_string, s7_int len)
 {
   s7_pointer x;
-  /* we could look for free entry in sc->input_string_ports and reuse it, but that takes longer than it saves,
-   *   mainly because ports are marked free by the GC, so free entries happen once-in-a-long-while (while the list grows),
-   *   and free_cell can't be used (freeze_t protecting the block). Perhaps free_frozen_cell (just sets type=T_FREE +(?) clears T_GC_MARKED),
-   *   but how to recognize such cases (see tio.scm).  Maybe a way in scheme to reuse such a port? (set! (port-string p) "asdf")?
-   */
   block_t *b = mallocate_port(sc);
   new_cell(sc, x, T_INPUT_PORT);
   port_block(x) = b;
@@ -32254,7 +32200,7 @@ s7_pointer s7_make_iterator(s7_scheme *sc, s7_pointer e)
       if (e == sc->starlet)
 	return(starlet_make_iterator(sc, iter));
       p = find_make_iterator_method(sc, e, iter);
-      if (p) {free_cell(sc, iter); return(p);}
+      if (p) return(p);
       iterator_set_current_slot(iter, let_slots(e));
       iterator_next(iter) = let_iterate;
       iterator_let_cons(iter) = NULL;
@@ -32316,24 +32262,20 @@ s7_pointer s7_make_iterator(s7_scheme *sc, s7_pointer e)
 	  iterator_length(iter) = (has_active_methods(sc, e)) ? closure_length(sc, e) : S7_INT64_MAX;
 	}
       else
-	{
-	  free_cell(sc, iter);
-	  sole_arg_wrong_type_error_nr(sc, sc->make_iterator_symbol, e,
-				       wrap_string(sc, "a function or macro with a '+iterator+ local that is not #f", 59));
-	}
+	sole_arg_wrong_type_error_nr(sc, sc->make_iterator_symbol, e,
+				     wrap_string(sc, "a function or macro with a '+iterator+ local that is not #f", 59));
       break;
 
     case T_C_OBJECT:
       iterator_length(iter) = c_object_length_to_int(sc, e);
       p = find_make_iterator_method(sc, e, iter);
-      if (p) {free_cell(sc, iter); return(p);}
+      if (p) return(p);
       iterator_current(iter) = list_2_unchecked(sc, e, int_zero); /* if not unchecked, gc protect iter */
       set_mark_seq(iter);
       iterator_next(iter) = c_object_iterate;
       break;
 
     default:
-      free_cell(sc, iter);  /* 19-Mar-22 */
       sole_arg_wrong_type_error_nr(sc, sc->make_iterator_symbol, e, a_sequence_string);
     }
   return(iter);
@@ -34438,7 +34380,6 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
     }
   s7_gc_unprotect_at(sc, gc_iter);
   iterator_current(iterator) = sc->nil;
-  free_cell(sc, p);  /* free_cell(sc, iterator); */ /* 18-Dec-18 removed */
 }
 
 static void slot_list_to_port(s7_scheme *sc, s7_pointer slot, s7_pointer port, shared_info_t *ci, bool bindings) /* bindings=let/inlet choice */
@@ -38081,7 +38022,7 @@ static s7_pointer ref_index_checked(s7_scheme *sc, s7_pointer caller, s7_pointer
   if (!is_applicable(in_obj)) /* let implicit_index shuffle syntax and closures */
     error_nr(sc, sc->syntax_error_symbol,
 	     set_elist_4(sc, wrap_string(sc, "~$ becomes ~$, but ~S can't take arguments", 42),
-			 cons(sc, caller, args), cons(sc, in_obj, cddr(args)), in_obj));
+			 set_ulist_1(sc, caller, args), cons(sc, in_obj, cddr(args)), in_obj));
   /* perhaps first $s -> "(~S ~{~$~^ ~})..." and we can pass the symbol rather than the global value as "caller" */
   return(implicit_index(sc, in_obj, cddr(args)));
 }
@@ -38125,7 +38066,7 @@ static s7_pointer implicit_pair_index_checked(s7_scheme *sc, s7_pointer obj, s7_
       s7_pointer safe_indices = copy_proper_list(sc, indices);
       error_nr(sc, sc->syntax_error_symbol,
 	       set_elist_4(sc, wrap_string(sc, "~$ becomes ~$, but ~S can't take arguments", 42),
-			   cons(sc, obj, safe_indices), cons(sc, in_obj, cdr(safe_indices)), in_obj));
+			   set_ulist_1(sc, obj, safe_indices), cons(sc, in_obj, cdr(safe_indices)), in_obj));
     }
   return(implicit_index(sc, in_obj, cdr(indices)));
 }
@@ -46988,7 +46929,7 @@ static noreturn void apply_error_nr(s7_scheme *sc, s7_pointer obj, s7_pointer ar
 	   set_elist_4(sc, wrap_string(sc, "attempt to apply ~A ~$ in ~S?", 29),
 		       (is_null(obj)) ? wrap_string(sc, "nil", 3) : ((is_symbol_and_keyword(obj)) ? wrap_string(sc, "a keyword", 9) : type_name_string(sc, obj)),
 		       obj,
-		       cons(sc, obj, args))); /* was current_code(sc) which is unreliable */
+		       set_ulist_1(sc, obj, args))); /* was current_code(sc) which is unreliable */
 }
 
 static void fallback_free(void *value) {}
@@ -49618,8 +49559,6 @@ static s7_pointer copy_c_object_to_same_type(s7_scheme *sc, s7_pointer dest, s7_
 	}
       s7_gc_unprotect_at(sc, gc_loc1);
       s7_gc_unprotect_at(sc, gc_loc2);
-      free_cell(sc, mi);
-      free_cell(sc, mj);
     }
   return(dest);
 }
@@ -50863,7 +50802,7 @@ static s7_pointer vector_append(s7_scheme *sc, s7_pointer args, uint8_t typ, s7_
 		int_vector_ints(new_vec) = (s7_int *)(iv_elements + i);
 	      else byte_vector_bytes(new_vec) = (uint8_t *)(byte_elements + i);
 	}}
-  /* unstack_gc_protect(sc); */ /* free_cell(sc, pargs); */ /* this is trouble if any arg is openlet with append method -- e.g. block */
+  /* unstack_gc_protect(sc); */
 
   if (typ == T_VECTOR)
     vector_elements(new_vec) = v_elements;
@@ -69331,7 +69270,7 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
 		  /* not pop_stack here since that can clobber sc->code et al, and if this for-each call is
 		   *   being treated as safe, fn_proc(for-each) assumes everywhere that sc->code is left alone.
 		   */
-		  unstack_gc_protect(sc);		  /* free_cell(sc, x); */ /* 16-Jan-19 */
+		  unstack_gc_protect(sc);
 		  return(sc->unspecified);
 		}
 	      func(sc, y);
@@ -69376,7 +69315,6 @@ static bool op_for_each(s7_scheme *sc)
       if (iterator_is_at_end(car(y)))
 	{
 	  sc->value = sc->unspecified;
-	  free_cell(sc, sc->args);
 	  return(true);
 	}}
   push_stack_direct(sc, OP_FOR_EACH);
@@ -69402,7 +69340,6 @@ static Inline bool inline_op_for_each_1(s7_scheme *sc)  /* called once in eval, 
   if (iterator_is_at_end(p))
     {
       sc->value = sc->unspecified;
-      /* free_cell(sc, counter); */ /* unsafe? */
       return(true);
     }
   code = T_Clo(sc->code);
@@ -69431,7 +69368,6 @@ static Inline bool inline_op_for_each_2(s7_scheme *sc) /* called once in eval, l
   if (!is_pair(lst))  /* '(1 2 . 3) as arg? -- counter_list can be anything here */
     {
       sc->value = sc->unspecified;
-      /* free_cell(sc, c); */ /* unsafe? t101-2|4|6|7|9|18|26|34|38 */ /* not sc->args = sc->nil; */
       return(true);
     }
   counter_set_list(c, cdr(lst));
@@ -69441,7 +69377,6 @@ static Inline bool inline_op_for_each_2(s7_scheme *sc) /* called once in eval, l
       if (counter_result(c) == counter_list(c))
 	{
 	  sc->value = sc->unspecified;
-	  free_cell(sc, c);  /* not sc->args = sc->nil; */
 	  return(true);
 	}
       push_stack_direct(sc, OP_FOR_EACH_2);
@@ -69819,7 +69754,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 		  set_car(y, s7_iterate(sc, car(x)));
 		  if (iterator_is_at_end(car(x)))
 		    {
-		      unstack_gc_protect(sc); /* free_cell(sc, car(x)); */ /* 16-Jan-19 iterator in circular list -- see s7test */
+		      unstack_gc_protect(sc);
 		      sc->args = T_Pos(old_args); /* can be #<unused> or #<counter> */
 		      return(proper_list_reverse_in_place(sc, car(val)));
 		    }}
@@ -69897,7 +69832,6 @@ static bool op_map(s7_scheme *sc)
       if (iterator_is_at_end(car(y)))
 	{
 	  sc->value = proper_list_reverse_in_place(sc, counter_result(sc->args));
-	  free_cell(sc, sc->args);  /* unsafe? */ /* not sc->args = sc->nil; */
 	  return(true);
 	}
       sc->x = cons(sc, x, sc->x);
@@ -69920,7 +69854,6 @@ static bool op_map_1(s7_scheme *sc)
   if (iterator_is_at_end(p))
     {
       sc->value = proper_list_reverse_in_place(sc, counter_result(args));
-      free_cell(sc, sc->args); /* unsafe? */  /* not sc->args = sc->nil; */
       return(true);
     }
   push_stack_direct(sc, OP_MAP_GATHER_1);
@@ -69956,7 +69889,6 @@ static bool op_map_2(s7_scheme *sc) /* possibly inline lg */
   if (!is_pair(p))
     {
       sc->value = proper_list_reverse_in_place(sc, counter_result(c));
-      free_cell(sc, c); /* unsafe? */  /* not sc->args = sc->nil; */
       return(true);
     }
   x = car(p);
@@ -69969,7 +69901,6 @@ static bool op_map_2(s7_scheme *sc) /* possibly inline lg */
       if (closure_map_list(code) == counter_list(c))
 	{
 	  sc->value = proper_list_reverse_in_place(sc, counter_result(c));
-	  free_cell(sc, c);  /* possibly unsafe */ /* not sc->args = sc->nil; */
 	  return(true);
 	}
       push_stack_direct(sc, OP_MAP_GATHER_2);
@@ -72178,7 +72109,7 @@ static opt_t optimize_func_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer fu
 	{
 	  s7_pointer sym = (quotes == 1) ? cadr(arg1) : arg1;
 	  if (is_keyword(sym)) sym = keyword_symbol(sym);
-	  if (func == sc->starlet)                   /* (*s7* ...), sc->starlet is a let */
+	  if (func == sc->starlet)                      /* (*s7* ...), sc->starlet is a let */
 	    {
 	      set_safe_optimize_op(expr, OP_IMPLICIT_STARLET_REF_S);
 	      set_opt3_int(expr, starlet_symbol_id(sym));
@@ -76281,11 +76212,7 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
 		    (check_recur(sc, func, nvars, cleared_args, car(body))))
 		  set_safe_closure_body(body);
 	      }}
-      if (is_symbol(func))
-	{
-	  sc->temp1 = sc->unused;
-	  free_cell(sc, lst);
-	}
+      if (is_symbol(func)) sc->temp1 = sc->unused;
       sc->got_tc = false;
       sc->not_tc = false;
       sc->got_rec = false;
@@ -77204,7 +77131,6 @@ static bool op_let_1(s7_scheme *sc)
   sc->code = car(sc->args); /* restore the original form */
   y = cdr(sc->args);
   sc->temp8 = y;
-  free_cell(sc, sc->args);
   set_curlet(sc, make_let(sc, T_Let(sc->curlet)));
   if (is_symbol(car(sc->code)))
     {
@@ -77427,8 +77353,6 @@ static void op_let_a_a_new(s7_scheme *sc)
   binding = opt2_pair(sc->code);
   set_curlet(sc, inline_make_let_with_slot(sc, sc->curlet, car(binding), fx_call(sc, cdr(binding))));
   sc->value = fx_call(sc, cdr(sc->code));
-  /* free_cell(sc, sc->curlet); *//* t101-3 and t725+unlet */ /* don't free let_slots here unless checked first (can be null after fx_call above?) */
-  /* upon return, we continue, so sc->curlet should be ok */
 }
 
 static void op_let_a_a_old(s7_scheme *sc) /* these are not called as fx*, and restoring sc->curlet has noticeable cost (e.g. 8 in thash) */
@@ -77449,7 +77373,6 @@ static void op_let_a_na_new(s7_scheme *sc)
   set_curlet(sc, make_let_with_slot(sc, sc->curlet, car(binding), fx_call(sc, cdr(binding))));
   for (p = cdr(sc->code); is_pair(cdr(p)); p = cdr(p)) fx_call(sc, p);
   sc->value = fx_call(sc, p);
-  free_cell(sc, sc->curlet); /* possibly unsafe */ /* see above */
 }
 
 /* this and others like it could easily be fx funcs, but check_let is called too late, so it's never seen as fxable */
@@ -79859,7 +79782,7 @@ static s7_pointer fx_with_let_s(s7_scheme *sc, s7_pointer arg)
   if (val == sc->undefined)  /* but sym can have the value #<undefined>: (with-let (inlet 'x #<undefined>) x) */
     {
       if ((e == sc->starlet) && (is_slot(global_slot(sym)))) /* (let () (define (func) (with-let *s7* letrec*)) (func) (func)), .5 tlet */
-	return(global_value(sym));                              /* perhaps the e=*s7* check is not needed */
+	return(global_value(sym));                           /* perhaps the e=*s7* check is not needed */
       if (is_slot(lookup_slot_with_let(sc, sym, e)))
 	return(sc->undefined);
       unbound_variable_error_nr(sc, sym);
@@ -80396,7 +80319,7 @@ static void check_set(s7_scheme *sc)
                          */
 			fx_annotate_arg(sc, cdr(code), sc->curlet); /* cdr(code) -> value */
 
-			if (car(settee) == sc->starlet_symbol)    /* (set! (*s7* 'field) value) */
+			if (car(settee) == sc->starlet_symbol)      /* (set! (*s7* 'field) value) */
 			  {
 			    s7_pointer sym = (is_symbol(index)) ?
 			                       ((is_keyword(index)) ? keyword_symbol(index) : index) :
@@ -82288,7 +82211,11 @@ static bool is_simple_end(s7_scheme *sc, s7_pointer end)
 static s7_pointer fxify_step_exprs(s7_scheme *sc, s7_pointer code)
 {
   s7_pointer vars = car(code);
-  s7_pointer e = collect_variables(sc, vars, sc->nil); /* only valid in step exprs, not in inits */
+  s7_pointer e;
+
+  for (sc->w = sc->nil, e = vars; is_pair(e); e = cdr(e)) sc->w = cons(sc, caar(e), sc->w);
+  e = sc->w; /* only valid in step exprs, not in inits */
+  sc->w = sc->nil;
 
   for (s7_pointer p = vars; is_pair(p); p = cdr(p))
     {
@@ -82604,9 +82531,10 @@ static s7_pointer check_do(s7_scheme *sc)
 		      if ((!has_set) &&
 			  (c_function_class(opt1_cfunc(end)) == sc->num_eq_class))
 			{
+			  /* vars is of the form ((i 0 (+ i 1))) -- 1 var etc */
 			  pair_set_syntax_op(form, OP_SAFE_DOTIMES);   /* safe_dotimes: end is = */
 			  if (is_fxable(sc, car(body)))
-			    fx_annotate_arg(sc, body, collect_variables(sc, vars, sc->nil));
+			    fx_annotate_arg(sc, body, set_plist_1(sc, caar(vars)));
 			}
 		      fx_tree(sc, body, car(v), NULL, NULL, false);
 		      if (stack_top_op(sc) == OP_SAFE_DO_STEP)
@@ -82797,7 +82725,11 @@ static s7_pointer check_do(s7_scheme *sc)
 	if ((is_pair(body)) && (is_null(cdr(body))) &&
 	    (is_fxable(sc, car(body))))
 	  {
-	    fx_annotate_arg(sc, body, collect_variables(sc, vars, sc->nil));
+	    s7_pointer e;
+	    for (sc->w = sc->nil, e = vars; is_pair(e); e = cdr(e)) sc->w = cons(sc, caar(e), sc->w);
+	    e = sc->w;
+	    sc->w = sc->nil;
+	    fx_annotate_arg(sc, body, e);
 	    if (stepper0) fx_tree(sc, body, stepper0, stepper1, stepper2, stepper3);
 	    if ((var1) && (!outer_shadowed) && (!stepper3)) fx_tree_outer(sc, body, var1, var2, var3, more_vars);
 	  }}}
@@ -84813,7 +84745,7 @@ static goto_t op_dotimes_p(s7_scheme *sc)
       if (do_let_or_dotimes(sc, code, false))
 	return(goto_do_end_clauses); /* not safe_do here */
       slot_set_value(sc->args, old_init);
-      set_curlet(sc, old_e); /* free_cell(sc, sc->curlet) beforehand is not safe */
+      set_curlet(sc, old_e);
       sc->args = old_args;
       set_unsafe_do(code);
       return(goto_do_unchecked);
@@ -84852,7 +84784,6 @@ static bool op_do_init_1(s7_scheme *sc)
   sc->args = proper_list_reverse_in_place(sc, sc->args);
   sc->code = car(sc->args);                       /* saved at the start */
   sc->x = cdr(sc->args);                          /* init values */
-  free_cell(sc, sc->args);
   sc->args = sc->x;
   set_curlet(sc, make_let(sc, T_Let(sc->curlet)));
 
@@ -84934,7 +84865,6 @@ static goto_t op_do_end_true(s7_scheme *sc)
    * multiple-value end-test result is ok
    */
   sc->code = T_Lst(cddr(sc->args));   /* result expr (a list -- implicit begin) */
-  /* unsafe: free_cell(sc, sc->args); */ /* t101-8|13 */
   sc->args = sc->nil;
   if (is_null(sc->code))
     {
@@ -88050,8 +87980,6 @@ static bool op_tc_let_if_a_z_la(s7_scheme *sc, s7_pointer code)
   unstack_gc_protect(sc);
   if (!op_tc_z(sc, if_true))
     return(false);
-  free_cell(sc, let_slots(inner_let));
-  free_cell(sc, inner_let);
   return(true);
 }
 
@@ -88116,8 +88044,6 @@ static bool op_tc_let_if_a_z_laa(s7_scheme *sc, s7_pointer code)
 			  unstack_gc_protect(sc);
 			  if (!op_tc_z(sc, if_true))  /* sc->inner_let in effect here since it was the last set above */
 			    return(false);
-			  free_cell(sc, let_slots(inner_let));
-			  free_cell(sc, inner_let);
 			  return(true);
 			}}}}}
       set_no_bool_opt(code);
@@ -88135,8 +88061,6 @@ static bool op_tc_let_if_a_z_laa(s7_scheme *sc, s7_pointer code)
   unstack_gc_protect(sc);
   if (!op_tc_z(sc, if_true))
     return(false);
-  free_cell(sc, let_slots(inner_let));
-  free_cell(sc, inner_let);
   return(true);
 }
 
@@ -88220,8 +88144,6 @@ static void op_tc_let_when_laa(s7_scheme *sc, s7_pointer code)
 	  set_curlet(sc, inner_let);
 	}}
   unstack_gc_protect(sc);
-  free_cell(sc, let_slots(inner_let));
-  free_cell(sc, inner_let);
   sc->value = sc->unspecified;
 }
 
@@ -88274,8 +88196,6 @@ static bool op_tc_if_a_z_let_if_a_z_laa(s7_scheme *sc, s7_pointer code)
   unstack_gc_protect(sc);
   if (!op_tc_z(sc, endp))  /* might refer to inner_let slots */
     return(false);
-  free_cell(sc, let_slots(inner_let)); /* true = has_fx, so we should be done with the let */
-  free_cell(sc, inner_let);
   return(true);
 }
 
@@ -88347,8 +88267,6 @@ static bool op_tc_let_cond(s7_scheme *sc, s7_pointer code)
   if (has_fx(result))
     {
       sc->value = fx_call(sc, result);
-      free_cell(sc, let_slots(inner_let));
-      free_cell(sc, inner_let);
       return(true);
     }
   sc->code = car(result);
@@ -96077,7 +95995,7 @@ static const char *decoded_name(s7_scheme *sc, const s7_pointer p)
   if (p == sc->unused)              return("#<unused>");
   if (p == sc->symbol_table)        return("symbol_table");
   if (p == sc->rootlet)             return("rootlet");
-  if (p == sc->starlet)          return("*s7*"); /* this is the function */
+  if (p == sc->starlet)             return("*s7*"); /* this is the function */
   if (p == sc->owlet)               return("owlet");
   if (p == sc->standard_input)      return("*stdin*");
   if (p == sc->standard_output)     return("*stdout*");
@@ -99033,7 +98951,7 @@ int main(int argc, char **argv)
  * s7test           1831   1818   1829   1830   1855
  * lt        2222   2172   2150   2185   1950   1911
  * dup              3788   2492   2239   2097   1995
- * thook     7651   ----   2590   2030   2046   2004  2009 [g_for_each_closure]
+ * thook     7651   ----   2590   2030   2046   2004
  * tread            2421   2419   2408   2405   2244
  * tcopy            5546   2539   2375   2386   2348
  * trclo     8031   2574   2454   2445   2449   2438
@@ -99046,8 +98964,8 @@ int main(int argc, char **argv)
  * tobj             3970   3828   3577   3508   3453
  * tmac             3873   3033   3677   3677   3512
  * teq              4045   3536   3486   3544   3591
- * tmap             8774   4489   4541   4586   4384  4409 [same]
  * tcase            4793   4439   4430   4439   4378
+ * tmap             8774   4489   4541   4586   4384
  * tlet      11.0   6974   5609   5980   5965   4498
  * tfft             7729   4755   4476   4536   4541
  * tstar            5923   5519   4449   4550   4548
