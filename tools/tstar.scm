@@ -12,9 +12,26 @@
 	((= i size))
       (f1)))
   
-  (f11)
+  (f11) ; 169 eval+starlet, no args so f1->body? let_temp_s7_direct: only for openlets!
+
+
+  (define (f12)
+    (let ((obj -1))
+      (do ((i 0 (+ i 1)))
+	  ((= i size))
+	(abs obj))))
+  (f12) ; 18: 10-20 times faster than f1, opt_dotimes -> opt_i_i_s_abs, but only if it precedes f6 et al
   
 
+  (define (f14)
+    (let ((obj -1))
+      (do ((i 0 (+ i 1)))
+	  ((= i size))
+	(magnitude obj))))
+  (f14) ; 38
+  ;; abs obj -> abs_method: still need find_method->eval and g_abs (saves 2+~15 of 360!), might preset method = 14 -> 10%?
+  
+  
   (define-constant (f2 x)
     (set! (*s7* 'safety) 1)
     (+ x 1)
@@ -25,9 +42,8 @@
 	((= i size))
       (f2 i)))
   
-  (f21) ; 707 -> 386 -> 357
+  (f21) ; 707 -> 386 -> 357: 336 eval+starlet_set+g_add_x1, avoid starlet_set if safety etc? (much overhead)
   
-
   (define-constant (f3 x)
     (+ (*s7* 'safety) (*s7* 'print-length)))
   
@@ -36,7 +52,7 @@
 	((= i size))
       (f3 i)))
 
-  (f31) ; 211 -> 180(print-length)
+  (f31) ; 211 -> 180 (print-length): 107 fx_add_aa+fx_safe_closure_t_a+fx_implicit_starlet_print_length|safety+op_safe_dotimes (arg ignored)
 
 
   (define (f6)
@@ -48,7 +64,7 @@
 	  ((= i size))
 	(abs obj))))
 
-  (f6) ; 628! -> 425
+  (f6) ; 628! -> 425: 396 eval+find_and_apply_method+g_abs
 
 
   (define (f7)
@@ -58,16 +74,8 @@
       (do ((i 0 (+ i 1)))
 	  ((= i size))
 	(abs obj)))) ; eval -> apply_c_function -> magnitude_p_p -> s7_let_ref + method_or_bust etc [50]
-  (f7) ; 360 -> 342 [find_and_apply_method/apply_method_closure]
+  (f7) ; 360 -> 342 [find_and_apply_method/apply_method_closure+magnitude_p_p+g_abs]
   
-  
-  (define (f12)
-    (let ((obj -1))
-      (do ((i 0 (+ i 1)))
-	  ((= i size))
-	(abs obj))))
-  (f12) ; 17: 10-20 times faster than f1, opt_dotimes -> opt_i_i_s_abs
-
   
   (define (f13)
     (let ((obj (openlet (let ((value -1))
@@ -77,16 +85,6 @@
 	  ((= i size))
 	(abs obj)))) ; eval -> apply_c_function -> magnitude_p_p -> method_or_bust etc g_abs find_method_with_let
   (f13) ; not much faster 314
-  
-  
-  (define (f14)
-    (let ((obj -1))
-      (do ((i 0 (+ i 1)))
-	  ((= i size))
-	(magnitude obj))))
-  (f14) ; 38
-  
-  ;;abs obj -> abs_method: still need find_method->eval and g_abs (saves 2+~15 of 360!), might preset method = 14 -> 10%?
   
   
   (define (f15)

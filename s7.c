@@ -12383,7 +12383,7 @@ static void call_with_exit(s7_scheme *sc)
 
   if (!call_exit_active(sc->code))
     error_nr(sc, sc->invalid_exit_function_symbol,
-	     (is_symbol(call_exit_name(sc->code))) ? 
+	     (is_symbol(call_exit_name(sc->code))) ?
 	       set_elist_2(sc, wrap_string(sc, "call-with-exit exit procedure, ~A, called outside its block", 59), call_exit_name(sc->code)) :
 	       set_elist_1(sc, wrap_string(sc, "call-with-exit exit procedure called outside its block", 54)));
 
@@ -45809,14 +45809,28 @@ static s7_pointer hash_table_copy(s7_scheme *sc, s7_pointer old_hash, s7_pointer
       if ((start == 0) &&
 	  (end >= hash_table_entries(old_hash)))
 	{
-	  for (s7_int i = 0; i < old_len; i++)
-	    for (hash_entry_t *x = old_lists[i]; x; x = hash_entry_next(x))
-	      {
-		s7_int loc = hash_entry_raw_hash(x) & new_mask;
-		hash_entry_t *p = make_hash_entry(sc, hash_entry_key(x), hash_entry_value(x), hash_entry_raw_hash(x));
-		hash_entry_next(p) = new_lists[loc];
-		new_lists[loc] = p;
-	      }
+	  if (old_len == hash_table_size(new_hash))
+	    {
+	      for (s7_int i = 0; i < old_len; i++)
+		for (hash_entry_t *x = old_lists[i]; x; x = hash_entry_next(x))
+		  {
+		    hash_entry_t *p = (hash_entry_t *)mallocate_block(sc);
+#if S7_DEBUGGING
+		    sc->blocks_mallocated[BLOCK_LIST]++;
+#endif
+		    memcpy((void *)p, (const void *)x, sizeof(block_t));
+		    hash_entry_next(p) = new_lists[i];
+		    new_lists[i] = p;
+		  }}
+	  else
+	    for (s7_int i = 0; i < old_len; i++)
+	      for (hash_entry_t *x = old_lists[i]; x; x = hash_entry_next(x))
+		{
+		  s7_int loc = hash_entry_raw_hash(x) & new_mask;
+		  hash_entry_t *p = make_hash_entry(sc, hash_entry_key(x), hash_entry_value(x), hash_entry_raw_hash(x));
+		  hash_entry_next(p) = new_lists[loc];
+		  new_lists[loc] = p;
+		}
 	  hash_table_entries(new_hash) = hash_table_entries(old_hash);
 	  return(new_hash);
 	}
@@ -75454,7 +75468,7 @@ static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t vars, s7_point
 
   if ((!is_proper_list_2(sc, clause1)) || (!is_fxable(sc, car(clause1)))) /* cond_a... */
     return(false);
-  
+
   p = cdr(p);
   if ((vars < 4) && (names == 1) && (body_len == 3))
     {
@@ -75507,7 +75521,7 @@ static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t vars, s7_point
 			}}}}
 	  return(false);
 	}}  /* end body len=3, (cond clause1 else */
-  
+
   if ((vars < 4) && (body_len == 4))
     {
       s7_pointer clause2 = car(p);
@@ -75516,7 +75530,7 @@ static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t vars, s7_point
 	{
 	  s7_pointer else_p = cdr(p);
 	  s7_pointer else_clause = car(else_p);
-	  
+
 	  if ((is_proper_list_2(sc, else_clause)) &&
 	      ((car(else_clause) == sc->T) || ((car(else_clause) == sc->else_symbol) && (is_global(sc->else_symbol)))))
 	    {
@@ -75543,14 +75557,14 @@ static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t vars, s7_point
 		  if (zs_fxable) set_optimized(body);
 		  return(zs_fxable);
 		}
-	      
+
 	      if ((names == 1) && /* needed to filter out cond_a_a_a_laa_opa_laa */
-		  
+
 		  (((is_pair(cadr(else_clause))) && (caadr(else_clause) == name) &&
 		    (is_pair(cdadr(else_clause))) && (is_fxable(sc, cadadr(else_clause))) &&
 		    (((vars == 1) && (is_null(cddadr(else_clause)))) ||
 		     ((vars == 2) && (is_proper_list_3(sc, cadr(else_clause))) && (is_fxable(sc, caddadr(else_clause)))))) ||
-		   
+
 		   ((is_pair(cadr(clause2))) && (caadr(clause2) == name) &&
 		    (is_pair(cdadr(clause2))) && (is_fxable(sc, cadadr(clause2))) &&
 		    (((vars == 1) && (is_null(cddadr(clause2)))) ||
@@ -75674,7 +75688,7 @@ static bool check_tc_let(s7_scheme *sc, const s7_pointer name, int32_t vars, s7_
 		(is_fxable(sc, car(clause)))) /* test is ok */
 	      {
 		s7_pointer result;
-		
+
 		if ((!is_pair(cdr(p))) &&
 		    (car(clause) != sc->T) &&
 		    ((car(clause) != sc->else_symbol) || (!is_global(sc->else_symbol))))
@@ -77682,7 +77696,7 @@ static bool op_let_star_shadowed(s7_scheme *sc)
   return(false);
 }
 
-static inline bool op_let_star1(s7_scheme *sc)
+static /* inline */ bool op_let_star1(s7_scheme *sc)
 {
   uint64_t let_counter = S7_INT64_MAX;
   s7_pointer sp = NULL;
@@ -82211,11 +82225,7 @@ static bool is_simple_end(s7_scheme *sc, s7_pointer end)
 static s7_pointer fxify_step_exprs(s7_scheme *sc, s7_pointer code)
 {
   s7_pointer vars = car(code);
-  s7_pointer e;
-
-  for (sc->w = sc->nil, e = vars; is_pair(e); e = cdr(e)) sc->w = cons(sc, caar(e), sc->w);
-  e = sc->w; /* only valid in step exprs, not in inits */
-  sc->w = sc->nil;
+  s7_pointer e = NULL;
 
   for (s7_pointer p = vars; is_pair(p); p = cdr(p))
     {
@@ -82226,12 +82236,20 @@ static s7_pointer fxify_step_exprs(s7_scheme *sc, s7_pointer code)
 	  callee = fx_choose(sc, expr, sc->nil, do_symbol_is_safe); /* not vars -- they aren't defined yet */
 	  if (callee) set_fx(expr, callee);
 	}
-      expr = cddar(p);   /* step */
+      expr = cdr(expr); /* cddar(p): step */
       if (is_pair(expr))
 	{
 	  if ((is_pair(car(expr))) &&
 	      (!is_checked(car(expr))))
-	    optimize_expression(sc, car(expr), 0, e, false);
+	    {
+	      if (!e)
+		{
+		  for (sc->w = sc->nil, e = vars; is_pair(e); e = cdr(e)) sc->w = cons(sc, caar(e), sc->w);
+		  e = sc->w; /* only valid in step exprs, not in inits; also all vars are valid at any point in step exprs */
+		  sc->w = sc->nil;
+		}
+	      optimize_expression(sc, car(expr), 0, e, false);
+	    }
 	  callee = fx_choose(sc, expr, vars, do_symbol_is_safe);  /* fx_proc can be nil! */
 	  if (callee) set_fx(expr, callee);
 	}}
@@ -91662,8 +91680,8 @@ static bool op_unknown(s7_scheme *sc)
 	    }}
       break;
 
-    case T_GOTO:       return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_GOTO));
-    case T_ITERATOR:   return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_ITERATE));
+    case T_GOTO:                          return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_GOTO));
+    case T_ITERATOR:                      return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_ITERATE));
     case T_BACRO: case T_MACRO:           return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_D, f)));
     case T_BACRO_STAR: case T_MACRO_STAR: return(fixup_unknown_op(sc, code, f, fixup_macro_d(sc, OP_MACRO_STAR_D, f)));
 
@@ -92601,7 +92619,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
     TOP_NO_POP:
       if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "  %s (%d), code: %s\n", op_names[sc->cur_op], (int)(sc->cur_op), display_truncated(sc->code)));
-      
+
       /* it is only slightly faster to use labels as values (computed gotos) here. In my timing tests (June-2018), the best case speedup was in titer.scm
        *    callgrind numbers 4808 to 4669; another good case was tread.scm: 2410 to 2386.  Most timings were a draw.  computed-gotos-s7.c has the code,
        *    macroized so it will work if such gotos aren't available.  I think I'll stick with a switch statement.
@@ -98943,21 +98961,21 @@ int main(int argc, char **argv)
  * ----------------------------------------------------
  * tpeak      148    114    108    105    102    103
  * tref      1081    687    463    459    464    410
- * index            1016    973    967    972    971
+ * index            1016    973    967    972    975
  * tmock            1165   1057   1019   1032   1018
  * tvect     3408   2464   1772   1669   1497   1454
- * tauto                   2562   2048   1729   1728
- * texit     1884   1950   1778   1741   1770   1765
+ * tauto                   2562   2048   1729   1726
+ * texit     1884   1950   1778   1741   1770   1764
  * s7test           1831   1818   1829   1830   1855
- * lt        2222   2172   2150   2185   1950   1911
- * dup              3788   2492   2239   2097   1995
+ * lt        2222   2172   2150   2185   1950   1914
+ * dup              3788   2492   2239   2097   1990
  * thook     7651   ----   2590   2030   2046   2004
- * tread            2421   2419   2408   2405   2244
- * tcopy            5546   2539   2375   2386   2348
+ * tread            2421   2419   2408   2405   2255
+ * tcopy            5546   2539   2375   2386   2348  2340
  * trclo     8031   2574   2454   2445   2449   2438
  * titer     3657   2842   2641   2509   2449   2458
  * tmat             3042   2524   2578   2590   2515
- * tload                   3046   2404   2566   2549
+ * tload                   3046   2404   2566   2555
  * fbench    2933   2583   2460   2430   2478   2573
  * tsort     3683   3104   2856   2804   2858   2858
  * tio              3752   3683   3620   3583   3122
@@ -98966,7 +98984,7 @@ int main(int argc, char **argv)
  * teq              4045   3536   3486   3544   3591
  * tcase            4793   4439   4430   4439   4378
  * tmap             8774   4489   4541   4586   4384
- * tlet      11.0   6974   5609   5980   5965   4498
+ * tlet      11.0   6974   5609   5980   5965   4503
  * tfft             7729   4755   4476   4536   4541
  * tstar            5923   5519   4449   4550   4548
  * tshoot           5447   5183   5055   5034   4850
@@ -98979,12 +98997,12 @@ int main(int argc, char **argv)
  * tlist     9219   7546   6558   6240   6300   6308
  * trec      19.6   6980   6599   6656   6658   6490
  * tleft     12.2   9753   7537   7331   7331   6811
- * tmisc                          7614   7115   7128
- * tclo             8025   7645   8809   7770   7701
+ * tmisc                          7614   7115   7125
+ * tclo             8025   7645   8809   7770   7796
  * tlamb                          8003   7941   7910
  * tgc              11.1   8177   7857   7986   8014
  * thash            11.7   9734   9479   9526   9251
- * cb        12.9   11.0   9658   9564   9609   9647
+ * cb        12.9   11.0   9658   9564   9609   9642
  * tmap-hash                                    10.3
  * tgen             11.4   12.0   12.1   12.2   12.3
  * tall      15.9   15.6   15.6   15.6   15.1   15.1
