@@ -12,7 +12,9 @@
 	((= i size))
       (f1)))
   
-  (f11) ; 169 eval+starlet, no args so f1->body? let_temp_s7_direct: only for openlets!
+  (f11) ; 169 eval+starlet, no args so f1->body? let_temp_s7_openlets
+        ; 146 if no closure
+        ; 307 if print-length, starlet_set_1
 
 
   (define (f12)
@@ -20,7 +22,7 @@
       (do ((i 0 (+ i 1)))
 	  ((= i size))
 	(abs obj))))
-  (f12) ; 18: 10-20 times faster than f1, opt_dotimes -> opt_i_i_s_abs, but only if it precedes f6 et al
+  (f12) ; 18: 10-20 times faster than f1, opt_dotimes -> opt_i_i_s_abs
   
 
   (define (f14)
@@ -29,7 +31,6 @@
 	  ((= i size))
 	(magnitude obj))))
   (f14) ; 38
-  ;; abs obj -> abs_method: still need find_method->eval and g_abs (saves 2+~15 of 360!), might preset method = 14 -> 10%?
   
   
   (define-constant (f2 x)
@@ -44,6 +45,7 @@
   
   (f21) ; 707 -> 386 -> 357: 336 eval+starlet_set+g_add_x1, avoid starlet_set if safety etc? (much overhead)
   
+
   (define-constant (f3 x)
     (+ (*s7* 'safety) (*s7* 'print-length)))
   
@@ -53,6 +55,32 @@
       (f3 i)))
 
   (f31) ; 211 -> 180 (print-length): 107 fx_add_aa+fx_safe_closure_t_a+fx_implicit_starlet_print_length|safety+op_safe_dotimes (arg ignored)
+
+
+  (define (f15)
+    (do ((j 0)
+	 (i 0 (+ i 1)))
+	((= i size))
+      (let-ref *s7* 'print-length)))
+  (f15)
+  ;; 317 -> 210 sc->starlet_ref
+
+
+  (define (f17)
+    (do ((j 0)
+	 (i 0 (+ i 1)))
+	((= i size))
+      (let-set! *s7* 'print-length 32)))
+  (f17)
+  ;; 354 -> 240 starlet_set
+
+
+  (define (f18)
+    (do ((i 0 (+ i 1)))
+	((= i size))
+      (let-ref (rootlet) 'abs)))
+  (f18)
+  ;; 14
 
 
   (define (f6)

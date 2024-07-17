@@ -1319,6 +1319,7 @@ struct s7_scheme {
              lcm_symbol, length_symbol, leq_symbol, let_ref_fallback_symbol, let_ref_symbol, let_set_fallback_symbol,
              let_set_symbol, let_temporarily_symbol, libraries_symbol, list_ref_symbol, list_set_symbol, list_symbol, list_tail_symbol, list_values_symbol,
              load_path_symbol, load_symbol, log_symbol, logand_symbol, logbit_symbol, logior_symbol, lognot_symbol, logxor_symbol, lt_symbol,
+             local_documentation_symbol, local_signature_symbol, local_setter_symbol, local_iterator_symbol,
              macro_symbol, macro_star_symbol, magnitude_symbol, make_byte_vector_symbol, make_float_vector_symbol, make_hash_table_symbol,
              make_weak_hash_table_symbol, make_int_vector_symbol, make_iterator_symbol, string_to_keyword_symbol, make_list_symbol, make_string_symbol,
              make_vector_symbol, map_symbol, max_symbol, member_symbol, memq_symbol, memv_symbol, min_symbol, modulo_symbol, multiply_symbol,
@@ -1346,58 +1347,57 @@ struct s7_scheme {
              values_symbol, varlet_symbol, vector_append_symbol, vector_dimension_symbol, vector_dimensions_symbol, vector_fill_symbol,
              vector_rank_symbol, vector_ref_symbol, vector_set_symbol, vector_symbol, vector_typer_symbol,
              weak_hash_table_symbol, with_input_from_file_symbol, with_input_from_string_symbol, with_output_to_file_symbol, with_output_to_string_symbol,
-             write_byte_symbol, write_char_symbol, write_string_symbol, write_symbol,
-             local_documentation_symbol, local_signature_symbol, local_setter_symbol, local_iterator_symbol;
+             write_byte_symbol, write_char_symbol, write_string_symbol, write_symbol;
   s7_pointer hash_code_symbol, dummy_equal_hash_table, features_setter;
 #if (!WITH_PURE_S7)
-  s7_pointer is_char_ready_symbol, char_ci_leq_symbol, char_ci_lt_symbol, char_ci_eq_symbol, char_ci_geq_symbol, char_ci_gt_symbol,
-             let_to_list_symbol, integer_length_symbol, string_ci_leq_symbol, string_ci_lt_symbol, string_ci_eq_symbol,
-             string_ci_geq_symbol, string_ci_gt_symbol, string_to_list_symbol, vector_to_list_symbol, string_length_symbol,
-             list_to_string_symbol, list_to_vector_symbol, vector_length_symbol;
+  s7_pointer char_ci_eq_symbol, char_ci_geq_symbol, char_ci_gt_symbol, char_ci_leq_symbol, char_ci_lt_symbol, integer_length_symbol,
+             is_char_ready_symbol, let_to_list_symbol, list_to_string_symbol, list_to_vector_symbol, string_ci_eq_symbol,
+             string_ci_geq_symbol, string_ci_gt_symbol, string_ci_leq_symbol, string_ci_lt_symbol, string_length_symbol,
+             string_to_list_symbol, vector_length_symbol, vector_to_list_symbol;
 #endif
 
   /* syntax symbols et al */
-  s7_pointer else_symbol, lambda_symbol, lambda_star_symbol, let_symbol, quote_symbol, quasiquote_symbol, unquote_symbol, macroexpand_symbol,
-             define_expansion_symbol, define_expansion_star_symbol, with_let_symbol, if_symbol, autoload_error_symbol,
-             when_symbol, unless_symbol, begin_symbol, cond_symbol, case_symbol, and_symbol, or_symbol, do_symbol, number_to_real_symbol,
-             define_symbol, define_star_symbol, define_constant_symbol, with_baffle_symbol, define_macro_symbol, no_setter_symbol,
-             define_macro_star_symbol, define_bacro_symbol, define_bacro_star_symbol, letrec_symbol, letrec_star_symbol, let_star_symbol,
-             rest_keyword, allow_other_keys_keyword, readable_keyword, display_keyword, write_keyword, value_symbol, type_symbol,
-             baffled_symbol, set_symbol, body_symbol, class_name_symbol, feed_to_symbol, format_error_symbol, immutable_error_symbol,
-             wrong_number_of_args_symbol, read_error_symbol, string_read_error_symbol, syntax_error_symbol, division_by_zero_symbol, bad_result_symbol,
-             io_error_symbol, invalid_exit_function_symbol, wrong_type_arg_symbol, out_of_range_symbol, out_of_memory_symbol,
-             missing_method_symbol, unbound_variable_symbol, if_keyword, symbol_table_symbol, profile_in_symbol, trace_in_symbol,
-             quote_function, quasiquote_function;
+  s7_pointer allow_other_keys_keyword, and_symbol, autoload_error_symbol, bad_result_symbol, baffled_symbol, begin_symbol, body_symbol, case_symbol,
+             class_name_symbol, cond_symbol, define_bacro_star_symbol, define_bacro_symbol, define_constant_symbol, define_expansion_star_symbol,
+             define_expansion_symbol, define_macro_star_symbol, define_macro_symbol, define_star_symbol, define_symbol, display_keyword, 
+             division_by_zero_symbol, do_symbol, else_symbol, feed_to_symbol, format_error_symbol, if_keyword, if_symbol, immutable_error_symbol,
+             invalid_exit_function_symbol, io_error_symbol, lambda_star_symbol, lambda_symbol, let_star_symbol, let_symbol,
+             letrec_star_symbol, letrec_symbol, macroexpand_symbol, missing_method_symbol, no_setter_symbol, number_to_real_symbol, or_symbol,
+             out_of_memory_symbol, out_of_range_symbol, profile_in_symbol, quasiquote_function, quasiquote_symbol, quote_function, quote_symbol,
+             read_error_symbol, readable_keyword, rest_keyword, set_symbol, string_read_error_symbol, symbol_table_symbol,
+             syntax_error_symbol, trace_in_symbol, type_symbol, unbound_variable_symbol, unless_symbol,
+             unquote_symbol, value_symbol, when_symbol, with_baffle_symbol, with_let_symbol, write_keyword,
+             wrong_number_of_args_symbol, wrong_type_arg_symbol;
 
   /* signatures of sequences used as applicable objects: ("hi" 1) */
-  s7_pointer string_signature, vector_signature, float_vector_signature, int_vector_signature, byte_vector_signature,
-             c_object_signature, let_signature, hash_table_signature, pair_signature;
+  s7_pointer  byte_vector_signature, c_object_signature, float_vector_signature, hash_table_signature, int_vector_signature,
+             let_signature, pair_signature, string_signature, vector_signature;
   /* common signatures */
   s7_pointer pcl_bc, pcl_bs, pcl_bt, pcl_c, pcl_e, pcl_f, pcl_i, pcl_n, pcl_r, pcl_s, pcl_v, pl_bc, pl_bn, pl_bt, pl_p, pl_sf, pl_tl, pl_nn;
 
   /* optimizer s7_functions */
-  s7_pointer add_2, add_3, add_1x, add_x1, subtract_1, subtract_2, subtract_3, subtract_x1, subtract_2f, subtract_f2, simple_char_eq,
-             char_equal_2, char_greater_2, char_less_2, char_position_csi, string_equal_2, substring_uncopied, display_2, display_f,
-             string_greater_2, string_less_2, symbol_to_string_uncopied, get_output_string_uncopied, string_equal_2c, string_c1, string_append_2,
-             vector_ref_2, vector_ref_3, vector_set_3, vector_set_4, read_char_1, dynamic_wind_unchecked, dynamic_wind_body, dynamic_wind_init, append_2,
-             fv_ref_2, fv_ref_3, fv_set_3, fv_set_unchecked, iv_ref_2, iv_ref_3, iv_set_3, bv_ref_2, bv_ref_3, bv_set_3, vector_2, vector_3,
-             list_0, list_1, list_2, list_3, list_4, list_set_i, hash_table_ref_2, hash_table_2, list_ref_at_0, list_ref_at_1, list_ref_at_2,
-             format_f, format_no_column, format_just_control_string, format_as_objstr, values_uncopied, int_log2, unlet_disabled, unlet_ref, outlet_unlet,
-             memq_2, memq_3, memq_4, memq_any, tree_set_memq_syms, simple_inlet, sublet_curlet, profile_out, simple_list_values, restore_setter,
-             simple_let_ref, simple_let_set, sv_unlet_ref, unlet_set, rootlet_ref, geq_2, add_i_random, is_defined_in_rootlet, is_defined_in_unlet;
+  s7_pointer add_1x, add_2, add_3, add_i_random, add_x1, append_2, bv_ref_2, bv_ref_3, bv_set_3, cdr_let_ref, cdr_let_set, char_equal_2, char_greater_2,
+             char_less_2, char_position_csi, curlet_ref, display_2, display_f, dynamic_wind_body, dynamic_wind_init, dynamic_wind_unchecked, format_as_objstr,
+             format_f, format_just_control_string, format_no_column, fv_ref_2, fv_ref_3, fv_set_3, fv_set_unchecked, geq_2, get_output_string_uncopied,
+             hash_table_2, hash_table_ref_2, int_log2, is_defined_in_rootlet, is_defined_in_unlet, iv_ref_2, iv_ref_3, iv_set_3,
+             list_0, list_1, list_2, list_3, list_4, list_ref_at_0, list_ref_at_1, list_ref_at_2, list_set_i, memq_2, memq_3, memq_4, memq_any,
+             outlet_unlet, profile_out, read_char_1, restore_setter, rootlet_ref, simple_char_eq, simple_inlet, simple_list_values, starlet_ref, starlet_set,
+             string_append_2, string_c1, string_equal_2, string_equal_2c, string_greater_2, string_less_2, sublet_curlet, substring_uncopied, subtract_1,
+             subtract_2, subtract_2f, subtract_3, subtract_f2, subtract_x1, sv_unlet_ref, symbol_to_string_uncopied, tree_set_memq_syms, unlet_disabled,
+             unlet_ref, unlet_set, values_uncopied, vector_2, vector_3, vector_ref_2, vector_ref_3, vector_set_3, vector_set_4, write_2;
 
-  s7_pointer multiply_2, invert_1, invert_x, divide_2, divide_by_2, max_2, min_2, max_3, min_3,
-             num_eq_2, num_eq_xi, num_eq_ix, less_xi, less_xf, less_x0, less_2, greater_xi, greater_xf, greater_2,
-             leq_xi, leq_2, leq_ixx, geq_xi, geq_xf, random_i, random_f, random_1,
-             mul_2_ff, mul_2_ii, mul_2_if, mul_2_fi, mul_2_xi, mul_2_ix, mul_2_fx, mul_2_xf,
-             add_2_ff, add_2_ii, add_2_if, add_2_fi, add_2_xi, add_2_ix, add_2_fx, add_2_xf;
+  s7_pointer add_2_ff, add_2_fi, add_2_fx, add_2_if, add_2_ii, add_2_ix, add_2_xf, add_2_xi, divide_2,
+             divide_by_2, geq_xf, geq_xi, greater_2, greater_xf, greater_xi, invert_1, invert_x, leq_2, leq_ixx,
+             leq_xi, less_2, less_x0, less_xf, less_xi, max_2, max_3, min_2, min_3, 
+             mul_2_ff, mul_2_fi, mul_2_fx, mul_2_if, mul_2_ii, mul_2_ix, mul_2_xf, mul_2_xi, multiply_2, 
+             num_eq_2, num_eq_ix, num_eq_xi, random_1, random_f, random_i;
   s7_pointer seed_symbol, carry_symbol;
 
   /* object->let symbols */
-  s7_pointer active_symbol, data_symbol, weak_symbol, dimensions_symbol, info_symbol, c_type_symbol, source_symbol, c_object_ref_symbol,
-             at_end_symbol, sequence_symbol, position_symbol, entries_symbol, function_symbol, open_symbol, alias_symbol, port_type_symbol,
-             file_symbol, file_info_symbol, line_symbol, c_object_let_symbol, class_symbol, current_value_symbol, closed_symbol,
-             is_mutable_symbol, size_symbol, original_vector_symbol, pointer_symbol;
+  s7_pointer active_symbol, alias_symbol, at_end_symbol, c_object_let_symbol, c_object_ref_symbol, c_type_symbol, class_symbol, closed_symbol,
+             current_value_symbol, data_symbol, dimensions_symbol, entries_symbol, file_info_symbol, file_symbol, function_symbol, info_symbol,
+             is_mutable_symbol, line_symbol, open_symbol, original_vector_symbol, pointer_symbol, port_type_symbol, position_symbol,
+             sequence_symbol, size_symbol, source_symbol, weak_symbol;
 
 #if WITH_SYSTEM_EXTRAS
   s7_pointer is_directory_symbol, file_exists_symbol, delete_file_symbol, getenv_symbol, system_symbol, directory_to_list_symbol, file_mtime_symbol;
@@ -4275,7 +4275,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_LETREC, OP_LETREC1, OP_LETREC_STAR, OP_LETREC_STAR1,
       OP_LET_TEMPORARILY, OP_LET_TEMP_UNCHECKED, OP_LET_TEMP_INIT1, OP_LET_TEMP_INIT2, OP_LET_TEMP_DONE, OP_LET_TEMP_DONE1,
       OP_LET_TEMP_S7, OP_LET_TEMP_NA, OP_LET_TEMP_A, OP_LET_TEMP_SETTER, OP_LET_TEMP_UNWIND, OP_LET_TEMP_S7_UNWIND, OP_LET_TEMP_SETTER_UNWIND,
-      OP_LET_TEMP_A_A, OP_LET_TEMP_S7_DIRECT, OP_LET_TEMP_S7_DIRECT_UNWIND,
+      OP_LET_TEMP_A_A, OP_LET_TEMP_S7_OPENLETS, OP_LET_TEMP_S7_OPENLETS_UNWIND,
       OP_COND, OP_COND1, OP_FEED_TO_1, OP_COND_SIMPLE, OP_COND1_SIMPLE, OP_COND_SIMPLE_O, OP_COND1_SIMPLE_O,
       OP_AND, OP_OR,
       OP_DEFINE_MACRO, OP_DEFINE_MACRO_STAR, OP_DEFINE_EXPANSION, OP_DEFINE_EXPANSION_STAR, OP_MACRO, OP_MACRO_STAR,
@@ -4495,7 +4495,7 @@ static const char* op_names[NUM_OPS] =
       "letrec", "letrec1", "letrec*", "letrec*1",
       "let_temporarily", "let_temp_unchecked", "let_temp_init1", "let_temp_init2", "let_temp_done", "let_temp_done1",
       "let_temp_s7", "let_temp_na", "let_temp_a", "let_temp_setter", "let_temp_unwind", "let_temp_s7_unwind", "let_temp_setter_unwind",
-      "let_temp_a_a", "let_temp_s7_direct", "let_temp_s7_direct_unwind",
+      "let_temp_a_a", "let_temp_s7_openlets", "let_temp_s7_openlets_unwind",
       "cond", "cond1", "feed_to_1", "cond_simple", "cond1_simple", "cond_simple_o", "cond1_simple_o",
       "and", "or",
       "define_macro", "define_macro*", "define_expansion", "define_expansion*", "macro", "macro*",
@@ -10360,7 +10360,7 @@ static s7_pointer let_ref_p_pp(s7_scheme *sc, s7_pointer lt, s7_pointer sym)
   return((is_slot(global_slot(sym))) ? global_value(sym) : sc->undefined);
 }
 
-static inline s7_pointer g_simple_let_ref(s7_scheme *sc, s7_pointer args)
+static inline s7_pointer g_cdr_let_ref(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer lt = car(args), sym = cadr(args);
   if (!is_let(lt))
@@ -10375,30 +10375,38 @@ static inline s7_pointer g_simple_let_ref(s7_scheme *sc, s7_pointer args)
   return(let_ref_p_pp(sc, let_outlet(lt), sym));
 }
 
+static s7_pointer starlet(s7_scheme *sc, s7_int choice);
+
+static s7_pointer g_starlet_ref(s7_scheme *sc, s7_pointer args) {return(starlet(sc, starlet_symbol_id(cadr(args))));}
+static s7_pointer g_curlet_ref(s7_scheme *sc, s7_pointer args) {return(lookup(sc, cadr(args)));}
+static s7_pointer g_unlet_ref(s7_scheme *sc, s7_pointer args) {return(initial_value(cadr(args)));}
 static s7_pointer g_rootlet_ref(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer sym = cadr(args);
   return((is_slot(global_slot(sym))) ? global_value(sym) : sc->undefined);
 }
 
-static s7_pointer g_unlet_ref(s7_scheme *sc, s7_pointer args) {return(initial_value(cadr(args)));}
-
 static s7_pointer let_ref_chooser(s7_scheme *sc, s7_pointer f, int32_t unused_args, s7_pointer expr)
 {
   s7_pointer arg1 = cadr(expr), arg2 = caddr(expr);
-  if ((is_pair(arg1)) && (is_quoted_symbol(arg2)) && (!is_keyword(cadr(arg2))))
+  if ((is_quoted_symbol(arg2)) && (!is_keyword(cadr(arg2))))
     {
-      if ((optimize_op(expr) == HOP_SAFE_C_opSq_C) && (car(arg1) == sc->cdr_symbol))
+      if (is_pair(arg1))
 	{
-	  set_opt3_sym(cdr(expr), cadr(arg2));
-	  return(sc->simple_let_ref);
-	}
-      if (car(arg1) == sc->rootlet_symbol) return(sc->rootlet_ref);
-      if (car(arg1) == sc->unlet_symbol)
-	{
-	  set_c_function(arg1, sc->unlet_disabled);
-	  return(sc->unlet_ref);
-	}}
+	  if ((optimize_op(expr) == HOP_SAFE_C_opSq_C) && (car(arg1) == sc->cdr_symbol))
+	    {
+	      set_opt3_sym(cdr(expr), cadr(arg2));
+	      return(sc->cdr_let_ref);
+	    }
+	  if (car(arg1) == sc->rootlet_symbol) return(sc->rootlet_ref);
+	  if (car(arg1) == sc->curlet_symbol) return(sc->curlet_ref);
+	  if (car(arg1) == sc->unlet_symbol)
+	    {
+	      set_c_function(arg1, sc->unlet_disabled);
+	      return(sc->unlet_ref);
+	    }}
+      if (arg1 == sc->starlet_symbol) return(sc->starlet_ref); /* should *curlet* be added? */
+    }
   return(f);
 }
 
@@ -10518,7 +10526,7 @@ static s7_pointer let_set_p_ppp_2(s7_scheme *sc, s7_pointer p1, s7_pointer p2, s
   return(let_set_1(sc, p1, p2, p3));
 }
 
-static s7_pointer g_simple_let_set(s7_scheme *sc, s7_pointer args)
+static s7_pointer g_cdr_let_set(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer y, lt = car(args), sym = cadr(args), val = caddr(args);
 
@@ -10543,6 +10551,9 @@ static s7_pointer g_simple_let_set(s7_scheme *sc, s7_pointer args)
   return(slot_value(y));
 }
 
+static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val);
+static s7_pointer g_starlet_set(s7_scheme *sc, s7_pointer args) {return(starlet_set_1(sc, cadr(args), caddr(args)));}
+
 static s7_pointer g_unlet_set(s7_scheme *sc, s7_pointer args)
 {
   immutable_object_error_nr(sc, set_elist_2(sc, wrap_string(sc, "~S is immutable in (unlet)", 26), cadr(args)));
@@ -10551,19 +10562,21 @@ static s7_pointer g_unlet_set(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer let_set_chooser(s7_scheme *sc, s7_pointer f, int32_t unused_args, s7_pointer expr)
 {
+  s7_pointer arg1 = cadr(expr);
   if (optimize_op(expr) == HOP_SAFE_C_opSq_CS)
     {
-      s7_pointer arg1 = cadr(expr), arg2 = caddr(expr), arg3 = cadddr(expr);
+      s7_pointer arg2 = caddr(expr), arg3 = cadddr(expr);
       if ((car(arg1) == sc->cdr_symbol) &&
 	  (is_quoted_pair(arg2)) &&
 	  (!is_possibly_constant(cadr(arg2))) &&
 	  (!is_possibly_constant(arg3)))
-	return(sc->simple_let_set);
+	return(sc->cdr_let_set);
       if (car(arg1) == sc->unlet_symbol)
 	{
 	  set_c_function(arg1, sc->unlet_disabled);
 	  return(sc->unlet_set);
 	}}
+  if (arg1 == sc->starlet_symbol) return(sc->starlet_set);
   return(f);
 }
 
@@ -10844,8 +10857,6 @@ s7_pointer s7_symbol_local_value(s7_scheme *sc, s7_pointer sym, s7_pointer let)
 
 /* -------------------------------- symbol->value -------------------------------- */
 #define lookup_global(Sc, Sym) ((is_defined_global(Sym)) ? global_value(Sym) : lookup_checked(Sc, Sym))
-
-static s7_pointer starlet(s7_scheme *sc, s7_int choice);
 
 static s7_pointer g_symbol_to_value(s7_scheme *sc, s7_pointer args)
 {
@@ -12148,7 +12159,6 @@ s7_pointer s7_make_continuation(s7_scheme *sc)
 
 static void let_temp_done(s7_scheme *sc, s7_pointer args, s7_pointer let);
 static void let_temp_unwind(s7_scheme *sc, s7_pointer slot, s7_pointer new_value);
-static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val);
 static s7_pointer dynamic_unwind(s7_scheme *sc, s7_pointer func, s7_pointer e);
 
 static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
@@ -12217,7 +12227,7 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
 	  starlet_set_1(sc, T_Sym(stack_code(sc->stack, i)), stack_args(sc->stack, i));
 	  break;
 
-	case OP_LET_TEMP_S7_DIRECT_UNWIND:
+	case OP_LET_TEMP_S7_OPENLETS_UNWIND:
 	  sc->has_openlets = (stack_args(sc->stack, i) != sc->F);
 	  break;
 
@@ -12448,7 +12458,7 @@ static void call_with_exit(s7_scheme *sc)
 	starlet_set_1(sc, T_Sym(stack_code(sc->stack, i)), stack_args(sc->stack, i));
 	break;
 
-      case OP_LET_TEMP_S7_DIRECT_UNWIND:
+      case OP_LET_TEMP_S7_OPENLETS_UNWIND:
 	sc->has_openlets = (stack_args(sc->stack, i) != sc->F);
 	break;
 
@@ -30363,7 +30373,7 @@ static s7_pointer g_open_output_function(s7_scheme *sc, s7_pointer args)
 /* -------- current-input-port stack -------- */
 #define INPUT_PORT_STACK_INITIAL_SIZE 4
 
-static inline void push_input_port(s7_scheme *sc, s7_pointer new_port)
+static /* inline */ void push_input_port(s7_scheme *sc, s7_pointer new_port)
 {
   if (sc->input_port_stack_loc >= sc->input_port_stack_size)
     {
@@ -35998,6 +36008,15 @@ static s7_pointer g_write(s7_scheme *sc, s7_pointer args)
 static s7_pointer write_p_p(s7_scheme *sc, s7_pointer x)
 {
   return((current_output_port(sc) == sc->F) ? x : object_out(sc, x, current_output_port(sc), P_WRITE));
+}
+
+static s7_pointer g_write_2(s7_scheme *sc, s7_pointer args) {return(write_p_pp(sc, car(args), cadr(args)));}
+
+static s7_pointer write_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr)
+{
+  if (args == 2) /* not check_for_substring_temp(sc, expr) here -- write returns arg so can be immutable if substring_uncopied */
+    return((caddr(expr) == sc->F) ? sc->display_f : sc->write_2);
+  return(f);
 }
 
 
@@ -52845,7 +52864,7 @@ static bool catch_let_temp_s7_unwind_function(s7_scheme *sc, s7_int catch_loc, s
   return(false);
 }
 
-static bool catch_let_temp_s7_direct_unwind_function(s7_scheme *sc, s7_int catch_loc, s7_pointer type, s7_pointer info, bool *reset_hook)
+static bool catch_let_temp_s7_openlets_unwind_function(s7_scheme *sc, s7_int catch_loc, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
   if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
   sc->has_openlets = (stack_args(sc->stack, catch_loc) != sc->F);
@@ -52888,7 +52907,7 @@ static void init_catchers(void)
   catchers[OP_EVAL_STRING] =        catch_eval_function;
   catchers[OP_GET_OUTPUT_STRING] =  catch_out_function;
   catchers[OP_LET_TEMP_DONE] =      catch_let_temporarily_function;
-  catchers[OP_LET_TEMP_S7_DIRECT_UNWIND] = catch_let_temp_s7_direct_unwind_function;
+  catchers[OP_LET_TEMP_S7_OPENLETS_UNWIND] = catch_let_temp_s7_openlets_unwind_function;
   catchers[OP_LET_TEMP_S7_UNWIND] = catch_let_temp_s7_unwind_function;
   catchers[OP_LET_TEMP_UNWIND] =    catch_let_temp_unwind_function;
   catchers[OP_MAP_UNWIND] =         catch_map_unwind_function;
@@ -55434,7 +55453,7 @@ static s7_pointer fx_hash_table_increment(s7_scheme *sc, s7_pointer arg)
 }
 
 
-static s7_pointer fx_simple_let_ref_s(s7_scheme *sc, s7_pointer arg)
+static s7_pointer fx_cdr_let_ref_s(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer sym;
   s7_pointer lt = s_lookup(sc, opt2_sym(arg), arg);  /* (var-ref local-var) -> local-var, opt_sym2(arg) == cadr(arg) */
@@ -58211,11 +58230,11 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 		  }
 		if (optimize_op(body) == HOP_SAFE_C_opSq_C)
 		  {
-		    if ((fn_proc(body) == g_simple_let_ref) &&
+		    if ((fn_proc(body) == g_cdr_let_ref) &&
 			(cadadr(body) == car(closure_args(opt1_lambda(arg)))))
 		      {
 			set_opt2_sym(cdr(arg), cadaddr(body));
-			return(fx_simple_let_ref_s); /* (var-ref local-var) -> (let-ref (cdr v=local_var) 'ref) */
+			return(fx_cdr_let_ref_s); /* (var-ref local-var) -> (let-ref (cdr v=local_var) 'ref) */
 		      }}}
 	    return((fx_proc(closure_body(opt1_lambda(arg))) == fx_sqr_t) ? fx_safe_closure_s_sqr : fx_safe_closure_s_a);
 	  }
@@ -58842,7 +58861,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	  if (fx_proc(tree) == fx_is_eq_car_sq) return(with_fx(tree, fx_is_eq_car_tq));
 	  if ((fx_proc(tree) == fx_c_opsq_c) || (fx_proc(tree) == fx_c_optq_c))
 	    {
-	      if (fn_proc(p) != g_simple_let_ref) /* don't step on opt3_sym */
+	      if (fn_proc(p) != g_cdr_let_ref) /* don't step on opt3_sym */
 		{
 		  if ((is_global_and_has_func(car(p), s7_p_pp_function)) &&
 		      (is_global_and_has_func(caadr(p), s7_p_p_function)))
@@ -64219,6 +64238,7 @@ static void use_slot_ref(s7_scheme *sc, opt_info *opc, s7_pointer let, s7_pointe
     }
 }
 
+static s7_pointer opt_p_curlet_ref(opt_info *o) {return(slot_value(o->v[1].p));}
 static s7_pointer opt_p_unlet_ref(opt_info *o) {return(o->v[1].p);}
 static s7_pointer opt_p_rootlet_ref(opt_info *o) {return(global_value(o->v[1].p));}
 
@@ -64231,13 +64251,16 @@ static bool opt_unlet_rootlet_ref(s7_scheme *sc, opt_info *opc, s7_pointer arg1,
 	  opc->v[0].fp = opt_p_c;
 	  opc->v[1].p = sc->undefined;
 	  return_true(sc, car_x);
-	}
-      opc->v[0].fp = opt_p_rootlet_ref;
-      opc->v[1].p = sym;
-      return_true(sc, car_x);
+	}}
+  if (car(arg1) == sc->curlet_symbol)
+    {
+      s7_pointer p = opt_simple_symbol(sc, sym);
+      if (!p) return_false(sc, car_x);
+      opc->v[0].fp = opt_p_curlet_ref;
+      return(true);
     }
-  opc->v[0].fp = opt_p_unlet_ref;
-  opc->v[1].p = initial_value(sym);
+  opc->v[0].fp = (car(arg1) == sc->rootlet_symbol) ? opt_p_rootlet_ref : opt_p_unlet_ref;
+  opc->v[1].p = (car(arg1) == sc->unlet_symbol) ? initial_value(sym) : sym;
   return_true(sc, car_x);
 }
 
@@ -64358,7 +64381,7 @@ static bool p_pp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 
       if ((car(car_x) == sc->let_ref_symbol) && (is_pair(arg1)) &&
 	  ((is_symbol_and_keyword(arg2)) || ((is_quoted_symbol(arg2)))) &&
-	  ((car(arg1) == sc->unlet_symbol) || (car(arg1) == sc->rootlet_symbol)))
+	  ((car(arg1) == sc->unlet_symbol) || (car(arg1) == sc->rootlet_symbol) || (car(arg1) == sc->curlet_symbol)))
 	return(opt_unlet_rootlet_ref(sc, opc, arg1, (is_pair(arg2)) ? cadr(arg2) : keyword_symbol(arg2), car_x));
 
       if (cell_optimize(sc, cdr(car_x)))
@@ -64961,7 +64984,7 @@ static s7_pointer opt_p_ppf_slot_set(opt_info *o) {slot_set_value(o->v[2].p, o->
 
 static bool use_ppc_slot_set(s7_scheme *sc, opt_info *opc, s7_pointer let, s7_pointer symbol, s7_pointer value)
 {
-  s7_pointer slot = symbol_to_local_slot(sc, symbol, let);
+  s7_pointer slot = lookup_slot_with_let(sc, symbol, let);
   if ((is_slot(slot)) && (!is_immutable(slot)))
     {
       opc->v[2].p = slot;
@@ -64974,7 +64997,7 @@ static bool use_ppc_slot_set(s7_scheme *sc, opt_info *opc, s7_pointer let, s7_po
 
 static bool use_pps_slot_set(s7_scheme *sc, opt_info *opc, s7_pointer let, s7_pointer symbol, s7_pointer val_slot)
 {
-  s7_pointer slot = symbol_to_local_slot(sc, symbol, let);
+  s7_pointer slot = lookup_slot_with_let(sc, symbol, let);
   if ((is_slot(slot)) && (!is_immutable(slot)))
     {
       opc->v[2].p = slot;
@@ -64987,7 +65010,7 @@ static bool use_pps_slot_set(s7_scheme *sc, opt_info *opc, s7_pointer let, s7_po
 
 static bool use_ppf_slot_set(s7_scheme *sc, opt_info *opc, s7_pointer let, s7_pointer symbol)
 {
-  s7_pointer slot = symbol_to_local_slot(sc, symbol, let);
+  s7_pointer slot = lookup_slot_with_let(sc, symbol, let);
   if ((is_slot(slot)) && (!is_immutable(slot)))
     {
       opc->v[2].p = slot;
@@ -71019,6 +71042,10 @@ static void init_choosers(s7_scheme *sc)
   sc->display_f = make_function_with_class(sc, f, "display", g_display_f, 2, 0, false);
   sc->display_2 = make_function_with_class(sc, f, "display", g_display_2, 2, 0, false);
 
+  /* write */
+  f = set_function_chooser(sc->write_symbol, write_chooser);
+  sc->write_2 = make_function_with_class(sc, f, "write", g_write_2, 2, 0, false);
+
   /* vector */
   f = set_function_chooser(sc->vector_symbol, vector_chooser);
   sc->vector_2 = make_function_with_class(sc, f, "vector", g_vector_2, 2, 0, false);
@@ -71142,14 +71169,17 @@ static void init_choosers(s7_scheme *sc)
 
   /* let-ref */
   f = set_function_chooser(sc->let_ref_symbol, let_ref_chooser);
-  sc->simple_let_ref = make_function_with_class(sc, f, "let-ref", g_simple_let_ref, 2, 0, false);
+  sc->cdr_let_ref = make_function_with_class(sc, f, "let-ref", g_cdr_let_ref, 2, 0, false);
+  sc->starlet_ref = make_function_with_class(sc, f, "let-ref", g_starlet_ref, 2, 0, false);
   sc->rootlet_ref = make_function_with_class(sc, f, "let-ref", g_rootlet_ref, 2, 0, false);
+  sc->curlet_ref = make_function_with_class(sc, f, "let-ref", g_curlet_ref, 2, 0, false);
   sc->unlet_ref = make_function_with_class(sc, f, "let-ref", g_unlet_ref, 2, 0, false);
 
   /* let-set */
   f = set_function_chooser(sc->let_set_symbol, let_set_chooser);
-  sc->simple_let_set = make_function_with_class(sc, f, "let-set!", g_simple_let_set, 3, 0, false);
+  sc->cdr_let_set = make_function_with_class(sc, f, "let-set!", g_cdr_let_set, 3, 0, false);
   sc->unlet_set = make_function_with_class(sc, f, "let-set!", g_unlet_set, 3, 0, false);
+  sc->starlet_set = make_function_with_class(sc, f, "let-set!", g_starlet_set, 3, 0, false);
 
   /* values */
   f = set_function_chooser(sc->values_symbol, values_chooser);
@@ -78094,7 +78124,7 @@ static void check_let_temporarily(s7_scheme *sc)
 		if ((is_quoted_symbol(cadar(var))) &&
 		    (starlet_symbol_id(cadr(cadar(var))) == SL_OPENLETS)) /* (cadr(cadar(var)) == make_symbol_with_strlen(sc, "openlets"))) */
 		  {
-		    pair_set_syntax_op(form, OP_LET_TEMP_S7_DIRECT);
+		    pair_set_syntax_op(form, OP_LET_TEMP_S7_OPENLETS);
 		    set_opt1_pair(form, cdr(var));
 		  }}}
 
@@ -78287,17 +78317,17 @@ static void op_let_temp_s7_unwind(s7_scheme *sc)
     sc->value = splice_in_values(sc, multiple_value(sc->value));
 }
 
-static bool op_let_temp_s7_direct(s7_scheme *sc)
+static bool op_let_temp_s7_openlets(s7_scheme *sc)
 {
   s7_pointer new_val;
-  push_stack_no_code(sc, OP_LET_TEMP_S7_DIRECT_UNWIND, (sc->has_openlets) ? sc->T : sc->F);
+  push_stack_no_code(sc, OP_LET_TEMP_S7_OPENLETS_UNWIND, (sc->has_openlets) ? sc->T : sc->F);
   new_val = fx_call(sc, opt1_pair(sc->code));
   sc->has_openlets = (new_val != sc->F);
   sc->code = cddr(sc->code); /* cddr is body of let-temp */
   return(is_pair(sc->code));
 }
 
-static void op_let_temp_s7_direct_unwind(s7_scheme *sc)
+static void op_let_temp_s7_openlets_unwind(s7_scheme *sc)
 {
   sc->has_openlets = (sc->args != sc->F);
   if (is_multiple_value(sc->value))
@@ -94137,16 +94167,16 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	  if (op_let_temp_done1(sc)) continue;
 	  goto SET_UNCHECKED;
 
-	case OP_LET_TEMP_S7:        if(op_let_temp_s7(sc))         goto BEGIN; sc->value = sc->nil; continue;
-	case OP_LET_TEMP_S7_DIRECT: if (op_let_temp_s7_direct(sc)) goto BEGIN; sc->value = sc->nil; continue;
-	case OP_LET_TEMP_NA:        if (op_let_temp_na(sc))        goto BEGIN; sc->value = sc->nil; continue;
-	case OP_LET_TEMP_A:         if (op_let_temp_a(sc))         goto BEGIN; sc->value = sc->nil; continue;
-	case OP_LET_TEMP_SETTER:    if (op_let_temp_setter(sc))    goto BEGIN; sc->value = sc->nil; continue;
-	case OP_LET_TEMP_A_A:       sc->value = fx_let_temp_a_a(sc, sc->code); continue;
+	case OP_LET_TEMP_S7:               if (op_let_temp_s7(sc))          goto BEGIN; sc->value = sc->nil; continue;
+	case OP_LET_TEMP_S7_OPENLETS:      if (op_let_temp_s7_openlets(sc)) goto BEGIN; sc->value = sc->nil; continue;
+	case OP_LET_TEMP_NA:               if (op_let_temp_na(sc))          goto BEGIN; sc->value = sc->nil; continue;
+	case OP_LET_TEMP_A:                if (op_let_temp_a(sc))           goto BEGIN; sc->value = sc->nil; continue;
+	case OP_LET_TEMP_SETTER:           if (op_let_temp_setter(sc))      goto BEGIN; sc->value = sc->nil; continue;
+	case OP_LET_TEMP_A_A:              sc->value = fx_let_temp_a_a(sc, sc->code); continue;
 
 	case OP_LET_TEMP_UNWIND:           op_let_temp_unwind(sc);           continue;
 	case OP_LET_TEMP_S7_UNWIND:        op_let_temp_s7_unwind(sc);        continue;
-	case OP_LET_TEMP_S7_DIRECT_UNWIND: op_let_temp_s7_direct_unwind(sc); continue;
+	case OP_LET_TEMP_S7_OPENLETS_UNWIND: op_let_temp_s7_openlets_unwind(sc); continue;
 	case OP_LET_TEMP_SETTER_UNWIND:    op_let_temp_setter_unwind(sc);    continue;
 
 
@@ -98971,7 +99001,7 @@ int main(int argc, char **argv)
  * dup              3788   2492   2239   2097   1990
  * thook     7651   ----   2590   2030   2046   2004
  * tread            2421   2419   2408   2405   2255
- * tcopy            5546   2539   2375   2386   2348  2340
+ * tcopy            5546   2539   2375   2386   2340
  * trclo     8031   2574   2454   2445   2449   2438
  * titer     3657   2842   2641   2509   2449   2458
  * tmat             3042   2524   2578   2590   2515
@@ -98986,8 +99016,8 @@ int main(int argc, char **argv)
  * tmap             8774   4489   4541   4586   4384
  * tlet      11.0   6974   5609   5980   5965   4503
  * tfft             7729   4755   4476   4536   4541
- * tstar            5923   5519   4449   4550   4548
  * tshoot           5447   5183   5055   5034   4850
+ * tstar            6705   5834   5278   5177   5047
  * tform            5348   5307   5316   5084   5094
  * tstr      10.0   6342   5488   5162   5180   5194
  * tnum             6013   5433   5396   5409   5432
@@ -99016,4 +99046,6 @@ int main(int argc, char **argv)
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
+ * curlet let_set? -- ugly code to shoehorn into p_ppp_ok for let-set! [t806]
+ *   let_temp_s7_openlets -> all fields here? (i.e. direct)
  */
