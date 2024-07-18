@@ -3780,9 +3780,10 @@ static s7_pointer *small_ints = NULL;
 static s7_pointer real_zero, real_NaN, complex_NaN, real_pi, real_one, arity_not_set, max_arity, real_infinity, real_minus_infinity;
 static s7_pointer int_zero, int_one, int_two, int_three, minus_one, minus_two, mostfix, leastfix;
 
+static const char *ones[10] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+
 static void init_small_ints(void)
 {
-  const char *ones[10] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
   s7_cell *cells = (s7_cell *)Malloc(NUM_SMALL_INTS * sizeof(s7_cell)); /* was calloc 14-Apr-22 */
   small_ints = (s7_pointer *)Malloc(NUM_SMALL_INTS * sizeof(s7_pointer));
   for (int32_t i = 0; i < NUM_SMALL_INTS; i++)
@@ -4605,11 +4606,13 @@ static const char* op_names[NUM_OPS] =
       "recur_and_a_or_a_laa_laa",
 };
 
-#define is_safe_c_op(op)  ((op >= OP_SAFE_C_NC) && (op < OP_THUNK))
-#define is_unknown_op(op) ((op >= OP_UNKNOWN) && (op <= OP_UNKNOWN_NP))
-#define is_h_safe_c_nc(P) (optimize_op(P) == HOP_SAFE_C_NC)
-#define is_safe_c_s(P)    ((optimize_op(P) == OP_SAFE_C_S) || (optimize_op(P) == HOP_SAFE_C_S))
-#define is_h_safe_c_s(P)  (optimize_op(P) == HOP_SAFE_C_S)
+#define is_safe_c_op(op)            ((op >= OP_SAFE_C_NC) && (op < OP_THUNK))
+#define is_safe_closure_op(op)      ((op >= OP_SAFE_CLOSURE_S) && (op < OP_ANY_CLOSURE_3P))
+#define is_safe_closure_star_op(op) ((op >= OP_SAFE_CLOSURE_STAR_A) && (op < OP_C_SS))
+#define is_unknown_op(op)           ((op >= OP_UNKNOWN) && (op <= OP_UNKNOWN_NP))
+#define is_h_safe_c_nc(P)           (optimize_op(P) == HOP_SAFE_C_NC)
+#define is_safe_c_s(P)              ((optimize_op(P) == OP_SAFE_C_S) || (optimize_op(P) == HOP_SAFE_C_S))
+#define is_h_safe_c_s(P)            (optimize_op(P) == HOP_SAFE_C_S)
 #define FIRST_UNHOPPABLE_OP OP_APPLY_SS
 
 static bool is_h_optimized(s7_pointer p)
@@ -14471,9 +14474,7 @@ static size_t integer_to_string_any_base(char *p, s7_int n, int32_t radix)  /* c
   sign = (n < 0);
   if (sign) n = -n;
 
-  /* the previous version that counted up to n, rather than dividing down below n, as here,
-   *   could be confused by large ints on 64 bit machines
-   */
+  /* the previous version that counted up to n, rather than dividing down below n, as here, could be confused by large ints on 64 bit machines  */
   pown = n;
   for (i = 1; i < 100; i++)
     {
@@ -14502,7 +14503,6 @@ static const char *integer_to_string(s7_scheme *sc, s7_int num, s7_int *nlen) /*
 {
   char *p, *op;
   bool sign;
-
   if (num == S7_INT64_MIN)
     {
       (*nlen) = 20;
@@ -14525,11 +14525,10 @@ static const char *integer_to_string(s7_scheme *sc, s7_int num, s7_int *nlen) /*
   return(++p);
 }
 
-static char *integer_to_string_no_length(s7_scheme *sc, s7_int num) /* do not free the returned string */
+static const char *integer_to_string_no_length(s7_scheme *sc, s7_int num) /* do not free the returned string */
 {
   char *p;
   bool sign;
-
   if (num == S7_INT64_MIN)
     return(number_name(leastfix)); /* "-9223372036854775808" but avoids a compiler complaint */
   p = (char *)(sc->int_to_str2 + INT_TO_STR_SIZE - 1);
@@ -35278,28 +35277,45 @@ static void counter_to_port(s7_scheme *sc, s7_pointer unused_obj, s7_pointer por
   port_write_string(port)(sc, "#<counter>", 10, port);
 }
 
+
 static void integer_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t unused_use_write, shared_info_t *unused_ci)
-{
-  if (has_number_name(obj))
+{ /* killer overhead here; breaking it into named/unnamed funcs helps only slightly -- still ridiculous overhead according to callgrind */
+
+  s7_int num = integer(obj);
+  if ((num < 10) && (num >= 0))
     {
       if (is_string_port(port))
 	{
-	  if (port_position(port) + number_name_length(obj) < port_data_size(port))
+	  if (port_position(port) + 1 < port_data_size(port))
 	    {
-	      memcpy((void *)(port_data(port) + port_position(port)), (void *)number_name(obj), number_name_length(obj));
-	      port_position(port) += number_name_length(obj);
+	      memcpy((void *)(port_data(port) + port_position(port)), (void *)ones[num], 1);
+	      port_position(port) += 1;
 	    }
-	  else string_write_string_resized(sc, number_name(obj), number_name_length(obj), port);
+	  else string_write_string_resized(sc, ones[num], 1, port);
 	}
-      else port_write_string(port)(sc, number_name(obj), number_name_length(obj), port);
+      else port_write_string(port)(sc, ones[num], 1, port);
     }
   else
-    {
-      s7_int nlen = 0;
-      const char *str = integer_to_string(sc, integer(obj), &nlen);
-      set_number_name(obj, str, nlen);
-      port_write_string(port)(sc, str, nlen, port);
-    }
+    if (has_number_name(obj))
+      {
+	if (is_string_port(port))
+	  {
+	    if (port_position(port) + number_name_length(obj) < port_data_size(port))
+	      {
+		memcpy((void *)(port_data(port) + port_position(port)), (void *)number_name(obj), number_name_length(obj));
+		port_position(port) += number_name_length(obj);
+	      }
+	    else string_write_string_resized(sc, number_name(obj), number_name_length(obj), port);
+	  }
+	else port_write_string(port)(sc, number_name(obj), number_name_length(obj), port);
+      }
+    else
+      {
+	s7_int nlen = 0;
+	const char *str = integer_to_string(sc, integer(obj), &nlen);
+	set_number_name(obj, str, nlen);
+	port_write_string(port)(sc, str, nlen, port);
+      }
 }
 
 static void number_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *unused_ci)
@@ -52997,7 +53013,7 @@ static void format_to_error_port(s7_scheme *sc, const char *str, s7_pointer args
 }
 
 static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
-{
+{ /* half the reported compute time here is in the longjmp after the catcher runs */
   bool reset_error_hook = false;
   s7_pointer cur_code = current_code(sc);
 
@@ -53025,10 +53041,10 @@ static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
       pair_fill(sc, set_plist_2(sc, sc->cur_code, sc->nil));
     }
 #endif
-  if (is_pair(cur_code))
+  if (is_pair(cur_code)) /* not redundant */
     {
       s7_int line = -1, file, position;
-      if (has_location(cur_code))
+      if (has_location(cur_code)) /* ignore callgrind!  this is the normal case */
 	{
 	  line = pair_line_number(cur_code);
 	  file = pair_file_number(cur_code);
@@ -53037,8 +53053,7 @@ static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
       else /* try to find a plausible line number! */
 	for (s7_pointer p = cur_code, sp = cur_code; is_pair(p); p = cdr(p), sp = cdr(sp))
 	  {
-	    if ((is_pair(car(p))) &&  /* what about p itself? */
-		(has_location(car(p))))
+	    if ((is_pair(car(p))) && (has_location(car(p))))
 	      {
 		line = pair_line_number(car(p));
 		file = pair_file_number(car(p));
@@ -53047,8 +53062,8 @@ static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
 	      }
 	    p = cdr(p);
 	    if ((!is_pair(p)) || (p == sp)) break;
-	    if ((is_pair(car(p))) &&
-		(has_location(car(p))))
+	    /* p itself never has the line/file info */
+	    if ((is_pair(car(p))) && (has_location(car(p))))
 	      {
 		line = pair_line_number(car(p));
 		file = pair_file_number(car(p));
@@ -81174,11 +81189,7 @@ static bool op_implicit_vector_ref_aa(s7_scheme *sc) /* tnum/tmat, neither uses 
 {
   s7_pointer x, y, code;
   s7_pointer v = lookup_checked(sc, car(sc->code));
-  if ((!is_any_vector(v)) || (vector_rank(v) != 2))
-    {
-      sc->last_function = v;
-      return(false);
-    }
+  if (!is_any_vector(v)) {sc->last_function = v; return(false);}
   code = cdr(sc->code);
   x = fx_call(sc, code);
   gc_protect_via_stack(sc, x);
@@ -81192,7 +81203,7 @@ static bool op_implicit_vector_ref_aa(s7_scheme *sc) /* tnum/tmat, neither uses 
 	  (ix < vector_dimension(v, 0)) && (iy < vector_dimension(v, 1)))
 	{
 	  s7_int index = (ix * vector_offset(v, 0)) + iy;
-	  sc->value = vector_getter(v)(sc, v, index); /* check for normal vector saves in some cases, costs in others */
+	  sc->value = (is_float_vector(v)) ? make_real(sc, float_vector(v, index)) : vector_getter(v)(sc, v, index); /* check for normal vector saves in some cases, costs in others */
 	  unstack_gc_protect(sc);
 	  return(true);
 	}}
@@ -82578,9 +82589,19 @@ static s7_pointer check_do(s7_scheme *sc)
 		      /* no semipermanent let here because apparently do_is_safe accepts recursive calls? */
 		      if ((!has_set) &&
 			  (c_function_class(opt1_cfunc(end)) == sc->num_eq_class))
-			{
+			{ 
 			  /* vars is of the form ((i 0 (+ i 1))) -- 1 var etc */
+			  opcode_t op = optimize_op(car(body));
 			  pair_set_syntax_op(form, OP_SAFE_DOTIMES);   /* safe_dotimes: end is = */
+
+			  if ((is_optimized(car(body))) &&
+			      ((is_safe_c_op(op)) || (is_safe_closure_op(op)) || (is_safe_closure_star_op(op))) &&
+			      (!op_has_hop(car(body))))
+			    {
+			      /* fprintf(stderr, "set hop bit %s\n", display(car(body))); */
+			      set_optimize_op(car(body), op + 1); /* set hop bit if it's a safe_closure call in a safe do loop */
+			    }
+
 			  if (is_fxable(sc, car(body)))
 			    fx_annotate_arg(sc, body, set_plist_1(sc, caar(vars)));
 			}
@@ -98998,27 +99019,27 @@ int main(int argc, char **argv)
  * texit     1884   1950   1778   1741   1770   1764
  * s7test           1831   1818   1829   1830   1855
  * lt        2222   2172   2150   2185   1950   1914
- * dup              3788   2492   2239   2097   1990
+ * dup              3788   2492   2239   2097   1980
  * thook     7651   ----   2590   2030   2046   2004
- * tread            2421   2419   2408   2405   2255
+ * tread            2421   2419   2408   2405   2248
  * tcopy            5546   2539   2375   2386   2340
- * trclo     8031   2574   2454   2445   2449   2438
+ * trclo     8031   2574   2454   2445   2449   2434
  * titer     3657   2842   2641   2509   2449   2458
- * tmat             3042   2524   2578   2590   2515
+ * tmat             3042   2524   2578   2590   2512
  * tload                   3046   2404   2566   2555
  * fbench    2933   2583   2460   2430   2478   2573
  * tsort     3683   3104   2856   2804   2858   2858
  * tio              3752   3683   3620   3583   3122
- * tobj             3970   3828   3577   3508   3453
+ * tobj             3970   3828   3577   3508   3448
  * tmac             3873   3033   3677   3677   3512
- * teq              4045   3536   3486   3544   3591
+ * teq              4045   3536   3486   3544   3559
  * tcase            4793   4439   4430   4439   4378
  * tmap             8774   4489   4541   4586   4384
  * tlet      11.0   6974   5609   5980   5965   4503
  * tfft             7729   4755   4476   4536   4541
  * tshoot           5447   5183   5055   5034   4850
  * tstar            6705   5834   5278   5177   5047
- * tform            5348   5307   5316   5084   5094
+ * tform            5348   5307   5316   5084   5066
  * tstr      10.0   6342   5488   5162   5180   5194
  * tnum             6013   5433   5396   5409   5432
  * tari      15.0   12.7   6827   6543   6278   6183
@@ -99028,8 +99049,8 @@ int main(int argc, char **argv)
  * trec      19.6   6980   6599   6656   6658   6490
  * tleft     12.2   9753   7537   7331   7331   6811
  * tmisc                          7614   7115   7125
- * tclo             8025   7645   8809   7770   7796
- * tlamb                          8003   7941   7910
+ * tclo             8025   7645   8809   7770   7596
+ * tlamb                          8003   7941   7898
  * tgc              11.1   8177   7857   7986   8014
  * thash            11.7   9734   9479   9526   9251
  * cb        12.9   11.0   9658   9564   9609   9642
@@ -99046,6 +99067,6 @@ int main(int argc, char **argv)
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
- * curlet let_set? -- ugly code to shoehorn into p_ppp_ok for let-set! [t806]
- *   let_temp_s7_openlets -> all fields here? (i.e. direct)
+ * let_temp_s7_openlets -> all fields here? (i.e. direct)
+ * tnum: implicit_int_vector_ref_a and implicit_float_vector_ref_aa
  */
