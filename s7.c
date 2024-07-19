@@ -8533,8 +8533,6 @@ s7_pointer s7_gc_unprotect_via_stack(s7_scheme *sc, s7_pointer x)
 #define set_gc_protected2(Sc, Val) set_stack_protected2(Sc, Val, OP_GC_PROTECT)
 #define set_gc_protected3(Sc, Val) set_stack_protected3(Sc, Val, OP_GC_PROTECT)
 
-#define map_iterator(Sc)             stack_protected2(Sc, OP_MAP_UNWIND)
-#define set_map_iterator(Sc, Val)    set_stack_protected2(Sc, Val, OP_MAP_UNWIND)
 #define map_unwind_list(Sc)          stack_protected3(Sc, OP_MAP_UNWIND)
 #define set_map_unwind_list(Sc, Val) set_stack_protected3(Sc, Val, OP_MAP_UNWIND)
 
@@ -68994,7 +68992,7 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 	      if (!is_mappable(seq))
 		wrong_type_error_nr(sc, sc->for_each_symbol, 2, seq, a_sequence_string);
 	      seq = s7_make_iterator(sc, seq);
-	      set_map_iterator(sc, seq); /* GC protect new iterator */
+	      set_stack_protected2(sc, seq, OP_MAP_UNWIND);
 	    }
 	  /* push_stack_no_let(sc, OP_GC_PROTECT, seq, f); */
 	  if (func == opt_cell_any_nv)
@@ -82477,6 +82475,26 @@ static s7_pointer do_end_bad(s7_scheme *sc, s7_pointer form)
   return(fxify_step_exprs(sc, code));
 }
 
+#if 0
+/* doesn't gain much, and leaf_hopper needs opts */
+static void leaf_hopper(s7_scheme *sc, s7_pointer leaf)
+{
+  if (is_pair(leaf))
+    {
+      if (is_optimized(leaf))
+	{
+	  opcode_t op = optimize_op(leaf);
+	  if (((is_safe_c_op(op)) || (is_safe_closure_op(op)) || (is_safe_closure_star_op(op))) && (!op_has_hop(leaf)))
+	    {
+	      /* if (S7_DEBUGGING) fprintf(stderr, "set hop bit %s %s\n", display(leaf), op_names[op]); */
+	      set_optimize_op(leaf, op + 1); /* set hop bit if it's a safe_closure call in a safe do loop */
+	    }}
+      leaf_hopper(sc, car(leaf));
+      leaf_hopper(sc, cdr(leaf));
+    }
+}
+#endif
+
 static s7_pointer check_do(s7_scheme *sc)
 {
   /* returns nil if optimizable */
@@ -82591,19 +82609,25 @@ static s7_pointer check_do(s7_scheme *sc)
 			  (c_function_class(opt1_cfunc(end)) == sc->num_eq_class))
 			{ 
 			  /* vars is of the form ((i 0 (+ i 1))) -- 1 var etc */
+#if 1
 			  opcode_t op = optimize_op(car(body));
+#endif
 			  pair_set_syntax_op(form, OP_SAFE_DOTIMES);   /* safe_dotimes: end is = */
-
+#if 1
 			  if ((is_optimized(car(body))) &&
 			      ((is_safe_c_op(op)) || (is_safe_closure_op(op)) || (is_safe_closure_star_op(op))) &&
 			      (!op_has_hop(car(body))))
 			    {
-			      /* fprintf(stderr, "set hop bit %s\n", display(car(body))); */
+			      /* fprintf(stderr, "set hop bit %s (%s: %s)\n", display(car(body)), op_names[op], display(body)); */
 			      set_optimize_op(car(body), op + 1); /* set hop bit if it's a safe_closure call in a safe do loop */
 			    }
+#else
+			  leaf_hopper(sc, body);
+#endif
 
 			  if (is_fxable(sc, car(body)))
-			    fx_annotate_arg(sc, body, set_plist_1(sc, caar(vars)));
+			    fx_annotate_arg(sc, body, set_plist_1(sc, caar(vars))); /* if _args, fxification ignored? (need safe_closure_s_na etc) */
+			  /* is this redundant? safe_closure_s_a must already have fx, and otherwise it is ignored */
 			}
 		      fx_tree(sc, body, car(v), NULL, NULL, false);
 		      if (stack_top_op(sc) == OP_SAFE_DO_STEP)
@@ -99049,13 +99073,13 @@ int main(int argc, char **argv)
  * trec      19.6   6980   6599   6656   6658   6490
  * tleft     12.2   9753   7537   7331   7331   6811
  * tmisc                          7614   7115   7125
- * tclo             8025   7645   8809   7770   7596
+ * tclo             8025   7645   8809   7770   7596  7583
  * tlamb                          8003   7941   7898
  * tgc              11.1   8177   7857   7986   8014
  * thash            11.7   9734   9479   9526   9251
- * cb        12.9   11.0   9658   9564   9609   9642
+ * cb        12.9   11.0   9658   9564   9609   9642  9634
  * tmap-hash                                    10.3
- * tgen             11.4   12.0   12.1   12.2   12.3
+ * tgen             11.4   12.0   12.1   12.2   12.3  12.4 leaf_hopper (75)
  * tall      15.9   15.6   15.6   15.6   15.1   15.1
  * timp             24.4   20.0   19.6   19.7   15.6
  * tmv              21.9   21.1   20.7   20.6   17.4
@@ -99068,5 +99092,6 @@ int main(int argc, char **argv)
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * let_temp_s7_openlets -> all fields here? (i.e. direct)
- * tnum: implicit_int_vector_ref_a and implicit_float_vector_ref_aa
+ * tnum: implicit_int|float_vector_ref_a and implicit_int|float_vector_ref_aa
+ * safe_do hop bit in other do cases and map/for-each/let
  */

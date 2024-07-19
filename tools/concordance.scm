@@ -51,7 +51,7 @@
 			       (set! last-c1 c1)))))
 		    (set! last-c c)
 		    (when (positive? cur-loc)
-		      (set! word (substring-uncopied cur-word 0 cur-loc)) ; hashing won't trigger a GC here, so this should be safe
+		      (set! word (substring-uncopied cur-word 0 cur-loc))
 		      (hash-table-set! words word ; in non-code text we'd probably want string-downcase here and below
 				       (cons cur-line (or (hash-table-ref words word) ()))))
 		    (set! cur-loc 0))))))))))
@@ -157,7 +157,7 @@
       (set! str str1)
       (cpos-2 c1 0))))
 
-(define cond2-cpos ; op_tc_cond_a_z_if_a_z_laa
+(define cond2-cpos ; op_tc_cond_a_z_a_z_laa
   (let ((len 0)
 	(str #f))
     (define (cond2-cpos-2 c pos)
@@ -169,7 +169,7 @@
       (set! str str1)
       (cond2-cpos-2 c1 0))))
 
-(define cond2-cposrev ; op_tc_cond_a_z_if_a_laa_z
+(define cond2-cposrev ; op_tc_cond_a_z_a_laa_z
   (let ((len 0)
 	(str #f))
     (define (cond2-cposrev-2 c pos)
@@ -244,10 +244,8 @@
 	(c #f)
 	(str #f))
     (define (condrev-cpos-1 pos)
-      (cond ((= pos len)
-	     #f)
-	    ((not (char=? c (string-ref str pos)))
-	     (condrev-cpos-1 (+ pos 1)))
+      (cond ((= pos len) #f)
+	    ((not (char=? c (string-ref str pos))) (condrev-cpos-1 (+ pos 1)))
 	    (else pos)))
     (lambda (c1 str1)
       (set! len (length str1))
@@ -287,10 +285,8 @@
 	(find #f)
 	(str #f))
     (define (spos-1 pos)
-      (if (= pos slen)
-	  #f
-	   (if (string=? find (substring str pos (+ pos flen)))
-	       pos
+      (if (= pos slen) #f
+	   (if (string=? find (substring str pos (+ pos flen))) pos
 	       (spos-1 (+ pos 1)))))
     (lambda (find1 str1)
       (set! len (length str1))
