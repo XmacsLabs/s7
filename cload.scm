@@ -291,7 +291,7 @@
 	       (format p "#include <~A>~%" header))
 	     headers))
 	(format p "#include \"s7.h\"~%~%")
-	(format p "static s7_pointer fsym, ffunc, c_pointer_string, string_string, character_string, boolean_string, real_string, complex_string, integer_string;~%"))
+	(format p "static s7_pointer fsym, s7_F, s7_unspec, ffunc, c_pointer_string, string_string, character_string, boolean_string, real_string, complex_string, integer_string;~%"))
       
       (define collides?
 	(let ((all-names (hash-table)))
@@ -414,12 +414,12 @@
 		  (format pp ")")
 		  
 		  (if (eq? return-translator 's7_make_c_pointer_with_type)
-		      (format pp ", ~S, s7_f(sc))" (type->type-symbol return-type))
+		      (format pp ", ~S, s7_F)" (type->type-symbol return-type))
 		      (if (symbol? return-translator)
 			  (format pp ")")))
 		  (format pp (if (not (eq? return-translator #t))
 				 ");~%"
-				 ";~%  return(s7_unspecified(sc));~%"))
+				 ";~%  return(s7_unspec);~%"))
 		  (format pp "}~%"))
 		
 		;; add optimizer connection
@@ -561,6 +561,8 @@
 	   signatures)
 	  (format p "  }~%~%"))
 
+	(format p "  s7_F = s7_f(sc);~%")
+	(format p "  s7_unspec = s7_unspecified(sc);~%")
 	(format p "  string_string = s7_make_semipermanent_string(sc, \"a string\");~%")
 	(format p "  c_pointer_string = s7_make_semipermanent_string(sc, \"a c-pointer\");~%")
 	(format p "  character_string = s7_make_semipermanent_string(sc, \"a character\");~%")
@@ -594,7 +596,7 @@
 		    (scheme-name (string-append prefix (if (> (length prefix) 0) ":" "") c-name))
 		    (trans (C->s7 type)))
 	       (if (eq? trans 's7_make_c_pointer_with_type)
-		   (format p "  s7_define(sc, cur_env, s7_make_symbol(sc, ~S), ~A(sc, (~A)~A, s7_make_symbol(sc, ~S), s7_f(sc)));~%" 
+		   (format p "  s7_define(sc, cur_env, s7_make_symbol(sc, ~S), ~A(sc, (~A)~A, s7_make_symbol(sc, ~S), s7_F));~%" 
 			   scheme-name
 			   trans
 			   (C->s7-cast type)
@@ -618,7 +620,7 @@
 		    (trans (C->s7 type)))
 	       (format p "#ifdef ~A~%" c-name)
 	       (if (eq? trans 's7_make_c_pointer_with_type)
-		   (format p "  s7_define(sc, cur_env, s7_make_symbol(sc, ~S), s7_make_c_pointer_with_type(sc, (~A)~A, s7_make_symbol(sc, \"~S\"), s7_f(sc)));~%" 
+		   (format p "  s7_define(sc, cur_env, s7_make_symbol(sc, ~S), s7_make_c_pointer_with_type(sc, (~A)~A, s7_make_symbol(sc, \"~S\"), s7_F));~%" 
 			   scheme-name
 			   (C->s7-cast type)
 			   c-name

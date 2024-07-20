@@ -713,55 +713,29 @@ int main(int argc, char **argv)
 
   /* try each straight (no errors) case */
 
-  if (!s7_is_null(sc, s7_nil(sc)))
-    {fprintf(stderr, "%d: %s is not null?\n", __LINE__, s1 = TO_STR(s7_nil(sc))); free(s1);}
-
-  if (s7_is_pair(s7_nil(sc)))
-    {fprintf(stderr, "%d: %s is a pair?\n", __LINE__, s1 = TO_STR(s7_nil(sc))); free(s1);}
-
-  if (!s7_is_boolean(s7_t(sc)))
-    {fprintf(stderr, "%d: %s is not boolean?\n", __LINE__, s1 = TO_STR(s7_t(sc))); free(s1);}
-
-  if (!s7_is_boolean(s7_f(sc)))
-    {fprintf(stderr, "%d: %s is not boolean?\n", __LINE__, s1 = TO_STR(s7_f(sc))); free(s1);}
-
-  if (s7_boolean(sc, s7_f(sc)))
-    {fprintf(stderr, "%d: %s is #t?\n", __LINE__, s1 = TO_STR(s7_f(sc))); free(s1);}
-
-  if (!s7_boolean(sc, s7_t(sc)))
-    {fprintf(stderr, "%d: %s is #f?\n", __LINE__, s1 = TO_STR(s7_t(sc))); free(s1);}
+  if (!s7_is_null(sc, s7_nil(sc))) fprintf(stderr, "%d: () is not null?\n", __LINE__);
+  if (s7_is_pair(s7_nil(sc))) fprintf(stderr, "%d: () is a pair?\n", __LINE__);
+  if (!s7_is_boolean(s7_t(sc))) fprintf(stderr, "%d: #t is not boolean?\n", __LINE__);
+  if (!s7_is_boolean(s7_f(sc))) fprintf(stderr, "%d: #f is not boolean?\n", __LINE__);
+  if (s7_boolean(sc, s7_f(sc)))  fprintf(stderr, "%d: #f is #t?\n", __LINE__);
+  if (!s7_boolean(sc, s7_t(sc))) fprintf(stderr, "%d: #t is #f?\n", __LINE__);
 
   p = s7_make_boolean(sc, true);
-  if (p != s7_t(sc))
-    {fprintf(stderr, "%d: %s is not #t?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+  if (p != s7_t(sc)) fprintf(stderr, "%d: s7_t(sc) is not #t?\n", __LINE__);
 
   p = s7_make_boolean(sc, false);
-  if (p != s7_f(sc))
-    {fprintf(stderr, "%d: %s is not #f?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+  if (p != s7_f(sc)) fprintf(stderr, "%d: s7_f(sc) is not #f?\n", __LINE__);
 
-  if (!s7_is_eq(s7_f(sc), s7_f(sc)))
-    {fprintf(stderr, "%d: (eq? %s %s) -> #f?\n", __LINE__, s1 = TO_STR(s7_f(sc)), s2 = TO_STR(s7_f(sc))); free(s1); free(s2);}
+  if (!s7_is_eq(s7_f(sc), s7_f(sc))) fprintf(stderr, "%d: (eq? s7_f(sc) s7_f(sc)) -> #f?\n", __LINE__);
+  if (!s7_is_eqv(sc, s7_f(sc), s7_f(sc))) fprintf(stderr, "%d: (eqv? s7_f(sc) s7_f(sc)) -> #f?\n", __LINE__);
+  if (!s7_is_equal(sc, s7_f(sc), s7_f(sc))) fprintf(stderr, "%d: (equal? s7_f(sc) s7_f(sc)) -> #f?\n", __LINE__);
 
-  if (!s7_is_eqv(sc, s7_f(sc), s7_f(sc)))
-    {fprintf(stderr, "%d: (eqv? %s %s) -> #f?\n", __LINE__, s1 = TO_STR(s7_f(sc)), s2 = TO_STR(s7_f(sc))); free(s1); free(s2);}
+  if (!s7_is_unspecified(sc, s7_unspecified(sc))) fprintf(stderr, "%d: s7_unspecifed(sc) is not #<unspecified>?\n", __LINE__);
+  if (s7_is_eq(s7_eof_object(sc), s7_undefined(sc))) fprintf(stderr, "%d: (eq? #<eof> #<undefined>) -> #t?\n", __LINE__);
+  if (s7_is_eqv(sc, s7_eof_object(sc), s7_undefined(sc))) fprintf(stderr, "%d: (eqv? #eof> #<undefined>) -> #t?\n", __LINE__);
+  if (s7_is_equal(sc, s7_eof_object(sc), s7_undefined(sc))) fprintf(stderr, "%d: (equal? #<eof> #<undefined>) -> #t?\n", __LINE__);
+  if (!s7_is_valid(sc, s7_t(sc))) fprintf(stderr, "%d: s7_t(sc) is not valid?\n", __LINE__);
 
-  if (!s7_is_equal(sc, s7_f(sc), s7_f(sc)))
-    {fprintf(stderr, "%d: (equal? %s %s) -> #f?\n", __LINE__, s1 = TO_STR(s7_f(sc)), s2 = TO_STR(s7_f(sc))); free(s1); free(s2);}
-
-  if (!s7_is_unspecified(sc, s7_unspecified(sc)))
-    {fprintf(stderr, "%d: %s is not #<unspecified>?\n", __LINE__, s1 = TO_STR(s7_unspecified(sc))); free(s1);}
-
-  if (s7_is_eq(s7_eof_object(sc), s7_undefined(sc)))
-    {fprintf(stderr, "%d: (eq? %s %s) -> #t?\n", __LINE__, s1 = TO_STR(s7_eof_object(sc)), s2 = TO_STR(s7_undefined(sc))); free(s1); free(s2);}
-
-  if (s7_is_eqv(sc, s7_eof_object(sc), s7_undefined(sc)))
-    {fprintf(stderr, "%d: (eqv? %s %s) -> #t?\n", __LINE__, s1 = TO_STR(s7_eof_object(sc)), s2 = TO_STR(s7_undefined(sc))); free(s1); free(s2);}
-
-  if (s7_is_equal(sc, s7_eof_object(sc), s7_undefined(sc)))
-    {fprintf(stderr, "%d: (equal? %s %s) -> #t?\n", __LINE__, s1 = TO_STR(s7_eof_object(sc)), s2 = TO_STR(s7_undefined(sc))); free(s1); free(s2);}
-
-  if (!s7_is_valid(sc, s7_t(sc)))
-    {fprintf(stderr, "%d: %s is not valid?\n", __LINE__, s1 = TO_STR(s7_t(sc))); free(s1);}
   {
     typedef struct fake_cell {
       union {
@@ -782,8 +756,7 @@ int main(int argc, char **argv)
       }
     free(x);
   }
-  if (s7_is_c_pointer(s7_t(sc)))
-    {fprintf(stderr, "%d: %s is a raw c pointer?\n", __LINE__, s1 = TO_STR(s7_t(sc))); free(s1);}
+  if (s7_is_c_pointer(s7_t(sc))) fprintf(stderr, "%d: s7_t(sc) is a raw c pointer?\n", __LINE__);
 
   i = 32;
   p = s7_make_c_pointer(sc, (void *)(&i));

@@ -203,7 +203,7 @@
 	       CblasUpper CblasLower CblasNonUnit CblasUnit CblasLeft CblasRight))
 
 	 (in-C "static s7_pointer g_free(s7_scheme *sc, s7_pointer args)
-                 {free(s7_c_pointer(s7_car(args))); return(s7_f(sc));}")
+                 {free(s7_c_pointer(s7_car(args))); return(s7_F);}")
 	 (C-function ("free" g_free "" 1))
 
 	 ;; redirect GSL errors to s7_error
@@ -798,12 +798,12 @@
 	 (in-C "
                 static s7_pointer g_gsl_sf_result_make(s7_scheme *sc, s7_pointer args)
                 {
-                  return(s7_make_c_pointer_with_type(sc, (void *)calloc(1, sizeof(gsl_sf_result)), gsl_sf_result__symbol, s7_f(sc)));
+                  return(s7_make_c_pointer_with_type(sc, (void *)calloc(1, sizeof(gsl_sf_result)), gsl_sf_result__symbol, s7_F));
                 }
                 static s7_pointer g_gsl_sf_result_free(s7_scheme *sc, s7_pointer args)
                 {
                   free(s7_c_pointer(s7_car(args)));
-                  return(s7_f(sc));
+                  return(s7_F);
                 }
                 static s7_pointer g_gsl_sf_result_val(s7_scheme *sc, s7_pointer args)
                 {
@@ -815,18 +815,18 @@
                 }
                 static s7_pointer g_gsl_sf_result_e10_make(s7_scheme *sc, s7_pointer args)
                 {
-                  return(s7_make_c_pointer_with_type(sc, (void *)calloc(1, sizeof(gsl_sf_result_e10)), gsl_sf_result_e10__symbol, s7_f(sc)));
+                  return(s7_make_c_pointer_with_type(sc, (void *)calloc(1, sizeof(gsl_sf_result_e10)), gsl_sf_result_e10__symbol, s7_F));
                 }
                 static s7_pointer g_to_doubles(s7_scheme *sc, s7_pointer args)
                 {
                   if (s7_is_vector(s7_car(args)))
-                    return(s7_make_c_pointer_with_type(sc, (void *)s7_float_vector_elements(s7_car(args)), double__symbol, s7_f(sc)));
+                    return(s7_make_c_pointer_with_type(sc, (void *)s7_float_vector_elements(s7_car(args)), double__symbol, s7_F));
                   return(s7_car(args));
                 }
                 static s7_pointer g_to_wrapped_doubles(s7_scheme *sc, s7_pointer args)
                 {
                   if (s7_is_vector(s7_car(args)))
-                    return(s7_make_c_pointer_wrapper_with_type(sc, (void *)s7_float_vector_elements(s7_car(args)), double__symbol, s7_f(sc)));
+                    return(s7_make_c_pointer_wrapper_with_type(sc, (void *)s7_float_vector_elements(s7_car(args)), double__symbol, s7_F));
                   return(s7_car(args));
                 }
                 ")
