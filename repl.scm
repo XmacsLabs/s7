@@ -1260,7 +1260,7 @@
 	    (set! cursor-pos 0)
 	    (set! prompt-string (format #f "break~NC " depth #\>))
 	    (set! prompt-length (length prompt-string)))
-	  (fformat *stderr* "break: ~A, C-q to exit break~%" call)
+	  (fformat *stderr* "break: ~A ;C-q to exit break~%" call)
 	  ((*repl* 'run)))))))
 
 (define (debug.scm-init)

@@ -1298,7 +1298,7 @@ struct s7_scheme {
              flush_output_port_symbol, for_each_symbol, format_symbol, funclet_symbol, _function__symbol, procedure_arglist_symbol,
              gc_symbol, gcd_symbol, gensym_symbol, geq_symbol, get_output_string_symbol, gt_symbol,
              hash_table_entries_symbol, hash_table_key_typer_symbol, hash_table_ref_symbol, hash_table_set_symbol, hash_table_symbol,
-             hash_table_value_typer_symbol, help_symbol,
+             hash_table_value_typer_symbol, help_symbol, hook_functions_symbol,
              imag_part_symbol, immutable_symbol, inexact_to_exact_symbol, inlet_symbol, int_vector_ref_symbol, int_vector_set_symbol, int_vector_symbol,
              integer_decode_float_symbol, integer_to_char_symbol,
              is_aritable_symbol, is_bignum_symbol, is_boolean_symbol, is_byte_symbol, is_byte_vector_symbol,
@@ -53522,6 +53522,40 @@ static void op_error_hook_quit(s7_scheme *sc)
 }
 
 
+/* -------------------------------- hook-functions -------------------------------- */
+
+static s7_pointer g_hook_functions(s7_scheme *sc, s7_pointer args)
+{
+  #define H_hook_functions "(hook-functions hook) gets or sets the list of functions associated with the hook"
+  #define Q_hook_functions s7_make_signature(sc, 2, sc->is_list_symbol, sc->is_procedure_symbol)
+  s7_pointer hook = car(args), slot;
+  if (!is_any_closure(hook)) /* closure* -> closure if no args */
+    error_nr(sc, sc->wrong_type_arg_symbol, 
+	     set_elist_2(sc, wrap_string(sc, "hook-functions hook must be a procedure created by make-hook: ~S", 64), hook));
+  slot = lookup_slot_from(sc->body_symbol, closure_let(hook));
+  return((is_slot(slot)) ? slot_value(slot) : sc->undefined);
+}
+
+static s7_pointer g_hook_set_functions(s7_scheme *sc, s7_pointer args)
+{
+  s7_pointer hook = car(args), lst, p, slot;
+  if (!is_any_closure(hook)) /* closure* -> closure if no args */
+    error_nr(sc, sc->wrong_type_arg_symbol, 
+	     set_elist_2(sc, wrap_string(sc, "set! hook-functions hook must be a procedure created by make-hook: ~S", 69), hook));
+  lst = cadr(args);
+  for (p = lst; is_pair(p); p = cdr(p))
+    if ((!is_any_procedure(car(p))) || (!s7_is_aritable(sc, car(p), 1)))
+      error_nr(sc, sc->wrong_type_arg_symbol, 
+	       set_elist_2(sc, wrap_string(sc, "new hook-functions value must be nil or a list of functions, each accepting one argument: ~S", 92), lst));
+  if (!is_null(p))
+      error_nr(sc, sc->wrong_type_arg_symbol, 
+	       set_elist_2(sc, wrap_string(sc, "new hook-functions value must be nil or a a proper list: ~S", 59), lst));
+  slot = lookup_slot_from(sc->body_symbol, closure_let(hook));
+  if (is_slot(slot)) slot_set_value(slot, lst);
+  return(lst);
+}
+
+
 /* -------------------------------- begin_hook -------------------------------- */
 void (*s7_begin_hook(s7_scheme *sc))(s7_scheme *sc, bool *val) {return(sc->begin_hook);}
 
@@ -57224,6 +57258,15 @@ static s7_pointer fx_and_3a(s7_scheme *sc, s7_pointer arg)
   return((fx_call(sc, p) == sc->F) ? sc->F : fx_call(sc, cdr(p)));
 }
 
+static s7_pointer fx_not_and_3a(s7_scheme *sc, s7_pointer arg)
+{
+  s7_pointer p = opt1_pair(cdr(arg)); /* cdadr */
+  if (fx_call(sc, p) == sc->F) return(sc->T);
+  p = cdr(p);
+  if (fx_call(sc, p) == sc->F) return(sc->T);
+  return(make_boolean(sc, (fx_call(sc, cdr(p)) == sc->F)));
+}
+
 static s7_pointer fx_and_n(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer x = sc->T;
@@ -58139,6 +58182,11 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 		  set_opt1_sym(cdr(arg), cadadr(cadr(arg)));
 		  set_opt3_con(cdr(arg), cadaddr(cadr(arg)));
 		  return(fx_not_is_eq_car_sq);
+		}
+	      if (fx_proc(cdr(arg)) == fx_and_3a)
+		{
+		  set_opt1_pair(cdr(arg), cdadr(arg));
+		  return(fx_not_and_3a);
 		}
 	      return(fx_not_a);
 	    }
@@ -90228,22 +90276,22 @@ static /* inline */ bool op_any_c_np(s7_scheme *sc) /* code: (func . args) where
 	check_stack_size(sc);
 	push_stack(sc, ((intptr_t)((is_pair(cdr(p))) ? OP_ANY_C_NP_1 : OP_ANY_C_NP_2)), sc->args, cdr(p));
 	sc->code = T_Pair(car(p));
-	return(true);
+	return(true); /* goto EVAL */
       }
   sc->args = proper_list_reverse_in_place(sc, sc->args);
   sc->value = fn_proc(sc->code)(sc, sc->args);
-  return(false);
+  return(false); /* continue */
 }
 
 static Inline bool inline_op_any_c_np_1(s7_scheme *sc) /* called once in eval, tlet (cb/set) */
 {
   /* in-coming sc->value has the current arg value, sc->args is all previous args, sc->code is on op-stack */
   if (inline_collect_np_args(sc, OP_ANY_C_NP_1, cons(sc, sc->value, sc->args)))
-    return(true);
+    return(true);  /* goto EVAL */
   sc->args = proper_list_reverse_in_place(sc, sc->args);
   sc->code = pop_op_stack(sc);
   sc->value = fn_proc(sc->code)(sc, sc->args);
-  return(false);
+  return(false);  /* continue?? */
 }
 
 static void op_any_c_np_2(s7_scheme *sc)
@@ -90251,6 +90299,7 @@ static void op_any_c_np_2(s7_scheme *sc)
   sc->args = proper_list_reverse_in_place(sc, sc->args = cons(sc, sc->value, sc->args));
   sc->code = pop_op_stack(sc);
   sc->value = fn_proc(sc->code)(sc, sc->args);
+  /* continue */
 }
 
 static bool op_any_c_np_mv(s7_scheme *sc)
@@ -97216,7 +97265,8 @@ static void init_setters(s7_scheme *sc)
 			s7_make_safe_function(sc, "#<symbol-set>", g_symbol_set, 2, 0, true, "symbol setter"));
   c_function_set_setter(global_value(sc->symbol_initial_value_symbol),
 			s7_make_safe_function(sc, "#<symbol-set-initial-value>", g_symbol_set_initial_value, 2, 0, false, "symbol-initial-value setter"));
-
+  c_function_set_setter(global_value(sc->hook_functions_symbol),
+			s7_make_safe_function(sc, "#<set-hook-functions>", g_hook_set_functions, 2, 0, false, "hook-functions setter"));
 }
 
 static void init_syntax(s7_scheme *sc)
@@ -97966,6 +98016,8 @@ static void init_rootlet(s7_scheme *sc)
   sc->tree_count_symbol =     defun("tree-count",    tree_count,     2, 1, false);
   sc->tree_is_cyclic_symbol = defun("tree-cyclic?",  tree_is_cyclic, 1, 0, false);
 
+  sc->hook_functions_symbol = defun("hook-functions", hook_functions, 1, 0, false);
+
   sc->quasiquote_symbol = s7_define_macro(sc, "quasiquote", g_quasiquote, 1, 0, false, H_quasiquote); /* is this considered syntax? r7rs says yes; also unquote */
   sc->quasiquote_function = initial_value(sc->quasiquote_symbol);
   sc->profile_in_symbol = unsafe_defun("profile-in", profile_in, 2, 0, false); /* calls dynamic-unwind */
@@ -98502,25 +98554,6 @@ s7_scheme *s7_init(void)
                                         result))))))))");
   /* (procedure-source (make-hook 'x 'y)): (lambda* (x y) (let ((result #<unspecified>)) ... result)), see stuff.scm for commentary */
 
-  s7_eval_c_string(sc, "(define hook-functions                                                            \n\
-                          (let ((+signature+ '(#t procedure?))                                            \n\
-                                (+documentation+ \"(hook-functions hook) gets or sets the list of functions associated with the hook\")) \n\
-                            (dilambda                                                                     \n\
-                              (lambda (hook)                                                              \n\
-                                (when (or (not (procedure? hook)) (continuation? hook) (goto? hook))      \n\
-                                  (error 'wrong-type-arg \"hook-functions hook must be a procedure created by make-hook: ~S\" hook)) \n\
-                                ((funclet hook) 'body))                                                   \n\
-                              (lambda (hook lst)                                                          \n\
-                                (when (or (not (procedure? hook)) (continuation? hook) (goto? hook))      \n\
-		                  (error 'wrong-type-arg \"hook-functions hook must be a procedure created by make-hook: ~S\" hook)) \n\
-                                (if (do ((p lst (cdr p)))                                                 \n\
-                                        ((not (and (pair? p)                                              \n\
-                                                   (procedure? (car p))                                   \n\
-                                                   (aritable? (car p) 1)))                                \n\
-                                         (null? p)))                                                      \n\
-                                    (set! ((funclet hook) 'body) lst)                                     \n\
-                                    (error 'wrong-type-arg \"hook-functions must be a list of functions, each accepting one argument: ~S\" lst))))))");
-
   /* -------- *unbound-variable-hook* -------- */
   sc->unbound_variable_hook = s7_eval_c_string(sc, "(make-hook 'variable)");
   s7_define_constant_with_documentation(sc, "*unbound-variable-hook*", sc->unbound_variable_hook,
@@ -98576,10 +98609,7 @@ s7_scheme *s7_init(void)
                                               ((null? (cddr clause)) (cadr clause))                       \n\
                                               (else (apply values (cdr clause))))))))                     \n\
                                 clauses)                                                                  \n\
-                              (values))))"); /* this is not redundant */  /* map above ignores trailing cdr if improper */
-  /*   was (return `(values ,@(cdr clause))) snd-14, begin snd-13, snd-23 (else (apply values (map quote (cdr clause)))) */
-  /* we need "values" (not "begin") to make sure all entries are plugged in at the source location? but that's not how "cond" works */
-  /*   maybe a better name: reader-cond-values? or reader-values or splicing-cond? */
+                              (values))))"); /* this is not redundant */
 
 #if (!WITH_PURE_S7)
   {
@@ -98619,7 +98649,7 @@ s7_scheme *s7_init(void)
    *   Otherwise, the cond-expand has no effect."  The code above returns #<unspecified>, but I read that prose to say that
    *   (begin 23 (cond-expand (surreals 1) (foonly 2))) should evaluate to 23.
    */
-  /* make-polar, call-with-values, make-hook, hook-functions, multiple-value-bind, cond-expand, and reader-cond can't
+  /* make-polar, call-with-values, make-hook, multiple-value-bind, cond-expand, and reader-cond can't
    *   set the initial_value to the global_value so that #_... can be used because the global_value is not semipermanent.
    *   but could it be made so?
    */
@@ -99009,14 +99039,14 @@ int main(int argc, char **argv)
  * tpeak      148    114    108    105    102    103
  * tref      1081    687    463    459    464    410
  * index            1016    973    967    972    975
- * tmock            1165   1057   1019   1032   1018
+ * tmock            1145   1082   1042   1045   1035
  * tvect     3408   2464   1772   1669   1497   1454
  * tauto                   2562   2048   1729   1726
  * texit     1884   1950   1778   1741   1770   1764
+ * thook     7651   ----   2590   2030   2046   1779
  * s7test           1831   1818   1829   1830   1855
  * lt        2222   2172   2150   2185   1950   1914
  * dup              3788   2492   2239   2097   1980
- * thook     7651   ----   2590   2030   2046   2004
  * tread            2421   2419   2408   2405   2248
  * tcopy            5546   2539   2375   2386   2340
  * trclo     8031   2574   2454   2445   2449   2434
@@ -99063,6 +99093,7 @@ int main(int argc, char **argv)
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
- * let_temp_s7_openlets -> all fields here? (i.e. direct)
  * safe_do hop bit in other do cases and map/for-each/let
+ * load tauto.scm: (hook-functions #<lambda ()>) -> #<undefined>, but undefined? is not in (list?)
+ * is fx_not_and_3a used anymore?
  */

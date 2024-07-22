@@ -1,6 +1,19 @@
 ;;; mock data (method call) timing test
 
-(set! (*s7* 'heap-size) 2048000)
+(set! (*s7* 'heap-size) (* 2 1024000))
+
+(define (ok? otst ola oexp)
+  (let ((result (catch #t ola
+		       (lambda (type info)
+			 (if (not (eq? oexp 'error))
+			     (begin (apply format #t info) (newline)))
+			 'error))))
+    (if (not (equal? result oexp))
+	(format #t "~A: ~A got ~S but expected ~S~%~%" (port-line-number) otst result oexp))))
+
+(define-macro (test tst expected) `(ok? ',tst (#_let () (define (_s7_) ,tst)) ,expected))
+
+
 (load "mockery.scm")
 
 (define mock-number (*mock-number* 'mock-number))
@@ -40,9 +53,8 @@
 	    (set! (w i) (/ (w i) pk)))
 	  w)))))
 
-(display (dolph-1 (expt 2 8) 0.5)) (newline)
-(display (dolph-1 (mock-number (expt 2 8)) (mock-number 0.5))) (newline)
-
+(test (dolph-1 (expt 2 8) 0.5) 
+      (dolph-1 (mock-number (expt 2 8)) (mock-number 0.5)))
 
 (define src-duration
   (let ((+documentation+ "(src-duration envelope) returns the new duration of a sound after using 'envelope' for time-varying sampling-rate conversion"))
@@ -63,9 +75,8 @@
 			       (* (- y1 y0) all-x))))))
 	    (set! dur (+ dur (abs area)))))))))
 
-(display (src-duration (float-vector 0 1  .1 1  .2 .6  .5 .9  1 .5))) (newline)
-(display (src-duration (apply vector (map mock-number '(0 1  .1 1  .2 .6  .5 .9  1 .5))))) (newline)
-
+(test (src-duration (float-vector 0 1  .1 1  .2 .6  .5 .9  1 .5))
+      (src-duration (apply vector (map mock-number '(0 1  .1 1  .2 .6  .5 .9  1 .5)))))
 
 (define* (cfft data n (dir 1))
   (if (not n) (set! n (length data)))
@@ -113,14 +124,14 @@
   (set! (cfft-data j) (complex (real-part (cfft-data i)) (- (imag-part (cfft-data i))))))
 (define cfft-mdata (copy cfft-data))
 
-(display (cfft cfft-data cfft-size)) (newline)
-
 (let ((mockdata (make-mock-vector cfft-size)))
   (do ((i 0 (+ i 1)))
       ((= i cfft-size))
     (set! (mockdata i) (mock-number (cfft-mdata i))))
-  (display (cfft mockdata cfft-size)) (newline))
 
+  (let-temporarily (((*s7* 'hash-table-float-epsilon) 1e-8))
+  (test (equivalent? (cfft cfft-data cfft-size)
+		     (cfft mockdata cfft-size)) #t)))
 
 (when (provided? 'pure-s7)
   (define (string-length str)
@@ -136,9 +147,8 @@
 		   (string-ref str (- (string-length str) 1)))
 	   (palindrome? (substring str 1 (- (string-length str) 1))))))
 
-(display (palindrome? "abcdefgfedcba")) (newline)
-(display (palindrome? (mock-string "abcdefgfedcba"))) (newline)
-
+(test (palindrome? "abcdefgfedcba")
+      (palindrome? (mock-string "abcdefgfedcba")))
 
 (let ()
   (define (walk p counts)
@@ -164,11 +174,11 @@
 	   (i 0 (+ i 1)))
 	  ((= i len)
 	   (sort! v (lambda (e1 e2) (> (cdr e1) (cdr e2))))
-	   v)
+	   (subvector v 0 100)) ; there are NaNs in these vectors
 	(vector-set! v i (iterate h)))))
   
-  (display (sort-counts (lint-reader (make-hash-table)))) (newline)
-  (display (sort-counts (lint-reader (make-mock-hash-table)))) (newline))
+  (test (sort-counts (lint-reader (make-hash-table)))
+	(sort-counts (lint-reader (make-mock-hash-table)))))
 
 
 (exit)

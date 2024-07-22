@@ -11295,8 +11295,47 @@ x: 32
 </pre>
 
 <p>See the end of repl.scm for more examples.  See nrepl.scm for a better version of repl.scm.
-Eventually I'll probably retire repl.scm.
 </p>
+
+<!--
+In the repl:
+
+    (define (f x)
+      (catch #t
+        (lambda ()
+          (+ x 1))
+        (lambda (type info)
+          (drop-into-repl (format *stderr* "caught (+ ~S 1) in ~S~%" x (outlet (curlet))) (curlet)))))
+
+    (f #\a)
+
+which calls the error handler above:
+
+    caught (+ #\a 1) in (inlet 'x #\a)
+    break: C-q to exit break
+    break> (curlet)
+    (inlet 'type wrong-type-arg 'info ("~A ~:D argument, ~S, is ~A but should be ~A" + 1 #\a "a character" "a number"))
+    ;; that is the error handler environment
+
+    break> (outlet (curlet))
+    (inlet 'x #\a)
+    ;; the environment where the error occurred
+
+    break> (with-let (outlet (outlet (outlet (curlet)))) (define (f x) (char? x)))
+    ;; redefine f in the environment where we originally defined it
+
+    break> (f #\a)
+    #t
+    ;; C-q here to exit the break repl; we return to the original repl
+    ;;   where f has been redefined:
+
+    (procedure-source f)
+    (lambda (x) (char? x))
+
+The environment chain is slightly different if you call the code at the top from a file
+rather than doing it all in the repl.
+-->
+
 
 <!--
 (load "/home/bil/test/sndlib/libsndlib.so" (inlet 'init_func 's7_init_sndlib))
