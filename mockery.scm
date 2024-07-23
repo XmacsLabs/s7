@@ -615,7 +615,7 @@
 		 
  		 'make-polar       (if (provided? 'pure-s7)
  				       (lambda (mag ang) (#_complex (* mag (cos ang)) (* mag (sin ang))))
- 				       (lambda (mag ang) (#_make-polar (->value mag) (->value arg))))
+ 				       (lambda (mag ang) (#_make-polar (->value mag) (->value ang))))
 
 		 'make-rectangular (with-mock-wrapper* #_complex)
 		 'complex          (with-mock-wrapper* #_complex)

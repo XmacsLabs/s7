@@ -1,5 +1,7 @@
 ;;; simple hook timing tests
 
+(set! (*s7* 'heap-size) 1024000)
+
 (let ((H (make-hook 'x)))
   
   (set! (hook-functions H)
@@ -111,26 +113,6 @@
 
 (let ((hook-type #f)
       (hook-data #f))
-    (define (f)
-      (do ((i 0 (+ i 1)))
-	  ((= i 1000))
-	(catch #t (lambda () 
-		    (let-temporarily (((hook-functions *error-hook*) ; type data -- why does this have to be in the catch?
-				       (list (lambda (hook)
-					       (set! hook-type (let-ref hook 'type))
-					       (set! hook-data (apply format #f (let-ref hook 'data)))))))
-		      (+ 1 #())))
-	       (lambda (type info)
-		 'error))
-	(unless (and (eq? hook-type 'wrong-type-arg)
-		     (equal? hook-data "+ second argument, #(), is a vector but should be a number"))
-	  (format *stderr* "error-hook: ~S ~S~%" hook-type hook-data))))
-    (f)
-    (f))
-
-
-(let ((hook-type #f)
-      (hook-data #f))
   (define (f)
     (do ((i 0 (+ i 1)))
 	((= i 1000))
@@ -188,8 +170,6 @@
 	(format *stderr* "H5: ~S~%" (H5)))))
   (f)
   (f))
-
-
 
 
 (exit)

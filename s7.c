@@ -1321,7 +1321,7 @@ struct s7_scheme {
              load_path_symbol, load_symbol, log_symbol, logand_symbol, logbit_symbol, logior_symbol, lognot_symbol, logxor_symbol, lt_symbol,
              local_documentation_symbol, local_signature_symbol, local_setter_symbol, local_iterator_symbol,
              macro_symbol, macro_star_symbol, magnitude_symbol, make_byte_vector_symbol, make_float_vector_symbol, make_hash_table_symbol,
-             make_weak_hash_table_symbol, make_int_vector_symbol, make_iterator_symbol, string_to_keyword_symbol, make_list_symbol, make_string_symbol,
+             make_weak_hash_table_symbol, make_int_vector_symbol, make_iterator_symbol, make_list_symbol, make_string_symbol,
              make_vector_symbol, map_symbol, max_symbol, member_symbol, memq_symbol, memv_symbol, min_symbol, modulo_symbol, multiply_symbol,
              name_symbol, nan_symbol, nan_payload_symbol, newline_symbol, not_symbol, number_to_string_symbol, numerator_symbol,
              object_to_string_symbol, object_to_let_symbol, open_input_file_symbol, open_input_function_symbol, open_input_string_symbol,
@@ -1337,7 +1337,7 @@ struct s7_scheme {
              signature_symbol, sin_symbol, sinh_symbol, sort_symbol, sqrt_symbol,
              stacktrace_symbol, string_append_symbol, string_copy_symbol, string_downcase_symbol, string_eq_symbol, string_fill_symbol,
              string_geq_symbol, string_gt_symbol, string_leq_symbol, string_lt_symbol, string_position_symbol, string_ref_symbol,
-             string_set_symbol, string_symbol, string_to_number_symbol, string_to_symbol_symbol, string_upcase_symbol,
+             string_set_symbol, string_symbol, string_to_keyword_symbol, string_to_number_symbol, string_to_symbol_symbol, string_upcase_symbol,
              sublet_symbol, substring_symbol, substring_uncopied_symbol, subtract_symbol, subvector_symbol, subvector_position_symbol, subvector_vector_symbol,
              symbol_symbol, symbol_to_dynamic_value_symbol, symbol_initial_value_symbol,
              symbol_to_keyword_symbol, symbol_to_string_symbol, symbol_to_value_symbol,
@@ -1351,7 +1351,7 @@ struct s7_scheme {
   s7_pointer hash_code_symbol, dummy_equal_hash_table, features_setter;
 #if (!WITH_PURE_S7)
   s7_pointer char_ci_eq_symbol, char_ci_geq_symbol, char_ci_gt_symbol, char_ci_leq_symbol, char_ci_lt_symbol, integer_length_symbol,
-             is_char_ready_symbol, let_to_list_symbol, list_to_string_symbol, list_to_vector_symbol, string_ci_eq_symbol,
+             is_char_ready_symbol, let_to_list_symbol, list_to_string_symbol, list_to_vector_symbol, make_polar_symbol, string_ci_eq_symbol,
              string_ci_geq_symbol, string_ci_gt_symbol, string_ci_leq_symbol, string_ci_lt_symbol, string_length_symbol,
              string_to_list_symbol, vector_length_symbol, vector_to_list_symbol;
 #endif
@@ -9556,9 +9556,6 @@ s7_pointer s7_make_slot(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_poi
 	    {
 	      set_initial_value(symbol, value);
 	      if ((!sc->string_signature) && ((is_c_function(value)) || (is_syntax(value)))) /* syntax probably can't happen here (handled explicitly in syntax procedure) */
-		/* non-c_functions that are not set! (and therefore initial_value GC) protected by default: make-hook hook-functions
-		 *   if these initial_values are added to unlet, they need explicit GC protection.
-		 */
 		add_to_unlet(sc, symbol);
 	    }
 	  set_local_slot(symbol, slot);
@@ -17463,6 +17460,23 @@ static s7_pointer cos_p_d(s7_scheme *sc, s7_double x) {return(make_real(sc, cos(
 #endif
 
 static s7_double cos_d_d(s7_double x) {return(cos(x));}
+
+
+#if (!WITH_PURE_S7)
+static s7_pointer multiply_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y);
+
+static s7_pointer g_make_polar(s7_scheme *sc, s7_pointer args)
+{
+  #define H_make_polar "(make-polar magnitude angle) returns (complex (* magnitude (cos angle)) (* magnitude (sin angle)))"
+  #define Q_make_polar s7_make_signature(sc, 3, sc->is_number_symbol, sc->is_real_symbol, sc->is_real_symbol)
+  s7_pointer mag = car(args), ang = cadr(args);
+  if (!s7_is_real(mag))
+    method_or_bust_pp(sc, mag, sc->make_polar_symbol, mag, ang, sc->type_names[T_REAL], 1);
+  if (!s7_is_real(ang))
+    method_or_bust_pp(sc, ang, sc->make_polar_symbol, mag, ang, sc->type_names[T_REAL], 2);
+  return(complex_p_pp(sc, multiply_p_pp(sc, mag, cos_p_p(sc, ang)), multiply_p_pp(sc, mag, sin_p_p(sc, ang))));
+}
+#endif
 
 
 /* -------------------------------- tan -------------------------------- */
@@ -52796,7 +52810,7 @@ static bool catch_barrier_function(s7_scheme *sc, s7_int catch_loc, s7_pointer t
 }
 
 static bool catch_error_hook_function(s7_scheme *sc, s7_int catch_loc, s7_pointer type, s7_pointer info, bool *reset_hook)
-{
+{ /* from op_error_hook_quit */
   if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
   let_set_2(sc, closure_let(sc->error_hook), sc->body_symbol, stack_code(sc->stack, catch_loc));
   /* apparently there was an error during *error-hook* evaluation, but Rick wants the hook re-established anyway */
@@ -52820,40 +52834,10 @@ static bool catch_map_unwind_function(s7_scheme *sc, s7_int catch_loc, s7_pointe
   return(false);
 }
 
-static bool op_let_temp_done1(s7_scheme *sc);
-
 static bool catch_let_temporarily_function(s7_scheme *sc, s7_int catch_loc, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
-  /* this is aimed at let-temp error-hook... error -- not yet tested much */
   if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
-  if ((!*reset_hook) &&
-      (hook_has_functions(sc->error_hook)))
-    {
-      s7_pointer error_hook_funcs = s7_hook_functions(sc, sc->error_hook);
-
-      let_set_2(sc, closure_let(sc->error_hook), sc->body_symbol, sc->nil);
-      let_set_2(sc, closure_let(sc->temp_error_hook), sc->body_symbol, error_hook_funcs);
-      sc->code = sc->temp_error_hook;
-      sc->args = list_2(sc, type, info);
-
-      push_stack_direct(sc, OP_EVAL_DONE);
-      set_curlet(sc, make_let(sc, closure_let(sc->code)));
-      eval(sc, OP_APPLY_LAMBDA);
-
-      let_set_2(sc, closure_let(sc->error_hook), sc->body_symbol, error_hook_funcs);
-      let_set_2(sc, closure_let(sc->temp_error_hook), sc->body_symbol, sc->nil);
-
-      sc->args = stack_args(sc->stack, catch_loc);
-      sc->code = stack_code(sc->stack, catch_loc);
-      set_curlet(sc, stack_let(sc->stack, catch_loc));
-
-      push_stack_direct(sc, OP_GC_PROTECT);
-      if (!op_let_temp_done1(sc))
-	{
-	  push_stack_direct(sc, OP_EVAL_DONE);
-	  eval(sc, OP_SET_UNCHECKED);
-	}}
-  else let_temp_done(sc, stack_args(sc->stack, catch_loc), T_Let(stack_let(sc->stack, catch_loc)));
+  let_temp_done(sc, stack_args(sc->stack, catch_loc), T_Let(stack_let(sc->stack, catch_loc)));
   return(false);
 }
 
@@ -53533,7 +53517,7 @@ static s7_pointer g_hook_functions(s7_scheme *sc, s7_pointer args)
     error_nr(sc, sc->wrong_type_arg_symbol, 
 	     set_elist_2(sc, wrap_string(sc, "hook-functions hook must be a procedure created by make-hook: ~S", 64), hook));
   slot = lookup_slot_from(sc->body_symbol, closure_let(hook));
-  return((is_slot(slot)) ? slot_value(slot) : sc->undefined);
+  return((is_slot(slot)) ? slot_value(slot) : sc->nil);
 }
 
 static s7_pointer g_hook_set_functions(s7_scheme *sc, s7_pointer args)
@@ -57258,15 +57242,6 @@ static s7_pointer fx_and_3a(s7_scheme *sc, s7_pointer arg)
   return((fx_call(sc, p) == sc->F) ? sc->F : fx_call(sc, cdr(p)));
 }
 
-static s7_pointer fx_not_and_3a(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer p = opt1_pair(cdr(arg)); /* cdadr */
-  if (fx_call(sc, p) == sc->F) return(sc->T);
-  p = cdr(p);
-  if (fx_call(sc, p) == sc->F) return(sc->T);
-  return(make_boolean(sc, (fx_call(sc, cdr(p)) == sc->F)));
-}
-
 static s7_pointer fx_and_n(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer x = sc->T;
@@ -58182,11 +58157,6 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 		  set_opt1_sym(cdr(arg), cadadr(cadr(arg)));
 		  set_opt3_con(cdr(arg), cadaddr(cadr(arg)));
 		  return(fx_not_is_eq_car_sq);
-		}
-	      if (fx_proc(cdr(arg)) == fx_and_3a)
-		{
-		  set_opt1_pair(cdr(arg), cdadr(arg));
-		  return(fx_not_and_3a);
 		}
 	      return(fx_not_a);
 	    }
@@ -80322,7 +80292,7 @@ static bool feed_to(s7_scheme *sc)
       if (is_symbol(cadr(sc->code)))
 	{
 	  sc->code = lookup_global(sc, cadr(sc->code));  /* car is => */
-	  return(true);
+	  return(true); /* goto APPLY */
 	}}
   else
     {
@@ -80330,13 +80300,14 @@ static bool feed_to(s7_scheme *sc)
 	{
 	  sc->code = lookup_global(sc, cadr(sc->code));  /* car is => */
 	  sc->args = (needs_copied_args(sc->code)) ? list_1(sc, sc->value) : set_plist_1(sc, sc->value);
-	  return(true);
+	  /* it would be nice to see T_C_FUNCTION here and call apply_c_function_unopt, but that requires either a switch (to continue) or putting this in the eval function */
+	  return(true); /* goto APPLY */
 	}
       sc->args = list_1(sc, sc->value);                 /* not plist here */
     }
   push_stack_direct(sc, OP_FEED_TO_1);
   sc->code = cadr(sc->code);                            /* need to evaluate the target function */
-  return(false);
+  return(false); /* goto EVAL */
 }
 
 
@@ -95076,7 +95047,7 @@ static s7_pointer kmg(s7_scheme *sc, s7_int bytes)
 
 static void add_gc_list_sizes(s7_scheme *sc, s7_pointer mu_let)
 {
-  /* check the gc lists (finalizations), at startup there are strings/input-strings from the s7_eval_c_string calls for make-polar et el */
+  /* check the gc lists (finalizations), at startup there are strings/input-strings from the s7_eval_c_string calls for make-hook et el */
   s7_int len = sc->strings->size + sc->vectors->size + sc->input_ports->size + sc->output_ports->size + sc->input_string_ports->size +
                sc->continuations->size + sc->c_objects->size + sc->hash_tables->size + sc->gensyms->size + sc->undefineds->size +
                sc->multivectors->size + sc->weak_refs->size + sc->weak_hash_iterators->size + sc->opt1_funcs->size;
@@ -97730,6 +97701,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->exact_to_inexact_symbol =      defun("exact->inexact",	exact_to_inexact,	1, 0, false);
   sc->is_exact_symbol =              defun("exact?",		is_exact,		1, 0, false);
   sc->is_inexact_symbol =            defun("inexact?",		is_inexact,		1, 0, false);
+  sc->make_polar_symbol =            defun("make-polar",        make_polar,	        2, 0, false);
 #endif
   sc->random_state_to_list_symbol =  defun("random-state->list", random_state_to_list,  0, 1, false);
   sc->number_to_string_symbol =      defun("number->string",	number_to_string,	1, 1, false);
@@ -98616,12 +98588,6 @@ s7_scheme *s7_init(void)
     s7_pointer rs = s7_define_variable(sc, "make-rectangular", global_value(sc->complex_symbol));
     set_initial_value(rs, global_value(sc->complex_symbol)); /* for #_make-rectangular */
   }
-  s7_eval_c_string(sc, "(define make-polar                                                                \n\
-                          (let ((+signature+ '(number? real? real?)))                                     \n\
-                            (lambda (mag ang)                                                             \n\
-                              (if (and (real? mag) (real? ang))                                           \n\
-                                  (complex (* mag (cos ang)) (* mag (sin ang)))                           \n\
-                                  (error 'wrong-type-arg \"make-polar arguments should be real\")))))");
 
   s7_eval_c_string(sc, "(define (call-with-values producer consumer) (apply consumer (list (producer))))");
   /* (consumer (producer)) will work in any "normal" context.  If consumer is syntax and then subsequently not syntax, there is confusion */
@@ -98649,9 +98615,8 @@ s7_scheme *s7_init(void)
    *   Otherwise, the cond-expand has no effect."  The code above returns #<unspecified>, but I read that prose to say that
    *   (begin 23 (cond-expand (surreals 1) (foonly 2))) should evaluate to 23.
    */
-  /* make-polar, call-with-values, make-hook, multiple-value-bind, cond-expand, and reader-cond can't
-   *   set the initial_value to the global_value so that #_... can be used because the global_value is not semipermanent.
-   *   but could it be made so?
+  /* call-with-values, make-hook, multiple-value-bind, cond-expand, and reader-cond can't set the initial_value to the global_value
+   *   so that #_... can be used because the global_value is not semipermanent, but could it be made so?
    */
 #endif
 
@@ -99042,8 +99007,8 @@ int main(int argc, char **argv)
  * tmock            1145   1082   1042   1045   1035
  * tvect     3408   2464   1772   1669   1497   1454
  * tauto                   2562   2048   1729   1726
+ * thook     7651   ----   2590   2030   2046   1756
  * texit     1884   1950   1778   1741   1770   1764
- * thook     7651   ----   2590   2030   2046   1779
  * s7test           1831   1818   1829   1830   1855
  * lt        2222   2172   2150   2185   1950   1914
  * dup              3788   2492   2239   2097   1980
@@ -99094,6 +99059,5 @@ int main(int argc, char **argv)
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * safe_do hop bit in other do cases and map/for-each/let
- * load tauto.scm: (hook-functions #<lambda ()>) -> #<undefined>, but undefined? is not in (list?)
- * is fx_not_and_3a used anymore?
+ * more numerics.scm stuff in tnum.scm? (like the exact sin func)
  */

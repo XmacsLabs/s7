@@ -11035,9 +11035,9 @@ The function <em class="emdef">debug-frame</em> provides a way to examine local 
 <em class="gray">g1</em>
 &gt; (g1 3)
 <em class="gray">break: (g1 3), C-q to exit break
-break> x</em>       ; this is a repl started at the breakpoint
+break&gt; x</em>       ; this is a repl started at the breakpoint
 <em class="gray">3</em>
-break>  -> 4   ; C-q typed to exit the break
+break&gt;  -> 4   ; C-q typed to exit the break
 <em class="gray">4</em>
 &gt; (define var 1)
 <em class="gray">1</em>
@@ -11313,18 +11313,18 @@ which calls the error handler above:
 
     caught (+ #\a 1) in (inlet 'x #\a)
     break: C-q to exit break
-    break> (curlet)
+    break&gt; (curlet)
     (inlet 'type wrong-type-arg 'info ("~A ~:D argument, ~S, is ~A but should be ~A" + 1 #\a "a character" "a number"))
     ;; that is the error handler environment
 
-    break> (outlet (curlet))
+    break&gt; (outlet (curlet))
     (inlet 'x #\a)
     ;; the environment where the error occurred
 
-    break> (with-let (outlet (outlet (outlet (curlet)))) (define (f x) (char? x)))
+    break&gt; (with-let (outlet (outlet (outlet (curlet)))) (define (f x) (char? x)))
     ;; redefine f in the environment where we originally defined it
 
-    break> (f #\a)
+    break&gt; (f #\a)
     #t
     ;; C-q here to exit the break repl; we return to the original repl
     ;;   where f has been redefined:
