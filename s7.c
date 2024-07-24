@@ -47384,7 +47384,9 @@ s7_pointer s7_arity(s7_scheme *sc, s7_pointer x)
     {
     case T_C_FUNCTION:
       return(cons(sc, make_integer(sc, c_function_min_args(x)), make_integer_unchecked(sc, c_function_max_args(x))));
-    case T_C_RST_NO_REQ_FUNCTION: case T_C_FUNCTION_STAR:
+    case T_C_RST_NO_REQ_FUNCTION:
+      return(cons(sc, int_zero, max_arity));
+    case T_C_FUNCTION_STAR:
       return(cons(sc, int_zero, make_integer(sc, c_function_max_args(x))));
     case T_MACRO: case T_BACRO: case T_CLOSURE:
       return(closure_arity_to_cons(sc, x, closure_args(x)));
@@ -47453,8 +47455,7 @@ static bool closure_star_is_aritable(s7_scheme *sc, s7_pointer x, s7_pointer x_a
   if (is_symbol(x_args))
     return(true);
   closure_star_arity_1(sc, x, x_args);
-  return((closure_arity(x) == -1) ||
-	 (args <= closure_arity(x)));
+  return((closure_arity(x) == -1) || (args <= closure_arity(x)));
 }
 
 bool s7_is_aritable(s7_scheme *sc, s7_pointer x, s7_int args)
@@ -47463,10 +47464,13 @@ bool s7_is_aritable(s7_scheme *sc, s7_pointer x, s7_int args)
     {
     case T_C_FUNCTION:
       return(c_function_is_aritable(x, args));
+
     case T_C_RST_NO_REQ_FUNCTION:
-      if ((x == initial_value(sc->hash_table_symbol)) ||  /* these two need a value for each key */
+      if ((x == initial_value(sc->hash_table_symbol)) ||  /* these two need a value for each key -- maybe a different type? */
 	  (x == initial_value(sc->weak_hash_table_symbol)))
 	return((args & 1) == 0);
+      return(true);
+
     case T_C_FUNCTION_STAR:
       return(c_function_max_args(x) >= args);
 
@@ -47537,8 +47541,11 @@ static int32_t arity_to_int(s7_scheme *sc, s7_pointer x)
   int32_t args;
   switch (type(x))
     {
-    case T_C_FUNCTION: case T_C_RST_NO_REQ_FUNCTION: case T_C_FUNCTION_STAR:
+    case T_C_FUNCTION: case T_C_FUNCTION_STAR:
       return(c_function_max_args(x));
+
+    case T_C_RST_NO_REQ_FUNCTION: 
+      return(MAX_ARITY);
 
     case T_MACRO: case T_BACRO: case T_CLOSURE:
       args = closure_arity_to_int(sc, x);
@@ -89809,12 +89816,8 @@ static bool op_s_g(s7_scheme *sc)
 
 static bool op_x_a(s7_scheme *sc, s7_pointer f)
 {
-  if ((((type(f) == T_C_FUNCTION) &&
-	(c_function_is_aritable(f, 1))) ||
-       ((type(f) == T_C_RST_NO_REQ_FUNCTION) &&
-	(c_function_max_args(f) >= 1) &&
-	(f != initial_value(sc->hash_table_symbol)) &&
-	(f != initial_value(sc->weak_hash_table_symbol)))) &&
+  if ((((type(f) == T_C_FUNCTION) && (c_function_is_aritable(f, 1))) ||
+       (type(f) == T_C_RST_NO_REQ_FUNCTION)) &&
       (!needs_copied_args(f)))
     {
       sc->value = c_function_call(f)(sc, with_list_t1(fx_call(sc, cdr(sc->code))));
@@ -89847,7 +89850,7 @@ static bool op_x_sc(s7_scheme *sc, s7_pointer f)
 {
   s7_pointer code = sc->code;
   if (((type(f) == T_C_FUNCTION) && (c_function_is_aritable(f, 2))) ||
-      ((type(f) == T_C_RST_NO_REQ_FUNCTION) && (c_function_max_args(f) >= 2))) /* ((L 'abs) x 0.0001) where 'abs is '* in timp.scm */
+      (type(f) == T_C_RST_NO_REQ_FUNCTION)) /* ((L 'abs) x 0.0001) where 'abs is '* in timp.scm */
     {
       if (!needs_copied_args(f))
 	{
@@ -89874,7 +89877,7 @@ static bool op_x_aa(s7_scheme *sc, s7_pointer f)
 {
   s7_pointer code = sc->code;
   if (((type(f) == T_C_FUNCTION) && (c_function_is_aritable(f, 2))) ||
-      ((type(f) == T_C_RST_NO_REQ_FUNCTION) && (c_function_max_args(f) >= 2))) /* ((L 'abs) x 0.0001) where 'abs is '* in timp.scm */
+      (type(f) == T_C_RST_NO_REQ_FUNCTION))
     {
       if (!needs_copied_args(f))
 	{
@@ -98520,7 +98523,7 @@ s7_scheme *s7_init(void)
                             (lambda hook-args                                                             \n\
                               (let ((body ()))                                                            \n\
                                 (apply lambda* hook-args                                                  \n\
-                                  `((let ((result #<unspecified>))                                        \n\
+                                  '((let ((result #<unspecified>))                                        \n\
                                       (let ((hook (openlet (sublet (curlet) 'let-ref-fallback (lambda (e sym) #<undefined>))))) \n\
                                         (for-each (lambda (hook-function) (hook-function hook)) body)     \n\
                                         result))))))))");
@@ -99059,5 +99062,4 @@ int main(int argc, char **argv)
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * safe_do hop bit in other do cases and map/for-each/let
- * more numerics.scm stuff in tnum.scm? (like the exact sin func)
  */
