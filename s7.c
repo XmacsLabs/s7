@@ -2243,6 +2243,10 @@ static void init_types(void)
 #define set_has_dox_slot1(p)           set_mid_type_bit(T_Let(p), T_MID_DOX_SLOT1)
 /* marks a let that includes the dox_slot1 */
 
+#define T_MID_EVEN_ARGS                T_MID_UNSAFE_DO
+#define has_even_args(p)               has_mid_type_bit(T_CFn(p), T_MID_EVEN_ARGS)
+#define set_has_even_args(p)           set_mid_type_bit(T_CFn(p), T_MID_EVEN_ARGS)
+
 #define T_COLLECTED                    (1 << (16 + 1))
 #define T_MID_COLLECTED                (1 << 1)
 #define is_collected(p)                has_mid_type_bit(T_Seq(p), T_MID_COLLECTED)
@@ -4257,7 +4261,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_F, OP_F_A, OP_F_AA, OP_F_NP, OP_F_NP_1,
 
       OP_IMPLICIT_GOTO, OP_IMPLICIT_GOTO_A, OP_IMPLICIT_CONTINUATION_A, OP_IMPLICIT_ITERATE,
-      OP_IMPLICIT_VECTOR_REF_A, OP_IMPLICIT_VECTOR_REF_AA, OP_IMPLICIT_VECTOR_SET_3, OP_IMPLICIT_VECTOR_SET_4,
+      OP_IMPLICIT_VECTOR_REF_A, OP_IMPLICIT_VECTOR_REF_AA,
       OP_IMPLICIT_STRING_REF_A, OP_IMPLICIT_C_OBJECT_REF_A, OP_IMPLICIT_PAIR_REF_A, OP_IMPLICIT_PAIR_REF_AA,
       OP_IMPLICIT_HASH_TABLE_REF_A, OP_IMPLICIT_HASH_TABLE_REF_AA,
       OP_IMPLICIT_LET_REF_C, OP_IMPLICIT_LET_REF_A, OP_IMPLICIT_STARLET_REF_S, OP_IMPLICIT_STARLET_SET,
@@ -4477,7 +4481,7 @@ static const char* op_names[NUM_OPS] =
       "f", "f_a", "f_aa", "f_np", "f_np_1",
 
       "implicit_goto", "implicit_goto_a", "implicit_continuation_a","implicit_iterate",
-      "implicit_vector_ref_a", "implicit_vector_ref_aa", "implicit_vector_set_3", "implicit_vector_set_4",
+      "implicit_vector_ref_a", "implicit_vector_ref_aa",
       "implicit_string_ref_a", "implicit_c_object_ref_a", "implicit_pair_ref_a", "implicit_pair_ref_aa",
       "implicit_hash_table_ref_a", "implicit_hash_table_ref_aa",
       "implicit_let_ref_c", "implicit_let_ref_a", "implicit_*s7*_ref_s", "implicit_*s7*_set",
@@ -4787,7 +4791,8 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj)
 	  /* bit 16 */
 	  ((full_typ & T_UNSAFE_DO) != 0) ?      ((is_pair(obj)) ? " unsafe-do" :
 						  ((is_let(obj)) ? " dox-slot1" :
-						   " ?8?")) : "",
+						   ((is_any_c_function(obj)) ? " even-args" :
+						    " ?8?"))) : "",
 	  /* bit 17 */
 	  ((full_typ & T_COLLECTED) != 0) ?      " collected" : "",
 	  /* bit 18 */
@@ -4989,7 +4994,7 @@ static bool has_odd_bits(s7_pointer obj)
   if (((full_typ & T_SAFE_PROCEDURE) != 0) && (!is_applicable(obj))) return(true);
   if (((full_typ & T_EXPANSION) != 0) && (!is_normal_symbol(obj)) && (!is_either_macro(obj))) return(true);
   if (((full_typ & T_MULTIPLE_VALUE) != 0) && (!is_symbol(obj)) && (!is_pair(obj))) return(true);
-  if (((full_typ & T_UNSAFE_DO) != 0) && (!is_pair(obj)) && (!is_let(obj))) return(true);
+  if (((full_typ & T_UNSAFE_DO) != 0) && (!is_pair(obj)) && (!is_let(obj)) && (!is_any_c_function(obj))) return(true);
   if (((full_typ & T_ITER_OK) != 0) && (!is_iterator(obj)) && (!is_pair(obj)) && (!is_slot(obj)) && (!is_c_function(obj)) && (!is_symbol(obj))) return(true);
   if (((full_typ & T_LOW_COUNT) != 0) && (!is_pair(obj))) return(true);
   if (((full_typ & T_UNSAFE) != 0) && (!is_symbol(obj)) && (!is_slot(obj)) && (!is_let(obj)) && (!is_pair(obj))) return(true);
@@ -47466,9 +47471,7 @@ bool s7_is_aritable(s7_scheme *sc, s7_pointer x, s7_int args)
       return(c_function_is_aritable(x, args));
 
     case T_C_RST_NO_REQ_FUNCTION:
-      if ((x == initial_value(sc->hash_table_symbol)) ||  /* these two need a value for each key -- maybe a different type? */
-	  (x == initial_value(sc->weak_hash_table_symbol)))
-	return((args & 1) == 0);
+      if (has_even_args(x)) return((args & 1) == 0);
       return(true);
 
     case T_C_FUNCTION_STAR:
@@ -47496,7 +47499,7 @@ bool s7_is_aritable(s7_scheme *sc, s7_pointer x, s7_int args)
 	if ((has_active_methods(sc, x)) &&
 	    ((func = find_method_with_let(sc, x, sc->is_aritable_symbol)) != sc->undefined))
 	  return(s7_apply_function(sc, func, set_plist_2(sc, x, make_integer(sc, args))) != sc->F);
-	return(is_safe_procedure(x));
+	return((is_safe_procedure(x)) && (args == 1)); /* TODO: can we get arity from x in that case? */
       }
 
     case T_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR:
@@ -47504,7 +47507,7 @@ bool s7_is_aritable(s7_scheme *sc, s7_pointer x, s7_int args)
 	     (vector_length(x) > 0) &&   /* (#() 0) -> error */
 	     (args <= vector_rank(x)));
 
-    case T_LET: case T_HASH_TABLE: case T_PAIR: /* for hash-table, this refers to (table 'key) */
+    case T_LET: case T_HASH_TABLE: case T_PAIR: /* for hash-table, this refers to the implicit ref (table 'key) */
       return(args == 1);
 
     case T_ITERATOR:
@@ -69048,7 +69051,8 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 	  set_no_cell_opt(body);
 	  set_curlet(sc, old_e);
 	}}
-
+  
+  /* using op+1 to hop costs more here (and in map) than it saves */
   if ((is_null(cdr(body))) &&
       (is_pair(seq)))
     {
@@ -75082,6 +75086,7 @@ static bool check_recur_if(s7_scheme *sc, const s7_pointer name, int32_t vars, s
 				(orig == cadddr(body)))
 			      set_safe_optimize_op(body, OP_RECUR_IF_A_A_opA_L3Aq);
 			    else return(false);
+			    /* TODO: cons-r is op_if_a_a_opl3a_l3a */
 			  }
 		      fx_annotate_arg(sc, cdr(body), args);
 		      fx_annotate_arg(sc, obody, args);
@@ -75166,7 +75171,7 @@ static bool check_recur_if(s7_scheme *sc, const s7_pointer name, int32_t vars, s
 		  (is_fxable(sc, cadr(la1))) && (is_fxable(sc, cadr(la2))) && (is_fxable(sc, cadr(la3))) &&
 		  (is_fxable(sc, caddr(la1))) && (is_fxable(sc, caddr(la2))) && (is_fxable(sc, caddr(la3))) &&
 		  (is_fxable(sc, cadddr(la1))) && (is_fxable(sc, cadddr(la2))) && (is_fxable(sc, cadddr(la3))))
-		{
+		{ /* (if (not (< y x)) z (name (name (- x 1) y z) (name (- y 1) z x) (name (- z 1) x y))) */
 		  set_safe_optimize_op(body, OP_RECUR_IF_A_A_LopL3A_L3A_L3Aq);
 		  fx_annotate_args(sc, cdr(la1), args);
 		  fx_annotate_args(sc, cdr(la2), args);
@@ -81233,45 +81238,6 @@ static bool op_implicit_vector_ref_aa(s7_scheme *sc) /* tnum/tmat, neither uses 
   return(true);
 }
 
-static /* inline */ bool op_implicit_vector_set_3(s7_scheme *sc) /* inline no diffs? */
-{
-  s7_pointer i1, code = cdr(sc->code);
-  s7_pointer v = lookup(sc, caar(code));
-  if (!is_any_vector(v))
-    {
-      /* this could be improved -- set_pair3 perhaps: pair3 set opt3? but this calls g_vector_set_3 */
-      pair_set_syntax_op(sc->code, OP_SET_UNCHECKED);
-      return(true);
-    }
-  i1 = fx_call(sc, cdar(code)); /* gc protect? */
-  set_car(sc->t3_3, fx_call(sc, cdr(code)));
-  set_car(sc->t3_1, v);
-  set_car(sc->t3_2, i1);
-  sc->value = g_vector_set_3(sc, sc->t3_1); /* calls vector_setter handling any vector type whereas vector_set_p_ppp wants a normal vector */
-  /* sc->value = vector_set_p_ppp(sc, v, i1, fx_call(sc, cdr(code))); */
-  return(false);
-}
-
-static bool op_implicit_vector_set_4(s7_scheme *sc)
-{
-  s7_pointer i1, i2, code = cdr(sc->code);
-  s7_pointer v = lookup(sc, caar(code));
-  if (!is_any_vector(v))
-    {
-      pair_set_syntax_op(sc->code, OP_SET_UNCHECKED);
-      return(true);
-    }
-  i1 = fx_call(sc, cdar(code));
-  i2 = fx_call(sc, opt3_pair(sc->code)); /* cddar(code) */
-  set_car(sc->t3_3, fx_call(sc, cdr(code)));
-  set_car(sc->t4_1, v);
-  set_car(sc->t3_1, i1);
-  set_car(sc->t3_2, i2);
-  sc->value = g_vector_set_4(sc, sc->t4_1);
-  set_car(sc->t4_1, sc->F);
-  return(false);
-}
-
 static goto_t call_set_implicit(s7_scheme *sc, s7_pointer obj, s7_pointer inds, s7_pointer val, s7_pointer form);
 
 static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer inds, s7_pointer val, s7_pointer form)
@@ -81320,17 +81286,6 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer ind
 
   if ((argnum > 1) || (vector_rank(vect) > 1))
     {
-      if ((argnum == 2) &&
-	  (cdr(form) == sc->code) &&     /* form == cdr(sc->code) only on the outer call, thereafter form is the old form for better error messages */
-	  (is_fxable(sc, car(inds))) &&
-	  (is_fxable(sc, cadr(inds))) &&
-	  (is_fxable(sc, car(val))))     /* (set! (v fx fx) fx) */
-	{
-	  fx_annotate_args(sc, inds, sc->curlet);
-	  fx_annotate_arg(sc, val, sc->curlet);
-	  set_opt3_pair(form, cdr(inds));
-	  pair_set_syntax_op(form, OP_IMPLICIT_VECTOR_SET_4);
-	}
       if ((argnum == vector_rank(vect)) &&
 	  (!is_pair(car(val))))
 	{
@@ -81373,15 +81328,6 @@ static goto_t set_implicit_vector(s7_scheme *sc, s7_pointer vect, s7_pointer ind
 
   /* one index, rank == 1 */
   index = car(inds);
-  if ((is_symbol(car(sc->code))) && /* not (set! (#(a 0 (3)) 1) 0) -- implicit_vector_set_3 assumes symbol vect ref */
-      (cdr(form) == sc->code) &&
-      (is_fxable(sc, index)) &&
-      (is_fxable(sc, car(val))))
-    {
-      fx_annotate_arg(sc, inds, sc->curlet);
-      fx_annotate_arg(sc, val, sc->curlet);
-      pair_set_syntax_op(form, OP_IMPLICIT_VECTOR_SET_3);
-    }
   if (!is_pair(index))
     {
       s7_int ind;
@@ -84148,12 +84094,12 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool loo
   if (is_null(cdr(code)))
     {
       s7_pfunc func;
-      if (no_cell_opt(code)) return(false);
+      if (no_cell_opt(code)) return_false(sc, code);
       func = s7_optimize_nv(sc, code);
       if (!func)
 	{
 	  set_no_cell_opt(code);
-	  return(false);
+	  return_false(sc, code);
 	}
       if (loop_end_ok)
 	{
@@ -84334,7 +84280,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool loo
 	        /* there aren't any other possibilities */
       sc->value = sc->T;
       sc->code = cdadr(scc);
-      return(true);
+      return_true(sc, code);
     }
 
   { /* not is_null(cdr(code)) i.e. there's more than one thing to do in the body */
@@ -84344,7 +84290,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool loo
     int32_t k;
 
     sc->pc = 0;
-    if (body_len >= 32) return(false);
+    if (body_len >= 32) return_false(sc, code);
 
     if (!no_float_opt(code))
       {
@@ -84384,7 +84330,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool loo
 	      }
 	    sc->value = sc->T;
 	    sc->code = cdadr(scc);
-	    return(true);
+	    return_true(sc, code);
 	  }}
 
     /* not float opt */
@@ -84427,9 +84373,9 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool loo
 	      }}
 	sc->value = sc->T;
 	sc->code = cdadr(scc);
-	return(true);
+	return_true(sc, code);
       }}
-  return(false);
+  return_false(sc, code);
 }
 
 static bool do_let(s7_scheme *sc, s7_pointer step_slot, s7_pointer scc)
@@ -89817,7 +89763,7 @@ static bool op_s_g(s7_scheme *sc)
 static bool op_x_a(s7_scheme *sc, s7_pointer f)
 {
   if ((((type(f) == T_C_FUNCTION) && (c_function_is_aritable(f, 1))) ||
-       (type(f) == T_C_RST_NO_REQ_FUNCTION)) &&
+       ((type(f) == T_C_RST_NO_REQ_FUNCTION) && (!has_even_args(f)))) &&
       (!needs_copied_args(f)))
     {
       sc->value = c_function_call(f)(sc, with_list_t1(fx_call(sc, cdr(sc->code))));
@@ -91331,7 +91277,7 @@ static s7_pointer read_expression(s7_scheme *sc)
 	  return(eof_object);
 
 	case TOKEN_BYTE_VECTOR:
-	  push_stack_no_let_no_code(sc, OP_READ_BYTE_VECTOR, sc->w);
+	  push_stack_no_let_no_code(sc, OP_READ_BYTE_VECTOR, sc->w); /* sc->w here and below = vector dimensions (from read_sharp) -> sc->args */
 	  sc->tok = TOKEN_LEFT_PAREN;
 	  break;
 
@@ -91341,7 +91287,7 @@ static s7_pointer read_expression(s7_scheme *sc)
 	  break;
 
 	case TOKEN_FLOAT_VECTOR:
-	  push_stack_no_let_no_code(sc, OP_READ_FLOAT_VECTOR, sc->w); /* here sc->w (vector dimensions from read_sharp) -> sc->args */
+	  push_stack_no_let_no_code(sc, OP_READ_FLOAT_VECTOR, sc->w);
 	  sc->tok = TOKEN_LEFT_PAREN;
 	  break;
 
@@ -91655,14 +91601,14 @@ static bool op_read_int_vector(s7_scheme *sc)
 
 static bool op_read_float_vector(s7_scheme *sc)
 {
-  /* sc->value is the list of values, #r(...sc->value...) */
+  /* sc->value is the list of values, #r(...sc->value...), sc->args = dimensions */
   sc->value = (sc->args == int_one) ? g_float_vector(sc, sc->value) : g_float_multivector(sc, integer(sc->args), sc->value);
   if (sc->safety > IMMUTABLE_VECTOR_SAFETY) set_immutable(sc->value);
   return(stack_top_op(sc) != OP_READ_LIST);
 
   /* to avoid making the list: sc->floats array (growable and maybe pruned),
    *   token_float_vector in read_expression: sc->value = unused, push op_read_float_vector
-   *   sc->args = dims (read_sharp sc->w = dims, read_expression push_op moves it to sc->args
+   *   sc->args = dims, (read_sharp sc->w = dims, read_expression push_op moves it to sc->args
    *   <read each entry...>: push op_read_float_vector (no op_read_list), read, eval,
    *   fill sc->floats, when right-paren make new vector [for multidims, get list->frame]
    */
@@ -93461,8 +93407,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_IMPLICIT_C_OBJECT_REF_A:    if (!op_implicit_c_object_ref_a(sc))    {if (op_unknown_a(sc))  goto EVAL;} continue;
 	case OP_IMPLICIT_GOTO:              if (!op_implicit_goto(sc))              {if (op_unknown(sc))    goto EVAL;} continue;
 	case OP_IMPLICIT_GOTO_A:            if (!op_implicit_goto_a(sc))            {if (op_unknown_a(sc))  goto EVAL;} continue;
-	case OP_IMPLICIT_VECTOR_SET_3:      if (op_implicit_vector_set_3(sc)) goto EVAL; continue;
-	case OP_IMPLICIT_VECTOR_SET_4:      if (op_implicit_vector_set_4(sc)) goto EVAL; continue;
 	case OP_IMPLICIT_STARLET_REF_S:     sc->value = starlet(sc, opt3_int(sc->code)); continue;
 	case OP_IMPLICIT_STARLET_SET:       sc->value = starlet_set_1(sc, opt3_sym(sc->code), fx_call(sc, cddr(sc->code))); continue;
 
@@ -97865,10 +97809,10 @@ static void init_rootlet(s7_scheme *sc)
   sc->string_to_byte_vector_symbol = defun("string->byte-vector", string_to_byte_vector, 1, 0, false);
   sc->byte_vector_to_string_symbol = defun("byte-vector->string", byte_vector_to_string, 1, 0, false);
 
-  sc->hash_table_symbol =            defun("hash-table",	hash_table,		0, 0, true);
+  sc->hash_table_symbol =            defun("hash-table",	hash_table,		0, 0, true); set_has_even_args(global_value(sc->hash_table_symbol));
   sc->make_hash_table_symbol =       defun("make-hash-table",	make_hash_table,	0, 3, false);
   sc->make_weak_hash_table_symbol =  defun("make-weak-hash-table", make_weak_hash_table,0, 3, false);
-  sc->weak_hash_table_symbol =       defun("weak-hash-table",   weak_hash_table,        0, 0, true);
+  sc->weak_hash_table_symbol =       defun("weak-hash-table",   weak_hash_table,        0, 0, true); set_has_even_args(global_value(sc->weak_hash_table_symbol));
   sc->hash_table_ref_symbol =        defun("hash-table-ref",	hash_table_ref,		2, 0, true);
   sc->hash_table_set_symbol =        defun("hash-table-set!",	hash_table_set,		3, 0, false);
   sc->hash_table_entries_symbol =    defun("hash-table-entries", hash_table_entries,	1, 0, false);
@@ -98627,7 +98571,7 @@ s7_scheme *s7_init(void)
   s7_define_function(sc, "report-missed-calls", g_report_missed_calls, 0, 0, false, NULL); /* tc/recur tests in s7test.scm */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 935) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 933) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
   if (false) gdb_break();
 #endif
@@ -99009,27 +98953,27 @@ int main(int argc, char **argv)
  * index            1016    973    967    972    975
  * tmock            1145   1082   1042   1045   1035
  * tvect     3408   2464   1772   1669   1497   1454
- * tauto                   2562   2048   1729   1726
+ * tauto                   2562   2048   1729   1724
  * thook     7651   ----   2590   2030   2046   1756
  * texit     1884   1950   1778   1741   1770   1764
  * s7test           1831   1818   1829   1830   1855
- * lt        2222   2172   2150   2185   1950   1914
- * dup              3788   2492   2239   2097   1980
- * tread            2421   2419   2408   2405   2248
+ * lt        2222   2172   2150   2185   1950   1913
+ * dup              3788   2492   2239   2097   1978
+ * tread            2421   2419   2408   2405   2241
  * tcopy            5546   2539   2375   2386   2340
  * trclo     8031   2574   2454   2445   2449   2434
  * titer     3657   2842   2641   2509   2449   2458
- * tmat             3042   2524   2578   2590   2512
- * tload                   3046   2404   2566   2555
- * fbench    2933   2583   2460   2430   2478   2573
+ * tmat             3042   2524   2578   2590   2532  univect if no 4 2532 from 2508 g_vector_set_4
+ * tload                   3046   2404   2566   2535
+ * fbench    2933   2583   2460   2430   2478   2571
  * tsort     3683   3104   2856   2804   2858   2858
  * tio              3752   3683   3620   3583   3122
- * tobj             3970   3828   3577   3508   3448
- * tmac             3873   3033   3677   3677   3512
- * teq              4045   3536   3486   3544   3559
+ * tobj             3970   3828   3577   3508   3440
+ * tmac             3873   3033   3677   3677   3509
+ * teq              4045   3536   3486   3544   3551
  * tcase            4793   4439   4430   4439   4378
  * tmap             8774   4489   4541   4586   4384
- * tlet      11.0   6974   5609   5980   5965   4503
+ * tlet      11.0   6974   5609   5980   5965   4498
  * tfft             7729   4755   4476   4536   4541
  * tshoot           5447   5183   5055   5034   4850
  * tstar            6705   5834   5278   5177   5047
@@ -99037,22 +98981,22 @@ int main(int argc, char **argv)
  * tstr      10.0   6342   5488   5162   5180   5194
  * tnum             6013   5433   5396   5409   5432
  * tari      15.0   12.7   6827   6543   6278   6183
- * tset                           6260   6364   6213
- * tgsl             7802   6373   6282   6208   6220
+ * tset                           6260   6364   6192
+ * tgsl             7802   6373   6282   6208   6218
  * tlist     9219   7546   6558   6240   6300   6308
  * trec      19.6   6980   6599   6656   6658   6490
- * tleft     12.2   9753   7537   7331   7331   6811
- * tmisc                          7614   7115   7125
- * tclo             8025   7645   8809   7770   7596
- * tlamb                          8003   7941   7898
- * tgc              11.1   8177   7857   7986   8014
- * thash            11.7   9734   9479   9526   9251
- * cb        12.9   11.0   9658   9564   9609   9642
+ * tleft     12.2   9753   7537   7331   7331   6809
+ * tmisc                          7614   7115   7123
+ * tclo             8025   7645   8809   7770   7595
+ * tlamb                          8003   7941   7895
+ * tgc              11.1   8177   7857   7986   8009
+ * thash            11.7   9734   9479   9526   9250
+ * cb        12.9   11.0   9658   9564   9609   9640
  * tmap-hash                                    10.3
  * tgen             11.4   12.0   12.1   12.2   12.3
  * tall      15.9   15.6   15.6   15.6   15.1   15.1
  * timp             24.4   20.0   19.6   19.7   15.6
- * tmv              21.9   21.1   20.7   20.6   17.4
+ * tmv              21.9   21.1   20.7   20.6   17.3
  * calls            37.5   37.0   37.5   37.1   37.2
  * sg                      55.9   55.8   55.4   55.5
  * tbig            175.8  156.5  148.1  146.2  146.1
@@ -99061,5 +99005,8 @@ int main(int argc, char **argv)
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
- * safe_do hop bit in other do cases and map/for-each/let
+ * safe_do hop bit in other do cases and let
+ * for opt_print there are more cases like opt_dotimes return_true etc
+ * tlist: sort! is unsafe only if requires eval goto -- can this be handled in opt?
+ *  also fill! -> 0 so this should not be opt'd
  */

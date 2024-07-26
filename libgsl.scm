@@ -68,6 +68,24 @@
       (set! *libraries* (cons (cons "libgsl.scm" (curlet)) *libraries*))
       (set! *cload-library-name* "*libgsl*")
 
+      ;; from johnm
+      (define (matrix_of_floats scm) ;; float-vector -> gsl_matrix
+	(let ((gsl (apply gsl_matrix_alloc (vector-dimensions scm))))
+	  (float-vector->gsl_matrix scm gsl)))
+	 
+      (define (vector_of_floats scm) ;; float-vector -> gsl_vector
+	(let ((gsl (apply gsl_vector_alloc (vector-dimensions scm))))
+	  (float-vector->gsl_vector scm gsl)))
+
+      (define (floats_of_matrix gsl) ;; gsl_matrix -> float-vector
+	(let* ((size (gsl_matrix_size gsl))
+	       (scm (make-float-vector (list (car size) (cdr size)))))
+	  (gsl_matrix->float-vector gsl scm)))
+
+      (define (floats_of_vector gsl) ;; gsl_vector -> float-vector
+	(let ((scm (make-float-vector (gsl_vector_size gsl))))
+	  (gsl_vector->float-vector gsl scm)))
+
       (c-define
        '((C-macro (double (GSL_CONST_CGS_SPEED_OF_LIGHT GSL_CONST_CGS_GRAVITATIONAL_CONSTANT GSL_CONST_CGS_PLANCKS_CONSTANT_H
 			   GSL_CONST_CGS_PLANCKS_CONSTANT_HBAR GSL_CONST_CGS_ASTRONOMICAL_UNIT GSL_CONST_CGS_LIGHT_YEAR
@@ -1667,6 +1685,15 @@
                 ")
 	 (C-function ("float-vector->gsl_vector" g_float_vector_to_gsl_vector "" 2))
 	 (C-function ("gsl_vector->float-vector" g_gsl_vector_to_float_vector "" 2))
+
+	 ;; from johnm
+	 (in-C "
+               static s7_pointer g_gsl_vector_size(s7_scheme *sc, s7_pointer args)
+               {
+                 gsl_vector *g; g = (gsl_vector *)s7_c_pointer_with_type(sc, s7_car(args), gsl_vector__symbol, __func__, 1);
+                 return(s7_make_integer(sc, (s7_int)(g->size)));
+               }")
+	 (C-function ("gsl_vector_size" g_gsl_vector_size "" 1))
 
 	 (gsl_vector* gsl_vector_alloc (size_t))
 	 (gsl_vector* gsl_vector_calloc (size_t))
