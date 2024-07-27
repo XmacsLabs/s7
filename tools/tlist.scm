@@ -203,7 +203,7 @@
       (set! body (list f body)))
     (lambda (path)
       (set! body 'lst)
-      (for-each extend-path (reverse (X-marks-the-spot () path)))
+      (for-each extend-path (reverse (X-marks-the-spot () path))) ; reverse! saves 30
       body)))
 
 (define (find-X tries)
@@ -243,7 +243,6 @@
     (list-r 0 0 6)))
 
 (list-test (/ count 10))
-
 
 
 (exit)

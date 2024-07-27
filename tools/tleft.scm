@@ -148,7 +148,7 @@
 (f10 tc-size (/ tc-size 10) (/ tc-size 10))
 
 ;;; --------------------------------------------------------------------------------
-;OP_RECUR_IF_A_A_opLAA_LAAq OP_RECUR_IF_A_opLAA_LAAq_A
+;OP_RECUR_IF_A_A_opLAA_LAAq OP_RECUR_IF_A_opLAA_LAAq_A ; first case handled now
 
 (define (rc1 x y)
   (if (<= y 0)
@@ -177,7 +177,7 @@
 (trc1r)
 
 ;;; --------------------------------------------------------------------------------
-;OP_RECUR_IF_A_A_opL3A_L3Aq OP_RECUR_IF_A_opL3A_L3Aq_A
+;OP_RECUR_IF_A_A_opL3A_L3Aq OP_RECUR_IF_A_opL3A_L3Aq_A ; first case handled now
 
 (define (rc2 x y z)
   (if (<= z 0)
