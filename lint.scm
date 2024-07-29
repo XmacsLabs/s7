@@ -6132,8 +6132,8 @@
 	    (let ()
 	      (define (numang args form env)
 		(cond ((not (pair? args)) form)
-		      ((eqv? (car args) -1) 'pi)
-		      ((or (equivalent? (car args) 0.0)
+		      ((eqv? (car args) -1) 'pi)             ; (angle -1) -> pi
+		      ((or (equivalent? (car args) 0.0)      ; (angle 0.0) -> 0.0
 			   (eq? (car args) 'pi))
 		       0.0)
 		      (else (cons 'angle args))))

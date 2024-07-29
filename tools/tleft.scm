@@ -148,7 +148,7 @@
 (f10 tc-size (/ tc-size 10) (/ tc-size 10))
 
 ;;; --------------------------------------------------------------------------------
-;OP_RECUR_IF_A_A_opLAA_LAAq OP_RECUR_IF_A_opLAA_LAAq_A ; first case handled now
+;OP_RECUR_IF_A_A_opLAA_LAAq OP_RECUR_IF_A_opLAA_LAAq_A ; handled now
 
 (define (rc1 x y)
   (if (<= y 0)
@@ -165,8 +165,8 @@
 
 (define (rc1-rev x y)
   (if (> y 0)
-      (+ (rc1 (+ x 1) (- y 1))
-	 (rc1 (- x 1) (- y 1)))
+      (+ (rc1-rev (+ x 1) (- y 1))
+	 (rc1-rev (- x 1) (- y 1)))
       x))
 
 (define (trc1r)
@@ -177,7 +177,7 @@
 (trc1r)
 
 ;;; --------------------------------------------------------------------------------
-;OP_RECUR_IF_A_A_opL3A_L3Aq OP_RECUR_IF_A_opL3A_L3Aq_A ; first case handled now
+;OP_RECUR_IF_A_A_opL3A_L3Aq OP_RECUR_IF_A_opL3A_L3Aq_A ; handled now
 
 (define (rc2 x y z)
   (if (<= z 0)
@@ -194,8 +194,8 @@
 
 (define (rc2-rev x y z)
   (if (> z 0)
-      (+ (rc2 (+ x 1) (+ y 1) (- z 1))
-	 (rc2 (- x 1) (- y 1) (- z 1)))
+      (+ (rc2-rev (+ x 1) (+ y 1) (- z 1))
+	 (rc2-rev (- x 1) (- y 1) (- z 1)))
       (+ x y)))
 
 (define (trc2r)
