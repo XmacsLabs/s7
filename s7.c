@@ -4384,12 +4384,14 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_TC_AND_A_IF_A_Z_LA, OP_TC_AND_A_IF_A_LA_Z,
       OP_TC_CASE_LA, OP_TC_CASE_L2A, OP_TC_CASE_L3A, /* treat this as last tc op (see below) */
 
+      OP_RECUR_IF_A_A_opLA_LAq, OP_RECUR_IF_A_A_opL2A_L2Aq, OP_RECUR_IF_A_A_opL3A_L3Aq,
+
+      OP_RECUR_IF_A_A_AND_A_L2A_L2A,
       OP_RECUR_IF_A_A_opA_LAq, OP_RECUR_IF_A_opA_LAq_A, OP_RECUR_IF_A_A_opLA_Aq, OP_RECUR_IF_A_opLA_Aq_A,
-      OP_RECUR_IF_A_A_opLA_LAq,
       OP_RECUR_IF_A_A_opA_LA_LAq, OP_RECUR_IF_A_opA_LA_LAq_A,
       OP_RECUR_IF_A_A_opLA_LA_LAq, OP_RECUR_IF_A_A_IF_A_A_opLA_LAq, OP_RECUR_IF_A_A_IF_A_A_opL2A_L2Aq,
       OP_RECUR_IF_A_A_opA_L2Aq, OP_RECUR_IF_A_opA_L2Aq_A, OP_RECUR_IF_A_A_opA_L3Aq,
-      OP_RECUR_IF_A_A_opL2A_L2Aq, OP_RECUR_IF_A_A_opL3A_L3Aq, OP_RECUR_IF_A_A_AND_A_L2A_L2A,
+      
       OP_RECUR_IF_A_A_IF_A_L2A_opA_L2Aq, /* same as cond case below */
       OP_RECUR_COND_A_A_opA_LAq, OP_RECUR_COND_A_A_opA_L2Aq,
       OP_RECUR_COND_A_A_A_A_opLA_LAq, OP_RECUR_COND_A_A_A_A_opL2A_L2Aq, OP_RECUR_COND_A_A_A_A_opA_L2Aq,
@@ -4601,17 +4603,17 @@ static const char* op_names[NUM_OPS] =
       "tc_and_a_if_a_z_la", "tc_and_a_if_a_la_z",
       "tc_case_la", "tc_case_l2a", "tc_case_l3a",
 
+      "recur_if_a_a_opla_laq", "recur_if_a_a_opl2a_l2aq", "recur_if_a_a_opl3a_l3aq",
+      "recur_if_a_a_and_a_l2a_l2a",
       "recur_if_a_a_opa_laq", "recur_if_a_opa_laq_a", "recur_if_a_a_opla_aq", "recur_if_a_opla_aq_a",
-      "recur_if_a_a_opla_laq",
       "recur_if_a_a_opa_la_laq", "recur_if_a_opa_la_laq_a",
       "recur_if_a_a_opla_la_laq", "recur_if_a_a_if_a_a_opla_laq", "recur_if_a_a_if_a_a_opl2a_l2aq",
       "recur_if_a_a_opa_l2aq", "recur_if_a_opa_l2aq_a", "recur_if_a_a_opa_l3aq",
-      "recur_if_a_a_opl2a_l2aq", "recur_if_a_a_opl3a_l3aq", "recur_if_a_a_and_a_l2a_l2a",
-      "recur_if_a_a_if_a_l2a_opa_l2aq",
-      "recur_cond_a_a_op_a_laq", "recur_cond_a_a_op_a_l2aq",
+      "recur_if_a_a_if_a_l2a_opa_l2aq", /* same as cond case below */
+      "recur_cond_a_a_opa_laq", "recur_cond_a_a_opa_l2aq",
       "recur_cond_a_a_a_a_opla_laq", "recur_cond_a_a_a_a_opl2a_l2aq", "recur_cond_a_a_a_a_opa_l2aq",
       "recur_cond_a_a_a_l2a_lopa_l2aq", "recur_cond_a_a_a_l2a_opa_l2aq",
-      "recur_and_a_or_a_l2a_l2a",
+      "recur_and_a_or_a_l2a_l2a"
 };
 
 #define is_safe_c_op(op)            ((op >= OP_SAFE_C_NC) && (op < OP_THUNK))
@@ -74971,12 +74973,12 @@ static bool tree_has_definers_or_binders(s7_scheme *sc, s7_pointer tree)
 #define rec_set_done_clause(p, c) set_opt1_pair(p, c)
 #define rec_set_call_clause(p, c) set_opt3_pair(p, c)
 
-static bool check_recur_if_and_cond(s7_scheme *sc, const s7_pointer name, int32_t vars, s7_pointer args, s7_pointer body)
+static bool check_recur_if_and_cond(s7_scheme *sc, const s7_pointer name, int32_t pars, s7_pointer args, s7_pointer body)
 {
   bool if_case = car(body) == sc->if_symbol;
   s7_pointer test = (if_case) ? cadr(body) : caadr(body); /* (if test...) or (cond ((test...))) */
-  if ((S7_DEBUGGING) && ((vars < 1) || (vars > 3))) fprintf(stderr, "%s[%d]: vars: %d\n", __func__, __LINE__, vars);
-  if (is_fxable(sc, test)) /* vars prechecked to be 1 <= vars <= 3 */
+  if ((S7_DEBUGGING) && ((pars < 1) || (pars > 3))) fprintf(stderr, "%s[%d]: pars: %d\n", __func__, __LINE__, pars);
+  if (is_fxable(sc, test)) /* pars prechecked to be 1 <= pars <= 3 */
     {
       s7_pointer true_p = (if_case) ? caddr(body) : cadr(cadr(body));
       s7_pointer false_p = (if_case) ? cadddr(body) : cadr(caddr(body));
@@ -74996,31 +74998,31 @@ static bool check_recur_if_and_cond(s7_scheme *sc, const s7_pointer name, int32_
 	  s7_pointer calls = true_quits ? cdr(false_p) : cdr(true_p);
 	  s7_pointer call1 = car(calls);
 	  s7_pointer call2 = cadr(calls);
-	  if ((((vars == 1) && (is_proper_list_2(sc, call1)) && (is_proper_list_2(sc, call2))) ||
-	       ((vars == 2) && (is_proper_list_3(sc, call1)) && (is_proper_list_3(sc, call2))) ||
-	       ((vars == 3) && (is_proper_list_4(sc, call1)) && (is_proper_list_4(sc, call2)))) &&
+	  if ((((pars == 1) && (is_proper_list_2(sc, call1)) && (is_proper_list_2(sc, call2))) ||
+	       ((pars == 2) && (is_proper_list_3(sc, call1)) && (is_proper_list_3(sc, call2))) ||
+	       ((pars == 3) && (is_proper_list_4(sc, call1)) && (is_proper_list_4(sc, call2)))) &&
 	      (car(call1) == name) && (car(call2) == name) &&
 	      (is_fxable(sc, cadr(call1))) && (is_fxable(sc, cadr(call2))) &&
-	      ((vars == 1) || ((is_fxable(sc, caddr(call1))) && (is_fxable(sc, caddr(call2))))) &&
-	      ((vars <= 2) || ((is_fxable(sc, cadddr(call1))) && (is_fxable(sc, cadddr(call2))))))
+	      ((pars == 1) || ((is_fxable(sc, caddr(call1))) && (is_fxable(sc, caddr(call2))))) &&
+	      ((pars <= 2) || ((is_fxable(sc, cadddr(call1))) && (is_fxable(sc, cadddr(call2))))))
 	    {
 	      rec_set_test_clause(body, (if_case) ? cdr(body) : cadr(body));
 	      rec_set_done_clause(body, (true_quits) ? ((if_case) ? cddr(body) : cdadr(body)) : ((if_case) ? cdddr(body) : cdaddr(body)));
 	      rec_set_call_clause(body, (true_quits) ? ((if_case) ? cdddr(body) : cdaddr(body)) : ((if_case) ? cddr(body) : cdadr(body)));
 	      if (true_quits) set_true_is_done(body);
-	      set_safe_optimize_op(body, (vars == 1) ? OP_RECUR_IF_A_A_opLA_LAq :
-				           ((vars == 2) ? OP_RECUR_IF_A_A_opL2A_L2Aq : OP_RECUR_IF_A_A_opL3A_L3Aq));
+	      set_safe_optimize_op(body, (pars == 1) ? OP_RECUR_IF_A_A_opLA_LAq :
+				           ((pars == 2) ? OP_RECUR_IF_A_A_opL2A_L2Aq : OP_RECUR_IF_A_A_opL3A_L3Aq));
 	      fx_annotate_args(sc, cdr(call1), args);
 	      fx_annotate_args(sc, cdr(call2), args);
 	      fx_annotate_arg(sc, rec_test_clause(body), args);
 	      fx_annotate_arg(sc, rec_done_clause(body), args);
-	      fx_tree(sc, cdr(body), car(args), (vars >= 2) ? cadr(args) : NULL, (vars == 3) ? caddr(args) : NULL, false);
+	      fx_tree(sc, cdr(body), car(args), (pars >= 2) ? cadr(args) : NULL, (pars == 3) ? caddr(args) : NULL, false);
 	      return(true);
 	    }}}
   return(false);
 }
 
-static bool check_recur_if(s7_scheme *sc, const s7_pointer name, int32_t vars, s7_pointer args, s7_pointer body)
+static bool check_recur_if(s7_scheme *sc, const s7_pointer name, int32_t pars, s7_pointer args, s7_pointer body)
 {
   s7_pointer test = cadr(body);
   if (is_fxable(sc, test))                   /* if_(A)... */
@@ -75029,7 +75031,7 @@ static bool check_recur_if(s7_scheme *sc, const s7_pointer name, int32_t vars, s
       s7_pointer true_p = car(obody);        /* if_a_(A)... */
       s7_pointer false_p = cadr(obody);      /* if_a_a_(A) */
 
-      if ((vars <= 2) &&
+      if ((pars <= 2) &&
 	  (is_fxable(sc, true_p)) &&
 	  (is_proper_list_4(sc, false_p)))
 	{
@@ -75045,25 +75047,25 @@ static bool check_recur_if(s7_scheme *sc, const s7_pointer name, int32_t vars, s
 		  s7_pointer la1 = cadr(false2);
 		  s7_pointer la2 = caddr(false2);
 		  if ((is_fxable(sc, true2)) &&
-		      (((vars == 1) && (is_proper_list_2(sc, la1)) && (is_proper_list_2(sc, la2))) ||
-		       (((vars == 2) && (is_proper_list_3(sc, la1)) && (is_proper_list_3(sc, la2))))) &&
+		      (((pars == 1) && (is_proper_list_2(sc, la1)) && (is_proper_list_2(sc, la2))) ||
+		       (((pars == 2) && (is_proper_list_3(sc, la1)) && (is_proper_list_3(sc, la2))))) &&
 		      (car(la1) == name) && (car(la2) == name) &&
 		      (is_fxable(sc, cadr(la1))) &&  (is_fxable(sc, cadr(la2))) &&
-		      ((vars == 1) || ((is_fxable(sc, caddr(la1))) && (is_fxable(sc, caddr(la2))))))
+		      ((pars == 1) || ((is_fxable(sc, caddr(la1))) && (is_fxable(sc, caddr(la2))))))
 		    {
-		      set_safe_optimize_op(body, (vars == 1) ? OP_RECUR_IF_A_A_IF_A_A_opLA_LAq : OP_RECUR_IF_A_A_IF_A_A_opL2A_L2Aq);
+		      set_safe_optimize_op(body, (pars == 1) ? OP_RECUR_IF_A_A_IF_A_A_opLA_LAq : OP_RECUR_IF_A_A_IF_A_A_opL2A_L2Aq);
 		      fx_annotate_arg(sc, cdr(body), args);
 		      fx_annotate_arg(sc, obody, args);
 		      fx_annotate_args(sc, cdr(false_p), args);
 		      fx_annotate_args(sc, cdr(la1), args);
 		      fx_annotate_args(sc, cdr(la2), args);
-		      fx_tree(sc, cdr(body), car(args), (vars == 2) ? cadr(args) : NULL, NULL, false);
+		      fx_tree(sc, cdr(body), car(args), (pars == 2) ? cadr(args) : NULL, NULL, false);
 		      set_opt1_pair(body, cdr(false_p));
 		      set_opt3_pair(body, false2);
 		      set_opt3_pair(false2, cdr(la2));
 		      return(true);
 		    }
-		  if ((vars == 2) && (is_proper_list_3(sc, true2)) &&
+		  if ((pars == 2) && (is_proper_list_3(sc, true2)) &&
 		      (car(true2) == name) &&
 		      (is_fxable(sc, cadr(true2))) && (is_fxable(sc, caddr(true2))) &&
 		      (is_fxable(sc, cadr(false2))) &&
@@ -75138,18 +75140,18 @@ static bool check_recur_if(s7_scheme *sc, const s7_pointer name, int32_t vars, s
 		      (is_pair(cdr(la))) &&
 		      (is_fxable(sc, cadr(la))))
 		    {
-		      if ((vars == 1) && (is_null(cddr(la))))
+		      if ((pars == 1) && (is_null(cddr(la))))
 			set_safe_optimize_op(body, (orig == cadddr(body)) ?
 					     ((la == cadr(false_p)) ? OP_RECUR_IF_A_A_opLA_Aq : OP_RECUR_IF_A_A_opA_LAq) :
 					     ((la == cadr(false_p)) ? OP_RECUR_IF_A_opLA_Aq_A : OP_RECUR_IF_A_opA_LAq_A));
 		      else
-			if ((vars == 2) &&
+			if ((pars == 2) &&
 			    (is_pair(cddr(la))) && (is_fxable(sc, caddr(la))) &&
 			    (is_null(cdddr(la))))
 			  set_safe_optimize_op(body, (orig == cadddr(body)) ? OP_RECUR_IF_A_A_opA_L2Aq : OP_RECUR_IF_A_opA_L2Aq_A);
 			else
 			  {
-			    if ((vars == 3) &&
+			    if ((pars == 3) &&
 				(is_pair(cddr(la))) && (is_fxable(sc, caddr(la))) &&
 				(is_pair(cdddr(la))) && (is_fxable(sc, cadddr(la))) &&
 				(is_null(cddddr(la))) &&
@@ -75161,14 +75163,14 @@ static bool check_recur_if(s7_scheme *sc, const s7_pointer name, int32_t vars, s
 		      fx_annotate_arg(sc, obody, args);
 		      fx_annotate_arg(sc, (la == cadr(false_p)) ? cddr(false_p) : cdr(false_p), args);
 		      fx_annotate_args(sc, cdr(la), args);
-		      fx_tree(sc, cdr(body), car(args), (vars > 1) ? cadr(args) : NULL, (vars > 2) ? caddr(args) : NULL, false);
+		      fx_tree(sc, cdr(body), car(args), (pars > 1) ? cadr(args) : NULL, (pars > 2) ? caddr(args) : NULL, false);
 		      set_opt3_pair(body, false_p);
 		      set_opt3_pair(false_p, la);
 		      return(true);
 		    }}}
 	  else /* 3 args to c func */
 	    {
-	      if ((vars == 1) &&
+	      if ((pars == 1) &&
 		  (is_pair(cdddr(false_p))) &&
 		  (is_null(cddddr(false_p))))
 		{
@@ -75205,21 +75207,22 @@ static bool check_recur_if(s7_scheme *sc, const s7_pointer name, int32_t vars, s
   return(false);
 }
 
-static bool check_recur(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer args, s7_pointer body)
+static bool check_recur(s7_scheme *sc, s7_pointer name, int32_t pars, s7_pointer args, s7_pointer body)
 {
-  /* fprintf(stderr, "%s %s %d %s %s\n", __func__, display(name), vars, display(args), display(body)); */
-  if ((((car(body) == sc->if_symbol) && (proper_list_length(body) == 4)) || /* (if a a opla) */
-       ((car(body) == sc->cond_symbol) && (proper_list_length(body) == 3) && (caaddr(body) == sc->else_symbol))) && /* (cond ((a a)) (else opla)) */
-      (vars > 0) && (vars <= 3) &&
-      (check_recur_if_and_cond(sc, name, vars, args, body)))
+  /* fprintf(stderr, "%s %s %d %s %s\n", __func__, display(name), pars, display(args), display(body)); */
+  if ((((car(body) == sc->if_symbol) && (proper_list_length(body) == 4)) ||   /* (if a a opla) */
+       ((car(body) == sc->cond_symbol) && (proper_list_length(body) == 3) &&
+	((caaddr(body) == sc->else_symbol) || (caaddr(body) == sc->T)))) &&    /* (cond ((a a)) (else|#t opla)) */
+      (pars > 0) && (pars <= 3) &&
+      (check_recur_if_and_cond(sc, name, pars, args, body)))
     return(true);
 
   if ((car(body) == sc->if_symbol) &&
       (proper_list_length(body) == 4))
-    return(check_recur_if(sc, name, vars, args, body));
+    return(check_recur_if(sc, name, pars, args, body));
 
   if ((car(body) == sc->and_symbol) &&
-      (vars == 2) &&
+      (pars == 2) &&
       (proper_list_length(body) == 3) &&
       (proper_list_length(caddr(body)) == 4) &&
       (caaddr(body) == sc->or_symbol) &&
@@ -75279,7 +75282,7 @@ static bool check_recur(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer
 		    {
 		      if ((is_fxable(sc, cadr(la_clause))) &&
 			  ((len == 3) ||
-			   ((len == 4) && (vars == 2) &&
+			   ((len == 4) && (pars == 2) &&
 			    (is_proper_list_3(sc, cadr(clause2))) &&
 			    (caadr(clause2) == name))))
 			{
@@ -75288,14 +75291,14 @@ static bool check_recur(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer
 			      (car(la) == name) &&
 			      (is_pair(cdr(la))) &&
 			      (is_fxable(sc, cadr(la))) &&
-			      (((vars == 1) && (is_null(cddr(la)))) ||
-			       ((vars == 2) &&
+			      (((pars == 1) && (is_null(cddr(la)))) ||
+			       ((pars == 2) &&
 				(is_pair(cddr(la))) &&
 				(is_fxable(sc, caddr(la))) &&
 				(is_null(cdddr(la))))))
 			    {
 			      if (len == 3)
-				set_safe_optimize_op(body, (vars == 1) ? OP_RECUR_COND_A_A_opA_LAq : OP_RECUR_COND_A_A_opA_L2Aq);
+				set_safe_optimize_op(body, (pars == 1) ? OP_RECUR_COND_A_A_opA_LAq : OP_RECUR_COND_A_A_opA_L2Aq);
 			      else
 				{
 				  s7_pointer l2a = cadr(clause2);
@@ -75311,7 +75314,7 @@ static bool check_recur(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer
 			      fx_annotate_args(sc, clause, args);
 			      fx_annotate_arg(sc, cdr(la_clause), args);
 			      fx_annotate_args(sc, cdr(la), args);
-			      fx_tree(sc, cdr(body), car(args), (vars == 1) ? NULL : cadr(args), NULL, false);
+			      fx_tree(sc, cdr(body), car(args), (pars == 1) ? NULL : cadr(args), NULL, false);
 			      set_opt3_pair(body, la_clause);
 			      set_opt3_pair(la_clause, la);
 			      return(true);
@@ -75325,7 +75328,7 @@ static bool check_recur(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer
 			      s7_pointer la2 = caddr(la_clause);
 			      bool happy = false;
 
-			      if ((vars == 1) &&
+			      if ((pars == 1) &&
 				  (is_proper_list_2(sc, la1)) && (is_proper_list_2(sc, la2)) &&
 				  (car(la1) == name) && (car(la2) == name) && (is_fxable(sc, cadr(la1))) && (is_fxable(sc, cadr(la2))))
 				{
@@ -75334,7 +75337,7 @@ static bool check_recur(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer
 				  happy = true;
 				}
 			      else
-				if ((vars == 2) &&
+				if ((pars == 2) &&
 				    /* (is_fxable(sc, cadr(clause2))) && */
 				    (is_proper_list_3(sc, la2)) && (car(la2) == name) && (is_fxable(sc, cadr(la2))) && (is_fxable(sc, caddr(la2))))
 				  {
@@ -75360,7 +75363,7 @@ static bool check_recur(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer
 				  fx_annotate_args(sc, clause, args);
 				  fx_annotate_args(sc, clause2, args);
 				  fx_annotate_args(sc, cdr(la2), args);
-				  fx_tree(sc, cdr(body), car(args), (vars == 1) ? NULL : cadr(args), NULL, false);
+				  fx_tree(sc, cdr(body), car(args), (pars == 1) ? NULL : cadr(args), NULL, false);
 				  set_opt3_pair(body, la_clause);
 				  return(true);
 				}}}}
@@ -75369,7 +75372,7 @@ static bool check_recur(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer
 		      if (clause2)
 			{
 			  s7_pointer l2a = cadr(clause2);
-			  if ((vars == 2) && (len == 4) &&
+			  if ((pars == 2) && (len == 4) &&
 			      (is_proper_list_3(sc, l2a)) && (car(l2a) == name) && (is_fxable(sc, cadr(l2a))) && (is_fxable(sc, caddr(l2a))))
 			    {
 			      s7_pointer la1 = cadr(la_clause);
@@ -75391,7 +75394,7 @@ static bool check_recur(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer
   return(false);
 }
 
-static bool check_tc_when(s7_scheme *sc, const s7_pointer name, int32_t vars, s7_pointer args, s7_pointer body)
+static bool check_tc_when(s7_scheme *sc, const s7_pointer name, int32_t pars, s7_pointer args, s7_pointer body)
 {
   s7_pointer test_expr = cadr(body);    /* car(body) == sc->when_symbol or sc->unless_symbol */
   if (is_fxable(sc, test_expr))
@@ -75410,7 +75413,7 @@ static bool check_tc_when(s7_scheme *sc, const s7_pointer name, int32_t vars, s7
 	    {
 	      if (is_null(cddr(l2a)))
 		{
-		  if (vars != 1) return(false);
+		  if (pars != 1) return(false);
 		  set_safe_optimize_op(body, OP_TC_WHEN_LA);
 		}
 	      else
@@ -75418,11 +75421,11 @@ static bool check_tc_when(s7_scheme *sc, const s7_pointer name, int32_t vars, s7
 		  {
 		    if (is_null(cdddr(l2a)))
 		      {
-			if (vars != 2) return(false);
+			if (pars != 2) return(false);
 			set_safe_optimize_op(body, OP_TC_WHEN_L2A);
 		      }
 		    else
-		      if ((vars == 3) && (is_fxable(sc, cadddr(l2a))) && (is_null(cddddr(l2a))))
+		      if ((pars == 3) && (is_fxable(sc, cadddr(l2a))) && (is_null(cddddr(l2a))))
 			set_safe_optimize_op(body, OP_TC_WHEN_L3A);
 		      else return(false);
 		  }
@@ -75430,7 +75433,7 @@ static bool check_tc_when(s7_scheme *sc, const s7_pointer name, int32_t vars, s7
 	      for (p = cddr(body); is_pair(cdr(p)); p = cdr(p))
 		fx_annotate_arg(sc, p, args);
 	      fx_annotate_args(sc, cdr(l2a), args);
-	      fx_tree(sc, cdr(body), car(args), (vars > 1) ? cadr(args) : NULL, (vars > 2) ? caddr(args) : NULL, false);
+	      fx_tree(sc, cdr(body), car(args), (pars > 1) ? cadr(args) : NULL, (pars > 2) ? caddr(args) : NULL, false);
 	      return(true);
 	    }}}
   return(false);
@@ -75438,10 +75441,10 @@ static bool check_tc_when(s7_scheme *sc, const s7_pointer name, int32_t vars, s7
 
 static bool check_tc_case(s7_scheme *sc, s7_pointer name, s7_pointer arg_names, s7_pointer body)
 {
-  /* vars == 1|2|3, opt1_any(clause) = key, has_tc(arg) = is tc call, opt2_any(clause) = result: has_tc(la arg) has_fx(val) or ((...)...) */
+  /* pars == 1|2|3, opt1_any(clause) = key, has_tc(arg) = is tc call, opt2_any(clause) = result: has_tc(la arg) has_fx(val) or ((...)...) */
   /*   it might be useful to add int keys and no-else-clause */
   s7_pointer clauses;
-  s7_int len, vars = proper_list_length(arg_names);
+  s7_int len, pars = proper_list_length(arg_names);
   bool got_else = false, results_fxable = true;
   for (clauses = cddr(body), len = 0; is_pair(clauses); clauses = cdr(clauses), len++)
     {
@@ -75472,12 +75475,12 @@ static bool check_tc_case(s7_scheme *sc, s7_pointer name, s7_pointer arg_names, 
 	    }
 	  else
 	    {
-	      s7_int local_vars = proper_list_length(cdar(result));
+	      s7_int local_pars = proper_list_length(cdar(result));
 	      if ((caar(result) == name) &&
-		  (((vars == 1) && (local_vars == 1)) || ((vars == 2) && (local_vars == 2)) || ((vars == 3) && (local_vars == 3))) &&
+		  (((pars == 1) && (local_pars == 1)) || ((pars == 2) && (local_pars == 2)) || ((pars == 3) && (local_pars == 3))) &&
 		  (is_fxable(sc, cadar(result))) &&
-		  ((vars == 1) || (is_fxable(sc, caddar(result)))) &&
-		  ((vars <= 2) || (is_fxable(sc, car(cdddar(result))))))
+		  ((pars == 1) || (is_fxable(sc, caddar(result)))) &&
+		  ((pars <= 2) || (is_fxable(sc, car(cdddar(result))))))
 		{
 		  set_has_tc(car(result));
 		  set_opt2_any(clauses, car(result));
@@ -75496,15 +75499,15 @@ static bool check_tc_case(s7_scheme *sc, s7_pointer name, s7_pointer arg_names, 
 	}}
   if ((!got_else) || (!is_null(clauses)))
     return(false);
-  set_optimize_op(body, (vars == 1) ? OP_TC_CASE_LA : ((vars == 2) ? OP_TC_CASE_L2A : OP_TC_CASE_L3A));
+  set_optimize_op(body, (pars == 1) ? OP_TC_CASE_LA : ((pars == 2) ? OP_TC_CASE_L2A : OP_TC_CASE_L3A));
   set_opt3_arglen(cdr(body), len);
   fx_annotate_arg(sc, cdr(body), arg_names);
-  fx_tree(sc, cdr(body), car(arg_names), (vars == 1) ? NULL : cadr(arg_names), (vars <= 2) ? NULL : caddr(arg_names), false); /* check_tc limits vars to <= 3 */
+  fx_tree(sc, cdr(body), car(arg_names), (pars == 1) ? NULL : cadr(arg_names), (pars <= 2) ? NULL : caddr(arg_names), false); /* check_tc limits pars to <= 3 */
   if (results_fxable) set_optimized(body);
   return(results_fxable);
 }
 
-static bool check_tc_cond_n(s7_scheme *sc, const s7_pointer name, int32_t vars, s7_pointer args, s7_pointer cond_form)
+static bool check_tc_cond_n(s7_scheme *sc, const s7_pointer name, int32_t pars, s7_pointer args, s7_pointer cond_form)
 {
   bool all_fxable = true;
   for (s7_pointer p = cdr(cond_form); is_pair(p); p = cdr(p))
@@ -75528,19 +75531,19 @@ static bool check_tc_cond_n(s7_scheme *sc, const s7_pointer name, int32_t vars, 
 	      for (s7_pointer arg = cdr(result); is_pair(arg); i++, arg = cdr(arg))
 		if (!is_fxable(sc, car(arg)))
 		  return(false);
-	      if (i != vars)
+	      if (i != pars)
 		return(false);
 	    }}
       else return(false);
     }
   set_optimize_op(cond_form, OP_TC_COND_N); /* body=cond_form?? */
-  set_opt3_arglen(cdr(cond_form), vars);  /* same */
+  set_opt3_arglen(cdr(cond_form), pars);  /* same */
   for (s7_pointer p = cdr(cond_form); is_pair(p); p = cdr(p))
     {
       s7_pointer clause = car(p);
       s7_pointer result = cadr(clause);
       fx_annotate_arg(sc, clause, args);
-      if ((is_pair(result)) && (car(result) == name)) /* vars = args checked above */
+      if ((is_pair(result)) && (car(result) == name)) /* pars = args checked above */
 	{
 	  set_has_tc(cdr(clause));
 	  fx_annotate_args(sc, cdr(result), args);
@@ -75549,14 +75552,14 @@ static bool check_tc_cond_n(s7_scheme *sc, const s7_pointer name, int32_t vars, 
 	if (is_fxable(sc, result))
 	  fx_annotate_arg(sc, cdr(clause), args);
 	else all_fxable = false;
-      if (vars > 0)
-	fx_tree(sc, clause, car(args), (vars > 1) ? cadr(args) : NULL, (vars > 2) ? caddr(args) : NULL, vars > 3);
+      if (pars > 0)
+	fx_tree(sc, clause, car(args), (pars > 1) ? cadr(args) : NULL, (pars > 2) ? caddr(args) : NULL, pars > 3);
     }
   if (all_fxable) set_optimized(cond_form);
   return(all_fxable);
 }
 
-static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer args, s7_pointer body)
+static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t pars, s7_pointer args, s7_pointer body)
 {
   s7_pointer p = cdr(body), clause1 = car(p);
   s7_int names = tree_count(sc, name, body, 0);
@@ -75566,7 +75569,7 @@ static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t vars, s7_point
     return(false);
 
   p = cdr(p);
-  if ((vars < 4) && (names == 1) && (body_len == 3))
+  if ((pars < 4) && (names == 1) && (body_len == 3))
     {
       if (((caar(p) == sc->T) || ((caar(p) == sc->else_symbol) && (is_global(sc->else_symbol)))))
 	{ /* body len=3, (cond clause1 else */
@@ -75579,16 +75582,16 @@ static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t vars, s7_point
 	      if ((is_pair(la)) && (car(la) == name) && (is_pair(cdr(la))))
 		{
 		  if ((is_fxable(sc, cadr(la))) &&
-		      (((vars == 1) && (is_null(cddr(la)))) ||
-		       ((vars == 2) && (is_pair(cddr(la))) && (is_null(cdddr(la))) && (is_fxable(sc, caddr(la)))) ||
-		       ((vars == 3) && (is_pair(cddr(la))) && (is_pair(cdddr(la))) && (is_null(cdr(cdddr(la)))) &&
+		      (((pars == 1) && (is_null(cddr(la)))) ||
+		       ((pars == 2) && (is_pair(cddr(la))) && (is_null(cdddr(la))) && (is_fxable(sc, caddr(la)))) ||
+		       ((pars == 3) && (is_pair(cddr(la))) && (is_pair(cdddr(la))) && (is_null(cdr(cdddr(la)))) &&
 			(is_fxable(sc, caddr(la))) && (is_fxable(sc, cadddr(la))))))
 		    {
 		      bool zs_fxable = is_fxable(sc, cadr(clause1));
-		      set_optimize_op(body, (vars == 1) ? OP_TC_COND_A_Z_LA : ((vars == 2) ? OP_TC_COND_A_Z_L2A : OP_TC_COND_A_Z_L3A));
+		      set_optimize_op(body, (pars == 1) ? OP_TC_COND_A_Z_LA : ((pars == 2) ? OP_TC_COND_A_Z_L2A : OP_TC_COND_A_Z_L3A));
 		      if (zs_fxable) fx_annotate_arg(sc, cdr(clause1), args);
 		      fx_annotate_args(sc, cdr(la), args);
-		      fx_tree(sc, cdr(body), car(args), (vars < 2) ? NULL : cadr(args), (vars < 3) ? NULL : caddr(args), false);
+		      fx_tree(sc, cdr(body), car(args), (pars < 2) ? NULL : cadr(args), (pars < 3) ? NULL : caddr(args), false);
 		      if (zs_fxable) set_optimized(body);
 		      set_opt1_pair(cdr(body), cdadr(body));
 		      set_opt3_pair(cdr(body), cdadr(caddr(body)));
@@ -75600,16 +75603,16 @@ static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t vars, s7_point
 		  if ((is_pair(la)) && (car(la) == name) && (is_pair(cdr(la))))
 		    {
 		      if ((is_fxable(sc, cadr(la))) &&
-			  (((vars == 1) && (is_null(cddr(la)))) ||
-			   ((vars == 2) && (is_pair(cddr(la))) && (is_null(cdddr(la))) && (is_fxable(sc, caddr(la)))) ||
-			   ((vars == 3) && (is_pair(cddr(la))) && (is_pair(cdddr(la))) && (is_null(cdr(cdddr(la)))) &&
+			  (((pars == 1) && (is_null(cddr(la)))) ||
+			   ((pars == 2) && (is_pair(cddr(la))) && (is_null(cdddr(la))) && (is_fxable(sc, caddr(la)))) ||
+			   ((pars == 3) && (is_pair(cddr(la))) && (is_pair(cdddr(la))) && (is_null(cdr(cdddr(la)))) &&
 			    (is_fxable(sc, caddr(la))) && (is_fxable(sc, cadddr(la))))))
 			{
 			  bool zs_fxable = is_fxable(sc, car(else_clause));
-			  set_optimize_op(body, (vars == 1) ? OP_TC_COND_A_LA_Z : ((vars == 2) ? OP_TC_COND_A_L2A_Z : OP_TC_COND_A_L3A_Z));
+			  set_optimize_op(body, (pars == 1) ? OP_TC_COND_A_LA_Z : ((pars == 2) ? OP_TC_COND_A_L2A_Z : OP_TC_COND_A_L3A_Z));
 			  if (zs_fxable) fx_annotate_arg(sc, else_clause, args);
 			  fx_annotate_args(sc, cdr(la), args);
-			  fx_tree(sc, cdr(body), car(args), (vars < 2) ? NULL : cadr(args), (vars < 3) ? NULL : caddr(args), false);
+			  fx_tree(sc, cdr(body), car(args), (pars < 2) ? NULL : cadr(args), (pars < 3) ? NULL : caddr(args), false);
 			  if (zs_fxable) set_optimized(body);
 			  set_opt1_pair(cdr(body), cdaddr(body));
 			  set_opt3_pair(cdr(body), cdadr(cadr(body)));
@@ -75618,7 +75621,7 @@ static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t vars, s7_point
 	  return(false);
 	}}  /* end body len=3, (cond clause1 else */
 
-  if ((vars < 4) && (body_len == 4))
+  if ((pars < 4) && (body_len == 4))
     {
       s7_pointer clause2 = car(p);
       if ((is_proper_list_2(sc, clause2)) &&
@@ -75631,7 +75634,7 @@ static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t vars, s7_point
 	      ((car(else_clause) == sc->T) || ((car(else_clause) == sc->else_symbol) && (is_global(sc->else_symbol)))))
 	    {
 	      bool zs_fxable = true;
-	      if ((vars == 2) && /* ...l2a_l2a case */
+	      if ((pars == 2) && /* ...l2a_l2a case */
 		  (is_proper_list_3(sc, cadr(clause2))) && (caadr(clause2) == name) &&
 		  (is_fxable(sc, cadadr(clause2))) && (is_safe_fxable(sc, caddadr(clause2))) &&
 		  (is_proper_list_3(sc, cadr(else_clause))) && (caadr(else_clause) == name) &&
@@ -75658,17 +75661,17 @@ static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t vars, s7_point
 
 		  (((is_pair(cadr(else_clause))) && (caadr(else_clause) == name) &&
 		    (is_pair(cdadr(else_clause))) && (is_fxable(sc, cadadr(else_clause))) &&
-		    (((vars == 1) && (is_null(cddadr(else_clause)))) ||
-		     ((vars == 2) && (is_proper_list_3(sc, cadr(else_clause))) && (is_fxable(sc, caddadr(else_clause)))))) ||
+		    (((pars == 1) && (is_null(cddadr(else_clause)))) ||
+		     ((pars == 2) && (is_proper_list_3(sc, cadr(else_clause))) && (is_fxable(sc, caddadr(else_clause)))))) ||
 
 		   ((is_pair(cadr(clause2))) && (caadr(clause2) == name) &&
 		    (is_pair(cdadr(clause2))) && (is_fxable(sc, cadadr(clause2))) &&
-		    (((vars == 1) && (is_null(cddadr(clause2)))) ||
-		     ((vars == 2) && (is_pair(cddadr(clause2))) && (is_fxable(sc, caddadr(clause2))) && (is_null(cdddr(cadr(clause2)))))))))
+		    (((pars == 1) && (is_null(cddadr(clause2)))) ||
+		     ((pars == 2) && (is_pair(cddadr(clause2))) && (is_fxable(sc, caddadr(clause2))) && (is_null(cdddr(cadr(clause2)))))))))
 		{
 		  s7_pointer test2 = clause2;
 		  s7_pointer la_test = else_clause;
-		  if (vars == 1)
+		  if (pars == 1)
 		    {
 		      if ((is_pair(cadr(else_clause))) && (caadr(else_clause) == name))
 			set_optimize_op(body, OP_TC_COND_A_Z_A_Z_LA);
@@ -75708,18 +75711,18 @@ static bool check_tc_cond(s7_scheme *sc, s7_pointer name, int32_t vars, s7_point
 		      zs_fxable = false;
 		    }
 		  fx_annotate_args(sc, cdadr(la_test), args);
-		  fx_tree(sc, cdr(body), car(args), (vars == 2) ? cadr(args) : NULL, NULL, false);
+		  fx_tree(sc, cdr(body), car(args), (pars == 2) ? cadr(args) : NULL, NULL, false);
 		  if (zs_fxable) set_optimized(body);
 		  return(zs_fxable);
 		}}}}
-  return(check_tc_cond_n(sc, name, vars, args, body));
+  return(check_tc_cond_n(sc, name, pars, args, body));
 }
 
-static bool check_tc_let(s7_scheme *sc, const s7_pointer name, int32_t vars, s7_pointer args, s7_pointer body)
+static bool check_tc_let(s7_scheme *sc, const s7_pointer name, int32_t pars, s7_pointer args, s7_pointer body)
 {
   s7_pointer let_body = caddr(body); /* body: (let ((x (- y 1))) (if (<= x 0) 0 (f1 (- x 1)))) etc */
-  if (((vars == 2) && ((car(let_body) == sc->if_symbol) || (car(let_body) == sc->when_symbol) || (car(let_body) == sc->unless_symbol))) ||
-      ((vars == 1) && (car(let_body) == sc->if_symbol)))
+  if (((pars == 2) && ((car(let_body) == sc->if_symbol) || (car(let_body) == sc->when_symbol) || (car(let_body) == sc->unless_symbol))) ||
+      ((pars == 1) && (car(let_body) == sc->if_symbol)))
     {
       s7_pointer test_expr = cadr(let_body);
       if (is_fxable(sc, test_expr))
@@ -75729,20 +75732,20 @@ static bool check_tc_let(s7_scheme *sc, const s7_pointer name, int32_t vars, s7_
 	      s7_pointer l2a = cadddr(let_body);
 	      if ((is_pair(l2a)) && /* else caddr is l2a and cadddr is z */
 		  (car(l2a) == name) &&
-		  (((vars == 1) && (is_proper_list_2(sc, l2a))) ||
-		   ((vars == 2) && (is_proper_list_3(sc, l2a)) && (is_safe_fxable(sc, caddr(l2a))))) &&
+		  (((pars == 1) && (is_proper_list_2(sc, l2a))) ||
+		   ((pars == 2) && (is_proper_list_3(sc, l2a)) && (is_safe_fxable(sc, caddr(l2a))))) &&
 		  (is_fxable(sc, cadr(l2a))))
 		{
 		  bool z_fxable;
-		  set_optimize_op(body, (vars == 1) ? OP_TC_LET_IF_A_Z_LA : OP_TC_LET_IF_A_Z_L2A);
+		  set_optimize_op(body, (pars == 1) ? OP_TC_LET_IF_A_Z_LA : OP_TC_LET_IF_A_Z_L2A);
 		  fx_annotate_arg(sc, cdaadr(body), args);  /* let var binding, caadr: (x (- y 1)) etc */
-		  fx_tree(sc, cdaadr(body), car(args), (vars == 1) ? NULL : cadr(args), NULL, false); /* these are references to l2a args, applied to the let var binding */
+		  fx_tree(sc, cdaadr(body), car(args), (pars == 1) ? NULL : cadr(args), NULL, false); /* these are references to l2a args, applied to the let var binding */
 		  fx_annotate_arg(sc, cdr(let_body), args); /* test_expr */
 		  fx_annotate_args(sc, cdr(l2a), args);
 		  z_fxable = is_fxable(sc, caddr(let_body));
 		  if (z_fxable) fx_annotate_arg(sc, cddr(let_body), args);
 		  fx_tree(sc, cdr(let_body), car(caadr(body)), NULL, NULL, false);
-		  fx_tree_outer(sc, cdr(let_body), car(args), (vars == 1) ? NULL : cadr(args), NULL, false);
+		  fx_tree_outer(sc, cdr(let_body), car(args), (pars == 1) ? NULL : cadr(args), NULL, false);
 		  if (z_fxable) set_optimized(body);
 		  return(z_fxable);
 		}}
@@ -75773,7 +75776,7 @@ static bool check_tc_let(s7_scheme *sc, const s7_pointer name, int32_t vars, s7_
 		      return(true);
 		    }}}}}
   else
-    if (car(let_body) == sc->cond_symbol) /* vars=#loop pars, args=names thereof (arglist) */
+    if (car(let_body) == sc->cond_symbol) /* pars=#loop pars, args=names thereof (arglist) */
       {
 	s7_pointer var_name;
 	bool all_fxable = true;
@@ -75797,17 +75800,17 @@ static bool check_tc_let(s7_scheme *sc, const s7_pointer name, int32_t vars, s7_
 		    for (s7_pointer arg = cdr(result); is_pair(arg); i++, arg = cdr(arg))
 		      if (!is_fxable(sc, car(arg)))
 			return(false);
-		    if (i != vars)
+		    if (i != pars)
 		      return(false);
 		  }}
 	    else return(false);
 	  }
 	/* cond form looks ok, body here is the let form */
 	set_optimize_op(body, OP_TC_LET_COND);
-	set_opt3_arglen(cdr(body), vars);
+	set_opt3_arglen(cdr(body), pars);
 	fx_annotate_arg(sc, cdaadr(body), args);   /* let var */
-	if (vars > 0)
-	  fx_tree(sc, cdaadr(body), car(args), (vars > 1) ? cadr(args) : NULL, (vars > 2) ? caddr(args) : NULL, vars > 3);
+	if (pars > 0)
+	  fx_tree(sc, cdaadr(body), car(args), (pars > 1) ? cadr(args) : NULL, (pars > 2) ? caddr(args) : NULL, pars > 3);
 	var_name = caaadr(body);
 	for (s7_pointer p = cdr(let_body); is_pair(p); p = cdr(p))
 	  {
@@ -75824,8 +75827,8 @@ static bool check_tc_let(s7_scheme *sc, const s7_pointer name, int32_t vars, s7_
 		fx_annotate_arg(sc, cdr(clause), args);
 	      else all_fxable = false;
 	    fx_tree(sc, clause, var_name, NULL, NULL, false); /* just 1 let var */
-	    if (vars > 0)
-	      fx_tree_outer(sc, clause, car(args), (vars > 1) ? cadr(args) : NULL, (vars > 2) ? caddr(args) : NULL, vars > 3);
+	    if (pars > 0)
+	      fx_tree_outer(sc, clause, car(args), (pars > 1) ? cadr(args) : NULL, (pars > 2) ? caddr(args) : NULL, pars > 3);
 	  }
 	if (all_fxable) set_optimized(body);
 	return(all_fxable);
@@ -75833,13 +75836,13 @@ static bool check_tc_let(s7_scheme *sc, const s7_pointer name, int32_t vars, s7_
   return(false);
 }
 
-/* tc lets can be let* or let+vars that don't refer to previous names, and there are more cond/if choices */
+/* tc lets can be let* or let+pars that don't refer to previous names, and there are more cond/if choices */
 
-static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer args, s7_pointer body)
+static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t pars, s7_pointer args, s7_pointer body)
 {
   if (!is_pair(body)) return(false);
 
-  if (((vars == 1) || (vars == 2) || (vars == 3)) &&
+  if (((pars == 1) || (pars == 2) || (pars == 3)) &&
       ((car(body) == sc->and_symbol) || (car(body) == sc->or_symbol)) &&
       (is_pair(cdr(body))) &&
       (is_fxable(sc, cadr(body))) &&
@@ -75852,24 +75855,24 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 	{
 	  s7_int len = proper_list_length(orx);
 	  if ((len == 3) ||
-	      ((vars == 1) && (len == 4) && (tree_count(sc, name, orx, 0) == 1) && (is_fxable(sc, caddr(orx))))) /* the ...or|and_a_a_la case below? */
+	      ((pars == 1) && (len == 4) && (tree_count(sc, name, orx, 0) == 1) && (is_fxable(sc, caddr(orx))))) /* the ...or|and_a_a_la case below? */
 	    {
 	      s7_pointer tc = (len == 3) ? caddr(orx) : cadddr(orx);
 	      if ((is_pair(tc)) &&
 		  (car(tc) == name) &&
 		  (is_pair(cdr(tc))) &&
 		  (is_fxable(sc, cadr(tc))) &&
-		  (((vars == 1) && (is_null(cddr(tc)))) ||
-		   ((vars == 2) && (is_pair(cddr(tc))) && (is_null(cdddr(tc))) && (is_safe_fxable(sc, caddr(tc)))) ||
-		   ((vars == 3) && (is_pair(cddr(tc))) && (is_pair(cdddr(tc))) && (is_null(cddddr(tc))) &&
+		  (((pars == 1) && (is_null(cddr(tc)))) ||
+		   ((pars == 2) && (is_pair(cddr(tc))) && (is_null(cdddr(tc))) && (is_safe_fxable(sc, caddr(tc)))) ||
+		   ((pars == 3) && (is_pair(cddr(tc))) && (is_pair(cdddr(tc))) && (is_null(cddddr(tc))) &&
 		    (is_safe_fxable(sc, caddr(tc))) && (is_safe_fxable(sc, cadddr(tc))))))
 		{
-		  if (vars == 1)
+		  if (pars == 1)
 		    set_safe_optimize_op(body, (car(body) == sc->and_symbol) ?
 					 ((len == 3) ? OP_TC_AND_A_OR_A_LA : OP_TC_AND_A_OR_A_A_LA) :
 					 ((len == 3) ? OP_TC_OR_A_AND_A_LA : OP_TC_OR_A_AND_A_A_LA));
 		  else
-		    if (vars == 2)
+		    if (pars == 2)
 		      set_safe_optimize_op(body, (car(body) == sc->and_symbol) ? OP_TC_AND_A_OR_A_L2A : OP_TC_OR_A_AND_A_L2A);
 		    else set_safe_optimize_op(body, (car(body) == sc->and_symbol) ? OP_TC_AND_A_OR_A_L3A : OP_TC_OR_A_AND_A_L3A);
 		  fx_annotate_arg(sc, cdr(body), args);
@@ -75878,12 +75881,12 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 		  fx_annotate_args(sc, cdr(tc), args);
 		  /* if ((fx_proc(cdr(tc)) == fx_c_sca) && (fn_proc(cadr(tc)) == g_substring)) -> g_substring_uncopied); */
 		  /*   for that to be safe we need to be sure nothing in the body looks for null-termination (e.g.. string->number) */
-		  fx_tree(sc, cdr(body), car(args), (vars == 1) ? NULL : cadr(args), (vars == 3) ? caddr(args) : NULL, false);
+		  fx_tree(sc, cdr(body), car(args), (pars == 1) ? NULL : cadr(args), (pars == 3) ? caddr(args) : NULL, false);
 		  return(true);
 		}}}
       else
 	{
-	  if ((vars == 1) &&
+	  if ((pars == 1) &&
 	      (car(body) == sc->or_symbol) &&
 	      (is_fxable(sc, orx)) &&
 	      (is_pair(cdddr(body))) &&
@@ -75911,7 +75914,7 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 		    }}}
 	  else
  	    {
- 	      if ((vars == 1) && (car(body) == sc->and_symbol) && (car(orx) == sc->if_symbol) &&
+ 	      if ((pars == 1) && (car(body) == sc->and_symbol) && (car(orx) == sc->if_symbol) &&
  		  (is_proper_list_4(sc, orx)) && (is_fxable(sc, cadr(orx))) && (tree_count(sc, name, orx, 0) == 1))
  		{
 		  bool z_first = ((is_pair(cadddr(orx))) && (car(cadddr(orx)) == name));
@@ -75930,7 +75933,7 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
  		      return(z_fxable);
 		    }}}}}
 
-  if ((vars == 3) &&
+  if ((pars == 3) &&
       (((car(body) == sc->or_symbol) && (is_proper_list_2(sc, cdr(body)))) ||
        ((car(body) == sc->if_symbol) && (is_proper_list_3(sc, cdr(body))) && (caddr(body) == sc->T))) &&
       (is_fxable(sc, cadr(body))))
@@ -75958,7 +75961,7 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 	      return(true);
 	    }}}
 
-  if (((vars >= 1) && (vars <= 3)) &&
+  if (((pars >= 1) && (pars <= 3)) &&
       (car(body) == sc->if_symbol) &&
       (proper_list_length(body) == 4))
     {
@@ -75972,7 +75975,7 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 
 	  fx_annotate_arg(sc, cdr(body), args);
 
-	  if (vars == 1)
+	  if (pars == 1)
 	    {
 	      if ((false_len == 2) &&
 		  (car(false_p) == name) &&
@@ -76003,7 +76006,7 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 		  return(true);
 		}}
 
-	  if (vars == 2)
+	  if (pars == 2)
 	    {
 	      if ((false_len == 3) &&
 		  (car(false_p) == name) &&
@@ -76036,7 +76039,7 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 		  return(true);
 		}}
 
-	  if (vars == 3)
+	  if (pars == 3)
 	    {
 	      if ((false_len == 4) &&
 		  (car(false_p) == name) &&
@@ -76093,11 +76096,11 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 			la = in_true;
 			z = cdddr(false_p);
 		      }
-		  if ((la) && ((vars == 3) || (!s7_tree_memq(sc, name, car(z)))))
+		  if ((la) && ((pars == 3) || (!s7_tree_memq(sc, name, car(z)))))
 		    {
-		      if (((vars == 1) && (is_null(cddr(la)))) ||
-			  ((vars == 2) && (is_pair(cddr(la))) && (is_null(cdddr(la))) && (is_safe_fxable(sc, caddr(la)))) ||
-			  ((vars == 3) &&
+		      if (((pars == 1) && (is_null(cddr(la)))) ||
+			  ((pars == 2) && (is_pair(cddr(la))) && (is_null(cdddr(la))) && (is_safe_fxable(sc, caddr(la)))) ||
+			  ((pars == 3) &&
 			   ((is_proper_list_4(sc, in_false)) || (is_proper_list_4(sc, in_true))) &&
 			   (is_safe_fxable(sc, caddr(la))) && (is_safe_fxable(sc, cadddr(la))) &&
 			   (((is_proper_list_4(sc, in_true)) && (car(in_true) == name) &&
@@ -76105,10 +76108,10 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 			    (!s7_tree_memq(sc, name, in_true)))))
 			{
 			  bool zs_fxable = true;
-			  if (vars == 1)
+			  if (pars == 1)
 			    set_optimize_op(body, (la == in_false) ? OP_TC_IF_A_Z_IF_A_Z_LA : OP_TC_IF_A_Z_IF_A_LA_Z);
 			  else
-			    if (vars == 2)
+			    if (pars == 2)
 			      set_optimize_op(body, (la == in_false) ? OP_TC_IF_A_Z_IF_A_Z_L2A : OP_TC_IF_A_Z_IF_A_L2A_Z);
 			    else
 			      if (la == in_false)
@@ -76120,7 +76123,7 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 			  else zs_fxable = false;
 			  fx_annotate_arg(sc, cdr(false_p), args);  /* inner test */
 			  fx_annotate_args(sc, cdr(la), args);      /* la arg(s) */
-			  if (vars == 3)
+			  if (pars == 3)
 			    {
 			      if (optimize_op(body) != OP_TC_IF_A_Z_IF_A_L3A_Z)
 				fx_annotate_args(sc, cdr(in_false), args);
@@ -76134,12 +76137,12 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
 			      else zs_fxable = false;
 			    }
 			  if ((has_fx(cddr(body))) && (has_fx(z)))
-			    fx_tree(sc, cdr(body), car(args), (vars > 1) ? cadr(args) : NULL, (vars > 2) ? caddr(args) : NULL, false);
+			    fx_tree(sc, cdr(body), car(args), (pars > 1) ? cadr(args) : NULL, (pars > 2) ? caddr(args) : NULL, false);
 			  if (zs_fxable) set_optimized(body);
 			  return(zs_fxable);
 			}}}}
 
-	  if ((vars == 2) &&
+	  if ((pars == 2) &&
 	      (false_len == 3) &&
 	      (car(false_p) == sc->let_star_symbol))
 	    {
@@ -76184,24 +76187,24 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t vars, s7_pointer ar
       (is_proper_list_1(sc, cadr(body))) &&
       (is_fxable(sc, cadr(caadr(body)))) && /* let one var is fxable */
       (is_pair(caddr(body))))
-    return(check_tc_let(sc, name, vars, args, body));
+    return(check_tc_let(sc, name, pars, args, body));
 
   /* cond */
   if (car(body) == sc->cond_symbol)
-    return(check_tc_cond(sc, name, vars, args, body));
+    return(check_tc_cond(sc, name, pars, args, body));
 
   /* case */
-  if (((vars >= 1) && (vars <= 3)) &&
+  if (((pars >= 1) && (pars <= 3)) &&
       (car(body) == sc->case_symbol) &&
       (is_pair(cdr(body))) &&
       (is_fxable(sc, cadr(body))))
     return(check_tc_case(sc, name, args, body));
 
   /* when */
-  if ((vars >= 1) && (vars <= 3) &&
+  if ((pars >= 1) && (pars <= 3) &&
       ((car(body) == sc->when_symbol) || (car(body) == sc->unless_symbol)) &&
       (is_fxable(sc, cadr(body))))
-    return(check_tc_when(sc, name, vars, args, body));
+    return(check_tc_when(sc, name, pars, args, body));
   return(false);
 }
 
@@ -88542,12 +88545,367 @@ static void rec_set_f6(s7_scheme *sc, s7_pointer p)
   sc->rec_f6p = car(sc->rec_f6p);
 }
 
-/* -------- if_a_a_opa_laq and if_a_opa_laq_a -------- */
 typedef enum {OPT_PTR, OPT_INT, OPT_DBL, OPT_INT_0} opt_pid_t;
 
+
+/* -------- if_a_a_opla_laq and if_a_opla_laq_a -------- */
+
+static opt_pid_t opinit_if_a_a_opla_laq(s7_scheme *sc, s7_pointer code)
+{
+  s7_pointer caller = car(rec_call_clause(code));
+  s7_pointer call1 = cadr(caller);
+  s7_pointer call2 = caddr(caller);
+
+#if (!WITH_GMP)
+  s7_pointer c_op = car(caller);
+  if ((is_symbol(c_op)) &&
+      ((is_slot(global_slot(c_op))) &&
+       ((is_global(c_op)) ||
+	(s7_slot(sc, c_op) == global_slot(c_op)))))
+    {
+      s7_pointer s_func = global_value(c_op);
+      s7_pointer slot = let_slots(sc->curlet);
+      if (is_c_function(s_func))
+	{
+	  sc->pc = 0;
+	  sc->rec_test_o = sc->opts[0];
+	  if (bool_optimize(sc, rec_test_clause(code)))
+	    {
+	      int32_t start_pc = sc->pc;
+	      sc->rec_result_o = sc->opts[start_pc];
+	      if (is_t_integer(slot_value(slot)))
+		{
+		  sc->rec_i_ii_f = s7_i_ii_function(s_func);
+		  if ((sc->rec_i_ii_f) &&
+		      (int_optimize(sc, rec_done_clause(code))))
+		    {
+		      sc->rec_a1_o = sc->opts[sc->pc];
+		      if (int_optimize(sc, cdr(call1)))
+			{
+			  sc->rec_a2_o = sc->opts[sc->pc];
+			  if (int_optimize(sc, cdr(call2)))
+			    {
+			      sc->rec_val1 = make_mutable_integer(sc, integer(slot_value(slot)));
+			      slot_set_value(slot, sc->rec_val1);
+			      if (sc->pc != 4) return(OPT_INT); /* call1/call2 above are more complicated than (- n 1) or the like */
+			      sc->rec_fb1 = sc->rec_test_o->v[0].fb;
+			      sc->rec_fi1 = sc->rec_result_o->v[0].fi;
+			      sc->rec_fi2 = sc->rec_a1_o->v[0].fi;
+			      sc->rec_fi3 = sc->rec_a2_o->v[0].fi;
+			      return(OPT_INT_0);
+			    }}}}
+	      if (is_t_real(slot_value(slot)))
+		{
+		  sc->rec_d_dd_f = s7_d_dd_function(s_func);
+		  if (sc->rec_d_dd_f)
+		    {
+		      sc->pc = start_pc;
+		      sc->rec_result_o = sc->opts[start_pc];
+		      if (float_optimize(sc, rec_done_clause(code)))
+			{
+			  sc->rec_a1_o = sc->opts[sc->pc];
+			  if (float_optimize(sc, cdr(call1)))
+			    {
+			      sc->rec_a2_o = sc->opts[sc->pc];
+			      if (float_optimize(sc, cdr(call2)))
+				{
+				  sc->rec_val1 = make_mutable_real(sc, real(slot_value(slot)));
+				  slot_set_value(slot, sc->rec_val1);
+				  return(OPT_DBL);
+				}}}}}}}}
+#endif
+  sc->rec_fn = fn_proc(caller);
+  rec_set_test(sc, rec_test_clause(code));
+  rec_set_res(sc, rec_done_clause(code));
+  rec_set_f1(sc, cdr(call1));
+  rec_set_f2(sc, cdr(call2));
+  sc->rec_slot1 = let_slots(sc->curlet);
+  return(OPT_PTR);
+}
+
+static s7_int oprec_i_if_a_a_opla_laq(s7_scheme *sc)
+{
+  s7_int i1, i2;
+  if (sc->rec_test_o->v[0].fb(sc->rec_test_o))                   /* if_(A) */
+    return(sc->rec_result_o->v[0].fi(sc->rec_result_o));         /* if_a_(A) */
+  i1 = sc->rec_a1_o->v[0].fi(sc->rec_a1_o);                      /* save a1 */
+  set_integer(sc->rec_val1, sc->rec_a2_o->v[0].fi(sc->rec_a2_o));/* slot1 = a2 */
+  i2 = oprec_i_if_a_a_opla_laq(sc);                              /* save la2 */
+  set_integer(sc->rec_val1, i1);                                 /* slot1 = a1 */
+  return(sc->rec_i_ii_f(oprec_i_if_a_a_opla_laq(sc), i2));       /* call op(la1, la2) */
+}
+
+static s7_int oprec_i_if_a_a_opla_laq_0(s7_scheme *sc)
+{
+  s7_int i1, i2;
+  if (sc->rec_fb1(sc->rec_test_o)) return(sc->rec_fi1(sc->rec_result_o));
+  i1 = sc->rec_fi2(sc->rec_a1_o);
+  set_integer(sc->rec_val1, sc->rec_fi3(sc->rec_a2_o));
+  if (sc->rec_fb1(sc->rec_test_o))
+    i2 = sc->rec_fi1(sc->rec_result_o);
+  else
+    {
+      s7_int i3;
+      i2 = sc->rec_fi2(sc->rec_a1_o);
+      set_integer(sc->rec_val1, sc->rec_fi3(sc->rec_a2_o));
+      i3 = oprec_i_if_a_a_opla_laq_0(sc);
+      set_integer(sc->rec_val1, i2);
+      i2 = sc->rec_i_ii_f(oprec_i_if_a_a_opla_laq_0(sc), i3);
+    }
+  set_integer(sc->rec_val1, i1);
+  return(sc->rec_i_ii_f(oprec_i_if_a_a_opla_laq_0(sc), i2));
+}
+
+static s7_double oprec_d_if_a_a_opla_laq(s7_scheme *sc)
+{
+  s7_double x1, x2;
+  if (sc->rec_test_o->v[0].fb(sc->rec_test_o)) return(sc->rec_result_o->v[0].fd(sc->rec_result_o));
+  x1 = sc->rec_a1_o->v[0].fd(sc->rec_a1_o);
+  set_real(sc->rec_val1, sc->rec_a2_o->v[0].fd(sc->rec_a2_o));
+  if (sc->rec_test_o->v[0].fb(sc->rec_test_o))
+    x2 = sc->rec_result_o->v[0].fd(sc->rec_result_o);
+  else
+    {
+      s7_double x3;
+      x2 = sc->rec_a1_o->v[0].fd(sc->rec_a1_o);
+      set_real(sc->rec_val1, sc->rec_a2_o->v[0].fd(sc->rec_a2_o));
+      x3 = oprec_d_if_a_a_opla_laq(sc);
+      set_real(sc->rec_val1, x2);
+      x2 = sc->rec_d_dd_f(oprec_d_if_a_a_opla_laq(sc), x3);
+    }
+  set_real(sc->rec_val1, x1);
+  return(sc->rec_d_dd_f(oprec_d_if_a_a_opla_laq(sc), x2));
+}
+
+static s7_pointer oprec_if_a_a_opla_laq(s7_scheme *sc)
+{
+  if (sc->rec_testf(sc, sc->rec_testp) != sc->F) return(sc->rec_resf(sc, sc->rec_resp));
+  recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
+  slot_set_value(sc->rec_slot1, sc->rec_f2f(sc, sc->rec_f2p));
+  slot_set_value(sc->rec_slot1, recur_swap(sc, oprec_if_a_a_opla_laq(sc)));
+  set_car(sc->t2_1, oprec_if_a_a_opla_laq(sc));
+  set_car(sc->t2_2, recur_pop(sc));
+  return(sc->rec_fn(sc, sc->t2_1));
+}
+
+static s7_int oprec_i_if_a_opla_laq_a(s7_scheme *sc)
+{
+  s7_int i1, i2;
+  if (!(sc->rec_test_o->v[0].fb(sc->rec_test_o))) return(sc->rec_result_o->v[0].fi(sc->rec_result_o));
+  i1 = sc->rec_a1_o->v[0].fi(sc->rec_a1_o);
+  set_integer(sc->rec_val1, sc->rec_a2_o->v[0].fi(sc->rec_a2_o));
+  i2 = oprec_i_if_a_opla_laq_a(sc);
+  set_integer(sc->rec_val1, i1);
+  return(sc->rec_i_ii_f(oprec_i_if_a_opla_laq_a(sc), i2));
+}
+
+static s7_int oprec_i_if_a_opla_laq_a_0(s7_scheme *sc)
+{
+  s7_int i1, i2;
+  if (!sc->rec_fb1(sc->rec_test_o)) return(sc->rec_fi1(sc->rec_result_o));
+  i1 = sc->rec_fi2(sc->rec_a1_o);
+  set_integer(sc->rec_val1, sc->rec_fi3(sc->rec_a2_o));
+  if (!sc->rec_fb1(sc->rec_test_o))
+    i2 = sc->rec_fi1(sc->rec_result_o);
+  else
+    {
+      s7_int i3;
+      i2 = sc->rec_fi2(sc->rec_a1_o);
+      set_integer(sc->rec_val1, sc->rec_fi3(sc->rec_a2_o));
+      i3 = oprec_i_if_a_opla_laq_a_0(sc);
+      set_integer(sc->rec_val1, i2);
+      i2 = sc->rec_i_ii_f(oprec_i_if_a_opla_laq_a_0(sc), i3);
+    }
+  set_integer(sc->rec_val1, i1);
+  return(sc->rec_i_ii_f(oprec_i_if_a_opla_laq_a_0(sc), i2));
+}
+
+static s7_double oprec_d_if_a_opla_laq_a(s7_scheme *sc)
+{
+  s7_double x1, x2;
+  if (!(sc->rec_test_o->v[0].fb(sc->rec_test_o))) return(sc->rec_result_o->v[0].fd(sc->rec_result_o));
+  x1 = sc->rec_a1_o->v[0].fd(sc->rec_a1_o);
+  set_real(sc->rec_val1, sc->rec_a2_o->v[0].fd(sc->rec_a2_o));
+  x2 = oprec_d_if_a_opla_laq_a(sc);
+  set_real(sc->rec_val1, x1);
+  return(sc->rec_d_dd_f(oprec_d_if_a_opla_laq_a(sc), x2));
+}
+
+static s7_pointer oprec_if_a_opla_laq_a(s7_scheme *sc)
+{
+  if (sc->rec_testf(sc, sc->rec_testp) == sc->F) return(sc->rec_resf(sc, sc->rec_resp));
+  recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
+  slot_set_value(sc->rec_slot1, sc->rec_f2f(sc, sc->rec_f2p));
+  slot_set_value(sc->rec_slot1, recur_swap(sc, oprec_if_a_opla_laq_a(sc)));
+  set_car(sc->t2_1, oprec_if_a_opla_laq_a(sc));
+  set_car(sc->t2_2, recur_pop(sc));
+  return(sc->rec_fn(sc, sc->t2_1));
+}
+
+static void wrap_recur_if_a_a_opla_laq(s7_scheme *sc)
+{
+  opt_pid_t choice = opinit_if_a_a_opla_laq(sc, sc->code);
+  bool a_op = true_is_done(sc->code);
+  tick_tc(sc, sc->cur_op);
+  if ((choice == OPT_INT) || (choice == OPT_INT_0))
+    {
+      if (choice == OPT_INT_0)
+	sc->value = make_integer(sc, (a_op) ? oprec_i_if_a_a_opla_laq_0(sc) : oprec_i_if_a_opla_laq_a_0(sc));
+      else sc->value = make_integer(sc, (a_op) ? oprec_i_if_a_a_opla_laq(sc) : oprec_i_if_a_opla_laq_a(sc));
+    }
+  else
+    if (choice == OPT_PTR)
+      {
+	sc->rec_stack = recur_make_stack(sc);
+	sc->value = (a_op) ? oprec_if_a_a_opla_laq(sc) : oprec_if_a_opla_laq_a(sc);
+	sc->rec_loc = 0;
+      }
+    else sc->value = make_real(sc, (a_op) ? oprec_d_if_a_a_opla_laq(sc) : oprec_d_if_a_opla_laq_a(sc));
+}
+
+static s7_pointer fx_recur_if_a_a_opla_laq(s7_scheme *sc, s7_pointer arg)
+{
+  opt_pid_t choice = opinit_if_a_a_opla_laq(sc, arg);
+  bool a_op = true_is_done(arg);
+  tick_tc(sc, OP_RECUR_IF_A_A_opLA_LAq);
+  if ((choice == OPT_INT) || (choice == OPT_INT_0))
+    {
+      if (choice == OPT_INT_0)
+	return(make_integer(sc, (a_op) ? oprec_i_if_a_a_opla_laq_0(sc) : oprec_i_if_a_opla_laq_a_0(sc)));
+      return(make_integer(sc, (a_op) ? oprec_i_if_a_a_opla_laq(sc) : oprec_i_if_a_opla_laq_a(sc)));
+    }
+  else
+    if (choice == OPT_PTR)
+      {
+	sc->rec_stack = recur_make_stack(sc);
+	return((a_op) ? oprec_if_a_a_opla_laq(sc) : oprec_if_a_opla_laq_a(sc));
+	sc->rec_loc = 0;
+      }
+    else return(make_real(sc, (a_op) ? oprec_d_if_a_a_opla_laq(sc) : oprec_d_if_a_opla_laq_a(sc)));
+}
+
+
+/* -------- if_a_a_opl2a_l2aq -------- */
+
+static void opinit_if_a_a_opl2a_l2aq(s7_scheme *sc, s7_pointer code)
+{
+  s7_pointer caller = car(rec_call_clause(code)); /* cdddr(sc->code) */
+  s7_pointer call1 = cadr(caller);
+  s7_pointer call2 = caddr(caller);
+  sc->rec_fn = fn_proc(caller);
+  rec_set_test(sc, rec_test_clause(code));  /* cdr(sc->code) */
+  rec_set_res(sc, rec_done_clause(code));   /* cddr(sc->code) or cdddr(sc->code) */
+  sc->rec_bool = true_is_done(code);
+  rec_set_f1(sc, cdr(call1));
+  rec_set_f2(sc, cddr(call1));
+  rec_set_f3(sc, cdr(call2));
+  rec_set_f4(sc, cddr(call2));
+  sc->rec_slot1 = let_slots(sc->curlet);
+  sc->rec_slot2 = next_slot(sc->rec_slot1);
+}
+
+static s7_pointer oprec_if_a_a_opl2a_l2aq(s7_scheme *sc)
+{
+  if ((sc->rec_testf(sc, sc->rec_testp) != sc->F) == sc->rec_bool) return(sc->rec_resf(sc, sc->rec_resp));
+  recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
+  recur_push(sc, sc->rec_f2f(sc, sc->rec_f2p));
+  recur_push(sc, sc->rec_f3f(sc, sc->rec_f3p));
+  slot_set_value(sc->rec_slot2, sc->rec_f4f(sc, sc->rec_f4p));
+  slot_set_value(sc->rec_slot1, recur_pop(sc));
+  sc->value = oprec_if_a_a_opl2a_l2aq(sc);
+  slot_set_value(sc->rec_slot2, recur_pop(sc));
+  slot_set_value(sc->rec_slot1, recur_pop(sc));
+  recur_push_unchecked(sc, sc->value);
+  set_car(sc->t2_1, oprec_if_a_a_opl2a_l2aq(sc));
+  set_car(sc->t2_2, recur_pop(sc));
+  return(sc->rec_fn(sc, sc->t2_1));
+}
+
+static s7_pointer op_recur_if_a_a_opl2a_l2aq(s7_scheme *sc)
+{
+  opinit_if_a_a_opl2a_l2aq(sc, sc->code);
+  return(oprec_if_a_a_opl2a_l2aq(sc));
+}
+
+static s7_pointer fx_recur_if_a_a_opl2a_l2aq(s7_scheme *sc, s7_pointer arg)
+{
+  tick_tc(sc, OP_RECUR_IF_A_A_opL2A_L2Aq);
+  sc->rec_stack = recur_make_stack(sc);
+  opinit_if_a_a_opl2a_l2aq(sc, arg);
+  sc->value = oprec_if_a_a_opl2a_l2aq(sc);
+  sc->rec_loc = 0;
+  return(sc->value);
+}
+
+
+/* -------- if_a_a_opl3a_l3aq -------- */
+
+static void opinit_if_a_a_opl3a_l3aq(s7_scheme *sc, s7_pointer code)
+{
+  s7_pointer caller = car(rec_call_clause(code)); /* rec call */
+  s7_pointer call1 = cadr(caller);
+  s7_pointer call2 = caddr(caller);
+  sc->rec_fn = fn_proc(caller);
+  rec_set_test(sc, rec_test_clause(code));  /* cdr(sc->code) */
+  rec_set_res(sc, rec_done_clause(code));   /* cddr(sc->code) or cdddr(sc->code) */
+  sc->rec_bool = true_is_done(code);
+  rec_set_f1(sc, cdr(call1));
+  rec_set_f2(sc, cddr(call1));
+  rec_set_f3(sc, cdddr(call1));
+  rec_set_f4(sc, cdr(call2));
+  rec_set_f5(sc, cddr(call2));
+  rec_set_f6(sc, cdddr(call2));
+  sc->rec_slot1 = let_slots(sc->curlet);
+  sc->rec_slot2 = next_slot(sc->rec_slot1);
+  sc->rec_slot3 = next_slot(sc->rec_slot2);
+}
+
+static s7_pointer oprec_if_a_a_opl3a_l3aq(s7_scheme *sc)
+{
+  if ((sc->rec_testf(sc, sc->rec_testp) != sc->F) == sc->rec_bool) return(sc->rec_resf(sc, sc->rec_resp));
+  recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
+  recur_push(sc, sc->rec_f2f(sc, sc->rec_f2p));
+  recur_push(sc, sc->rec_f3f(sc, sc->rec_f3p));
+  recur_push(sc, sc->rec_f4f(sc, sc->rec_f4p));
+  recur_push(sc, sc->rec_f5f(sc, sc->rec_f5p));
+  slot_set_value(sc->rec_slot3, sc->rec_f6f(sc, sc->rec_f6p));
+  slot_set_value(sc->rec_slot2, recur_pop(sc));
+  slot_set_value(sc->rec_slot1, recur_pop(sc));
+  sc->value = oprec_if_a_a_opl3a_l3aq(sc);
+  slot_set_value(sc->rec_slot3, recur_pop(sc));
+  slot_set_value(sc->rec_slot2, recur_pop(sc));
+  slot_set_value(sc->rec_slot1, recur_pop(sc));
+  recur_push_unchecked(sc, sc->value);
+  set_car(sc->t2_1, oprec_if_a_a_opl3a_l3aq(sc));
+  set_car(sc->t2_2, recur_pop(sc));
+  return(sc->rec_fn(sc, sc->t2_1));
+}
+
+static s7_pointer op_recur_if_a_a_opl3a_l3aq(s7_scheme *sc)
+{
+  opinit_if_a_a_opl3a_l3aq(sc, sc->code);
+  return(oprec_if_a_a_opl3a_l3aq(sc));
+}
+
+static s7_pointer fx_recur_if_a_a_opl3a_l3aq(s7_scheme *sc, s7_pointer arg)
+{
+  tick_tc(sc, OP_RECUR_IF_A_A_opL3A_L3Aq);
+  sc->rec_stack = recur_make_stack(sc);
+  opinit_if_a_a_opl3a_l3aq(sc, arg);
+  sc->value = oprec_if_a_a_opl3a_l3aq(sc);
+  sc->rec_loc = 0;
+  return(sc->value);
+}
+
+
+/* -------- if_a_a_opa_laq and if_a_opa_laq_a -------- */
 static opt_pid_t opinit_if_a_a_opa_laq(s7_scheme *sc, bool a_op, bool la_op, s7_pointer code)
 {
   s7_pointer caller = opt3_pair(code); /* false_p in check_recur */
+#if 0
+  fprintf(stderr, "%s %d %d\n", display(code), a_op, la_op);   /* (if (zero? x) x (+ x (_?_5 (- x 1)))) 1 1 */
+  fprintf(stderr, "caller: %s\n", display(caller));            /* (+ x (_?_5 (- x 1))) */
+#endif
 #if (!WITH_GMP)
   s7_pointer c_op = car(caller);
   if ((is_symbol(c_op)) &&
@@ -88560,7 +88918,8 @@ static opt_pid_t opinit_if_a_a_opa_laq(s7_scheme *sc, bool a_op, bool la_op, s7_
 	{
 	  sc->pc = 0;
 	  sc->rec_test_o = sc->opts[0];
-	  if (bool_optimize(sc, cdr(code)))
+	  /* fprintf(stderr, "%d: cdr(code): %s\n", __LINE__, display(cdr(code))); */ /* cdr(code): ((zero? x) x (+ x (_?_5 (- x 1)))) */
+	  if (bool_optimize(sc, cdr(code))) /* (zero? x) */
 	    {
 	      int32_t start_pc = sc->pc;
 	      sc->rec_result_o = sc->opts[start_pc];
@@ -88568,23 +88927,40 @@ static opt_pid_t opinit_if_a_a_opa_laq(s7_scheme *sc, bool a_op, bool la_op, s7_
 		{
 		  sc->rec_i_ii_f = s7_i_ii_function(s_func);
 		  if ((sc->rec_i_ii_f) &&
-		      (int_optimize(sc, (a_op) ? cddr(code) : cdddr(code))))
+		      (int_optimize(sc, (a_op) ? cddr(code) : cdddr(code)))) /* x as return */
 		    {
+		      /* fprintf(stderr, "%d: a_op code: %s\n", __LINE__, display((a_op) ? cddr(code) : cdddr(code))); *//* a_op code: (x (+ x (_?_5 (- x 1)))) */
 		      sc->rec_a1_o = sc->opts[sc->pc];
-		      if (int_optimize(sc, (la_op) ? cdr(caller) : cddr(caller))) /* cdadr? */
+		      if (int_optimize(sc, (la_op) ? cdr(caller) : cddr(caller))) /* x in (+ x ...) */
 			{
+			  /* fprintf(stderr, "%d: la_op code: %s\n", __LINE__, display((la_op) ? cdr(caller) : cddr(caller))); */ /* la_op code: (x (_?_5 (- x 1))) */
 			  sc->rec_a2_o = sc->opts[sc->pc];
-			  if (int_optimize(sc, cdr(opt3_pair(caller))))
+			  if (int_optimize(sc, cdr(opt3_pair(caller)))) /* arg of recur call: (- x 1) */
 			    {
+			      /* fprintf(stderr, "%d: opt3 code: %s\n", __LINE__, display(cdr(opt3_pair(caller)))); */ /* opt3 code: ((- x 1)) */
 			      sc->rec_val1 = make_mutable_integer(sc, integer(slot_value(slot)));
 			      slot_set_value(slot, sc->rec_val1);
 			      return(OPT_INT);
 			    }}}}}}}
 #endif
+#if 0
+  fprintf(stderr, "not int: a_op: %s, la_op: %s, opt3: %s\n", 
+	  display((a_op) ?  cddr(code) : cdddr(code)), display((la_op) ? cdr(caller) : cddr(caller)), display(cdr(opt3_pair(caller))));
+#endif
+  /* not int: a_op: (lis (cons (car lis) (copy-list-1 (cdr lis)))), 
+   *         la_op: ((car lis) (copy-list-1 (cdr lis))), 
+   *         opt3: ((cdr lis))
+   * (if (not (pair? lis)) lis (cons (car lis) (copy-list (cdr lis))))
+   *
+   * not int: a_op: (1 (lcm n (flcm (- n 1)))), 
+   *         la_op: (n (flcm (- n 1))), 
+   *         opt3: ((- n 1))
+   * (if (<= n 1) 1 (lcm n (flcm (- n 1)))) 1 1
+   */
   rec_set_test(sc, cdr(code));
-  rec_set_res(sc, (a_op) ?  cddr(code) : cdddr(code));
-  rec_set_f1(sc, (la_op) ? cdr(caller) : cddr(caller));
-  rec_set_f2(sc, cdr(opt3_pair(caller)));
+  rec_set_res(sc, (a_op) ?  cddr(code) : cdddr(code));   /* done */
+  rec_set_f1(sc, (la_op) ? cdr(caller) : cddr(caller));  /* a arg */
+  rec_set_f2(sc, cdr(opt3_pair(caller)));                /* la arg */
   sc->rec_slot1 = let_slots(sc->curlet);
   sc->rec_fn = fn_proc(caller);
   return(OPT_PTR);
@@ -88847,313 +89223,6 @@ static s7_pointer op_recur_if_a_a_opa_l3aq(s7_scheme *sc)
 {
   opinit_if_a_a_opa_l3aq(sc);
   return(oprec_if_a_a_opa_l3aq(sc));
-}
-
-/* -------- if_a_a_opla_laq and if_a_opla_laq_a -------- */
-static opt_pid_t opinit_if_a_a_opla_laq(s7_scheme *sc)
-{
-  s7_pointer caller = car(rec_call_clause(sc->code));
-  s7_pointer call1 = cadr(caller);
-  s7_pointer call2 = caddr(caller);
-
-#if (!WITH_GMP)
-  s7_pointer c_op = car(caller);
-  if ((is_symbol(c_op)) &&
-      ((is_slot(global_slot(c_op))) &&
-       ((is_global(c_op)) ||
-	(s7_slot(sc, c_op) == global_slot(c_op)))))
-    {
-      s7_pointer s_func = global_value(c_op);
-      s7_pointer slot = let_slots(sc->curlet);
-      if (is_c_function(s_func))
-	{
-	  sc->pc = 0;
-	  sc->rec_test_o = sc->opts[0];
-	  if (bool_optimize(sc, rec_test_clause(sc->code)))
-	    {
-	      int32_t start_pc = sc->pc;
-	      sc->rec_result_o = sc->opts[start_pc];
-	      if (is_t_integer(slot_value(slot)))
-		{
-		  sc->rec_i_ii_f = s7_i_ii_function(s_func);
-		  if ((sc->rec_i_ii_f) &&
-		      (int_optimize(sc, rec_done_clause(sc->code))))
-		    {
-		      sc->rec_a1_o = sc->opts[sc->pc];
-		      if (int_optimize(sc, cdr(call1)))
-			{
-			  sc->rec_a2_o = sc->opts[sc->pc];
-			  if (int_optimize(sc, cdr(call2)))
-			    {
-			      sc->rec_val1 = make_mutable_integer(sc, integer(slot_value(slot)));
-			      slot_set_value(slot, sc->rec_val1);
-			      if (sc->pc != 4) return(OPT_INT); /* call1/call2 above are more complicated than (- n 1) or the like */
-			      sc->rec_fb1 = sc->rec_test_o->v[0].fb;
-			      sc->rec_fi1 = sc->rec_result_o->v[0].fi;
-			      sc->rec_fi2 = sc->rec_a1_o->v[0].fi;
-			      sc->rec_fi3 = sc->rec_a2_o->v[0].fi;
-			      return(OPT_INT_0);
-			    }}}}
-	      if (is_t_real(slot_value(slot)))
-		{
-		  sc->rec_d_dd_f = s7_d_dd_function(s_func);
-		  if (sc->rec_d_dd_f)
-		    {
-		      sc->pc = start_pc;
-		      sc->rec_result_o = sc->opts[start_pc];
-		      if (float_optimize(sc, rec_done_clause(sc->code)))
-			{
-			  sc->rec_a1_o = sc->opts[sc->pc];
-			  if (float_optimize(sc, cdr(call1)))
-			    {
-			      sc->rec_a2_o = sc->opts[sc->pc];
-			      if (float_optimize(sc, cdr(call2)))
-				{
-				  sc->rec_val1 = make_mutable_real(sc, real(slot_value(slot)));
-				  slot_set_value(slot, sc->rec_val1);
-				  return(OPT_DBL);
-				}}}}}}}}
-#endif
-  sc->rec_fn = fn_proc(caller);
-  rec_set_test(sc, rec_test_clause(sc->code));
-  rec_set_res(sc, rec_done_clause(sc->code));
-  rec_set_f1(sc, cdr(call1));
-  rec_set_f2(sc, cdr(call2));
-  sc->rec_slot1 = let_slots(sc->curlet);
-  return(OPT_PTR);
-}
-
-static s7_int oprec_i_if_a_a_opla_laq(s7_scheme *sc)
-{
-  s7_int i1, i2;
-  if (sc->rec_test_o->v[0].fb(sc->rec_test_o))                   /* if_(A) */
-    return(sc->rec_result_o->v[0].fi(sc->rec_result_o));         /* if_a_(A) */
-  i1 = sc->rec_a1_o->v[0].fi(sc->rec_a1_o);                      /* save a1 */
-  set_integer(sc->rec_val1, sc->rec_a2_o->v[0].fi(sc->rec_a2_o));/* slot1 = a2 */
-  i2 = oprec_i_if_a_a_opla_laq(sc);                              /* save la2 */
-  set_integer(sc->rec_val1, i1);                                 /* slot1 = a1 */
-  return(sc->rec_i_ii_f(oprec_i_if_a_a_opla_laq(sc), i2));       /* call op(la1, la2) */
-}
-
-static s7_int oprec_i_if_a_a_opla_laq_0(s7_scheme *sc)
-{
-  s7_int i1, i2;
-  if (sc->rec_fb1(sc->rec_test_o)) return(sc->rec_fi1(sc->rec_result_o));
-  i1 = sc->rec_fi2(sc->rec_a1_o);
-  set_integer(sc->rec_val1, sc->rec_fi3(sc->rec_a2_o));
-  if (sc->rec_fb1(sc->rec_test_o))
-    i2 = sc->rec_fi1(sc->rec_result_o);
-  else
-    {
-      s7_int i3;
-      i2 = sc->rec_fi2(sc->rec_a1_o);
-      set_integer(sc->rec_val1, sc->rec_fi3(sc->rec_a2_o));
-      i3 = oprec_i_if_a_a_opla_laq_0(sc);
-      set_integer(sc->rec_val1, i2);
-      i2 = sc->rec_i_ii_f(oprec_i_if_a_a_opla_laq_0(sc), i3);
-    }
-  set_integer(sc->rec_val1, i1);
-  return(sc->rec_i_ii_f(oprec_i_if_a_a_opla_laq_0(sc), i2));
-}
-
-static s7_double oprec_d_if_a_a_opla_laq(s7_scheme *sc)
-{
-  s7_double x1, x2;
-  if (sc->rec_test_o->v[0].fb(sc->rec_test_o)) return(sc->rec_result_o->v[0].fd(sc->rec_result_o));
-  x1 = sc->rec_a1_o->v[0].fd(sc->rec_a1_o);
-  set_real(sc->rec_val1, sc->rec_a2_o->v[0].fd(sc->rec_a2_o));
-  if (sc->rec_test_o->v[0].fb(sc->rec_test_o))
-    x2 = sc->rec_result_o->v[0].fd(sc->rec_result_o);
-  else
-    {
-      s7_double x3;
-      x2 = sc->rec_a1_o->v[0].fd(sc->rec_a1_o);
-      set_real(sc->rec_val1, sc->rec_a2_o->v[0].fd(sc->rec_a2_o));
-      x3 = oprec_d_if_a_a_opla_laq(sc);
-      set_real(sc->rec_val1, x2);
-      x2 = sc->rec_d_dd_f(oprec_d_if_a_a_opla_laq(sc), x3);
-    }
-  set_real(sc->rec_val1, x1);
-  return(sc->rec_d_dd_f(oprec_d_if_a_a_opla_laq(sc), x2));
-}
-
-static s7_pointer oprec_if_a_a_opla_laq(s7_scheme *sc)
-{
-  if (sc->rec_testf(sc, sc->rec_testp) != sc->F) return(sc->rec_resf(sc, sc->rec_resp));
-  recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
-  slot_set_value(sc->rec_slot1, sc->rec_f2f(sc, sc->rec_f2p));
-  slot_set_value(sc->rec_slot1, recur_swap(sc, oprec_if_a_a_opla_laq(sc)));
-  set_car(sc->t2_1, oprec_if_a_a_opla_laq(sc));
-  set_car(sc->t2_2, recur_pop(sc));
-  return(sc->rec_fn(sc, sc->t2_1));
-}
-
-static s7_int oprec_i_if_a_opla_laq_a(s7_scheme *sc)
-{
-  s7_int i1, i2;
-  if (!(sc->rec_test_o->v[0].fb(sc->rec_test_o))) return(sc->rec_result_o->v[0].fi(sc->rec_result_o));
-  i1 = sc->rec_a1_o->v[0].fi(sc->rec_a1_o);
-  set_integer(sc->rec_val1, sc->rec_a2_o->v[0].fi(sc->rec_a2_o));
-  i2 = oprec_i_if_a_opla_laq_a(sc);
-  set_integer(sc->rec_val1, i1);
-  return(sc->rec_i_ii_f(oprec_i_if_a_opla_laq_a(sc), i2));
-}
-
-static s7_int oprec_i_if_a_opla_laq_a_0(s7_scheme *sc)
-{
-  s7_int i1, i2;
-  if (!sc->rec_fb1(sc->rec_test_o)) return(sc->rec_fi1(sc->rec_result_o));
-  i1 = sc->rec_fi2(sc->rec_a1_o);
-  set_integer(sc->rec_val1, sc->rec_fi3(sc->rec_a2_o));
-  if (!sc->rec_fb1(sc->rec_test_o))
-    i2 = sc->rec_fi1(sc->rec_result_o);
-  else
-    {
-      s7_int i3;
-      i2 = sc->rec_fi2(sc->rec_a1_o);
-      set_integer(sc->rec_val1, sc->rec_fi3(sc->rec_a2_o));
-      i3 = oprec_i_if_a_opla_laq_a_0(sc);
-      set_integer(sc->rec_val1, i2);
-      i2 = sc->rec_i_ii_f(oprec_i_if_a_opla_laq_a_0(sc), i3);
-    }
-  set_integer(sc->rec_val1, i1);
-  return(sc->rec_i_ii_f(oprec_i_if_a_opla_laq_a_0(sc), i2));
-}
-
-static s7_double oprec_d_if_a_opla_laq_a(s7_scheme *sc)
-{
-  s7_double x1, x2;
-  if (!(sc->rec_test_o->v[0].fb(sc->rec_test_o))) return(sc->rec_result_o->v[0].fd(sc->rec_result_o));
-  x1 = sc->rec_a1_o->v[0].fd(sc->rec_a1_o);
-  set_real(sc->rec_val1, sc->rec_a2_o->v[0].fd(sc->rec_a2_o));
-  x2 = oprec_d_if_a_opla_laq_a(sc);
-  set_real(sc->rec_val1, x1);
-  return(sc->rec_d_dd_f(oprec_d_if_a_opla_laq_a(sc), x2));
-}
-
-static s7_pointer oprec_if_a_opla_laq_a(s7_scheme *sc)
-{
-  if (sc->rec_testf(sc, sc->rec_testp) == sc->F) return(sc->rec_resf(sc, sc->rec_resp));
-  recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
-  slot_set_value(sc->rec_slot1, sc->rec_f2f(sc, sc->rec_f2p));
-  slot_set_value(sc->rec_slot1, recur_swap(sc, oprec_if_a_opla_laq_a(sc)));
-  set_car(sc->t2_1, oprec_if_a_opla_laq_a(sc));
-  set_car(sc->t2_2, recur_pop(sc));
-  return(sc->rec_fn(sc, sc->t2_1));
-}
-
-static void wrap_recur_if_a_a_opla_laq(s7_scheme *sc)
-{
-  opt_pid_t choice = opinit_if_a_a_opla_laq(sc);
-  bool a_op = true_is_done(sc->code);
-  tick_tc(sc, sc->cur_op);
-  if ((choice == OPT_INT) || (choice == OPT_INT_0))
-    {
-      if (choice == OPT_INT_0)
-	sc->value = make_integer(sc, (a_op) ? oprec_i_if_a_a_opla_laq_0(sc) : oprec_i_if_a_opla_laq_a_0(sc));
-      else sc->value = make_integer(sc, (a_op) ? oprec_i_if_a_a_opla_laq(sc) : oprec_i_if_a_opla_laq_a(sc));
-    }
-  else
-    if (choice == OPT_PTR)
-      {
-	sc->rec_stack = recur_make_stack(sc);
-	sc->value = (a_op) ? oprec_if_a_a_opla_laq(sc) : oprec_if_a_opla_laq_a(sc);
-	sc->rec_loc = 0;
-      }
-    else sc->value = make_real(sc, (a_op) ? oprec_d_if_a_a_opla_laq(sc) : oprec_d_if_a_opla_laq_a(sc));
-}
-
-
-/* -------- if_a_a_opl2a_l2aq(s7_scheme *sc) -------- */
-
-static void opinit_if_a_a_opl2a_l2aq(s7_scheme *sc)
-{
-  s7_pointer caller = car(rec_call_clause(sc->code)); /* cdddr(sc->code) */
-  s7_pointer call1 = cadr(caller);
-  s7_pointer call2 = caddr(caller);
-  sc->rec_fn = fn_proc(caller);
-  rec_set_test(sc, rec_test_clause(sc->code));  /* cdr(sc->code) */
-  rec_set_res(sc, rec_done_clause(sc->code));   /* cddr(sc->code) or cdddr(sc->code) */
-  sc->rec_bool = true_is_done(sc->code);
-  rec_set_f1(sc, cdr(call1));
-  rec_set_f2(sc, cddr(call1));
-  rec_set_f3(sc, cdr(call2));
-  rec_set_f4(sc, cddr(call2));
-  sc->rec_slot1 = let_slots(sc->curlet);
-  sc->rec_slot2 = next_slot(sc->rec_slot1);
-}
-
-static s7_pointer oprec_if_a_a_opl2a_l2aq(s7_scheme *sc)
-{
-  if ((sc->rec_testf(sc, sc->rec_testp) != sc->F) == sc->rec_bool) return(sc->rec_resf(sc, sc->rec_resp));
-  recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
-  recur_push(sc, sc->rec_f2f(sc, sc->rec_f2p));
-  recur_push(sc, sc->rec_f3f(sc, sc->rec_f3p));
-  slot_set_value(sc->rec_slot2, sc->rec_f4f(sc, sc->rec_f4p));
-  slot_set_value(sc->rec_slot1, recur_pop(sc));
-  sc->value = oprec_if_a_a_opl2a_l2aq(sc);
-  slot_set_value(sc->rec_slot2, recur_pop(sc));
-  slot_set_value(sc->rec_slot1, recur_pop(sc));
-  recur_push_unchecked(sc, sc->value);
-  set_car(sc->t2_1, oprec_if_a_a_opl2a_l2aq(sc));
-  set_car(sc->t2_2, recur_pop(sc));
-  return(sc->rec_fn(sc, sc->t2_1));
-}
-
-static s7_pointer op_recur_if_a_a_opl2a_l2aq(s7_scheme *sc)
-{
-  opinit_if_a_a_opl2a_l2aq(sc);
-  return(oprec_if_a_a_opl2a_l2aq(sc));
-}
-
-
-/* -------- if_a_a_opl3a_l3aq(s7_scheme *sc) -------- */
-
-static void opinit_if_a_a_opl3a_l3aq(s7_scheme *sc)
-{
-  s7_pointer caller = car(rec_call_clause(sc->code)); /* rec call */
-  s7_pointer call1 = cadr(caller);
-  s7_pointer call2 = caddr(caller);
-  sc->rec_fn = fn_proc(caller);
-  rec_set_test(sc, rec_test_clause(sc->code));  /* cdr(sc->code) */
-  rec_set_res(sc, rec_done_clause(sc->code));   /* cddr(sc->code) or cdddr(sc->code) */
-  sc->rec_bool = true_is_done(sc->code);
-  rec_set_f1(sc, cdr(call1));
-  rec_set_f2(sc, cddr(call1));
-  rec_set_f3(sc, cdddr(call1));
-  rec_set_f4(sc, cdr(call2));
-  rec_set_f5(sc, cddr(call2));
-  rec_set_f6(sc, cdddr(call2));
-  sc->rec_slot1 = let_slots(sc->curlet);
-  sc->rec_slot2 = next_slot(sc->rec_slot1);
-  sc->rec_slot3 = next_slot(sc->rec_slot2);
-}
-
-static s7_pointer oprec_if_a_a_opl3a_l3aq(s7_scheme *sc)
-{
-  if ((sc->rec_testf(sc, sc->rec_testp) != sc->F) == sc->rec_bool) return(sc->rec_resf(sc, sc->rec_resp));
-  recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
-  recur_push(sc, sc->rec_f2f(sc, sc->rec_f2p));
-  recur_push(sc, sc->rec_f3f(sc, sc->rec_f3p));
-  recur_push(sc, sc->rec_f4f(sc, sc->rec_f4p));
-  recur_push(sc, sc->rec_f5f(sc, sc->rec_f5p));
-  slot_set_value(sc->rec_slot3, sc->rec_f6f(sc, sc->rec_f6p));
-  slot_set_value(sc->rec_slot2, recur_pop(sc));
-  slot_set_value(sc->rec_slot1, recur_pop(sc));
-  sc->value = oprec_if_a_a_opl3a_l3aq(sc);
-  slot_set_value(sc->rec_slot3, recur_pop(sc));
-  slot_set_value(sc->rec_slot2, recur_pop(sc));
-  slot_set_value(sc->rec_slot1, recur_pop(sc));
-  recur_push_unchecked(sc, sc->value);
-  set_car(sc->t2_1, oprec_if_a_a_opl3a_l3aq(sc));
-  set_car(sc->t2_2, recur_pop(sc));
-  return(sc->rec_fn(sc, sc->t2_1));
-}
-
-static s7_pointer op_recur_if_a_a_opl3a_l3aq(s7_scheme *sc)
-{
-  opinit_if_a_a_opl3a_l3aq(sc);
-  return(oprec_if_a_a_opl3a_l3aq(sc));
 }
 
 
@@ -96373,6 +96442,9 @@ static void init_fx_function(void)
   fx_function[OP_TC_WHEN_L2A] = fx_tc_when_l2a;
   fx_function[OP_TC_WHEN_L3A] = fx_tc_when_l3a;
 
+  fx_function[OP_RECUR_IF_A_A_opLA_LAq] = fx_recur_if_a_a_opla_laq;
+  fx_function[OP_RECUR_IF_A_A_opL2A_L2Aq] = fx_recur_if_a_a_opl2a_l2aq;
+  fx_function[OP_RECUR_IF_A_A_opL3A_L3Aq] = fx_recur_if_a_a_opl3a_l3aq;
   fx_function[OP_RECUR_IF_A_A_opA_LAq] = fx_recur_if_a_a_opa_laq;
   fx_function[OP_RECUR_IF_A_opA_LAq_A] = fx_recur_if_a_opa_laq_a;
   fx_function[OP_RECUR_IF_A_A_AND_A_L2A_L2A] = fx_recur_if_a_a_and_a_l2a_l2a;
@@ -99040,7 +99112,7 @@ int main(int argc, char **argv)
  * timp             24.4   20.0   19.6   19.7   15.6
  * tmv              21.9   21.1   20.7   20.6   17.3
  * calls            37.5   37.0   37.5   37.1   37.2
- * sg                      55.9   55.8   55.4   55.5
+ * sg                      55.9   55.8   55.4   55.4
  * tbig            175.8  156.5  148.1  146.2  146.1
  * ----------------------------------------------------
  *
@@ -99055,7 +99127,7 @@ int main(int argc, char **argv)
  *   cond cases can also use this: t811 -> tleft and s7tests, check_recur* is a mess now
  *   if/cond + begin-when as test, rec-tester, set!+define+let-shadowing in rec checks, > 2 clauses in cond
  *   need s7tests for the l1|2|3a cond cases
+ *   check op|rec-stack timings, follow op order in code/tests
  * tc->do in opt?
  * not gmp: (angle|magnitude (complex|make-rectangular...)) -> direct (don't create number) -- real|imag-part of same -> arg choice, den|num ratio same (den (/...))? (lint)
- * check swap
  */
