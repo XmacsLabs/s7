@@ -2740,6 +2740,8 @@ static void init_types(void)
 #define T_TRUE_IS_DONE                 (1 << 10)
 #define true_is_done(p)                has_high_type_bit(T_Pair(p), T_TRUE_IS_DONE)
 #define set_true_is_done(p)            set_high_type_bit(T_Pair(p), T_TRUE_IS_DONE)
+#define set_a_is_cadr(p)               set_true_is_done(p)
+#define a_is_cadr(p)                   true_is_done(p)
 
 #define T_FULL_UNKNOPT                 (1LL << (48 + 11))
 #define T_UNKNOPT                      (1 << 11)
@@ -4390,10 +4392,10 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_RECUR_IF_A_A_opA_LAq, OP_RECUR_IF_A_opA_LAq_A, OP_RECUR_IF_A_A_opLA_Aq, OP_RECUR_IF_A_opLA_Aq_A,
       OP_RECUR_IF_A_A_opA_LA_LAq, OP_RECUR_IF_A_opA_LA_LAq_A,
       OP_RECUR_IF_A_A_opLA_LA_LAq, OP_RECUR_IF_A_A_IF_A_A_opLA_LAq, OP_RECUR_IF_A_A_IF_A_A_opL2A_L2Aq,
-      OP_RECUR_IF_A_A_opA_L2Aq, OP_RECUR_IF_A_opA_L2Aq_A, OP_RECUR_IF_A_A_opA_L3Aq,
+      OP_RECUR_IF_A_A_opA_L2Aq, OP_RECUR_IF_A_A_opA_L3Aq,
       
       OP_RECUR_IF_A_A_IF_A_L2A_opA_L2Aq, /* same as cond case below */
-      OP_RECUR_COND_A_A_opA_LAq, OP_RECUR_COND_A_A_opA_L2Aq,
+      OP_RECUR_COND_A_A_opA_LAq,
       OP_RECUR_COND_A_A_A_A_opLA_LAq, OP_RECUR_COND_A_A_A_A_opL2A_L2Aq, OP_RECUR_COND_A_A_A_A_opA_L2Aq,
       OP_RECUR_COND_A_A_A_L2A_LopA_L2Aq, OP_RECUR_COND_A_A_A_L2A_opA_L2Aq,
       OP_RECUR_AND_A_OR_A_L2A_L2A,
@@ -4608,9 +4610,9 @@ static const char* op_names[NUM_OPS] =
       "recur_if_a_a_opa_laq", "recur_if_a_opa_laq_a", "recur_if_a_a_opla_aq", "recur_if_a_opla_aq_a",
       "recur_if_a_a_opa_la_laq", "recur_if_a_opa_la_laq_a",
       "recur_if_a_a_opla_la_laq", "recur_if_a_a_if_a_a_opla_laq", "recur_if_a_a_if_a_a_opl2a_l2aq",
-      "recur_if_a_a_opa_l2aq", "recur_if_a_opa_l2aq_a", "recur_if_a_a_opa_l3aq",
+      "recur_if_a_a_opa_l2aq", "recur_if_a_a_opa_l3aq",
       "recur_if_a_a_if_a_l2a_opa_l2aq", /* same as cond case below */
-      "recur_cond_a_a_opa_laq", "recur_cond_a_a_opa_l2aq",
+      "recur_cond_a_a_opa_laq",
       "recur_cond_a_a_a_a_opla_laq", "recur_cond_a_a_a_a_opl2a_l2aq", "recur_cond_a_a_a_a_opa_l2aq",
       "recur_cond_a_a_a_l2a_lopa_l2aq", "recur_cond_a_a_a_l2a_opa_l2aq",
       "recur_and_a_or_a_l2a_l2a"
@@ -74969,15 +74971,15 @@ static bool tree_has_definers_or_binders(s7_scheme *sc, s7_pointer tree)
 #define rec_test_clause(p)        opt2_pair(p)
 #define rec_done_clause(p)        opt1_pair(p)
 #define rec_call_clause(p)        opt3_pair(p)
-#define rec_set_test_clause(p, c) set_opt2_pair(p, c)
-#define rec_set_done_clause(p, c) set_opt1_pair(p, c)
-#define rec_set_call_clause(p, c) set_opt3_pair(p, c)
+#define rec_set_test_clause(p, c) set_opt2_pair(p, T_Pair(c)) /* these check T_Lst in set_opt2_pair, but here we want pairs */
+#define rec_set_done_clause(p, c) set_opt1_pair(p, T_Pair(c))
+#define rec_set_call_clause(p, c) set_opt3_pair(p, T_Pair(c))
 
 static bool check_recur_if_and_cond(s7_scheme *sc, const s7_pointer name, int32_t pars, s7_pointer args, s7_pointer body)
 {
   bool if_case = car(body) == sc->if_symbol;
   s7_pointer test = (if_case) ? cadr(body) : caadr(body); /* (if test...) or (cond ((test...))) */
-  if ((S7_DEBUGGING) && ((pars < 1) || (pars > 3))) fprintf(stderr, "%s[%d]: pars: %d\n", __func__, __LINE__, pars);
+  /* if ((S7_DEBUGGING) && ((pars < 1) || (pars > 3))) fprintf(stderr, "%s[%d]: pars: %d\n", __func__, __LINE__, pars); */
   if (is_fxable(sc, test)) /* pars prechecked to be 1 <= pars <= 3 */
     {
       s7_pointer true_p = (if_case) ? caddr(body) : cadr(cadr(body));
@@ -75008,7 +75010,7 @@ static bool check_recur_if_and_cond(s7_scheme *sc, const s7_pointer name, int32_
 	    {
 	      rec_set_test_clause(body, (if_case) ? cdr(body) : cadr(body));
 	      rec_set_done_clause(body, (true_quits) ? ((if_case) ? cddr(body) : cdadr(body)) : ((if_case) ? cdddr(body) : cdaddr(body)));
-	      rec_set_call_clause(body, (true_quits) ? ((if_case) ? cdddr(body) : cdaddr(body)) : ((if_case) ? cddr(body) : cdadr(body)));
+	      rec_set_call_clause(body, car((true_quits) ? ((if_case) ? cdddr(body) : cdaddr(body)) : ((if_case) ? cddr(body) : cdadr(body))));
 	      if (true_quits) set_true_is_done(body);
 	      set_safe_optimize_op(body, (pars == 1) ? OP_RECUR_IF_A_A_opLA_LAq :
 				           ((pars == 2) ? OP_RECUR_IF_A_A_opL2A_L2Aq : OP_RECUR_IF_A_A_opL3A_L3Aq));
@@ -75018,7 +75020,60 @@ static bool check_recur_if_and_cond(s7_scheme *sc, const s7_pointer name, int32_
 	      fx_annotate_arg(sc, rec_done_clause(body), args);
 	      fx_tree(sc, cdr(body), car(args), (pars >= 2) ? cadr(args) : NULL, (pars == 3) ? caddr(args) : NULL, false);
 	      return(true);
-	    }}}
+	    }
+
+	  if ((is_fxable(sc, call1)) &&
+	      (((pars == 1) && (is_proper_list_2(sc, call2))) || 
+	       ((pars == 2) && (is_proper_list_3(sc, call2))) ||
+	       ((pars == 3) && (is_proper_list_4(sc, call2)))) &&
+	      (car(call2) == name) && (is_fxable(sc, cadr(call2))) &&
+	      ((pars == 1) || (is_fxable(sc, caddr(call2)))) &&
+	      ((pars <= 2) || (is_fxable(sc, cadddr(call2)))))
+	    {
+	      rec_set_test_clause(body, (if_case) ? cdr(body) : cadr(body));
+	      rec_set_done_clause(body, (true_quits) ? ((if_case) ? cddr(body) : cdadr(body)) : ((if_case) ? cdddr(body) : cdaddr(body)));
+	      rec_set_call_clause(body, car((true_quits) ? ((if_case) ? cdddr(body) : cdaddr(body)) : ((if_case) ? cddr(body) : cdadr(body))));
+
+	      rec_set_call_clause(rec_call_clause(body), caddr(rec_call_clause(body)));
+	      set_a_is_cadr(rec_call_clause(body));
+
+	      if (true_quits) set_true_is_done(body);
+#if 0
+	      set_safe_optimize_op(body, (pars == 1) ? OP_RECUR_IF_A_A_opA_LAq : 
+				           ((pars == 2) ? OP_RECUR_IF_A_A_opA_L2Aq : OP_RECUR_IF_A_A_opA_L3Aq));
+	      fx_annotate_arg(sc, calls, args);
+	      fx_annotate_args(sc, cdr(call2), args);
+	      fx_annotate_arg(sc, rec_test_clause(body), args);
+	      fx_annotate_arg(sc, rec_done_clause(body), args);
+	      fx_tree(sc, cdr(body), car(args), (pars == 2) ? cadr(args) : NULL, (pars == 3)? caddr(args) : NULL, false);
+	      return(true);
+#endif	      
+	    }
+	  /* TODO: combine these two blocks and extend to 2|3 pars */
+	  if ((is_fxable(sc, call2)) &&
+	      (pars == 1) && (is_proper_list_2(sc, call1)) &&
+	      (car(call1) == name) && (is_fxable(sc, cadr(call1))))
+	    {
+	      rec_set_test_clause(body, (if_case) ? cdr(body) : cadr(body));
+	      rec_set_done_clause(body, (true_quits) ? ((if_case) ? cddr(body) : cdadr(body)) : ((if_case) ? cdddr(body) : cdaddr(body)));
+	      rec_set_call_clause(body, car((true_quits) ? ((if_case) ? cdddr(body) : cdaddr(body)) : ((if_case) ? cddr(body) : cdadr(body))));
+
+	      rec_set_call_clause(rec_call_clause(body), cadr(rec_call_clause(body)));
+
+	      if (true_quits) set_true_is_done(body);
+	      /* here a_is_cadr == 0 */
+#if 0
+	      set_safe_optimize_op(body, OP_RECUR_IF_A_A_opLA_Aq);
+	      fx_annotate_arg(sc, cdr(calls), args);
+	      fx_annotate_args(sc, cdr(call1), args);
+	      fx_annotate_arg(sc, rec_test_clause(body), args);
+	      fx_annotate_arg(sc, rec_done_clause(body), args);
+	      fx_tree(sc, cdr(body), car(args), (pars == 2) ? cadr(args) : NULL, NULL, false);
+	      return(true);
+#endif
+	    }
+
+	}}
   return(false);
 }
 
@@ -75130,6 +75185,7 @@ static bool check_recur_if(s7_scheme *sc, const s7_pointer name, int32_t pars, s
 
       if (orig)
 	{
+	  /* TODO: get rid of this */
 	  if (is_null(cdddr(false_p))) /* 2 args to outer (c) func */
 	    {
 	      if ((is_fxable(sc, cadr(false_p))) || (is_fxable(sc, caddr(false_p))))
@@ -75143,19 +75199,18 @@ static bool check_recur_if(s7_scheme *sc, const s7_pointer name, int32_t pars, s
 		      if ((pars == 1) && (is_null(cddr(la))))
 			set_safe_optimize_op(body, (orig == cadddr(body)) ?
 					     ((la == cadr(false_p)) ? OP_RECUR_IF_A_A_opLA_Aq : OP_RECUR_IF_A_A_opA_LAq) :
-					     ((la == cadr(false_p)) ? OP_RECUR_IF_A_opLA_Aq_A : OP_RECUR_IF_A_opA_LAq_A));
+					     ((la == cadr(false_p)) ? OP_RECUR_IF_A_opLA_Aq_A : OP_RECUR_IF_A_opA_LAq_A)); /* TODO get rid of these */
 		      else
 			if ((pars == 2) &&
 			    (is_pair(cddr(la))) && (is_fxable(sc, caddr(la))) &&
 			    (is_null(cdddr(la))))
-			  set_safe_optimize_op(body, (orig == cadddr(body)) ? OP_RECUR_IF_A_A_opA_L2Aq : OP_RECUR_IF_A_opA_L2Aq_A);
+			  set_safe_optimize_op(body, OP_RECUR_IF_A_A_opA_L2Aq);
 			else
 			  {
 			    if ((pars == 3) &&
 				(is_pair(cddr(la))) && (is_fxable(sc, caddr(la))) &&
 				(is_pair(cdddr(la))) && (is_fxable(sc, cadddr(la))) &&
-				(is_null(cddddr(la))) &&
-				(orig == cadddr(body)))
+				(is_null(cddddr(la))))
 			      set_safe_optimize_op(body, OP_RECUR_IF_A_A_opA_L3Aq);
 			    else return(false);
 			  }
@@ -75164,8 +75219,6 @@ static bool check_recur_if(s7_scheme *sc, const s7_pointer name, int32_t pars, s
 		      fx_annotate_arg(sc, (la == cadr(false_p)) ? cddr(false_p) : cdr(false_p), args);
 		      fx_annotate_args(sc, cdr(la), args);
 		      fx_tree(sc, cdr(body), car(args), (pars > 1) ? cadr(args) : NULL, (pars > 2) ? caddr(args) : NULL, false);
-		      set_opt3_pair(body, false_p);
-		      set_opt3_pair(false_p, la);
 		      return(true);
 		    }}}
 	  else /* 3 args to c func */
@@ -75298,7 +75351,11 @@ static bool check_recur(s7_scheme *sc, s7_pointer name, int32_t pars, s7_pointer
 				(is_null(cdddr(la))))))
 			    {
 			      if (len == 3)
-				set_safe_optimize_op(body, (pars == 1) ? OP_RECUR_COND_A_A_opA_LAq : OP_RECUR_COND_A_A_opA_L2Aq);
+				{
+				set_safe_optimize_op(body, (pars == 1) ? OP_RECUR_COND_A_A_opA_LAq : OP_RECUR_IF_A_A_opA_L2Aq);
+				/* set_opt3_pair(body, la_clause); */
+				set_a_is_cadr(la_clause);
+				}
 			      else
 				{
 				  s7_pointer l2a = cadr(clause2);
@@ -75308,6 +75365,7 @@ static bool check_recur(s7_scheme *sc, s7_pointer name, int32_t pars, s7_pointer
 				      set_safe_optimize_op(body, OP_RECUR_COND_A_A_A_L2A_opA_L2Aq);
 				      fx_annotate_arg(sc, clause2, args);
 				      fx_annotate_args(sc, cdr(l2a), args);
+				      set_opt3_pair(body, la_clause);
 				    }
 				  else return(false);
 				}
@@ -75315,7 +75373,7 @@ static bool check_recur(s7_scheme *sc, s7_pointer name, int32_t pars, s7_pointer
 			      fx_annotate_arg(sc, cdr(la_clause), args);
 			      fx_annotate_args(sc, cdr(la), args);
 			      fx_tree(sc, cdr(body), car(args), (pars == 1) ? NULL : cadr(args), NULL, false);
-			      set_opt3_pair(body, la_clause);
+			      /* set_opt3_pair(body, la_clause); */
 			      set_opt3_pair(la_clause, la);
 			      return(true);
 			    }}
@@ -88552,7 +88610,7 @@ typedef enum {OPT_PTR, OPT_INT, OPT_DBL, OPT_INT_0} opt_pid_t;
 
 static opt_pid_t opinit_if_a_a_opla_laq(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer caller = car(rec_call_clause(code));
+  s7_pointer caller = rec_call_clause(code);
   s7_pointer call1 = cadr(caller);
   s7_pointer call2 = caddr(caller);
 
@@ -88789,7 +88847,7 @@ static s7_pointer fx_recur_if_a_a_opla_laq(s7_scheme *sc, s7_pointer arg)
 
 static void opinit_if_a_a_opl2a_l2aq(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer caller = car(rec_call_clause(code)); /* cdddr(sc->code) */
+  s7_pointer caller = rec_call_clause(code); /* cdddr(sc->code) */
   s7_pointer call1 = cadr(caller);
   s7_pointer call2 = caddr(caller);
   sc->rec_fn = fn_proc(caller);
@@ -88842,7 +88900,7 @@ static s7_pointer fx_recur_if_a_a_opl2a_l2aq(s7_scheme *sc, s7_pointer arg)
 
 static void opinit_if_a_a_opl3a_l3aq(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer caller = car(rec_call_clause(code)); /* rec call */
+  s7_pointer caller = rec_call_clause(code); /* rec call */
   s7_pointer call1 = cadr(caller);
   s7_pointer call2 = caddr(caller);
   sc->rec_fn = fn_proc(caller);
@@ -88899,13 +88957,10 @@ static s7_pointer fx_recur_if_a_a_opl3a_l3aq(s7_scheme *sc, s7_pointer arg)
 
 
 /* -------- if_a_a_opa_laq and if_a_opa_laq_a -------- */
-static opt_pid_t opinit_if_a_a_opa_laq(s7_scheme *sc, bool a_op, bool la_op, s7_pointer code)
+static opt_pid_t opinit_if_a_a_opa_laq(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer caller = opt3_pair(code); /* false_p in check_recur */
-#if 0
-  fprintf(stderr, "%s %d %d\n", display(code), a_op, la_op);   /* (if (zero? x) x (+ x (_?_5 (- x 1)))) 1 1 */
-  fprintf(stderr, "caller: %s\n", display(caller));            /* (+ x (_?_5 (- x 1))) */
-#endif
+  s7_pointer caller = rec_call_clause(code);
+  bool la_op = a_is_cadr(caller);
 #if (!WITH_GMP)
   s7_pointer c_op = car(caller);
   if ((is_symbol(c_op)) &&
@@ -88918,8 +88973,7 @@ static opt_pid_t opinit_if_a_a_opa_laq(s7_scheme *sc, bool a_op, bool la_op, s7_
 	{
 	  sc->pc = 0;
 	  sc->rec_test_o = sc->opts[0];
-	  /* fprintf(stderr, "%d: cdr(code): %s\n", __LINE__, display(cdr(code))); */ /* cdr(code): ((zero? x) x (+ x (_?_5 (- x 1)))) */
-	  if (bool_optimize(sc, cdr(code))) /* (zero? x) */
+	  if (bool_optimize(sc, rec_test_clause(code))) /* (zero? x) */
 	    {
 	      int32_t start_pc = sc->pc;
 	      sc->rec_result_o = sc->opts[start_pc];
@@ -88927,25 +88981,18 @@ static opt_pid_t opinit_if_a_a_opa_laq(s7_scheme *sc, bool a_op, bool la_op, s7_
 		{
 		  sc->rec_i_ii_f = s7_i_ii_function(s_func);
 		  if ((sc->rec_i_ii_f) &&
-		      (int_optimize(sc, (a_op) ? cddr(code) : cdddr(code)))) /* x as return */
+		      (int_optimize(sc, rec_done_clause(code)))) /* x as return */
 		    {
-		      /* fprintf(stderr, "%d: a_op code: %s\n", __LINE__, display((a_op) ? cddr(code) : cdddr(code))); *//* a_op code: (x (+ x (_?_5 (- x 1)))) */
 		      sc->rec_a1_o = sc->opts[sc->pc];
 		      if (int_optimize(sc, (la_op) ? cdr(caller) : cddr(caller))) /* x in (+ x ...) */
 			{
-			  /* fprintf(stderr, "%d: la_op code: %s\n", __LINE__, display((la_op) ? cdr(caller) : cddr(caller))); */ /* la_op code: (x (_?_5 (- x 1))) */
 			  sc->rec_a2_o = sc->opts[sc->pc];
-			  if (int_optimize(sc, cdr(opt3_pair(caller)))) /* arg of recur call: (- x 1) */
+			  if (int_optimize(sc, cdr(rec_call_clause(caller)))) /* arg of recur call: (- x 1) */
 			    {
-			      /* fprintf(stderr, "%d: opt3 code: %s\n", __LINE__, display(cdr(opt3_pair(caller)))); */ /* opt3 code: ((- x 1)) */
 			      sc->rec_val1 = make_mutable_integer(sc, integer(slot_value(slot)));
 			      slot_set_value(slot, sc->rec_val1);
 			      return(OPT_INT);
 			    }}}}}}}
-#endif
-#if 0
-  fprintf(stderr, "not int: a_op: %s, la_op: %s, opt3: %s\n", 
-	  display((a_op) ?  cddr(code) : cdddr(code)), display((la_op) ? cdr(caller) : cddr(caller)), display(cdr(opt3_pair(caller))));
 #endif
   /* not int: a_op: (lis (cons (car lis) (copy-list-1 (cdr lis)))), 
    *         la_op: ((car lis) (copy-list-1 (cdr lis))), 
@@ -88957,10 +89004,10 @@ static opt_pid_t opinit_if_a_a_opa_laq(s7_scheme *sc, bool a_op, bool la_op, s7_
    *         opt3: ((- n 1))
    * (if (<= n 1) 1 (lcm n (flcm (- n 1)))) 1 1
    */
-  rec_set_test(sc, cdr(code));
-  rec_set_res(sc, (a_op) ?  cddr(code) : cdddr(code));   /* done */
+  rec_set_test(sc, rec_test_clause(code));
+  rec_set_res(sc, rec_done_clause(code));
   rec_set_f1(sc, (la_op) ? cdr(caller) : cddr(caller));  /* a arg */
-  rec_set_f2(sc, cdr(opt3_pair(caller)));                /* la arg */
+  rec_set_f2(sc, cdr(rec_call_clause(caller)));          /* la arg */
   sc->rec_slot1 = let_slots(sc->curlet);
   sc->rec_fn = fn_proc(caller);
   return(OPT_PTR);
@@ -89044,9 +89091,12 @@ static s7_pointer oprec_if_a_opla_aq_a(s7_scheme *sc)
   return(sc->rec_fn(sc, sc->t2_1));
 }
 
-static void wrap_recur_if_a_a_opa_laq(s7_scheme *sc, bool a_op, bool la_op)
+static void wrap_recur_if_a_a_opa_laq(s7_scheme *sc)
 {
-  opt_pid_t choice = opinit_if_a_a_opa_laq(sc, a_op, la_op, sc->code);
+  bool a_op = true_is_done(sc->code);
+  bool la_op = a_is_cadr(rec_call_clause(sc->code));
+
+  opt_pid_t choice = opinit_if_a_a_opa_laq(sc, sc->code);
   tick_tc(sc, sc->cur_op);
   if (choice == OPT_INT)
     sc->value = make_integer(sc, (a_op) ? oprec_i_if_a_a_opa_laq(sc) : oprec_i_if_a_opa_laq_a(sc));
@@ -89063,7 +89113,7 @@ static void wrap_recur_if_a_a_opa_laq(s7_scheme *sc, bool a_op, bool la_op)
 static s7_pointer fx_recur_if_a_a_opa_laq(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_RECUR_IF_A_A_opA_LAq);
-  if (opinit_if_a_a_opa_laq(sc, true, true, arg) == OPT_INT)
+  if (opinit_if_a_a_opa_laq(sc, arg) == OPT_INT)
     sc->value = make_integer(sc, oprec_i_if_a_a_opa_laq(sc));
   else
     {
@@ -89077,7 +89127,7 @@ static s7_pointer fx_recur_if_a_a_opa_laq(s7_scheme *sc, s7_pointer arg)
 static s7_pointer fx_recur_if_a_opa_laq_a(s7_scheme *sc, s7_pointer arg)
 {
   tick_tc(sc, OP_RECUR_IF_A_opA_LAq_A);
-  if (opinit_if_a_a_opa_laq(sc, false, true, arg) == OPT_INT)
+  if (opinit_if_a_a_opa_laq(sc, arg) == OPT_INT)
     sc->value = make_integer(sc, oprec_i_if_a_opa_laq_a(sc));
   else
     {
@@ -89089,13 +89139,16 @@ static s7_pointer fx_recur_if_a_opa_laq_a(s7_scheme *sc, s7_pointer arg)
 }
 
 /* -------- cond_a_a_opa_laq -------- */
+/* TODO: redundant */
 static void opinit_cond_a_a_opa_laq(s7_scheme *sc)
 {
-  s7_pointer caller = opt3_pair(sc->code);
-  rec_set_test(sc, cadr(sc->code));
-  rec_set_res(sc, cdadr(sc->code));
-  rec_set_f1(sc, cdr(caller));
-  rec_set_f2(sc, cdr(opt3_pair(caller)));
+  s7_pointer caller = rec_call_clause(sc->code);
+  bool la_op = a_is_cadr(caller);
+  if ((S7_DEBUGGING) && (!a_is_cadr(caller))) fprintf(stderr, "%s %s\n", __func__, display(sc->code));
+  rec_set_test(sc, rec_test_clause(sc->code));
+  rec_set_res(sc, rec_done_clause(sc->code));
+  rec_set_f1(sc, (la_op) ? cdr(caller) : cddr(caller));
+  rec_set_f2(sc, cdr(rec_call_clause(caller)));
   sc->rec_slot1 = let_slots(sc->curlet);
   sc->rec_fn = fn_proc(caller);
 }
@@ -89107,16 +89160,17 @@ static s7_pointer op_recur_cond_a_a_opa_laq(s7_scheme *sc)
 }
 
 /* -------- if_a_a_opa_l2aq and if_a_opa_l2aq_a and cond_a_a_opa_l2aq -------- */
-typedef enum {IF1A_LA2, IF2A_LA2, COND2A_LA2} l2aq_t;
 
-static void opinit_if_a_a_opa_l2aq(s7_scheme *sc, l2aq_t a_op)
+static void opinit_if_a_a_opa_l2aq(s7_scheme *sc)
 {
-  s7_pointer caller = opt3_pair(sc->code);
-  rec_set_test(sc, (a_op == COND2A_LA2) ? cadr(sc->code) : cdr(sc->code));
-  rec_set_res(sc, (a_op == IF2A_LA2) ?  cddr(sc->code) : ((a_op == IF1A_LA2) ? cdddr(sc->code) : cdadr(sc->code)));
-  rec_set_f1(sc, cdr(caller));
-  rec_set_f2(sc, cdr(opt3_pair(caller)));
-  rec_set_f3(sc, cddr(opt3_pair(caller)));
+  s7_pointer caller = rec_call_clause(sc->code);
+  bool la_op = a_is_cadr(caller);
+  rec_set_test(sc, rec_test_clause(sc->code));
+  rec_set_res(sc, rec_done_clause(sc->code));
+  if ((S7_DEBUGGING) && (!a_is_cadr(caller))) fprintf(stderr, "%s %s\n", __func__, display(sc->code));
+  rec_set_f1(sc, (la_op) ? cdr(caller) : cddr(caller));
+  rec_set_f2(sc, cdr(rec_call_clause(caller)));
+  rec_set_f3(sc, cddr(rec_call_clause(caller)));
   sc->rec_slot1 = let_slots(sc->curlet);
   sc->rec_slot2 = next_slot(sc->rec_slot1);
   sc->rec_fn = fn_proc(caller);
@@ -89124,12 +89178,13 @@ static void opinit_if_a_a_opa_l2aq(s7_scheme *sc, l2aq_t a_op)
 
 static s7_pointer oprec_if_a_a_opa_l2aq(s7_scheme *sc)
 {
-  if (sc->rec_testf(sc, sc->rec_testp) != sc->F) return(sc->rec_resf(sc, sc->rec_resp));
+  sc->rec_bool = true_is_done(sc->code);
+  if ((sc->rec_testf(sc, sc->rec_testp) != sc->F) == sc->rec_bool) return(sc->rec_resf(sc, sc->rec_resp));
   recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
   recur_push(sc, sc->rec_f2f(sc, sc->rec_f2p));
   slot_set_value(sc->rec_slot2, sc->rec_f3f(sc, sc->rec_f3p));
   slot_set_value(sc->rec_slot1, recur_pop(sc));
-  if (sc->rec_testf(sc, sc->rec_testp) != sc->F)
+  if ((sc->rec_testf(sc, sc->rec_testp) != sc->F) == sc->rec_bool)
     set_car(sc->t2_2, sc->rec_resf(sc, sc->rec_resp));
   else
     {
@@ -89145,6 +89200,7 @@ static s7_pointer oprec_if_a_a_opa_l2aq(s7_scheme *sc)
   return(sc->rec_fn(sc, sc->t2_1));
 }
 
+#if 0
 static s7_pointer oprec_if_a_opa_l2aq_a(s7_scheme *sc)
 {
   if (sc->rec_testf(sc, sc->rec_testp) == sc->F) return(sc->rec_resf(sc, sc->rec_resp));
@@ -89156,22 +89212,11 @@ static s7_pointer oprec_if_a_opa_l2aq_a(s7_scheme *sc)
   set_car(sc->t2_1, recur_pop(sc));
   return(sc->rec_fn(sc, sc->t2_1));
 }
+#endif
 
 static s7_pointer op_recur_if_a_a_opa_l2aq(s7_scheme *sc)
 {
-  opinit_if_a_a_opa_l2aq(sc, IF2A_LA2);
-  return(oprec_if_a_a_opa_l2aq(sc));
-}
-
-static s7_pointer op_recur_if_a_opa_l2aq_a(s7_scheme *sc)
-{
-  opinit_if_a_a_opa_l2aq(sc, IF1A_LA2);
-  return(oprec_if_a_opa_l2aq_a(sc));
-}
-
-static s7_pointer op_recur_cond_a_a_opa_l2aq(s7_scheme *sc)
-{
-  opinit_if_a_a_opa_l2aq(sc, COND2A_LA2);
+  opinit_if_a_a_opa_l2aq(sc);
   return(oprec_if_a_a_opa_l2aq(sc));
 }
 
@@ -89179,13 +89224,15 @@ static s7_pointer op_recur_cond_a_a_opa_l2aq(s7_scheme *sc)
 /* -------- if_a_a_opa_l3aq -------- */
 static void opinit_if_a_a_opa_l3aq(s7_scheme *sc)
 {
-  s7_pointer caller = opt3_pair(sc->code), l3a = cdr(opt3_pair(caller));
-  rec_set_test(sc, cdr(sc->code));
-  rec_set_res(sc, cddr(sc->code));
-  rec_set_f1(sc, cdr(caller));
-  rec_set_f2(sc, l3a);
-  rec_set_f3(sc, cdr(l3a));
-  rec_set_f4(sc, cddr(l3a));
+  s7_pointer caller = rec_call_clause(sc->code);
+  bool la_op = a_is_cadr(caller);
+  rec_set_test(sc, rec_test_clause(sc->code));
+  rec_set_res(sc, rec_done_clause(sc->code));
+  if ((S7_DEBUGGING) && (!a_is_cadr(caller))) fprintf(stderr, "%s %s\n", __func__, display(sc->code));
+  rec_set_f1(sc, (la_op) ? cdr(caller) : cddr(caller));
+  rec_set_f2(sc, cdr(rec_call_clause(caller)));
+  rec_set_f3(sc, cddr(rec_call_clause(caller)));
+  rec_set_f4(sc, cdddr(rec_call_clause(caller)));
   sc->rec_slot1 = let_slots(sc->curlet);
   sc->rec_slot2 = next_slot(sc->rec_slot1);
   sc->rec_slot3 = next_slot(sc->rec_slot2);
@@ -89194,14 +89241,15 @@ static void opinit_if_a_a_opa_l3aq(s7_scheme *sc)
 
 static s7_pointer oprec_if_a_a_opa_l3aq(s7_scheme *sc)
 {
-  if (sc->rec_testf(sc, sc->rec_testp) != sc->F) return(sc->rec_resf(sc, sc->rec_resp));
+  sc->rec_bool = true_is_done(sc->code);
+  if ((sc->rec_testf(sc, sc->rec_testp) != sc->F) == sc->rec_bool) return(sc->rec_resf(sc, sc->rec_resp));
   recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
   recur_push(sc, sc->rec_f2f(sc, sc->rec_f2p));
   recur_push(sc, sc->rec_f3f(sc, sc->rec_f3p));
   slot_set_value(sc->rec_slot3, sc->rec_f4f(sc, sc->rec_f4p));
   slot_set_value(sc->rec_slot2, recur_pop(sc));
   slot_set_value(sc->rec_slot1, recur_pop(sc));
-  if (sc->rec_testf(sc, sc->rec_testp) != sc->F)
+  if ((sc->rec_testf(sc, sc->rec_testp) != sc->F) == sc->rec_bool)
     set_car(sc->t2_2, sc->rec_resf(sc, sc->rec_resp));
   else
     {
@@ -93424,21 +93472,19 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_RECUR_IF_A_A_opL2A_L2Aq:        wrap_recur(sc, op_recur_if_a_a_opl2a_l2aq);        continue;
 	case OP_RECUR_IF_A_A_opL3A_L3Aq:        wrap_recur(sc, op_recur_if_a_a_opl3a_l3aq);        continue;
 
-	case OP_RECUR_IF_A_A_opLA_LA_LAq:       wrap_recur(sc, op_recur_if_a_a_opla_la_laq);       continue;
-
-	case OP_RECUR_IF_A_A_opA_LAq:           wrap_recur_if_a_a_opa_laq(sc, true, true);         continue;
-	case OP_RECUR_IF_A_opA_LAq_A:           wrap_recur_if_a_a_opa_laq(sc, false, true);        continue;
- 	case OP_RECUR_IF_A_A_opLA_Aq:           wrap_recur_if_a_a_opa_laq(sc, true, false);        continue;
-	case OP_RECUR_IF_A_opLA_Aq_A:           wrap_recur_if_a_a_opa_laq(sc, false, false);       continue;
+	case OP_RECUR_IF_A_opA_LAq_A:
+ 	case OP_RECUR_IF_A_A_opLA_Aq:
+	case OP_RECUR_IF_A_opLA_Aq_A:
+	case OP_RECUR_IF_A_A_opA_LAq:           wrap_recur_if_a_a_opa_laq(sc);                     continue;
 	case OP_RECUR_COND_A_A_opA_LAq:         wrap_recur(sc, op_recur_cond_a_a_opa_laq);         continue;
 
 	case OP_RECUR_IF_A_A_opA_L2Aq:          wrap_recur(sc, op_recur_if_a_a_opa_l2aq);          continue;
-	case OP_RECUR_IF_A_opA_L2Aq_A:          wrap_recur(sc, op_recur_if_a_opa_l2aq_a);          continue;
-	case OP_RECUR_COND_A_A_opA_L2Aq:        wrap_recur(sc, op_recur_cond_a_a_opa_l2aq);        continue;
 	case OP_RECUR_IF_A_A_opA_L3Aq:          wrap_recur(sc, op_recur_if_a_a_opa_l3aq);          continue;
 
 	case OP_RECUR_IF_A_A_opA_LA_LAq:        wrap_recur(sc, op_recur_if_a_a_opa_la_laq);        continue;
 	case OP_RECUR_IF_A_opA_LA_LAq_A:        wrap_recur(sc, op_recur_if_a_opa_la_laq_a);        continue;
+
+	case OP_RECUR_IF_A_A_opLA_LA_LAq:       wrap_recur(sc, op_recur_if_a_a_opla_la_laq);       continue;
 
 	case OP_RECUR_IF_A_A_AND_A_L2A_L2A:     wrap_recur(sc, op_recur_if_a_a_and_a_l2a_l2a);     continue;
 	case OP_RECUR_IF_A_A_IF_A_L2A_opA_L2Aq: wrap_recur(sc, op_recur_if_a_a_if_a_l2a_opa_l2aq); continue;
@@ -98685,7 +98731,7 @@ s7_scheme *s7_init(void)
   s7_define_function(sc, "report-missed-calls", g_report_missed_calls, 0, 0, false, NULL); /* tc/recur tests in s7test.scm */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 933) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 931) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
   if (false) gdb_break();
 #endif
