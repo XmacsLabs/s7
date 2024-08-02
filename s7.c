@@ -89058,26 +89058,26 @@ static s7_pointer fx_recur_if_a_a_opa_laq(s7_scheme *sc, s7_pointer arg)
   return(sc->value);
 }
 
-static void opinit_if_a_a_opa_l2aq(s7_scheme *sc)
+
+/* -------- if_a_a_opa_l2aq -------- */
+static void opinit_if_a_a_opa_l2aq(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer caller = rec_call_clause(sc->code);
+  s7_pointer caller = rec_call_clause(code);
   bool la_op = a_is_cadr(caller);
-  rec_set_test(sc, rec_test_clause(sc->code));
-  rec_set_res(sc, rec_done_clause(sc->code));
-  if ((S7_DEBUGGING) && (!a_is_cadr(caller))) fprintf(stderr, "%s %s\n", __func__, display(sc->code));
+  rec_set_test(sc, rec_test_clause(code));
+  rec_set_res(sc, rec_done_clause(code));
+  if ((S7_DEBUGGING) && (!a_is_cadr(caller))) fprintf(stderr, "%s %s\n", __func__, display(code));
   rec_set_f1(sc, (la_op) ? cdr(caller) : cddr(caller));
   rec_set_f2(sc, cdr(rec_call_clause(caller)));
   rec_set_f3(sc, cddr(rec_call_clause(caller)));
   sc->rec_slot1 = let_slots(sc->curlet);
   sc->rec_slot2 = next_slot(sc->rec_slot1);
   sc->rec_fn = fn_proc(caller);
+  sc->rec_bool = true_is_done(code);
 }
 
-
-/* -------- if_a_a_opa_l2aq -------- */
 static s7_pointer oprec_if_a_a_opa_l2aq(s7_scheme *sc)
 {
-  sc->rec_bool = true_is_done(sc->code);
   if ((sc->rec_testf(sc, sc->rec_testp) != sc->F) == sc->rec_bool) return(sc->rec_resf(sc, sc->rec_resp));
   recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
   recur_push(sc, sc->rec_f2f(sc, sc->rec_f2p));
@@ -89099,33 +89099,25 @@ static s7_pointer oprec_if_a_a_opa_l2aq(s7_scheme *sc)
   return(sc->rec_fn(sc, sc->t2_1));
 }
 
-static s7_pointer op_recur_if_a_a_opa_l2aq(s7_scheme *sc)
-{
-  opinit_if_a_a_opa_l2aq(sc);
-  return(oprec_if_a_a_opa_l2aq(sc));
-}
-
-#if 0
-static s7_pointer fx_recur_if_a_a_opa_l2aq(s7_scheme *sc, s7_pointer arg)
+static s7_pointer wrap_recur_if_a_a_opa_l2aq(s7_scheme *sc, s7_pointer code)
 {
   tick_tc(sc, OP_RECUR_IF_A_A_opA_L2Aq);
   sc->rec_stack = recur_make_stack(sc);
-  opinit_if_a_a_opa_l2aq(sc, arg); /* TODO: need code arg above */
+  opinit_if_a_a_opa_l2aq(sc, code);
   sc->value = oprec_if_a_a_opa_l2aq(sc);
   sc->rec_loc = 0;
   return(sc->value);
 }
-#endif
 
 
 /* -------- if_a_a_opa_l3aq -------- */
-static void opinit_if_a_a_opa_l3aq(s7_scheme *sc)
+static void opinit_if_a_a_opa_l3aq(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer caller = rec_call_clause(sc->code);
+  s7_pointer caller = rec_call_clause(code);
   bool la_op = a_is_cadr(caller);
-  rec_set_test(sc, rec_test_clause(sc->code));
-  rec_set_res(sc, rec_done_clause(sc->code));
-  if ((S7_DEBUGGING) && (!a_is_cadr(caller))) fprintf(stderr, "%s %s\n", __func__, display(sc->code));
+  rec_set_test(sc, rec_test_clause(code));
+  rec_set_res(sc, rec_done_clause(code));
+  if ((S7_DEBUGGING) && (!a_is_cadr(caller))) fprintf(stderr, "%s %s\n", __func__, display(code));
   rec_set_f1(sc, (la_op) ? cdr(caller) : cddr(caller));
   rec_set_f2(sc, cdr(rec_call_clause(caller)));
   rec_set_f3(sc, cddr(rec_call_clause(caller)));
@@ -89134,11 +89126,11 @@ static void opinit_if_a_a_opa_l3aq(s7_scheme *sc)
   sc->rec_slot2 = next_slot(sc->rec_slot1);
   sc->rec_slot3 = next_slot(sc->rec_slot2);
   sc->rec_fn = fn_proc(caller);
+  sc->rec_bool = true_is_done(code);
 }
 
 static s7_pointer oprec_if_a_a_opa_l3aq(s7_scheme *sc)
 {
-  sc->rec_bool = true_is_done(sc->code);
   if ((sc->rec_testf(sc, sc->rec_testp) != sc->F) == sc->rec_bool) return(sc->rec_resf(sc, sc->rec_resp));
   recur_push(sc, sc->rec_f1f(sc, sc->rec_f1p));
   recur_push(sc, sc->rec_f2f(sc, sc->rec_f2p));
@@ -89164,10 +89156,14 @@ static s7_pointer oprec_if_a_a_opa_l3aq(s7_scheme *sc)
   return(sc->rec_fn(sc, sc->t2_1));
 }
 
-static s7_pointer op_recur_if_a_a_opa_l3aq(s7_scheme *sc)
+static s7_pointer wrap_recur_if_a_a_opa_l3aq(s7_scheme *sc, s7_pointer code)
 {
-  opinit_if_a_a_opa_l3aq(sc);
-  return(oprec_if_a_a_opa_l3aq(sc));
+  tick_tc(sc, OP_RECUR_IF_A_A_opA_L3Aq);
+  sc->rec_stack = recur_make_stack(sc);
+  opinit_if_a_a_opa_l3aq(sc, code);
+  sc->value = oprec_if_a_a_opa_l3aq(sc);
+  sc->rec_loc = 0;
+  return(sc->value);
 }
 
 
@@ -93414,8 +93410,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_RECUR_IF_A_A_opL3A_L3Aq:        wrap_recur(sc, op_recur_if_a_a_opl3a_l3aq);        continue;
 
 	case OP_RECUR_IF_A_A_opA_LAq:           wrap_recur_if_a_a_opa_laq(sc, sc->code);           continue;
-	case OP_RECUR_IF_A_A_opA_L2Aq:          wrap_recur(sc, op_recur_if_a_a_opa_l2aq);          continue;
-	case OP_RECUR_IF_A_A_opA_L3Aq:          wrap_recur(sc, op_recur_if_a_a_opa_l3aq);          continue;
+	case OP_RECUR_IF_A_A_opA_L2Aq:          wrap_recur_if_a_a_opa_l2aq(sc, sc->code);          continue;
+	case OP_RECUR_IF_A_A_opA_L3Aq:          wrap_recur_if_a_a_opa_l3aq(sc, sc->code);          continue;
 
 	case OP_RECUR_IF_A_A_opA_LA_LAq:        wrap_recur(sc, op_recur_if_a_a_opa_la_laq);        continue;
 	case OP_RECUR_IF_A_opA_LA_LAq_A:        wrap_recur(sc, op_recur_if_a_opa_la_laq_a);        continue;
@@ -96385,6 +96381,8 @@ static void init_fx_function(void)
   fx_function[OP_RECUR_IF_A_A_opL2A_L2Aq] = fx_recur_if_a_a_opl2a_l2aq;
   fx_function[OP_RECUR_IF_A_A_opL3A_L3Aq] = fx_recur_if_a_a_opl3a_l3aq;
   fx_function[OP_RECUR_IF_A_A_opA_LAq] = fx_recur_if_a_a_opa_laq;
+  fx_function[OP_RECUR_IF_A_A_opA_L2Aq] = wrap_recur_if_a_a_opa_l2aq;
+  fx_function[OP_RECUR_IF_A_A_opA_L3Aq] = wrap_recur_if_a_a_opa_l3aq;
   fx_function[OP_RECUR_IF_A_A_AND_A_L2A_L2A] = fx_recur_if_a_a_and_a_l2a_l2a;
   fx_function[OP_RECUR_COND_A_A_A_A_opLA_LAq] = fx_recur_cond_a_a_a_a_opla_laq; /* very few calls (only s7test) */
   fx_function[OP_RECUR_AND_A_OR_A_L2A_L2A] = fx_recur_and_a_or_a_l2a_l2a;       /* very few calls (lint) */
@@ -99066,7 +99064,6 @@ int main(int argc, char **argv)
  *   if/cond + begin-when as test, rec-tester, set!+define+let-shadowing in rec checks, > 2 clauses in cond
  *   need s7tests for the l1|2|3a cond cases
  *   t812 for remaining cases for opa_la, t811 -> s7test or trec? [error checks needed!]
- *   no fx yet: OP_RECUR_IF_A_A_opA_L2Aq|L3Aq (need code arg)
  * tc->do in opt?
  * not gmp: (angle|magnitude (complex|make-rectangular...)) -> direct (don't create number) -- real|imag-part of same -> arg choice, den|num ratio same (den (/...))? (lint)
  */
