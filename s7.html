@@ -2406,8 +2406,22 @@ The new-dimensions parameter is a list giving the lengths of the dimensions.  Th
 end parameters refer to positions in the original vector.
 subvector-vector returns
 the underlying vector, and subvector-position returns the starting point of the subvector
-in the underlying data.
+in the underlying data.  subvector makes it easy to access rows or columns of a vector viewed as a matrix:
 </p>
+<pre class="indented">
+&gt; (define V (vector 0 1 2 3 4 5 6 7 8 9 10 11))
+#(0 1 2 3 4 5 6 7 8 9 10 11)
+&gt; (do ((i 0 (+ i 4))) ((= i 12)) (display (subvector V i (+ i 4))) (newline))
+#(0 1 2 3)
+#(4 5 6 7)
+#(8 9 10 11)
+&gt; (do ((sV (subvector V 0 12 '(3 4))) (i 0 (+ i 1))) ((= i 4))
+    (display (vector (sV 0 i) (sV 1 i) (sV 2 i))) (newline))
+#(0 4 8)
+#(1 5 9)
+#(2 6 10)
+#(3 7 11)
+</pre>
 
 <!--
 <div class="small">
