@@ -89445,7 +89445,7 @@ static opt_pid_t opinit_cond_a_a_a_l2a_lopa_l2aq(s7_scheme *sc, s7_pointer code)
   rec_set_res(sc, cdadr(code));
   p = caddr(code);
   rec_set_f1(sc, p);
-  p = cdadr(sc->rec_f1p);
+  p = cdadr(caddr(code)); /* not sc->rec_f1p = car(caddr(p)) */
   rec_set_f2(sc, p);
   rec_set_f3(sc, cdr(p));
   rec_set_f4(sc, cdr(caller));
