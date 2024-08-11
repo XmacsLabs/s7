@@ -6102,7 +6102,7 @@ static s7_pointer find_let(s7_scheme *sc, s7_pointer obj)
       return(sc->rootlet);
     case T_CONTINUATION: case T_GOTO:
       return(sc->rootlet); /* ??? */
-    case T_C_MACRO: case T_C_FUNCTION_STAR: case T_C_FUNCTION: case T_C_RST_NO_REQ_FUNCTION: /* TODO: t_c_macro needs to be checked */
+    case T_C_MACRO: case T_C_FUNCTION_STAR: case T_C_FUNCTION: case T_C_RST_NO_REQ_FUNCTION:
       return(c_function_let(obj));
     }
   return(sc->nil);
@@ -46136,10 +46136,10 @@ static s7_pointer g_procedure_arglist(s7_scheme *sc, s7_pointer args)
                                s7_make_signature(sc, 2, sc->is_list_symbol, sc->is_symbol_symbol), \
                                s7_make_signature(sc, 2, sc->is_procedure_symbol, sc->is_macro_symbol))
   s7_pointer p = car(args);
-  if (has_closure_let(p)) return(closure_args(p));
+  if (has_closure_let(p)) return(s7_copy(sc, set_plist_1(sc, closure_args(p))));  /* closure_args can be a symbol: (define (f1 . a) a) */
   check_method(sc, p, sc->procedure_arglist_symbol, set_plist_1(sc, p));
   error_nr(sc, sc->wrong_type_arg_symbol,
-	   set_elist_2(sc, wrap_string(sc, "procedure-arglist argument, ~S, is not a function", 49), p));
+	   set_elist_2(sc, wrap_string(sc, "procedure-arglist argument, ~S, is not a scheme function", 56), p));
   return(sc->nil); /* never hit */
 }
 
@@ -88812,7 +88812,6 @@ static void opinit_if_a_a_if_a_a_opl2a_l2aq(s7_scheme *sc, s7_pointer code)
   rec_set_f2(sc, cdr(rec_done_clause(code)));
   rec_set_test(sc, rec_test_clause(code));
   rec_set_res(sc, cdr(rec_test_clause(code)));
-
   p = cdadr(caller);
   rec_set_f3(sc, p);
   rec_set_f4(sc, cdr(p));
@@ -89290,7 +89289,7 @@ static void opinit_cond_a_a_a_a_opa_l2aq(s7_scheme *sc, s7_pointer code)
   rec_set_f1(sc, p);
   rec_set_f2(sc, cdr(p));
   rec_set_f3(sc, cdr(caller));
-  rec_set_f4(sc, opt3_pair(caller));
+  rec_set_f4(sc, rec_call_clause(caller));
   rec_set_f5(sc, cdr(rec_call_clause(caller)));
   sc->rec_slot1 = let_slots(sc->curlet);
   sc->rec_slot2 = next_slot(sc->rec_slot1);
@@ -89445,7 +89444,7 @@ static opt_pid_t opinit_cond_a_a_a_l2a_lopa_l2aq(s7_scheme *sc, s7_pointer code)
   rec_set_res(sc, cdadr(code));
   p = caddr(code);
   rec_set_f1(sc, p);
-  p = cdadr(caddr(code)); /* not sc->rec_f1p = car(caddr(p)) */
+  p = cdadr(p);      /* not sc->rec_f1p = car(caddr(code)) */
   rec_set_f2(sc, p);
   rec_set_f3(sc, cdr(p));
   rec_set_f4(sc, cdr(caller));
@@ -98829,7 +98828,7 @@ int main(int argc, char **argv)
  * tstr      10.0   6342   5488   5162   5180   5194
  * tnum             6013   5433   5396   5409   5432
  * tlist     9219   7546   6558   6240   6300   5764
- * trec      19.6   6980   6599   6656   6658   5981  6018 [8->9]
+ * trec      19.6   6980   6599   6656   6658   5981  6018 [8->9 overhead apparently]
  * tari      15.0   12.7   6827   6543   6278   6180
  * tset                           6260   6364   6174
  * tgsl             7802   6373   6282   6208   6218
@@ -98863,9 +98862,12 @@ int main(int argc, char **argv)
  *   if/cond + begin-when as test, rec-tester, set!+define+let-shadowing in rec checks
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
  *   extend oprec_i* and also to oprec_p[air]* where base p is protected but locals need not be?
- *   if tc_and cases for combination of if+and|or
+ *   if tc_and cases for combination of if+and|or?
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
+ *   try w/o fx*
  * tc->do in opt? 
+ * should procedure-arglist invent an arlist if from C (or have it predefined as sig is)? can cload see this?
+ * t101 + gmp
  */
