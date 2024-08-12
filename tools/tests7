@@ -36,7 +36,8 @@ echo '-------- with-gmp --------'
 echo ' '
 gcc s7.c -c -I. -g3 -DWITH_GMP -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lgmp -lmpfr -lmpc -lm -ldl -Wl,-export-dynamic
-repl s7test.scm
+# repl s7test.scm
+repl t101.scm
 
 echo ' '
 echo '-------- with-gmp precision --------'
