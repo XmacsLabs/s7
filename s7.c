@@ -133,7 +133,7 @@
   #define INITIAL_HEAP_SIZE 64000         /* 29-Jul-21 -- seems faster */
 #endif
 /* the heap grows as needed, this is its initial size. If the initial heap is small, s7 can run in about 2.5 Mbytes of memory.
- * There are many cases where a bigger heap is faster (but harware cache size probably matters more).
+ * There are many cases where a bigger heap is faster (but hardware cache size probably matters more).
  * The heap size must be a multiple of 32.  Each object takes 48 bytes.
  */
 
@@ -9673,9 +9673,13 @@ static s7_pointer g_openlet(s7_scheme *sc, s7_pointer args)
   #define Q_openlet sc->pcl_e
 
   s7_pointer e = car(args), elet, func;
-  elet = find_let(sc, e); /* returns nil if no let found, so has to follow error check above */
-  if (!is_let(elet))
-    sole_arg_wrong_type_error_nr(sc, sc->openlet_symbol, e, a_let_string);
+  if (!is_let(e))
+    {
+      elet = find_let(sc, e); /* returns nil if no let found, so has to follow error check above */
+      if (!is_let(elet))
+	sole_arg_wrong_type_error_nr(sc, sc->openlet_symbol, e, a_let_string);
+    }
+  else elet = e;
   if (elet == sc->rootlet)
     error_nr(sc, sc->out_of_range_symbol, set_elist_1(sc, wrap_string(sc, "can't openlet rootlet", 21)));
   if (is_unlet(elet)) /* protect against infinite loop: (let () (define + -) (with-let (unlet) (+ (openlet (unlet)) 2))) */
@@ -74353,7 +74357,7 @@ static opt_t optimize(s7_scheme *sc, s7_pointer code, int32_t hop, s7_pointer e)
 		syntax_error_nr(sc, "stray dot in function body: ~S", 30, code);
 	      return(OPT_OOPS);
 	    }}
-      else /* new 22-Sep-19, but I don't think this saves anything over falling into trailers */
+      else
 	if (is_symbol(obj))
 	  set_optimize_op(obj, (is_keyword(obj)) ? OP_CONSTANT : OP_SYMBOL);
 	else set_optimize_op(obj, OP_CONSTANT);
@@ -93077,48 +93081,48 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
 
 	  /* these nine are ok */
-	case OP_TC_CASE_LA:               if (op_tc_case_la(sc, sc->code, 1))               continue; goto BEGIN;
-	case OP_TC_CASE_L2A:              if (op_tc_case_la(sc, sc->code, 2))               continue; goto BEGIN;
-	case OP_TC_CASE_L3A:              if (op_tc_case_la(sc, sc->code, 3))               continue; goto BEGIN;
-	case OP_TC_WHEN_LA:               sc->value = op_tc_when_la(sc, sc->code);          continue;
-	case OP_TC_WHEN_L2A:              sc->value = op_tc_when_l2a(sc, sc->code);         continue;
-	case OP_TC_WHEN_L3A:              sc->value = op_tc_when_l3a(sc, sc->code);         continue;
-	case OP_TC_IF_A_Z_LA:             if (op_tc_if_a_z_la(sc, sc->code))                continue; goto EVAL;
-	case OP_TC_IF_A_Z_L2A:            if (op_tc_if_a_z_l2a(sc, sc->code))               continue; goto EVAL;
-	case OP_TC_IF_A_Z_L3A:            if (op_tc_if_a_z_l3a(sc, sc->code))               continue; goto EVAL;
+	case OP_TC_CASE_LA:               if (op_tc_case_la(sc, sc->code, 1))                continue; goto BEGIN;
+	case OP_TC_CASE_L2A:              if (op_tc_case_la(sc, sc->code, 2))                continue; goto BEGIN;
+	case OP_TC_CASE_L3A:              if (op_tc_case_la(sc, sc->code, 3))                continue; goto BEGIN;
+	case OP_TC_WHEN_LA:               sc->value = op_tc_when_la(sc, sc->code);           continue;
+	case OP_TC_WHEN_L2A:              sc->value = op_tc_when_l2a(sc, sc->code);          continue;
+	case OP_TC_WHEN_L3A:              sc->value = op_tc_when_l3a(sc, sc->code);          continue;
+	case OP_TC_IF_A_Z_LA:             if (op_tc_if_a_z_la(sc, sc->code))                 continue; goto EVAL;
+	case OP_TC_IF_A_Z_L2A:            if (op_tc_if_a_z_l2a(sc, sc->code))                continue; goto EVAL;
+	case OP_TC_IF_A_Z_L3A:            if (op_tc_if_a_z_l3a(sc, sc->code))                continue; goto EVAL; 
 
-	case OP_TC_IF_A_Z_IF_A_Z_LA:      if (op_tc_if_a_z_if_a_z_la(sc, sc->code, true))   continue; goto EVAL;
-	case OP_TC_IF_A_Z_IF_A_LA_Z:      if (op_tc_if_a_z_if_a_z_la(sc, sc->code, false))  continue; goto EVAL;
- 	case OP_TC_AND_A_IF_A_LA_Z:       if (op_tc_if_a_z_if_a_z_la(sc, sc->code, false))  continue; goto EVAL;
- 	case OP_TC_AND_A_IF_A_Z_LA:       if (op_tc_if_a_z_if_a_z_la(sc, sc->code, true))   continue; goto EVAL;
+	case OP_TC_IF_A_Z_IF_A_Z_LA:      if (op_tc_if_a_z_if_a_z_la(sc, sc->code, true))    continue; goto EVAL;
+	case OP_TC_IF_A_Z_IF_A_LA_Z:      if (op_tc_if_a_z_if_a_z_la(sc, sc->code, false))   continue; goto EVAL;
+ 	case OP_TC_AND_A_IF_A_LA_Z:       if (op_tc_if_a_z_if_a_z_la(sc, sc->code, false))   continue; goto EVAL;
+ 	case OP_TC_AND_A_IF_A_Z_LA:       if (op_tc_if_a_z_if_a_z_la(sc, sc->code, true))    continue; goto EVAL;
 
-	case OP_TC_IF_A_Z_IF_A_Z_L2A:     if (op_tc_if_a_z_if_a_z_l2a(sc, sc->code))        continue; goto EVAL;
-	case OP_TC_IF_A_Z_IF_A_L2A_Z:     if (op_tc_if_a_z_if_a_l2a_z(sc, sc->code))        continue; goto EVAL;
+	case OP_TC_IF_A_Z_IF_A_Z_L2A:     if (op_tc_if_a_z_if_a_z_l2a(sc, sc->code))         continue; goto EVAL;
+	case OP_TC_IF_A_Z_IF_A_L2A_Z:     if (op_tc_if_a_z_if_a_l2a_z(sc, sc->code))         continue; goto EVAL;
 
-	case OP_TC_IF_A_Z_IF_A_Z_L3A:     if (op_tc_if_a_z_if_a_z_l3a(sc, sc->code, true))  continue; goto EVAL;
-	case OP_TC_IF_A_Z_IF_A_L3A_Z:     if (op_tc_if_a_z_if_a_z_l3a(sc, sc->code, false)) continue; goto EVAL;
+	case OP_TC_IF_A_Z_IF_A_Z_L3A:     if (op_tc_if_a_z_if_a_z_l3a(sc, sc->code, true))   continue; goto EVAL;
+	case OP_TC_IF_A_Z_IF_A_L3A_Z:     if (op_tc_if_a_z_if_a_z_l3a(sc, sc->code, false))  continue; goto EVAL;
 
-	case OP_TC_AND_A_OR_A_LA:         sc->value = op_tc_and_a_or_a_la(sc, sc->code);    continue;
-	case OP_TC_OR_A_AND_A_LA:         sc->value = op_tc_or_a_and_a_la(sc, sc->code);    continue;
-	case OP_TC_AND_A_OR_A_L2A:        sc->value = op_tc_and_a_or_a_l2a(sc, sc->code);   continue;
-	case OP_TC_OR_A_AND_A_L2A:        sc->value = op_tc_or_a_and_a_l2a(sc, sc->code);   continue;
-	case OP_TC_AND_A_OR_A_L3A:        sc->value = op_tc_and_a_or_a_l3a(sc, sc->code);   continue;
-	case OP_TC_OR_A_AND_A_L3A:        sc->value = op_tc_or_a_and_a_l3a(sc, sc->code);   continue;
-	case OP_TC_OR_A_AND_A_A_LA:       sc->value = op_tc_or_a_and_a_a_la(sc, sc->code);  continue;
-	case OP_TC_OR_A_AND_A_A_L3A:      sc->value = op_tc_or_a_and_a_a_l3a(sc, sc->code); continue;
-	case OP_TC_AND_A_OR_A_A_LA:       sc->value = op_tc_and_a_or_a_a_la(sc, sc->code);  continue;
-	case OP_TC_OR_A_A_AND_A_A_LA:     sc->value = op_tc_or_a_a_and_a_a_la(sc, sc->code);continue;
+	case OP_TC_AND_A_OR_A_LA:         sc->value = op_tc_and_a_or_a_la(sc, sc->code);     continue;
+	case OP_TC_OR_A_AND_A_LA:         sc->value = op_tc_or_a_and_a_la(sc, sc->code);     continue;
+	case OP_TC_AND_A_OR_A_L2A:        sc->value = op_tc_and_a_or_a_l2a(sc, sc->code);    continue;
+	case OP_TC_OR_A_AND_A_L2A:        sc->value = op_tc_or_a_and_a_l2a(sc, sc->code);    continue;
+	case OP_TC_AND_A_OR_A_L3A:        sc->value = op_tc_and_a_or_a_l3a(sc, sc->code);    continue;
+	case OP_TC_OR_A_AND_A_L3A:        sc->value = op_tc_or_a_and_a_l3a(sc, sc->code);    continue;
+	case OP_TC_OR_A_AND_A_A_LA:       sc->value = op_tc_or_a_and_a_a_la(sc, sc->code);   continue;
+	case OP_TC_OR_A_AND_A_A_L3A:      sc->value = op_tc_or_a_and_a_a_l3a(sc, sc->code);  continue;
+	case OP_TC_AND_A_OR_A_A_LA:       sc->value = op_tc_and_a_or_a_a_la(sc, sc->code);   continue;
+	case OP_TC_OR_A_A_AND_A_A_LA:     sc->value = op_tc_or_a_a_and_a_a_la(sc, sc->code); continue;
 
-	case OP_TC_LET_IF_A_Z_LA:         if (op_tc_let_if_a_z_la(sc, sc->code))            continue; goto EVAL;
-	case OP_TC_LET_IF_A_Z_L2A:        if (op_tc_let_if_a_z_l2a(sc, sc->code))           continue; goto EVAL;
-	case OP_TC_LET_WHEN_L2A:          sc->value = op_tc_let_when_l2a(sc, sc->code);     continue;
+	case OP_TC_LET_IF_A_Z_LA:         if (op_tc_let_if_a_z_la(sc, sc->code))             continue; goto EVAL;
+	case OP_TC_LET_IF_A_Z_L2A:        if (op_tc_let_if_a_z_l2a(sc, sc->code))            continue; goto EVAL;
+	case OP_TC_LET_WHEN_L2A:          sc->value = op_tc_let_when_l2a(sc, sc->code);      continue;
 
-	case OP_TC_COND_A_Z_A_L2A_L2A:    if (op_tc_cond_a_z_a_l2a_l2a(sc, sc->code))       continue; goto EVAL;
-	case OP_TC_IF_A_Z_IF_A_L3A_L3A:   if (op_tc_if_a_z_if_a_l3a_l3a(sc, sc->code))      continue; goto EVAL;
+	case OP_TC_COND_A_Z_A_L2A_L2A:    if (op_tc_cond_a_z_a_l2a_l2a(sc, sc->code))        continue; goto EVAL;
+	case OP_TC_IF_A_Z_IF_A_L3A_L3A:   if (op_tc_if_a_z_if_a_l3a_l3a(sc, sc->code))       continue; goto EVAL;
 
-	case OP_TC_IF_A_Z_LET_IF_A_Z_L2A: if (op_tc_if_a_z_let_if_a_z_l2a(sc, sc->code))    continue; goto EVAL;
-	case OP_TC_LET_COND:              if (op_tc_let_cond(sc, sc->code))                 continue; goto EVAL;
-	case OP_TC_COND_N:                if (op_tc_cond_n(sc, sc->code))                   continue; goto EVAL;
+	case OP_TC_IF_A_Z_LET_IF_A_Z_L2A: if (op_tc_if_a_z_let_if_a_z_l2a(sc, sc->code))     continue; goto EVAL;
+	case OP_TC_LET_COND:              if (op_tc_let_cond(sc, sc->code))                  continue; goto EVAL;
+	case OP_TC_COND_N:                if (op_tc_cond_n(sc, sc->code))                    continue; goto EVAL;
 
 
 	  /* these six are ok */
@@ -98219,7 +98223,6 @@ s7_scheme *s7_init(void)
   init_signatures(sc);      /* depends on procedure symbols */
   sc->starlet = make_starlet(sc);
   s7_set_history_enabled(sc, true);
-
   s7_eval_c_string(sc, "(define make-hook                                                                 \n\
                           (let ((+documentation+ \"(make-hook . pars) returns a new hook (a function) that passes the parameters to each function in its function list.\")) \n\
                             (lambda hook-args                                                             \n\
@@ -98230,6 +98233,7 @@ s7_scheme *s7_init(void)
                                         (for-each (lambda (hook-function) (hook-function hook)) body)     \n\
                                         result))))))))");
   /* (procedure-source (make-hook 'x 'y)): (lambda* (x y) (let ((result #<unspecified>)) ... result)), see stuff.scm for commentary */
+  /* '((when (pair? body) ...) at start might be a good idea -- depends on how often an empty hook is called */
 
   /* -------- *unbound-variable-hook* -------- */
   sc->unbound_variable_hook = s7_eval_c_string(sc, "(make-hook 'variable)");
@@ -98669,16 +98673,16 @@ int main(int argc, char **argv)
 #if (MS_WINDOWS) || (!WITH_C_LOADER) || ((defined(__linux__)) && (!defined(__GLIBC__))) /* musl? */
       dumb_repl(sc);
 #else
-#ifdef S7_LOAD_PATH
+  #ifdef S7_LOAD_PATH
       s7_add_to_load_path(sc, S7_LOAD_PATH);
-#else
+  #else
       char *dir = realdir(argv[0]);
       if (dir)
 	{
 	  s7_add_to_load_path(sc, dir);
 	  free(dir);
 	}
-#endif
+  #endif
       s7_repl(sc);
 #endif
     }
@@ -98712,7 +98716,7 @@ int main(int argc, char **argv)
  * tmock            1145   1082   1042   1045   1035
  * tvect     3408   2464   1772   1669   1497   1454
  * tauto                   2562   2048   1729   1724
- * thook     7651   ----   2590   2030   2046   1756
+ * thook     7651   ----   2590   2030   2046   1754
  * texit     1884   1950   1778   1741   1770   1759
  * s7test           1831   1818   1829   1830   1855
  * lt        2222   2172   2150   2185   1950   1913
@@ -98764,19 +98768,21 @@ int main(int argc, char **argv)
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * safe_do hop bit in other do cases and let
- * perhaps complex-vector (stored as rl,im... could use existing float-vectors?) #c(...) for vector (read-time complex is a+bi)
+ * perhaps complex-vector (stored as rl,im...), could use existing float-vectors?) #c(...) for vector (read-time complex is a+bi)
  *    (make-complex-vector size): (make-float-vector (* 2 size))
  *    ref/set map/for-each, opt/do, implicit ref/set, fill! reverse copy append s7test
  *    iterator ->str ->list ->let equal subvector sort?!? hash unknown-ops cload! wrapper [also wrap_complex -- not useful in s7.c currently]
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   cond cases can also use this: t811 -> tleft and s7tests, check_recur* is a mess now, need tc_if_and_cond
- *   if/cond + begin-when as test, rec-tester, set!+define+let-shadowing in rec checks
+ *   if/cond + begin-when as test, rec-tester, set!+define+let-shadowing in rec checks, la(la...) tests
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
  *   extend oprec_i* and also to oprec_p[air]* where base p is protected but locals need not be?
  *   if tc_and cases for combination of if+and|or?
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
+ *   safe_closure_a -> recur in loop, lookup closure and set h bit, go directly to recur in loop
  * should procedure-arglist invent an arglist if from C (or have it predefined as sig is)? can cload see this? why doesn't C have __func_pars__?
  *   also would be nice to have function location info for C/FFI funcs: (list __FILE__ __LINE__)?
+ * gmp+t101?
  */
