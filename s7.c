@@ -25848,15 +25848,15 @@ Pass this as the second argument to 'random' to get a repeatable random number s
 #if WITH_GMP
   s7_pointer r, seed;
   if (is_null(args))
-    return(sc->F); /* how to find current state, if any? */
-
-  seed = car(args);
-  if (!s7_is_integer(seed))
-    return(sole_arg_method_or_bust(sc, seed, sc->random_state_symbol, args, sc->type_names[T_INTEGER]));
-
-  if (is_t_integer(seed))
-    seed = s7_int_to_big_integer(sc, integer(seed));
-
+    seed = s7_int_to_big_integer(sc, 1234); /* ?? */
+  else 
+    {
+      seed = car(args);
+      if (!s7_is_integer(seed))
+	return(sole_arg_method_or_bust(sc, seed, sc->random_state_symbol, args, sc->type_names[T_INTEGER]));
+      if (is_t_integer(seed))
+	seed = s7_int_to_big_integer(sc, integer(seed));
+    }
   new_cell(sc, r, T_RANDOM_STATE);
   gmp_randinit_default(random_gmp_state(r));            /* Mersenne twister */
   gmp_randseed(random_gmp_state(r), big_integer(seed)); /* this is ridiculously slow! */
@@ -71961,7 +71961,7 @@ static opt_t fxify_closure_s(s7_scheme *sc, s7_pointer func, s7_pointer expr, s7
 static bool fxify_closure_a(s7_scheme *sc, s7_pointer func, bool one_form, bool safe_case, int32_t hop, s7_pointer expr, s7_pointer e)
 {
   if (!one_form)
-    set_optimize_op(expr, hop + ((safe_case) ? OP_SAFE_CLOSURE_A : OP_CLOSURE_A));
+    set_optimize_op(expr, hop + ((safe_case) ? OP_SAFE_CLOSURE_A : OP_CLOSURE_A)); /* fx(body) cases here are rare (make-index) */
   else
     if (!safe_case)
       set_optimize_op(expr, hop + OP_CLOSURE_A_O);
@@ -75086,14 +75086,9 @@ static bool check_recur_if(s7_scheme *sc, const s7_pointer name, int32_t pars, s
 
 		      return(true);
 		    }
-		  if ((pars == 2) && (is_proper_list_3(sc, true2)) &&
-		      (car(true2) == name) &&
-		      (is_fxable(sc, cadr(true2))) && (is_fxable(sc, caddr(true2))) &&
-		      (is_fxable(sc, cadr(false2))) &&
-		      (is_proper_list_3(sc, la2)) &&
-		      (car(la2) == name) &&          /* actually, not needed because func is TC (not RECUR) if not == name */
-		      (is_fxable(sc, cadr(la2))) &&
-		      (is_fxable(sc, caddr(la2))))
+		  if ((pars == 2) && (is_fxable(sc, cadr(false2))) &&
+		      (is_proper_list_3(sc, true2)) && (car(true2) == name) && (is_fxable(sc, cadr(true2))) && (is_fxable(sc, caddr(true2))) &&
+		      (is_proper_list_3(sc, la2)) && (car(la2) == name) && (is_fxable(sc, cadr(la2))) && (is_fxable(sc, caddr(la2))))
 		    {
 		      set_safe_optimize_op(body, OP_RECUR_IF_A_A_IF_A_L2A_opA_L2Aq);
 		      fx_annotate_arg(sc, cdr(body), args);       /* if_(A)... */
@@ -75267,15 +75262,9 @@ static bool check_recur(s7_scheme *sc, s7_pointer name, int32_t pars, s7_pointer
 			  (caadr(clause2) == name))
 			{
 			  s7_pointer la = caddr(la_clause);
-			  if ((is_pair(la)) &&
-			      (car(la) == name) &&
-			      (is_pair(cdr(la))) &&
-			      (is_fxable(sc, cadr(la))) &&
-			      (((pars == 1) && (is_null(cddr(la)))) ||
-			       ((pars == 2) &&
-				(is_pair(cddr(la))) &&
-				(is_fxable(sc, caddr(la))) &&
-				(is_null(cdddr(la))))))
+			  if ((pars == 2) &&
+			      (is_pair(la)) && (car(la) == name) && (is_pair(cdr(la))) && (is_fxable(sc, cadr(la))) &&
+			      (is_pair(cddr(la))) && (is_fxable(sc, caddr(la))) && (is_null(cdddr(la))))
 			    {
 			      s7_pointer l2a = cadr(clause2);
 			      if ((is_fxable(sc, cadr(l2a))) && /* args to first l2a */
@@ -75293,7 +75282,7 @@ static bool check_recur(s7_scheme *sc, s7_pointer name, int32_t pars, s7_pointer
 			      fx_annotate_args(sc, clause, args);
 			      fx_annotate_arg(sc, cdr(la_clause), args);
 			      fx_annotate_args(sc, cdr(la), args);
-			      fx_tree(sc, cdr(body), car(args), (pars == 1) ? NULL : cadr(args), NULL, false);
+			      fx_tree(sc, cdr(body), car(args), cadr(args), NULL, false);
 			      rec_set_call_clause(la_clause, la);
 			      return(true);
 			    }}
@@ -75327,7 +75316,7 @@ static bool check_recur(s7_scheme *sc, s7_pointer name, int32_t pars, s7_pointer
 				  {
 				    if (is_fxable(sc, la1))
 				      {
-					set_safe_optimize_op(body, OP_RECUR_COND_A_A_A_A_opA_L2Aq);
+					set_safe_optimize_op(body, OP_RECUR_COND_A_A_A_A_opA_L2Aq); /* see if_a_a_if_a_l2a_opa_l2a, first l2a->a */
 					fx_annotate_arg(sc, cdr(la_clause), args);
 					happy = true;
 				      }}
@@ -98199,6 +98188,7 @@ s7_scheme *s7_init(void)
 
   sc->pi_symbol = s7_define_constant(sc, "pi", big_pi(sc)); /* not actually a constant because it changes with bignum-precision */
   s7_provide(sc, "gmp");
+  set_initial_value(sc->pi_symbol, big_pi(sc)); /* real_pi (below) is not in the heap so pi's initial_value is real_pi if not gmp (s7_make_slot 9571) */
 #else
   sc->pi_symbol = s7_define_constant(sc, "pi", real_pi);
 #endif
@@ -98774,7 +98764,6 @@ int main(int argc, char **argv)
  *    iterator ->str ->list ->let equal subvector sort?!? hash unknown-ops cload! wrapper [also wrap_complex -- not useful in s7.c currently]
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   cond cases can also use this: t811 -> tleft and s7tests, check_recur* is a mess now, need tc_if_and_cond
- *   if/cond + begin-when as test, rec-tester, set!+define+let-shadowing in rec checks, la(la...) tests
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
  *   extend oprec_i* and also to oprec_p[air]* where base p is protected but locals need not be?
  *   if tc_and cases for combination of if+and|or?
@@ -98782,7 +98771,10 @@ int main(int argc, char **argv)
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *   safe_closure_a -> recur in loop, lookup closure and set h bit, go directly to recur in loop
- * should procedure-arglist invent an arglist if from C (or have it predefined as sig is)? can cload see this? why doesn't C have __func_pars__?
- *   also would be nice to have function location info for C/FFI funcs: (list __FILE__ __LINE__)?
- * gmp+t101?
+ * function location info for C/FFI funcs (cload could do this, but it would be the FFI location):
+ *   #define stringify_1(x) #x
+ *   #define stringify(x) stringify_1(x)
+ *   static const char *L_abs = __FILE__ "[" stringify(__LINE__) "]";
+ *   then at init time: s7_set_location(abs, L_abs)|s7_location(abs)? maybe include s7_scheme arg
+ *   object->let, *function*, maybe procedure-location, (scheme funcs have (*function* (curlet) 'file|line), but we'd want this via the function name
  */
