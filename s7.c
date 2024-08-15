@@ -8823,6 +8823,7 @@ static s7_pointer g_gensym(s7_scheme *sc, s7_pointer args)
       plen = 6;
     }
   len = plen + 32; /* why 32 -- we need room for the gensym_counter integer, but (length "9223372036854775807") = 19, see gensym name collision loop below */
+  /* it might be better (less predictable) to use a random number instead of gensym_counter, but that looks messy */
 
   b = mallocate(sc, len + sizeof(block_t) + 2 * sizeof(s7_cell));
   base = (char *)block_data(b);
@@ -98763,18 +98764,15 @@ int main(int argc, char **argv)
  *    ref/set map/for-each, opt/do, implicit ref/set, fill! reverse copy append s7test
  *    iterator ->str ->list ->let equal subvector sort?!? hash unknown-ops cload! wrapper [also wrap_complex -- not useful in s7.c currently]
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
- *   cond cases can also use this: t811 -> tleft and s7tests, check_recur* is a mess now, need tc_if_and_cond
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
  *   extend oprec_i* and also to oprec_p[air]* where base p is protected but locals need not be?
- *   if tc_and cases for combination of if+and|or?
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
- *   safe_closure_a -> recur in loop, lookup closure and set h bit, go directly to recur in loop
  * function location info for C/FFI funcs (cload could do this, but it would be the FFI location):
  *   #define stringify_1(x) #x
  *   #define stringify(x) stringify_1(x)
  *   static const char *L_abs = __FILE__ "[" stringify(__LINE__) "]";
  *   then at init time: s7_set_location(abs, L_abs)|s7_location(abs)? maybe include s7_scheme arg
- *   object->let, *function*, maybe procedure-location, (scheme funcs have (*function* (curlet) 'file|line), but we'd want this via the function name
+ *   object->let, *function*, maybe procedure-location, (scheme funcs have (*function* (curlet) 'file|line), but we'd want this via the function name)
  */

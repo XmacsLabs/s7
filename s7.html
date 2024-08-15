@@ -1763,6 +1763,7 @@ for a setter that insists the new value be an integer:
 &gt; (typed-let ((x 3 integer?))
     (set! x 3.14))
 <em class="red">error</em><em class="gray">: set! x: 3.14, is a real but should be an integer</em>
+;; see also typed-lambda in stuff.scm
 </pre>
 
 <p>C-side symbol setters go through s7_set_setter. There is an example <a href="#notify">below</a>.

@@ -124,6 +124,22 @@
        (set! (outlet ,e) (rootlet)) ; mimic (inlet ...)
        ,e)))
 
+(define-macro (typed-lambda args . body) ; (typed-lambda ((var [type])...) ...), (typed-lambda ((i integer?) (x real?) z) (+ i x z))
+  (if (symbol? args)
+      (apply lambda args body)
+      (let ((new-args (copy args)))
+	(do ((p new-args (cdr p)))
+	    ((not (pair? p)))
+	  (if (pair? (car p))
+	      (set-car! p (caar p))))
+	`(lambda ,new-args
+	   ,@(map (lambda (arg)
+		    (if (pair? arg)
+			`(unless (,(cadr arg) ,(car arg))
+			   (error 'wrong-type-arg "~S is not ~S~%" ',(car arg) ',(cadr arg)))
+			(values)))
+		  args)
+	   ,@body))))
 
 ;;; ----------------
 (define (first obj)  (if (sequence? obj) (obj 0) (error 'wrong-type-arg "first argument, ~S, is not a sequence" obj)))

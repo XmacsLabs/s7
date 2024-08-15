@@ -237,18 +237,9 @@
 
 (tcase1)
 
-#|
-(define (case2 i) ; case_a_i_s_a, uses t_lookup
-  (case i
-    ((0) 0)
-    ((1) 1)
-    ((2) 2)
-    (else 3)))
-|#
 (define (tcase2)
   (do ((i 0 (+ i 1)))
       ((= i case-size))
-    ;(case2 i)
     (case i
       ((0) 0)
       ((1) 1)
@@ -257,17 +248,9 @@
 
 (tcase2)
 
-#|
-(define (case3 x lst)        ; case_a_i_s_a
-  (case x                    ;   t_lookup
-    ((0) (pair? lst))        ; fx_is_pair_u
-    ((1) (pair? (cdr lst)))  ; fx_is_pair_cdr_u
-    (else (null? lst))))     ; fx_is_null_u
-|#
 (define (tcase3 lst)
   (do ((i 0 (+ i 1)))        ; op_simple_do_step -> safe_closure_aa_o
       ((= i case-size))
-    ;(case3 i '(1 2))       ; fx_t fx_q
     (case i                    ;   t_lookup
       ((0) (pair? lst))        ; fx_is_pair_u
       ((1) (pair? (cdr lst)))  ; fx_is_pair_cdr_u
@@ -287,20 +270,9 @@
 
 (tcase3-1 '(1 2))
 
-#|
-(define (case4 x) ; case a_e_s_a
-  (case (remainder x 5)
-    ((a) 0)
-    ((b) 1)
-    ((c) 2)
-    ((d) 3)
-    (else 4)))
-|#
-
 (define (tcase4)
   (do ((i 0 (+ i 1)))
       ((= i case-size))
-    ;(case4 i)
     (case (remainder i 5)
       ((a) 0)
       ((b) 1)
@@ -314,19 +286,9 @@
   (let ((syms '(a b c d e)))
     (lambda (x)
       (syms (remainder x 5))))) ; list-ref is slower
-#|
-(define (case5 x) ; case p_e_s
-  (case (sym-selector x)
-    ((a) 0)
-    ((b) 1)
-    ((c) 2)
-    ((d) 3)
-    (else 4)))
-|#
 (define (tcase5)
   (do ((i 0 (+ i 1)))
       ((= i case-size))
-    ;(case5 i)
     (case (sym-selector i)
       ((a) 0)
       ((b) 1)
@@ -338,19 +300,9 @@
 
 (define-constant (int-selector x)
   (remainder x 5))
-#|
-(define (case6 x) ; case p_i_s
-  (case (int-selector x)
-    ((1) 0)
-    ((2) 1)
-    ((3) 2)
-    ((4) 3)
-    (else 4)))
-|#
 (define (tcase6)
   (do ((i 0 (+ i 1)))
       ((= i case-size))
-    ;(case6 i)
     (case (int-selector i)
       ((1) 0)
       ((2) 1)
@@ -362,19 +314,10 @@
 
 (define-constant (any-selector x)
   (if (zero? (remainder x 3)) #\a))
-#|
-(define (case7 x) ; case p_g_s
-  (case (any-selector x)
-    ((1/2) 0)
-    ((#\a) 1)
-    ((#<unspecified>) 2)
-    ((#f) 3)
-    (else 4)))
-|#
+
 (define (tcase7)
   (do ((i 0 (+ i 1)))
       ((= i case-size))
-    ;(case7 i)
     (case (any-selector i)
       ((1/2) 0)
       ((#\a) 1)
@@ -384,20 +327,9 @@
 
 (tcase7)
 
-#|
-(define (case8 x) ; case a_g_s_a
-  (case (even? x)
-    ((1/2) 0)
-    ((#\a) 1)
-    ((#<unspecified>) 2)
-    ((#f) 3)
-    (else 4)))
-|#
-
 (define (tcase8)
   (do ((i 0 (+ i 1)))
       ((= i case-size))
-   ;(case8 i)
     (case (even? i)
       ((1/2) 0)
       ((#\a) 1)
@@ -407,18 +339,9 @@
 
 (tcase8)
 
-#|
-(define (case9 x) ; case a_e_g
-  (case (even? x)
-    ((#t) (display x #f) (not x))
-    ((#f) (write x #f) (integer? x))
-    (else 'oops)))
-|#
-
 (define (tcase9)
   (do ((i 0 (+ i 1)))
       ((= i case-size))
-    ;(case9 i)
     (case (even? i)
       ((#t) (display i #f) (not i))
       ((#f) (write i #f) (integer? i))
@@ -426,19 +349,9 @@
 
 (tcase9)
 
-#|
-(define (case10 x) ; case a_g_g
-  (case (even? x)
-    ((#t) (display x #f) (not x))
-    ((1/2) (write x #f) (integer? x))
-    ((1 2 3) 0)
-    (else 'oops)))
-|#
-
 (define (tcase10)
   (do ((i 0 (+ i 1)))
       ((= i case-size))
-    ;(case10 i)
     (case (even? i)
       ((#t) (display i #f) (not i))
       ((1/2) (write i #f) (integer? i))
@@ -447,20 +360,9 @@
 
 (tcase10)
 
-#|
-(define (case11 x) ; case a_s_g
-  (case (remainder x 5)
-    ((a) 0)
-    ((b) (display x #f) 1)
-    ((c) (+ 1 2))
-    ((d) 3)
-    (else 4)))
-|#
-
 (define (tcase11)
   (do ((i 0 (+ i 1)))
       ((= i case-size))
-    ;(case11 i)
     (case (remainder i 5)
       ((a) 0)
       ((b) (display i #f) 1)
@@ -470,19 +372,9 @@
 
 (tcase11)
 
-#|
-(define (case12 x) ; case p_g_g
-  (case (any-selector x)
-    ((#t) (display x #f) (not x))
-    ((1/2) (write x #f) (integer? x))
-    ((1 2 3) 0)
-    (else 'oops)))
-|#
-
 (define (tcase12)
   (do ((i 0 (+ i 1)))
       ((= i case-size))
-    ;(case12 i)
     (case (any-selector i)
       ((#t) (display i #f) (not i))
       ((1/2) (write i #f) (integer? i))
@@ -491,20 +383,10 @@
 
 (tcase12)
 
-#|
-(define (case13 x) ; case p_e_g
-  (case (sym-selector x)
-    ((a) 0)
-    ((b) (display x #f) 32)
-    ((c) 2)
-    ((d) 3)
-    (else 4)))
-|#
-
 (define (tcase13)
   (do ((i 0 (+ i 1)))
       ((= i case-size))
-    ;(case13 i)
+
     (case (sym-selector i)
       ((a) 0)
       ((b) (display i #f) 32)
@@ -514,20 +396,9 @@
 
 (tcase13)
 
-#|
-(define (case14 x) ; a_g_s
-  (case x
-    ((1 2 3) 0)
-    ((4 5) 1)
-    ((6) 2)
-    ((7 8 9) 3)
-    ((10) 4)))
-|#
-
 (define (tcase14)
   (do ((i 0 (+ i 1)))
       ((= i case-size))
-    ;(case14 i)
     (case i
       ((1 2 3) 0)
       ((4 5) 1)
@@ -537,19 +408,9 @@
 
 (tcase14)
 
-#|
-(define (case15 x) ; case a_e_s
-  (case (remainder x 5)
-    ((a) 0)
-    ((b) 1)
-    ((c) 2)
-    ((d) 3)))
-|#
-
 (define (tcase15)
   (do ((i 0 (+ i 1)))
       ((= i case-size))
-    ;(case15 i)
     (case (remainder i 5)
       ((a) 0)
       ((b) 1)
@@ -558,20 +419,9 @@
 
 (tcase15)
 
-#|
-(define (case16 x) ; case a_s_g_a
-  (case (remainder x 5)
-    ((a) 0)
-    ((b) (display x #f) 1)
-    ((c) (+ 1 2))
-    ((d) 3)
-    (else 4)))
-|#
-
 (define (tcase16)
   (do ((i 0 (+ i 1)))
       ((= i case-size))
-    ;(case16 i)
     (case (remainder i 5)
       ((a) 0)
       ((b) (display i #f) 1)
