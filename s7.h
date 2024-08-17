@@ -2,7 +2,7 @@
 #define S7_H
 
 #define S7_VERSION "10.12"
-#define S7_DATE "16-Aug-2024"
+#define S7_DATE "19-Aug-2024"
 #define S7_MAJOR_VERSION 10
 #define S7_MINOR_VERSION 12
 
@@ -36,6 +36,16 @@ extern "C" {
 
 typedef struct s7_scheme s7_scheme;
 typedef struct s7_cell *s7_pointer;
+
+#if S7_WITH_COMPLEX_VECTORS
+  #if __cplusplus
+    #include <complex>
+    typedef std::complex<s7_double> s7_complex;
+  #else
+    #include <complex.h>
+    typedef double complex s7_complex;
+  #endif
+#endif
 
 s7_scheme *s7_init(void);
   /* s7_scheme is our interpreter
@@ -324,12 +334,19 @@ s7_double s7_float_vector_ref(s7_pointer vec, s7_int index);
 s7_double s7_float_vector_set(s7_pointer vec, s7_int index, s7_double value);
 
 s7_pointer s7_make_vector(s7_scheme *sc, s7_int len);                                 /* (make-vector len) */
+s7_pointer s7_make_normal_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info); /* make-vector but possibly multidimensional */
+s7_pointer s7_make_and_fill_vector(s7_scheme *sc, s7_int len, s7_pointer fill);       /* (make-vector len fill) */
 s7_pointer s7_make_int_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info);
 s7_pointer s7_make_byte_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info);
 s7_pointer s7_make_float_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info);
-s7_pointer s7_make_normal_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info); /* make-vector but possibly multidimensional */
 s7_pointer s7_make_float_vector_wrapper(s7_scheme *sc, s7_int len, s7_double *data, s7_int dims, s7_int *dim_info, bool free_data);
-s7_pointer s7_make_and_fill_vector(s7_scheme *sc, s7_int len, s7_pointer fill);       /* (make-vector len fill) */
+#if S7_WITH_COMPLEX_VECTORS
+  s7_pointer s7_make_complex_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info);
+  s7_pointer s7_make_complex_vector_wrapper(s7_scheme *sc, s7_int len, s7_complex *data, s7_int dims, s7_int *dim_info, bool free_data);
+  s7_complex *s7_complex_vector_elements(s7_pointer vec);
+  s7_complex s7_complex_vector_ref(s7_pointer vec, s7_int index);
+  s7_complex s7_complex_vector_set(s7_pointer vec, s7_int index, s7_complex value);
+#endif
 
 void s7_vector_fill(s7_scheme *sc, s7_pointer vec, s7_pointer obj);                   /* (vector-fill! vec obj) */
 s7_pointer s7_vector_copy(s7_scheme *sc, s7_pointer old_vect);
@@ -911,6 +928,7 @@ bool s7_is_bignum(s7_pointer obj);
  *
  *        s7 changes
  *
+ * 16-Aug:    s7 complex vectors.
  * 2-July:    s7_make_typed_function_with_environment.
  * 31-May:    *s7* 'symbol-printer and 'symbol-quote?.
  * 24-May:    symbol-initial-value, s7_symbol_initial_value, and setters.

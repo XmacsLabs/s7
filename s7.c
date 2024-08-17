@@ -247,6 +247,7 @@
   #ifndef HAVE_COMPLEX_NUMBERS
     #if __TINYC__
       #define HAVE_COMPLEX_NUMBERS 0
+      typedef double s7_complex;
     #else
       #define HAVE_COMPLEX_NUMBERS 1
     #endif
@@ -390,18 +391,26 @@
   #include <math.h>
 #endif
 
+#include "s7.h"
+
 /* there is also apparently __STDC_NO_COMPLEX__ */
 #if HAVE_COMPLEX_NUMBERS
   #if __cplusplus
     #include <complex>
+    #ifndef S7_WITH_COMPLEX_VECTORS
+      using namespace std;  /* the code has to work in C as well as C++, so we can't scatter std:: all over the place */
+      typedef std::complex<s7_double> s7_complex;
+    #endif
   #else
     #include <complex.h>
+    #ifndef S7_WITH_COMPLEX_VECTORS
+      typedef double complex s7_complex;
+    #endif
     #if defined(__sun) && defined(__SVR4)
       #undef _Complex_I
       #define _Complex_I 1.0i
     #endif
   #endif
-
   #ifndef CMPLX
     #if (!(defined(__cplusplus))) && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 7)) && !defined(__INTEL_COMPILER)
       #define CMPLX(x, y) __builtin_complex ((double) (x), (double) (y))
@@ -416,8 +425,6 @@
 #else
   #define s7_complex_i (s7_complex)_Complex_I /* a float, but we want a double */
 #endif
-
-#include "s7.h"
 
 #ifndef M_PI
   #define M_PI 3.1415926535897932384626433832795029L
@@ -464,7 +471,7 @@
 enum {T_FREE = 0,
       T_PAIR, T_NIL, T_UNUSED, T_UNDEFINED, T_UNSPECIFIED, T_EOF, T_BOOLEAN, T_CHARACTER, T_SYNTAX, T_SYMBOL,
       T_INTEGER, T_RATIO, T_REAL, T_COMPLEX, T_BIG_INTEGER, T_BIG_RATIO, T_BIG_REAL, T_BIG_COMPLEX,
-      T_STRING, T_C_OBJECT, T_VECTOR, T_INT_VECTOR, T_FLOAT_VECTOR, T_BYTE_VECTOR,
+      T_STRING, T_C_OBJECT, T_VECTOR, T_INT_VECTOR, T_FLOAT_VECTOR, T_BYTE_VECTOR, T_COMPLEX_VECTOR,
       T_CATCH, T_DYNAMIC_WIND, T_HASH_TABLE, T_LET, T_ITERATOR,
       T_STACK, T_COUNTER, T_SLOT, T_C_POINTER, T_OUTPUT_PORT, T_INPUT_PORT, T_RANDOM_STATE, T_CONTINUATION, T_GOTO,
       T_CLOSURE, T_CLOSURE_STAR, T_MACRO, T_MACRO_STAR, T_BACRO, T_BACRO_STAR,
@@ -475,7 +482,7 @@ enum {T_FREE = 0,
 static const char *s7_type_names[] =
   {"free", "pair", "nil", "unused", "undefined", "unspecified", "eof_object", "boolean", "character", "syntax", "symbol",
    "integer", "ratio", "real", "complex", "big_integer", "big_ratio", "big_real", "big_complex",
-   "string", "c_object", "vector", "int_vector", "float_vector", "byte_vector",
+   "string", "c_object", "vector", "int_vector", "float_vector", "byte_vector", "complex_vector",
    "catch", "dynamic_wind", "hash_table", "let", "iterator",
    "stack", "counter", "slot", "c_pointer", "output_port", "input_port", "random_state", "continuation", "goto",
    "closure", "closure*", "macro", "macro*", "bacro", "bacro*",
@@ -484,12 +491,12 @@ static const char *s7_type_names[] =
 
 /* 1:t_pair, 2:t_nil, 3:t_unused, 4:t_undefined, 5:t_unspecified, 6:t_eof, 7:t_boolean, 8:t_character, 9:t_syntax, 10:t_symbol,
    11:t_integer, 12:t_ratio, 13:t_real, 14:t_complex, 15:t_big_integer, 16:t_big_ratio, 17:t_big_real, 18:t_big_complex,
-   19:t_string, 20:t_c_object, 21:t_vector, 22:t_int_vector, 23:t_float_vector, 24:t_byte_vector,
-   25:t_catch, 26:t_dynamic_wind, 27:t_hash_table, 28:t_let, 29:t_iterator,
-   30:t_stack, 31:t_counter, 32:t_slot, 33:t_c_pointer, 34:t_output_port, 35:t_input_port, 36:t_random_state, 37:t_continuation, 38:t_goto,
-   39:t_closure, 40:t_closure_star, 41:t_macro, 42:t_macro_star, 43:t_bacro, 44:t_bacro_star,
-   45:t_c_macro, 46:t_c_function_star, 47:t_c_function, 48:t_c_rst_no_req_function,
-   49:num_types
+   19:t_string, 20:t_c_object, 21:t_vector, 22:t_int_vector, 23:t_float_vector, 24:t_byte_vector, 25:t_complex_vector,
+   26:t_catch, 27:t_dynamic_wind, 28:t_hash_table, 29:t_let, 30:t_iterator,
+   31:t_stack, 32:t_counter, 33:t_slot, 34:t_c_pointer, 35:t_output_port, 36:t_input_port, 37:t_random_state, 38:t_continuation, 39:t_goto,
+   40:t_closure, 41:t_closure_star, 42:t_macro, 43:t_macro_star, 44:t_bacro, 45:t_bacro_star,
+   46:t_c_macro, 47:t_c_function_star, 48:t_c_function, 49:t_c_rst_no_req_function,
+   50:num_types
 */
 
 typedef struct block_t {
@@ -549,8 +556,9 @@ typedef block_t vdims_t;
 #define vdims_original(p)                p->ex.ex_ptr
 
 
-typedef enum {TOKEN_EOF, TOKEN_LEFT_PAREN, TOKEN_RIGHT_PAREN, TOKEN_DOT, TOKEN_ATOM, TOKEN_QUOTE, TOKEN_DOUBLE_QUOTE, TOKEN_BACK_QUOTE,
-	      TOKEN_COMMA, TOKEN_AT_MARK, TOKEN_SHARP_CONST, TOKEN_VECTOR, TOKEN_BYTE_VECTOR, TOKEN_INT_VECTOR, TOKEN_FLOAT_VECTOR} token_t;
+typedef enum {TOKEN_EOF, TOKEN_LEFT_PAREN, TOKEN_RIGHT_PAREN, TOKEN_DOT, TOKEN_ATOM, TOKEN_QUOTE, TOKEN_DOUBLE_QUOTE,
+	      TOKEN_BACK_QUOTE, TOKEN_COMMA, TOKEN_AT_MARK, TOKEN_SHARP_CONST, 
+              TOKEN_VECTOR, TOKEN_BYTE_VECTOR, TOKEN_INT_VECTOR, TOKEN_FLOAT_VECTOR, TOKEN_COMPLEX_VECTOR} token_t;
 
 typedef enum {NO_ARTICLE, INDEFINITE_ARTICLE} article_t;
 typedef enum {DWIND_INIT, DWIND_BODY, DWIND_FINISH} dwind_t;
@@ -851,6 +859,7 @@ typedef struct s7_cell {
 	s7_pointer *objects;
 	s7_int *ints;
 	s7_double *floats;
+	s7_complex *complexs;
 	uint8_t *bytes;
       } elements;
       block_t *block;
@@ -1249,7 +1258,7 @@ struct s7_scheme {
   c_proc_t *alloc_function_cells;
   uint32_t alloc_big_pointer_k;
   s7_big_cell *alloc_big_pointer_cells;
-  s7_pointer string_wrappers, integer_wrappers, real_wrappers, c_pointer_wrappers;
+  s7_pointer string_wrappers, integer_wrappers, real_wrappers, complex_wrappers, c_pointer_wrappers;
   uint8_t *alloc_symbol_cells;
   char *num_to_str;
 
@@ -1291,7 +1300,8 @@ struct s7_scheme {
              cddaar_symbol, cddadr_symbol, cddar_symbol, cdddar_symbol, cddddr_symbol, cdddr_symbol, cddr_symbol, cdr_symbol,
              ceiling_symbol, char_downcase_symbol, char_eq_symbol, char_geq_symbol, char_gt_symbol, char_leq_symbol, char_lt_symbol,
              char_position_symbol, char_to_integer_symbol, char_upcase_symbol, cload_directory_symbol, close_input_port_symbol,
-             close_output_port_symbol, complex_symbol, cons_symbol, copy_symbol, cos_symbol, cosh_symbol, coverlet_symbol,
+             close_output_port_symbol, complex_symbol, complex_vector_ref_symbol, complex_vector_set_symbol, complex_vector_symbol, 
+             cons_symbol, copy_symbol, cos_symbol, cosh_symbol, coverlet_symbol,
              curlet_symbol, current_error_port_symbol, current_input_port_symbol, current_output_port_symbol, cutlet_symbol, cyclic_sequences_symbol,
              denominator_symbol, dilambda_symbol, display_symbol, divide_symbol, documentation_symbol, dynamic_wind_symbol, dynamic_unwind_symbol,
              num_eq_symbol, error_symbol, eval_string_symbol, eval_symbol, exact_to_inexact_symbol, exit_symbol, exp_symbol, expt_symbol,
@@ -1304,7 +1314,7 @@ struct s7_scheme {
              integer_decode_float_symbol, integer_to_char_symbol,
              is_aritable_symbol, is_bignum_symbol, is_boolean_symbol, is_byte_symbol, is_byte_vector_symbol,
              is_c_object_symbol, c_object_type_symbol, is_c_pointer_symbol, is_char_alphabetic_symbol, is_char_lower_case_symbol, is_char_numeric_symbol,
-             is_char_symbol, is_char_upper_case_symbol, is_char_whitespace_symbol, is_complex_symbol, is_constant_symbol,
+             is_char_symbol, is_char_upper_case_symbol, is_char_whitespace_symbol, is_complex_symbol, is_complex_vector_symbol, is_constant_symbol,
              is_continuation_symbol, is_defined_symbol, is_dilambda_symbol, is_eof_object_symbol, is_eq_symbol, is_equal_symbol,
              is_eqv_symbol, is_even_symbol, is_exact_symbol, is_float_vector_symbol, is_funclet_symbol,
              is_gensym_symbol, is_goto_symbol, is_hash_table_symbol, is_immutable_symbol,
@@ -1314,14 +1324,16 @@ struct s7_scheme {
              is_port_closed_symbol, is_positive_symbol, is_procedure_symbol, is_proper_list_symbol, is_provided_symbol,
              is_random_state_symbol, is_rational_symbol, is_real_symbol, is_sequence_symbol, is_string_symbol, is_subvector_symbol,
              is_symbol_symbol, is_syntax_symbol, is_vector_symbol, is_weak_hash_table_symbol, is_zero_symbol,
-             is_float_symbol, is_integer_or_real_at_end_symbol, is_integer_or_any_at_end_symbol, is_unspecified_symbol, is_undefined_symbol,
+             is_float_symbol, is_integer_or_real_at_end_symbol, is_integer_or_any_at_end_symbol, is_integer_or_number_at_end_symbol, 
+             is_unspecified_symbol, is_undefined_symbol,
              iterate_symbol, iterator_is_at_end_symbol, iterator_sequence_symbol,
              keyword_to_symbol_symbol,
              lcm_symbol, length_symbol, leq_symbol, let_ref_fallback_symbol, let_ref_symbol, let_set_fallback_symbol,
              let_set_symbol, let_temporarily_symbol, libraries_symbol, list_ref_symbol, list_set_symbol, list_symbol, list_tail_symbol, list_values_symbol,
              load_path_symbol, load_symbol, log_symbol, logand_symbol, logbit_symbol, logior_symbol, lognot_symbol, logxor_symbol, lt_symbol,
              local_documentation_symbol, local_signature_symbol, local_setter_symbol, local_iterator_symbol,
-             macro_symbol, macro_star_symbol, magnitude_symbol, make_byte_vector_symbol, make_float_vector_symbol, make_hash_table_symbol,
+             macro_symbol, macro_star_symbol, magnitude_symbol, 
+             make_byte_vector_symbol, make_complex_vector_symbol, make_float_vector_symbol, make_hash_table_symbol,
              make_weak_hash_table_symbol, make_int_vector_symbol, make_iterator_symbol, make_list_symbol, make_string_symbol,
              make_vector_symbol, map_symbol, max_symbol, member_symbol, memq_symbol, memv_symbol, min_symbol, modulo_symbol, multiply_symbol,
              name_symbol, nan_symbol, nan_payload_symbol, newline_symbol, not_symbol, number_to_string_symbol, numerator_symbol,
@@ -1372,7 +1384,7 @@ struct s7_scheme {
 
   /* signatures of sequences used as applicable objects: ("hi" 1) */
   s7_pointer  byte_vector_signature, c_object_signature, float_vector_signature, hash_table_signature, int_vector_signature,
-             let_signature, pair_signature, string_signature, vector_signature;
+             let_signature, pair_signature, string_signature, vector_signature, complex_vector_signature;
   /* common signatures */
   s7_pointer pcl_bc, pcl_bs, pcl_bt, pcl_c, pcl_e, pcl_f, pcl_i, pcl_n, pcl_r, pcl_s, pcl_v, pl_bc, pl_bn, pl_bt, pl_p, pl_sf, pl_tl, pl_nn;
 
@@ -1833,14 +1845,16 @@ static void init_types(void)
 
   t_sequence_p[T_NIL] = true; t_sequence_p[T_PAIR] = true;
   t_sequence_p[T_STRING] = true;
-  t_sequence_p[T_VECTOR] = true; t_sequence_p[T_INT_VECTOR] = true; t_sequence_p[T_FLOAT_VECTOR] = true; t_sequence_p[T_BYTE_VECTOR] = true;
+  t_sequence_p[T_VECTOR] = true; t_sequence_p[T_INT_VECTOR] = true; t_sequence_p[T_FLOAT_VECTOR] = true;
+                                 t_sequence_p[T_BYTE_VECTOR] = true; t_sequence_p[T_COMPLEX_VECTOR] = true;
   t_sequence_p[T_HASH_TABLE] = true;
   t_sequence_p[T_LET] = true;
   t_sequence_p[T_C_OBJECT] = true; /* this assumes the object has a length method? */
 
   t_mappable_p[T_PAIR] = true;
   t_mappable_p[T_STRING] = true;
-  t_mappable_p[T_VECTOR] = true; t_mappable_p[T_INT_VECTOR] = true; t_mappable_p[T_FLOAT_VECTOR] = true; t_mappable_p[T_BYTE_VECTOR] = true;
+  t_mappable_p[T_VECTOR] = true; t_mappable_p[T_INT_VECTOR] = true; t_mappable_p[T_FLOAT_VECTOR] = true;
+                                 t_mappable_p[T_BYTE_VECTOR] = true; t_mappable_p[T_COMPLEX_VECTOR] = true;
   t_mappable_p[T_HASH_TABLE] = true;
   t_mappable_p[T_LET] = true;
   t_mappable_p[T_C_OBJECT] = true;
@@ -1850,11 +1864,13 @@ static void init_types(void)
   t_mappable_p[T_BACRO] = true; t_mappable_p[T_BACRO_STAR] = true;
   t_mappable_p[T_CLOSURE] = true; t_mappable_p[T_CLOSURE_STAR] = true;
 
-  t_vector_p[T_VECTOR] = true; t_vector_p[T_INT_VECTOR] = true; t_vector_p[T_FLOAT_VECTOR] = true; t_vector_p[T_BYTE_VECTOR] = true;
+  t_vector_p[T_VECTOR] = true; t_vector_p[T_INT_VECTOR] = true; t_vector_p[T_FLOAT_VECTOR] = true;
+                               t_vector_p[T_BYTE_VECTOR] = true; t_vector_p[T_COMPLEX_VECTOR] = true;
 
   t_applicable_p[T_PAIR] = true;
   t_applicable_p[T_STRING] = true;
-  t_applicable_p[T_VECTOR] = true; t_applicable_p[T_INT_VECTOR] = true; t_applicable_p[T_FLOAT_VECTOR] = true; t_applicable_p[T_BYTE_VECTOR] = true;
+  t_applicable_p[T_VECTOR] = true; t_applicable_p[T_INT_VECTOR] = true; t_applicable_p[T_FLOAT_VECTOR] = true;
+                                   t_applicable_p[T_BYTE_VECTOR] = true; t_applicable_p[T_COMPLEX_VECTOR] = true;
   t_applicable_p[T_HASH_TABLE] = true;
   t_applicable_p[T_ITERATOR] = true;
   t_applicable_p[T_LET] = true;
@@ -1903,7 +1919,8 @@ static void init_types(void)
   t_immutable_p[T_SYMBOL] = false;
   t_immutable_p[T_STRING] = false;
   t_immutable_p[T_C_OBJECT] = false; t_immutable_p[T_C_POINTER] = false;
-  t_immutable_p[T_VECTOR] = false; t_immutable_p[T_FLOAT_VECTOR] = false; t_immutable_p[T_INT_VECTOR] = false; t_immutable_p[T_BYTE_VECTOR] = false;
+  t_immutable_p[T_VECTOR] = false; t_immutable_p[T_FLOAT_VECTOR] = false; t_immutable_p[T_INT_VECTOR] = false;
+                                   t_immutable_p[T_BYTE_VECTOR] = false; t_immutable_p[T_COMPLEX_VECTOR] = false;
   t_immutable_p[T_HASH_TABLE] = false;
   t_immutable_p[T_LET] = false;
   /* t_immutable_p[T_ITERATOR] = false; t_immutable_p[T_INPUT_PORT] = false; t_immutable_p[T_OUTPUT_PORT] = false; */ /* ?? */
@@ -1980,6 +1997,7 @@ static void init_types(void)
   #define T_Cmp(P) check_ref_one(P, T_COMPLEX,           __func__, __LINE__, NULL, NULL)
   #define T_Con(P) check_ref_one(P, T_CONTINUATION,      __func__, __LINE__, "sweep", "process_continuation")
   #define T_Ctr(P) check_ref_one(P, T_COUNTER,           __func__, __LINE__, NULL, NULL)
+  #define T_Cvc(P) check_ref_one(P, T_COMPLEX_VECTOR,    __func__, __LINE__, "sweep", NULL)
   #define T_Dyn(P) check_ref_one(P, T_DYNAMIC_WIND,      __func__, __LINE__, NULL, NULL)
   #define T_Eof(P) check_ref_one(P, T_EOF,               __func__, __LINE__, "sweep", NULL)
   #define T_Exs(P) check_ref_exs(P,                      __func__, __LINE__)                /* not an internal type, but #<unused> and slot are ok */
@@ -2043,6 +2061,7 @@ static void init_types(void)
   #define T_Cmp(P)  P
   #define T_Con(P)  P
   #define T_Ctr(P)  P
+  #define T_Cvc(P)  P
   #define T_Dyn(P)  P
   #define T_Eof(P)  P
   #define T_Exs(P)  P
@@ -3330,6 +3349,11 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define float_vector(p, i)             ((T_Fvc(p))->object.vector.elements.floats[i])
 #define float_vector_floats(p)         (T_Fvc(p))->object.vector.elements.floats
 
+#define is_complex_vector(p)           (type(p) == T_COMPLEX_VECTOR)
+#define complex_vector(p, i)           ((T_Cvc(p))->object.vector.elements.complexs[i])
+#define complex_vector_complexs(p)     (T_Cvc(p))->object.vector.elements.complexs
+/* English: probably complexes, but I like this form */
+
 #define is_byte_vector(p)              (type(p) == T_BYTE_VECTOR)
 #define byte_vector_length(p)          (T_BVc(p))->object.vector.length
 #define byte_vector_bytes(p)           (T_BVc(p))->object.vector.elements.bytes
@@ -3641,8 +3665,6 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #endif
 
 #if __cplusplus && HAVE_COMPLEX_NUMBERS
-  using namespace std;                /* the code has to work in C as well as C++, so we can't scatter std:: all over the place */
-  typedef complex<s7_double> s7_complex;
   static s7_double Real(complex<s7_double> x) {return(real(x));} /* protect the C++ name */
   static s7_double Imag(complex<s7_double> x) {return(imag(x));}
 #endif
@@ -3964,20 +3986,24 @@ static void try_to_call_gc(s7_scheme *sc);
 #define make_complex(Sc, R, I) \
   ({ s7_double _im_; _im_ = (I); ((_im_ == 0.0) ? make_real(Sc, R) : \
 				  ({ s7_pointer _C_; new_cell(Sc, _C_, T_COMPLEX); set_real_part(_C_, R); set_imag_part(_C_, _im_); _C_;}) ); })
+#define make_complex_unchecked(Sc, R, I) \
+  ({ s7_double _im_; _im_ = (I); ((_im_ == 0.0) ? make_real_unchecked(Sc, R) : \
+				  ({ s7_pointer _C_; new_cell_no_check(Sc, _C_, T_COMPLEX); set_real_part(_C_, R); set_imag_part(_C_, _im_); _C_;}) ); })
 
 #define real_to_double(Sc, X, Caller) ({ s7_pointer _x_; _x_ = (X); ((type(_x_) == T_REAL) ? real(_x_) : s7_number_to_real_with_caller(Sc, _x_, Caller)); })
 #define rational_to_double(Sc, X)     ({ s7_pointer _x_; _x_ = (X); ((type(_x_) == T_INTEGER) ? (s7_double)integer(_x_) : fraction(_x_)); })
 
 #else
 
-#define make_integer(Sc, N)           s7_make_integer(Sc, N)
-#define make_integer_unchecked(Sc, N) s7_make_integer(Sc, N)
-#define make_real(Sc, X)              s7_make_real(Sc, X)
-#define make_real_unchecked(Sc, X)    s7_make_real(Sc, X)
-#define make_complex(Sc, R, I)        s7_make_complex(Sc, R, I)
-#define make_complex_not_0i(Sc, R, I) s7_make_complex(Sc, R, I)
-#define real_to_double(Sc, X, Caller) s7_number_to_real_with_caller(Sc, X, Caller)
-#define rational_to_double(Sc, X)     s7_number_to_real(Sc, X)
+#define make_integer(Sc, N)              s7_make_integer(Sc, N)
+#define make_integer_unchecked(Sc, N)    s7_make_integer(Sc, N)
+#define make_real(Sc, X)                 s7_make_real(Sc, X)
+#define make_real_unchecked(Sc, X)       s7_make_real(Sc, X)
+#define make_complex(Sc, R, I)           s7_make_complex(Sc, R, I)
+#define make_complex_unchecked(Sc, R, I) s7_make_complex(Sc, R, I)
+#define make_complex_not_0i(Sc, R, I)    s7_make_complex(Sc, R, I)
+#define real_to_double(Sc, X, Caller)    s7_number_to_real_with_caller(Sc, X, Caller)
+#define rational_to_double(Sc, X)        s7_number_to_real(Sc, X)
 #endif
 
 #if S7_DEBUGGING
@@ -4293,7 +4319,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
       OP_CASE,
       OP_READ_LIST, OP_READ_NEXT, OP_READ_DOT, OP_READ_QUOTE,
       OP_READ_QUASIQUOTE, OP_READ_UNQUOTE, OP_READ_APPLY_VALUES,
-      OP_READ_VECTOR, OP_READ_BYTE_VECTOR, OP_READ_INT_VECTOR, OP_READ_FLOAT_VECTOR, OP_READ_DONE,
+      OP_READ_VECTOR, OP_READ_BYTE_VECTOR, OP_READ_INT_VECTOR, OP_READ_FLOAT_VECTOR, OP_READ_COMPLEX_VECTOR, OP_READ_DONE,
       OP_LOAD_RETURN_IF_EOF, OP_LOAD_CLOSE_AND_POP_IF_EOF, OP_EVAL_DONE, OP_SPLICE_VALUES, OP_NO_VALUES,
       OP_CATCH, OP_DYNAMIC_WIND, OP_DYNAMIC_UNWIND, OP_DYNAMIC_UNWIND_PROFILE, OP_PROFILE_IN,
       OP_DEFINE_CONSTANT, OP_DEFINE_CONSTANT1,
@@ -4505,7 +4531,7 @@ static const char* op_names[NUM_OPS] =
       "define_macro", "define_macro*", "define_expansion", "define_expansion*", "macro", "macro*",
       "case", "read_list", "read_next", "read_dot", "read_quote",
       "read_quasiquote", "read_unquote", "read_apply_values",
-      "read_vector", "read_byte_vector", "read_int_vector", "read_float_vector", "read_done",
+      "read_vector", "read_byte_vector", "read_int_vector", "read_float_vector", "read_complex_vector", "read_done",
       "load_return_if_eof", "load_close_and_pop_if_eof", "eval_done", "splice_values", "no_values",
       "catch", "dynamic_wind", "dynamic_unwind", "dynamic_unwind_profile", "profile_in",
       "define_constant", "define_constant1",
@@ -6035,55 +6061,56 @@ static const char *type_name_from_type(int32_t typ, article_t article)
   bool no_article = (article == NO_ARTICLE);
   switch (typ)
     {
-    case T_FREE:            return((no_article) ? "free-cell"         : "a free cell");
-    case T_NIL:             return("nil");
-    case T_UNUSED:          return((no_article) ? "#<unused>"         : "the unused object");
-    case T_EOF:             return((no_article) ? "#<eof>"            : "the end-of-file object");
-    case T_UNSPECIFIED:     return((no_article) ? "#<unspecified>"    : "the unspecified object");
-    case T_UNDEFINED:       return((no_article) ? "undefined"         : "an undefined object");
-    case T_BOOLEAN:         return("boolean");
-    case T_STRING:          return((no_article) ? "string"            : "a string");
-    case T_BYTE_VECTOR:     return((no_article) ? "byte-vector"       : "a byte-vector");
-    case T_SYMBOL:          return((no_article) ? "symbol"            : "a symbol");
-    case T_SYNTAX:          return((no_article) ? "syntax"            : "syntactic");
-    case T_PAIR:            return((no_article) ? "pair"              : "a pair");
-    case T_GOTO:            return((no_article) ? "goto"              : "a goto (from call-with-exit)");
-    case T_CONTINUATION:    return((no_article) ? "continuation"      : "a continuation");
-    case T_C_RST_NO_REQ_FUNCTION:
-    case T_C_FUNCTION:      return((no_article) ? "c-function"        : "a c-function");
-    case T_C_FUNCTION_STAR: return((no_article) ? "c-function*"       : "a c-function*");
-    case T_CLOSURE:         return((no_article) ? "function"          : "a function");
-    case T_CLOSURE_STAR:    return((no_article) ? "function*"         : "a function*");
-    case T_C_MACRO:         return((no_article) ? "c-macro"           : "a c-macro");
-    case T_C_POINTER:       return((no_article) ? "c-pointer"         : "a c-pointer");
-    case T_CHARACTER:       return((no_article) ? "character"         : "a character");
-    case T_VECTOR:          return((no_article) ? "vector"            : "a vector");
-    case T_INT_VECTOR:      return((no_article) ? "int-vector"        : "an int-vector");
-    case T_FLOAT_VECTOR:    return((no_article) ? "float-vector"      : "a float-vector");
-    case T_MACRO_STAR:      return((no_article) ? "macro*"            : "a macro*");
-    case T_MACRO:           return((no_article) ? "macro"             : "a macro");
-    case T_BACRO_STAR:      return((no_article) ? "bacro*"            : "a bacro*");
     case T_BACRO:           return((no_article) ? "bacro"             : "a bacro");
-    case T_CATCH:           return((no_article) ? "catch"             : "a catch");
-    case T_STACK:           return((no_article) ? "stack"             : "a stack");
-    case T_DYNAMIC_WIND:    return((no_article) ? "dynamic-wind"      : "a dynamic-wind");
-    case T_HASH_TABLE:      return((no_article) ? "hash-table"        : "a hash-table");
-    case T_ITERATOR:        return((no_article) ? "iterator"          : "an iterator");
-    case T_LET:             return((no_article) ? "let"               : "a let");
-    case T_COUNTER:         return((no_article) ? "internal-counter"  : "an internal counter");
-    case T_RANDOM_STATE:    return((no_article) ? "random-state"      : "a random-state");
-    case T_SLOT:            return((no_article) ? "slot"              : "a slot (variable binding)");
-    case T_INTEGER:         return((no_article) ? "integer"           : "an integer");
-    case T_RATIO:           return((no_article) ? "ratio"             : "a ratio");
-    case T_REAL:            return((no_article) ? "real"              : "a real");
-    case T_COMPLEX:         return((no_article) ? "complex-number"    : "a complex number");
+    case T_BACRO_STAR:      return((no_article) ? "bacro*"            : "a bacro*");
+    case T_BIG_COMPLEX:     return((no_article) ? "big-complex-number": "a big complex number");
     case T_BIG_INTEGER:     return((no_article) ? "big-integer"       : "a big integer");
     case T_BIG_RATIO:       return((no_article) ? "big-ratio"         : "a big ratio");
     case T_BIG_REAL:        return((no_article) ? "big-real"          : "a big real");
-    case T_BIG_COMPLEX:     return((no_article) ? "big-complex-number": "a big complex number");
-    case T_INPUT_PORT:      return((no_article) ? "input-port"        : "an input port");
-    case T_OUTPUT_PORT:     return((no_article) ? "output-port"       : "an output port");
+    case T_BOOLEAN:         return("boolean");
+    case T_BYTE_VECTOR:     return((no_article) ? "byte-vector"       : "a byte-vector");
+    case T_CATCH:           return((no_article) ? "catch"             : "a catch");
+    case T_CHARACTER:       return((no_article) ? "character"         : "a character");
+    case T_CLOSURE:         return((no_article) ? "function"          : "a function");
+    case T_CLOSURE_STAR:    return((no_article) ? "function*"         : "a function*");
+    case T_COMPLEX:         return((no_article) ? "complex-number"    : "a complex number");
+    case T_COMPLEX_VECTOR:  return((no_article) ? "complex-vector"    : "a complex-vector");
+    case T_CONTINUATION:    return((no_article) ? "continuation"      : "a continuation");
+    case T_COUNTER:         return((no_article) ? "internal-counter"  : "an internal counter");
+    case T_C_FUNCTION:      return((no_article) ? "c-function"        : "a c-function");
+    case T_C_FUNCTION_STAR: return((no_article) ? "c-function*"       : "a c-function*");
+    case T_C_MACRO:         return((no_article) ? "c-macro"           : "a c-macro");
     case T_C_OBJECT:        return((no_article) ? "c-object"          : "a c_object");
+    case T_C_POINTER:       return((no_article) ? "c-pointer"         : "a c-pointer");
+    case T_C_RST_NO_REQ_FUNCTION: return((no_article) ? "c-function"  : "a c-function");
+    case T_DYNAMIC_WIND:    return((no_article) ? "dynamic-wind"      : "a dynamic-wind");
+    case T_EOF:             return((no_article) ? "#<eof>"            : "the end-of-file object");
+    case T_FLOAT_VECTOR:    return((no_article) ? "float-vector"      : "a float-vector");
+    case T_FREE:            return((no_article) ? "free-cell"         : "a free cell");
+    case T_GOTO:            return((no_article) ? "goto"              : "a goto (from call-with-exit)");
+    case T_HASH_TABLE:      return((no_article) ? "hash-table"        : "a hash-table");
+    case T_INPUT_PORT:      return((no_article) ? "input-port"        : "an input port");
+    case T_INTEGER:         return((no_article) ? "integer"           : "an integer");
+    case T_INT_VECTOR:      return((no_article) ? "int-vector"        : "an int-vector");
+    case T_ITERATOR:        return((no_article) ? "iterator"          : "an iterator");
+    case T_LET:             return((no_article) ? "let"               : "a let");
+    case T_MACRO:           return((no_article) ? "macro"             : "a macro");
+    case T_MACRO_STAR:      return((no_article) ? "macro*"            : "a macro*");
+    case T_NIL:             return("nil");
+    case T_OUTPUT_PORT:     return((no_article) ? "output-port"       : "an output port");
+    case T_PAIR:            return((no_article) ? "pair"              : "a pair");
+    case T_RANDOM_STATE:    return((no_article) ? "random-state"      : "a random-state");
+    case T_RATIO:           return((no_article) ? "ratio"             : "a ratio");
+    case T_REAL:            return((no_article) ? "real"              : "a real");
+    case T_SLOT:            return((no_article) ? "slot"              : "a slot (variable binding)");
+    case T_STACK:           return((no_article) ? "stack"             : "a stack");
+    case T_STRING:          return((no_article) ? "string"            : "a string");
+    case T_SYMBOL:          return((no_article) ? "symbol"            : "a symbol");
+    case T_SYNTAX:          return((no_article) ? "syntax"            : "syntactic");
+    case T_UNDEFINED:       return((no_article) ? "undefined"         : "an undefined object");
+    case T_UNSPECIFIED:     return((no_article) ? "#<unspecified>"    : "the unspecified object");
+    case T_UNUSED:          return((no_article) ? "#<unused>"         : "the unused object");
+    case T_VECTOR:          return((no_article) ? "vector"            : "a vector");
     }
   return(NULL);
 }
@@ -7315,7 +7342,7 @@ static void mark_vector_possibly_shared(s7_pointer p)
 
 static void mark_int_or_float_vector(s7_pointer p) {set_mark(p);}
 
-static void mark_int_or_float_vector_possibly_shared(s7_pointer p)
+static void mark_int_or_float_vector_possibly_shared(s7_pointer p) /* also complex_vector */
 {
   if (is_subvector(p))
     mark_int_or_float_vector_possibly_shared(subvector_vector(p));
@@ -7432,6 +7459,7 @@ static void init_mark_functions(void)
   mark_function[T_CLOSURE]             = mark_closure;
   mark_function[T_CLOSURE_STAR]        = mark_closure;
   mark_function[T_COMPLEX]             = just_mark;
+  mark_function[T_COMPLEX_VECTOR]      = mark_int_or_float_vector;
   mark_function[T_CONTINUATION]        = mark_continuation;
   mark_function[T_COUNTER]             = mark_counter;
   mark_function[T_C_FUNCTION]          = just_mark;
@@ -8065,7 +8093,7 @@ static inline void remove_from_heap(s7_scheme *sc, s7_pointer x)
       if (is_funclet(x)) set_immutable_let(x);
     case T_HASH_TABLE:
     case T_VECTOR:
-      /* not int|float_vector or string because none of their elements are GC-able (so unheap below is ok)
+      /* not byte|int|float|complex_vector or string because none of their elements are GC-able (so unheap below is ok)
        *   but hash-table and let seem like they need protection? And let does happen via define-class.
        */
       add_semipermanent_object(sc, x);
@@ -13532,8 +13560,6 @@ static double s7_round(double number) {return((number < 0.0) ? ceil(number - 0.5
   #define casinh(x) asinh(x)
   #define cacosh(x) acosh(x)
   #define catanh(x) atanh(x)
-#else
-  typedef double complex s7_complex;
 #endif
 
 
@@ -13585,10 +13611,9 @@ static s7_complex cpow(s7_complex x, s7_complex y)
 #endif /* not HAVE_COMPLEX_TRIG */
 
 #else  /* not HAVE_COMPLEX_NUMBERS */
-  typedef double s7_complex;
   #define _Complex_I 1.0
-  #define creal(x) x
-  #define cimag(x) x
+  #define creal(x) 0.0
+  #define cimag(x) 0.0
   #define csin(x) sin(x)
   #define casin(x) x
   #define ccos(x) cos(x)
@@ -13619,6 +13644,17 @@ static s7_complex cpow(s7_complex x, s7_complex y)
   static s7_complex casinh_1(s7_complex z) {return(clog(z + csqrt(1.0 + z * z)));}
 #endif
 
+static s7_pointer wrap_complex(s7_scheme *sc, s7_complex x)
+{
+  s7_pointer p = car(sc->complex_wrappers);
+#if S7_DEBUGGING
+  if ((full_type(p) & (~T_GC_MARK)) != (T_COMPLEX | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
+#endif
+  set_real_part(p, creal(x));
+  set_imag_part(p, cimag(x));
+  sc->complex_wrappers = cdr(sc->complex_wrappers);
+  return(p);
+}
 
 bool s7_is_number(s7_pointer p)   {return(is_number(p));}
 bool s7_is_complex(s7_pointer p)  {return(is_number(p));}
@@ -27412,7 +27448,7 @@ static bool sequence_is_empty(s7_scheme *sc, s7_pointer obj) /* "is_empty" is ta
 {
   switch (type(obj))
     {
-    case T_BYTE_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR:
+    case T_BYTE_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_COMPLEX_VECTOR:
     case T_VECTOR:     return(vector_length(obj) == 0);
     case T_NIL:        return(true);
     case T_PAIR:       return(false);
@@ -27434,7 +27470,7 @@ static s7_int sequence_length(s7_scheme *sc, s7_pointer lst)
 	return((len == 0) ? -1 : len);
       }
     case T_NIL:         return(0);
-    case T_BYTE_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR:
+    case T_BYTE_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_COMPLEX_VECTOR:
     case T_VECTOR:      return(vector_length(lst));
     case T_STRING:      return(string_length(lst));
     case T_HASH_TABLE:  return(hash_table_entries(lst));
@@ -32090,6 +32126,13 @@ static s7_pointer float_vector_iterate(s7_scheme *sc, s7_pointer obj)
   return(iterator_quit(obj));
 }
 
+static s7_pointer complex_vector_iterate(s7_scheme *sc, s7_pointer obj)
+{
+  if (iterator_position(obj) < iterator_length(obj))
+    return(c_complex_to_s7(sc, complex_vector(iterator_sequence(obj), iterator_position(obj)++)));
+  return(iterator_quit(obj));
+}
+
 static s7_pointer int_vector_iterate(s7_scheme *sc, s7_pointer obj)
 {
   if (iterator_position(obj) < iterator_length(obj))
@@ -32284,6 +32327,11 @@ s7_pointer s7_make_iterator(s7_scheme *sc, s7_pointer e)
     case T_FLOAT_VECTOR:
       iterator_length(iter) = vector_length(e);
       iterator_next(iter) = float_vector_iterate;
+      break;
+
+    case T_COMPLEX_VECTOR:
+      iterator_length(iter) = vector_length(e);
+      iterator_next(iter) = complex_vector_iterate;
       break;
 
     case T_NIL: /* (make-iterator #()) -> #<iterator: vector>, so I guess () should also work */
@@ -33266,6 +33314,10 @@ static void make_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port)
     else
       if (is_byte_vector(vect))
 	vtyp = "byte-";
+      else
+	if (is_complex_vector(vect))
+	  vtyp = "complex-";
+
   vlen = vector_length(vect);
 
   if (vector_rank(vect) == 1)
@@ -33547,7 +33599,10 @@ static int32_t print_vector_length(s7_scheme *sc, s7_pointer vect, s7_pointer po
     else
       if (is_float_vector(vect))
 	port_write_string(port)(sc, "#r(...)", 7, port);
-      else port_write_string(port)(sc, "#u(...)", 7, port);
+      else
+	if (is_byte_vector(vect))
+	  port_write_string(port)(sc, "#u(...)", 7, port);
+	else port_write_string(port)(sc, "#c(...)", 7, port);
   return(-1);
 }
 
@@ -33693,6 +33748,70 @@ static void float_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port
   else
     {
       plen = catstrs_direct(buf, "#r", pos_int_to_str_direct(sc, vector_ndims(vect)), "d", (const char *)NULL);
+      port_write_string(port)(sc, buf, plen, port);
+      gc_protect_via_stack(sc, vect);
+      multivector_to_port(sc, vect, port, len, 0, 0, vector_ndims(vect), P_DISPLAY, NULL);
+      unstack_gc_protect(sc);
+    }
+  if ((use_write == P_READABLE) &&
+      (is_immutable_vector(vect)))
+    port_write_character(port)(sc, ')', port);
+}
+
+static void complex_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port, use_write_t use_write, shared_info_t *unused_ci)
+{
+  #define CV_BUFSIZE 1024 /* some floats can take around 312 bytes */
+  char buf[CV_BUFSIZE];
+  s7_int i, plen;
+  bool too_long;
+  const s7_complex *els = complex_vector_complexs(vect);
+  s7_int len = print_vector_length(sc, vect, port, use_write);
+  if (len < 0) return;  /* vector-length=0 etc */
+  too_long = (len < vector_length(vect));
+
+  if ((use_write == P_READABLE) &&
+      (is_immutable_vector(vect)))
+    port_write_string(port)(sc, "(immutable! ", 12, port);
+
+  if (len > 1000)
+    {
+      s7_int vlen = vector_length(vect);
+      s7_complex first = els[0];
+      for (i = 1; i < vlen; i++)
+	if (els[i] != first)
+	  break;
+      if (i == vlen)
+	{
+	  make_vector_to_port(sc, vect, port);
+	  /* TODO: can't assume "+" here or below -- use number_to_string_base_10 */
+	  plen = snprintf(buf, CV_BUFSIZE, "%.*g+%.*gi)", sc->float_format_precision, creal(first), sc->float_format_precision, cimag(first));
+	  port_write_string(port)(sc, buf, clamp_length(plen, CV_BUFSIZE), port);
+	  if ((use_write == P_READABLE) &&
+	      (is_immutable_vector(vect)))
+	    port_write_character(port)(sc, ')', port);
+	  return;
+	}}
+
+  if (vector_rank(vect) == 1)
+    {
+      port_write_string(port)(sc, "#c(", 3, port);
+      plen = snprintf(buf, CV_BUFSIZE - 8, "%.*g+%.*gi", sc->float_format_precision, creal(els[0]), sc->float_format_precision, cimag(els[0]));
+      /* floatify(buf, &plen); */ /* TODO: comlexify?? also below */
+      port_write_string(port)(sc, buf, clamp_length(plen, CV_BUFSIZE), port);
+      for (i = 1; i < len; i++)
+	{
+	  plen = snprintf(buf, CV_BUFSIZE - 8, " %.*g+%.*gi", sc->float_format_precision, creal(els[i]), sc->float_format_precision, cimag(els[i]));
+	  plen--; /* fixup for the initial #\space */
+	  /* floatify((char *)(buf + 1), &plen); */
+	  port_write_string(port)(sc, buf, clamp_length(plen + 1, CV_BUFSIZE), port);
+	}
+      if (too_long)
+	port_write_string(port)(sc, " ...)", 5, port);
+      else port_write_character(port)(sc, ')', port);
+    }
+  else
+    {
+      plen = catstrs_direct(buf, "#c", pos_int_to_str_direct(sc, vector_ndims(vect)), "d", (const char *)NULL);
       port_write_string(port)(sc, buf, plen, port);
       gc_protect_via_stack(sc, vect);
       multivector_to_port(sc, vect, port, len, 0, 0, vector_ndims(vect), P_DISPLAY, NULL);
@@ -35066,13 +35185,14 @@ static void iterator_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 	  switch (type(iterator_sequence(obj)))
 	    {
 	    case T_NIL:
-	    case T_PAIR:         port_write_string(port)(sc, "(make-iterator ())", 18, port);	        break;
-	    case T_STRING:       port_write_string(port)(sc, "(make-iterator \"\")", 18, port);	        break;
-	    case T_BYTE_VECTOR:  port_write_string(port)(sc, "(make-iterator #u())", 20, port);	        break;
-	    case T_VECTOR:       port_write_string(port)(sc, "(make-iterator #())", 19, port);	        break;
-	    case T_INT_VECTOR:	 port_write_string(port)(sc, "(make-iterator #i())", 20, port);	        break;
-	    case T_FLOAT_VECTOR: port_write_string(port)(sc, "(make-iterator #r())", 20, port);	        break;
-	    case T_LET:	         port_write_string(port)(sc, "(make-iterator (inlet))", 23, port);      break;
+	    case T_PAIR:           port_write_string(port)(sc, "(make-iterator ())", 18, port);	     break;
+	    case T_STRING:         port_write_string(port)(sc, "(make-iterator \"\")", 18, port);    break;
+	    case T_BYTE_VECTOR:    port_write_string(port)(sc, "(make-iterator #u())", 20, port);    break;
+	    case T_VECTOR:         port_write_string(port)(sc, "(make-iterator #())", 19, port);     break;
+	    case T_INT_VECTOR:	   port_write_string(port)(sc, "(make-iterator #i())", 20, port);    break;
+	    case T_FLOAT_VECTOR:   port_write_string(port)(sc, "(make-iterator #r())", 20, port);    break;
+	    case T_COMPLEX_VECTOR: port_write_string(port)(sc, "(make-iterator #c())", 20, port);    break;
+	    case T_LET:	           port_write_string(port)(sc, "(make-iterator (inlet))", 23, port); break;
 
 	    case T_HASH_TABLE:
 	      if (is_weak_hash_table(iterator_sequence(obj)))
@@ -35616,56 +35736,57 @@ static void stack_to_port(s7_scheme *sc, const s7_pointer obj, s7_pointer port, 
 static void init_display_functions(void)
 {
   for (int32_t i = 0; i < 256; i++) display_functions[i] = display_fallback;
-  display_functions[T_BACRO] =        macro_to_port;
-  display_functions[T_BACRO_STAR] =   macro_to_port;
+  display_functions[T_BACRO] =           macro_to_port;
+  display_functions[T_BACRO_STAR] =      macro_to_port;
 #if WITH_GMP
-  display_functions[T_BIG_COMPLEX] =  big_number_to_port;
-  display_functions[T_BIG_INTEGER] =  big_number_to_port;
-  display_functions[T_BIG_RATIO] =    big_number_to_port;
-  display_functions[T_BIG_REAL] =     big_number_to_port;
+  display_functions[T_BIG_COMPLEX] =     big_number_to_port;
+  display_functions[T_BIG_INTEGER] =     big_number_to_port;
+  display_functions[T_BIG_RATIO] =       big_number_to_port;
+  display_functions[T_BIG_REAL] =        big_number_to_port;
 #endif
-  display_functions[T_BOOLEAN] =      unique_to_port;
-  display_functions[T_BYTE_VECTOR] =  byte_vector_to_port;
-  display_functions[T_CATCH] =        catch_to_port;
-  display_functions[T_CHARACTER] =    character_to_port;
-  display_functions[T_CLOSURE] =      closure_to_port;
-  display_functions[T_CLOSURE_STAR] = closure_to_port;
-  display_functions[T_COMPLEX] =      number_to_port;
-  display_functions[T_CONTINUATION] = continuation_to_port;
-  display_functions[T_COUNTER] =      counter_to_port;
-  display_functions[T_C_FUNCTION] =   c_function_to_port;
+  display_functions[T_BOOLEAN] =         unique_to_port;
+  display_functions[T_BYTE_VECTOR] =     byte_vector_to_port;
+  display_functions[T_CATCH] =           catch_to_port;
+  display_functions[T_CHARACTER] =       character_to_port;
+  display_functions[T_CLOSURE] =         closure_to_port;
+  display_functions[T_CLOSURE_STAR] =    closure_to_port;
+  display_functions[T_COMPLEX] =         number_to_port;
+  display_functions[T_COMPLEX_VECTOR] =  complex_vector_to_port;
+  display_functions[T_CONTINUATION] =    continuation_to_port;
+  display_functions[T_COUNTER] =         counter_to_port;
+  display_functions[T_C_FUNCTION] =      c_function_to_port;
   display_functions[T_C_FUNCTION_STAR] = c_function_to_port;
-  display_functions[T_C_MACRO] =      c_macro_to_port;
-  display_functions[T_C_OBJECT] =     c_object_to_port;
-  display_functions[T_C_POINTER] =    c_pointer_to_port;
+  display_functions[T_C_MACRO] =         c_macro_to_port;
+  display_functions[T_C_OBJECT] =        c_object_to_port;
+  display_functions[T_C_POINTER] =       c_pointer_to_port;
   display_functions[T_C_RST_NO_REQ_FUNCTION] = c_function_to_port;
-  display_functions[T_DYNAMIC_WIND] = dynamic_wind_to_port;
-  display_functions[T_EOF] =          eof_to_port;
-  display_functions[T_FLOAT_VECTOR] = float_vector_to_port;
-  display_functions[T_GOTO] =         goto_to_port;
-  display_functions[T_HASH_TABLE] =   hash_table_to_port;
-  display_functions[T_INPUT_PORT] =   input_port_to_port;
-  display_functions[T_INTEGER] =      integer_to_port;
-  display_functions[T_INT_VECTOR] =   int_vector_to_port;
-  display_functions[T_ITERATOR] =     iterator_to_port;
-  display_functions[T_LET] =          let_to_port;
-  display_functions[T_MACRO] =        macro_to_port;
-  display_functions[T_MACRO_STAR] =   macro_to_port;
-  display_functions[T_NIL] =          unique_to_port;
-  display_functions[T_OUTPUT_PORT] =  output_port_to_port;
-  display_functions[T_PAIR] =         pair_to_port;
-  display_functions[T_RANDOM_STATE] = random_state_to_port;
-  display_functions[T_RATIO] =        number_to_port;
-  display_functions[T_REAL] =         number_to_port;
-  display_functions[T_SLOT] =         internal_slot_to_port;
-  display_functions[T_STACK] =        stack_to_port;
-  display_functions[T_STRING] =       string_to_port;
-  display_functions[T_SYMBOL] =       symbol_to_port;
-  display_functions[T_SYNTAX] =       syntax_to_port;
-  display_functions[T_UNDEFINED] =    undefined_to_port;
-  display_functions[T_UNSPECIFIED] =  unique_to_port;
-  display_functions[T_UNUSED] =       unique_to_port;
-  display_functions[T_VECTOR] =       vector_to_port;
+  display_functions[T_DYNAMIC_WIND] =    dynamic_wind_to_port;
+  display_functions[T_EOF] =             eof_to_port;
+  display_functions[T_FLOAT_VECTOR] =    float_vector_to_port;
+  display_functions[T_GOTO] =            goto_to_port;
+  display_functions[T_HASH_TABLE] =      hash_table_to_port;
+  display_functions[T_INPUT_PORT] =      input_port_to_port;
+  display_functions[T_INTEGER] =         integer_to_port;
+  display_functions[T_INT_VECTOR] =      int_vector_to_port;
+  display_functions[T_ITERATOR] =        iterator_to_port;
+  display_functions[T_LET] =             let_to_port;
+  display_functions[T_MACRO] =           macro_to_port;
+  display_functions[T_MACRO_STAR] =      macro_to_port;
+  display_functions[T_NIL] =             unique_to_port;
+  display_functions[T_OUTPUT_PORT] =     output_port_to_port;
+  display_functions[T_PAIR] =            pair_to_port;
+  display_functions[T_RANDOM_STATE] =    random_state_to_port;
+  display_functions[T_RATIO] =           number_to_port;
+  display_functions[T_REAL] =            number_to_port;
+  display_functions[T_SLOT] =            internal_slot_to_port;
+  display_functions[T_STACK] =           stack_to_port;
+  display_functions[T_STRING] =          string_to_port;
+  display_functions[T_SYMBOL] =          symbol_to_port;
+  display_functions[T_SYNTAX] =          syntax_to_port;
+  display_functions[T_UNDEFINED] =       undefined_to_port;
+  display_functions[T_UNSPECIFIED] =     unique_to_port;
+  display_functions[T_UNUSED] =          unique_to_port;
+  display_functions[T_VECTOR] =          vector_to_port;
 }
 
 static void object_to_port_with_circle_check_1(s7_scheme *sc, s7_pointer vr, s7_pointer port, use_write_t use_write, shared_info_t *ci)
@@ -39961,10 +40082,11 @@ static s7_pointer append_in_place(s7_scheme *sc, s7_pointer a, s7_pointer b)
 
 
 /* -------------------------------- vectors -------------------------------- */
-bool s7_is_vector(s7_pointer p)       {return(is_any_vector(p));}
-bool s7_is_float_vector(s7_pointer p) {return(is_float_vector(p));}
-bool s7_is_int_vector(s7_pointer p)   {return(is_int_vector(p));}
-bool s7_is_byte_vector(s7_pointer p)  {return(is_byte_vector(p));}
+bool s7_is_vector(s7_pointer p)         {return(is_any_vector(p));}
+bool s7_is_float_vector(s7_pointer p)   {return(is_float_vector(p));}
+bool s7_is_complex_vector(s7_pointer p) {return(is_complex_vector(p));}
+bool s7_is_int_vector(s7_pointer p)     {return(is_int_vector(p));}
+bool s7_is_byte_vector(s7_pointer p)    {return(is_byte_vector(p));}
 
 static bool is_byte_vector_b_p(s7_pointer b) {return(is_byte_vector(b));}
 
@@ -40011,10 +40133,11 @@ static inline s7_pointer typed_vector_setter(s7_scheme *sc, s7_pointer vec, s7_i
   return(val);
 }
 
-static s7_pointer t_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc)     {return(vector_element(vec, loc));}
-static s7_pointer int_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc)   {return(make_integer(sc, int_vector(vec, loc)));}
-static s7_pointer float_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc) {return(make_real(sc, float_vector(vec, loc)));}
-static s7_pointer byte_vector_getter(s7_scheme *sc, s7_pointer bv, s7_int loc)   {return(small_int(byte_vector(bv, loc)));}
+static s7_pointer t_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc)       {return(vector_element(vec, loc));}
+static s7_pointer int_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc)     {return(make_integer(sc, int_vector(vec, loc)));}
+static s7_pointer float_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc)   {return(make_real(sc, float_vector(vec, loc)));}
+static s7_pointer complex_vector_getter(s7_scheme *sc, s7_pointer vec, s7_int loc) {return(c_complex_to_s7(sc, complex_vector(vec, loc)));}
+static s7_pointer byte_vector_getter(s7_scheme *sc, s7_pointer bv, s7_int loc)     {return(small_int(byte_vector(bv, loc)));}
 
 static s7_pointer int_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s7_pointer val)
 {
@@ -40027,6 +40150,12 @@ static s7_pointer int_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s
 static s7_pointer float_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s7_pointer val)
 {
   float_vector(vec, loc) = real_to_double(sc, val, "float-vector-set!");
+  return(val);
+}
+
+static s7_pointer complex_vector_setter(s7_scheme *sc, s7_pointer vec, s7_int loc, s7_pointer val)
+{
+  complex_vector(vec, loc) = s7_to_c_complex(val);
   return(val);
 }
 
@@ -40082,6 +40211,21 @@ static inline s7_pointer make_simple_float_vector(s7_scheme *sc, s7_int len) /* 
   vector_set_dimension_info(x, NULL);
   vector_getter(x) = float_vector_getter;
   vector_setter(x) = float_vector_setter;
+  add_vector(sc, x);
+  return(x);
+}
+
+static inline s7_pointer make_simple_complex_vector(s7_scheme *sc, s7_int len) /* len >= 0 and < max */
+{
+  s7_pointer x;
+  block_t *b = mallocate_vector(sc, len * sizeof(s7_complex));
+  new_cell(sc, x, T_COMPLEX_VECTOR | T_SAFE_PROCEDURE);
+  vector_length(x) = len;
+  vector_block(x) = b;
+  complex_vector_complexs(x) = (s7_complex *)block_data(b);
+  vector_set_dimension_info(x, NULL);
+  vector_getter(x) = complex_vector_getter;
+  vector_setter(x) = complex_vector_setter;
   add_vector(sc, x);
   return(x);
 }
@@ -40190,19 +40334,34 @@ static s7_pointer make_vector_1(s7_scheme *sc, s7_int len, bool filled, uint8_t 
 	    vector_getter(x) = int_vector_getter;
 	    vector_setter(x) = int_vector_setter;
 	  }
-	else /* byte-vector */
-	  {
-	    block_t *b = mallocate(sc, len);
-	    vector_block(x) = b;
-	    byte_vector_bytes(x) = (uint8_t *)block_data(b);
-	    vector_getter(x) = byte_vector_getter;
-	    vector_setter(x) = byte_vector_setter;
-	    if (filled)
-	      {
-		if (STEP_64(len))
-		  memclr64((void *)(byte_vector_bytes(x)), len);
-		else memclr((void *)(byte_vector_bytes(x)), len);
-	      }}
+	else
+	  if (typ == T_COMPLEX_VECTOR)
+	    {
+	      block_t *b = inline_mallocate(sc, len * sizeof(s7_complex));
+	      vector_block(x) = b;
+	      complex_vector_complexs(x) = (s7_complex *)block_data(b);
+	      if (filled)
+		{
+		  if (STEP_8(len))
+		    memclr64((void *)complex_vector_complexs(x), len * sizeof(s7_complex));
+		  else memclr((void *)complex_vector_complexs(x), len * sizeof(s7_complex));
+		}
+	      vector_getter(x) = complex_vector_getter;
+	      vector_setter(x) = complex_vector_setter;
+	    }
+	  else /* byte-vector */
+	    {
+	      block_t *b = mallocate(sc, len);
+	      vector_block(x) = b;
+	      byte_vector_bytes(x) = (uint8_t *)block_data(b);
+	      vector_getter(x) = byte_vector_getter;
+	      vector_setter(x) = byte_vector_setter;
+	      if (filled)
+		{
+		  if (STEP_64(len))
+		    memclr64((void *)(byte_vector_bytes(x)), len);
+		  else memclr((void *)(byte_vector_bytes(x)), len);
+		}}
   vector_set_dimension_info(x, NULL);
   return(x);
 }
@@ -40285,10 +40444,11 @@ static s7_pointer make_any_vector(s7_scheme *sc, int32_t type, s7_int len, s7_in
   return(p);
 }
 
-s7_pointer s7_make_int_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info)    {return(make_any_vector(sc, T_INT_VECTOR, len, dims, dim_info));}
-s7_pointer s7_make_byte_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info)   {return(make_any_vector(sc, T_BYTE_VECTOR, len, dims, dim_info));}
-s7_pointer s7_make_float_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info)  {return(make_any_vector(sc, T_FLOAT_VECTOR, len, dims, dim_info));}
-s7_pointer s7_make_normal_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info) {return(make_any_vector(sc, T_VECTOR, len, dims, dim_info));}
+s7_pointer s7_make_int_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info)     {return(make_any_vector(sc, T_INT_VECTOR, len, dims, dim_info));}
+s7_pointer s7_make_byte_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info)    {return(make_any_vector(sc, T_BYTE_VECTOR, len, dims, dim_info));}
+s7_pointer s7_make_float_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info)   {return(make_any_vector(sc, T_FLOAT_VECTOR, len, dims, dim_info));}
+s7_pointer s7_make_complex_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info) {return(make_any_vector(sc, T_COMPLEX_VECTOR, len, dims, dim_info));}
+s7_pointer s7_make_normal_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info)  {return(make_any_vector(sc, T_VECTOR, len, dims, dim_info));}
 
 s7_pointer s7_make_float_vector_wrapper(s7_scheme *sc, s7_int len, s7_double *data, s7_int dims, s7_int *dim_info, bool free_data)
 {
@@ -40300,6 +40460,28 @@ s7_pointer s7_make_float_vector_wrapper(s7_scheme *sc, s7_int len, s7_double *da
   float_vector_floats(x) = data;
   vector_getter(x) = float_vector_getter;
   vector_setter(x) = float_vector_setter;
+  vector_length(x) = len;
+  if (!dim_info)
+    {
+      s7_int di[1];
+      di[0] = len;
+      vector_set_dimension_info(x, make_vdims(sc, free_data, 1, di));
+    }
+  else vector_set_dimension_info(x, make_vdims(sc, free_data, dims, dim_info));
+  add_multivector(sc, x);
+  return(x);
+}
+
+s7_pointer s7_make_complex_vector_wrapper(s7_scheme *sc, s7_int len, s7_complex *data, s7_int dims, s7_int *dim_info, bool free_data)
+{
+  /* this wraps up a C-allocated/freed complex array as an s7 vector */
+  s7_pointer x;
+  block_t *b = mallocate_empty_block(sc);
+  new_cell(sc, x, T_COMPLEX_VECTOR | T_SAFE_PROCEDURE);
+  vector_block(x) = b;
+  complex_vector_complexs(x) = data;
+  vector_getter(x) = complex_vector_getter;
+  vector_setter(x) = complex_vector_setter;
   vector_length(x) = len;
   if (!dim_info)
     {
@@ -40368,6 +40550,27 @@ static void byte_vector_fill(s7_pointer vec, uint8_t byte)
     else memclr((void *)(byte_vector_bytes(vec)), len);
 }
 
+static void complex_vector_fill(s7_pointer vec, s7_complex x)
+{
+  s7_int len = vector_length(vec);
+  if (len == 0) return;
+  if (x == 0.0)
+    {
+      if (STEP_8(len))
+	memclr64((void *)complex_vector_complexs(vec), len * sizeof(s7_complex));
+      else memclr((void *)complex_vector_complexs(vec), len * sizeof(s7_complex));
+    }
+  else
+    {
+      s7_int i = 0, left = len - 8;
+      s7_complex *orig = complex_vector_complexs(vec);
+      while (i <= left)
+	LOOP_8(orig[i++] = x);
+      for (; i < len; i++)
+	orig[i] = x;
+    }
+}
+
 void s7_vector_fill(s7_scheme *sc, s7_pointer vec, s7_pointer obj)
 {
   switch (type(vec))
@@ -40386,6 +40589,11 @@ void s7_vector_fill(s7_scheme *sc, s7_pointer vec, s7_pointer obj)
       if (!is_byte(obj))
 	wrong_type_error_nr(sc, wrap_string(sc, "byte-vector fill!", 17), 2, obj, wrap_string(sc, "a byte", 6));
       byte_vector_fill(vec, (uint8_t)s7_integer_clamped_if_gmp(sc, obj));
+      break;
+    case T_COMPLEX_VECTOR:
+      if (!is_number(obj))
+	wrong_type_error_nr(sc, wrap_string(sc, "complex-vector fill!", 20), 2, obj, sc->type_names[T_COMPLEX]);
+      complex_vector_fill(vec, s7_to_c_complex(obj));
       break;
     case T_VECTOR:
     default:
@@ -40432,6 +40640,12 @@ static s7_pointer g_vector_fill_1(s7_scheme *sc, s7_pointer caller, s7_pointer a
 	  error_nr(sc, sc->out_of_range_symbol,
 		   set_elist_3(sc, wrap_string(sc, "~S second argument, ~S, should fit in an unsigned byte", 54), caller, fill));
       }
+    else
+      if (is_complex_vector(x))
+	{
+	  if (!is_number(fill)) /* possibly a bignum */
+	    return(method_or_bust(sc, fill, caller, args, sc->type_names[T_COMPLEX], 2));
+	}
   end = vector_length(x);
   if (!is_null(cddr(args)))
     {
@@ -40478,6 +40692,12 @@ static s7_pointer g_vector_fill_1(s7_scheme *sc, s7_pointer caller, s7_pointer a
 		memclr((void *)(byte_vector_bytes(x) + start), end - start);
 	      else local_memset((void *)(byte_vector_bytes(x) + start), k, end - start);
 	    }
+	  else
+	    if (is_complex_vector(x))
+	      {
+		s7_complex cfill = s7_to_c_complex(fill);
+		for (s7_int i = start; i < end; i++) complex_vector(x, i) = cfill;
+	      }
   return(fill);
 }
 
@@ -40591,6 +40811,10 @@ s7_double *s7_float_vector_elements(s7_pointer vec) {return(float_vector_floats(
 s7_double s7_float_vector_ref(s7_pointer vec, s7_int index) {return(float_vector(vec, index));}
 s7_double s7_float_vector_set(s7_pointer vec, s7_int index, s7_double value) {float_vector(vec, index) = value; return(value);}
 
+s7_complex *s7_complex_vector_elements(s7_pointer vec) {return(complex_vector_complexs(vec));}
+s7_complex s7_complex_vector_ref(s7_pointer vec, s7_int index) {return(complex_vector(vec, index));}
+s7_complex s7_complex_vector_set(s7_pointer vec, s7_int index, s7_complex value) {complex_vector(vec, index) = value; return(value);}
+
 s7_int s7_vector_dimensions(s7_pointer vec, s7_int *dims, s7_int dims_size)
 {
   if (dims_size <= 0) return(0);
@@ -40686,27 +40910,31 @@ s7_pointer s7_vector_to_list(s7_scheme *sc, s7_pointer vect)
   if (len == 0) return(sc->nil);
   init_temp(sc->y, sc->nil);
   gc_protect_via_stack(sc, vect);
+  check_free_heap_size(sc, 2 * len);
   switch (type(vect))
     {
     case T_VECTOR:
-      check_free_heap_size(sc, len);
       for (s7_int i = len - 1; i >= 0; i--)
 	sc->y = cons_unchecked(sc, vector_element(vect, i), sc->y);
       break;
     case T_BYTE_VECTOR:
-      check_free_heap_size(sc, len);
       for (s7_int i = len - 1; i >= 0; i--)
 	sc->y = cons_unchecked(sc, small_int(byte_vector(vect, i)), sc->y);
       break;
     case T_INT_VECTOR:
-      check_free_heap_size(sc, 2 * len);
       for (s7_int i = len - 1; i >= 0; i--)
 	sc->y = cons_unchecked(sc, make_integer_unchecked(sc, int_vector(vect, i)), sc->y);
       break;
     case T_FLOAT_VECTOR:
-      check_free_heap_size(sc, 2 * len);
       for (s7_int i = len - 1; i >= 0; i--)
 	sc->y = cons_unchecked(sc, make_real_unchecked(sc, float_vector(vect, i)), sc->y);
+      break;
+    case T_COMPLEX_VECTOR:
+      for (s7_int i = len - 1; i >= 0; i--)
+	{
+	  s7_complex z = complex_vector(vect, i);
+	  sc->y = cons_unchecked(sc, make_complex_unchecked(sc, creal(z), cimag(z)), sc->y);
+	}
       break;
     }
   unstack_gc_protect(sc);
@@ -41005,6 +41233,43 @@ static s7_pointer g_byte_vector(s7_scheme *sc, s7_pointer args)
   return(vec);
 }
 
+/* -------------------------------- complex-vector? -------------------------------- */
+static s7_pointer g_is_complex_vector(s7_scheme *sc, s7_pointer args)
+{
+  #define H_is_complex_vector "(complex-vector? obj) returns #t if obj is an homogeneous complex vector"
+  #define Q_is_complex_vector sc->pl_bt
+  check_boolean_method(sc, s7_is_complex_vector, sc->is_complex_vector_symbol, args);
+}
+
+
+/* -------------------------------- complex-vector -------------------------------- */
+static s7_pointer g_complex_vector(s7_scheme *sc, s7_pointer args)
+{
+  #define H_complex_vector "(complex-vector ...) returns an homogeneous complex vector whose elements are the arguments"
+  #define Q_complex_vector s7_make_circular_signature(sc, 1, 2, sc->is_complex_vector_symbol, sc->is_complex_symbol)
+
+  s7_pointer vec, b;
+  s7_int len = proper_list_length_with_end(args, &b);
+  if (!is_null(b))
+    error_nr(sc, sc->read_error_symbol, set_elist_1(sc, wrap_string(sc, "complex-vector contents list is not a proper list", 49)));
+  if (len > sc->max_vector_length)
+    error_nr(sc, sc->out_of_range_symbol,
+	     set_elist_3(sc, wrap_string(sc, "complex-vector has too many arguments: '~S, but (*s7* 'max-vector-length) is ~D", 79),
+			 args, wrap_integer(sc, sc->max_vector_length)));
+  vec = make_simple_complex_vector(sc, len);
+  if (len > 0)
+    {
+      s7_int i = 0;
+      for (s7_pointer x = args; is_pair(x); x = cdr(x), i++)
+	{
+	  s7_pointer p = car(x);
+	  if (is_number(p))
+	    complex_vector(vec, i) = s7_to_c_complex(p);
+	  else return(method_or_bust(sc, p, sc->complex_vector_symbol, args, sc->type_names[T_COMPLEX], i + 1));
+	}}
+  return(vec);
+}
+
 
 #if (!WITH_PURE_S7)
 /* -------------------------------- list->vector -------------------------------- */
@@ -41075,10 +41340,11 @@ static s7_pointer g_subvector_position(s7_scheme *sc, s7_pointer args)
        */
       switch (type(sv))
 	{
-	case T_VECTOR:       return(make_integer(sc, (s7_int)(vector_elements(sv) - vector_elements(subvector_vector(sv)))));
-	case T_INT_VECTOR:   return(make_integer(sc, (s7_int)(int_vector_ints(sv) - int_vector_ints(subvector_vector(sv)))));
-	case T_FLOAT_VECTOR: return(make_integer(sc, (s7_int)(float_vector_floats(sv) - float_vector_floats(subvector_vector(sv)))));
-	case T_BYTE_VECTOR:  return(make_integer(sc, (s7_int)(byte_vector_bytes(sv) - byte_vector_bytes(subvector_vector(sv)))));
+	case T_VECTOR:         return(make_integer(sc, (s7_int)(vector_elements(sv) - vector_elements(subvector_vector(sv)))));
+	case T_INT_VECTOR:     return(make_integer(sc, (s7_int)(int_vector_ints(sv) - int_vector_ints(subvector_vector(sv)))));
+	case T_FLOAT_VECTOR:   return(make_integer(sc, (s7_int)(float_vector_floats(sv) - float_vector_floats(subvector_vector(sv)))));
+	case T_COMPLEX_VECTOR: return(make_integer(sc, (s7_int)(complex_vector_complexs(sv) - complex_vector_complexs(subvector_vector(sv)))));
+	case T_BYTE_VECTOR:    return(make_integer(sc, (s7_int)(byte_vector_bytes(sv) - byte_vector_bytes(subvector_vector(sv)))));
 	}}
   return(sole_arg_method_or_bust(sc, sv, sc->subvector_position_symbol, args, sc->type_names[T_VECTOR]));
 }
@@ -41135,7 +41401,10 @@ static s7_pointer subvector(s7_scheme *sc, s7_pointer vect, s7_int skip_dims, s7
     else
       if (is_t_vector(vect))
 	vector_elements(x) = (s7_pointer *)(vector_elements(vect) + index);
-      else byte_vector_bytes(x) = (uint8_t *)(byte_vector_bytes(vect) + index);
+      else
+	if (is_byte_vector(x))
+	  byte_vector_bytes(x) = (uint8_t *)(byte_vector_bytes(vect) + index);
+	else complex_vector_complexs(x) = (s7_complex *)(complex_vector_complexs(vect) + index);
   add_multivector(sc, x);
   return(x);
 }
@@ -41261,7 +41530,10 @@ a vector that points to the same elements as the original-vector but with differ
     else
       if (is_t_vector(x))
 	vector_elements(x) = (s7_pointer *)(vector_elements(orig) + offset);
-      else byte_vector_bytes(x) = (uint8_t *)(byte_vector_bytes(orig) + offset);
+      else 
+	if (is_byte_vector(x))
+	  byte_vector_bytes(x) = (uint8_t *)(byte_vector_bytes(orig) + offset);
+	else complex_vector_complexs(x) = (s7_complex *)(complex_vector_complexs(orig) + offset);
   add_multivector(sc, x);
   return(x);
 }
@@ -41741,6 +42013,9 @@ static s7_pointer g_make_vector_1(s7_scheme *sc, s7_pointer args, s7_pointer cal
 	else
 	  if (caller == sc->make_byte_vector_symbol)
 	    result_type = T_BYTE_VECTOR;
+	  else
+	    if (caller == sc->make_complex_vector_symbol)
+	      result_type = T_COMPLEX_VECTOR;
       if (is_pair(cddr(args)))
 	{
 	  typf = caddr(args);
@@ -41774,7 +42049,13 @@ static s7_pointer g_make_vector_1(s7_scheme *sc, s7_pointer args, s7_pointer cal
 			if (!is_byte(fill)) wrong_type_error_nr(sc, caller, 2, fill, an_unsigned_byte_string);
 			result_type = T_BYTE_VECTOR;
 		      }
-		    else check_vector_typer_c_function(sc, caller, typf);
+		    else
+		      if (typf == global_value(sc->is_complex_symbol))
+			{
+			  if (!is_number(fill)) wrong_type_error_nr(sc, caller, 2, fill, sc->type_names[T_COMPLEX]);
+			  result_type = T_COMPLEX_VECTOR;
+			}
+		      else check_vector_typer_c_function(sc, caller, typf);
 	      }}}
   /* before making the new vector, if fill is specified and the vector is typed, we have to check for a type error.
    *    otherwise we can end up with a vector whose elements are NULL, causing a segfault in the gc.
@@ -41899,6 +42180,88 @@ static s7_pointer make_float_vector_p_pp(s7_scheme *sc, s7_pointer len, s7_point
       return(fv);
     }
   return(g_make_float_vector(sc, set_plist_2(sc, len, fill)));
+}
+
+
+/* -------------------------------- make-complex-vector -------------------------------- */
+static s7_pointer g_make_complex_vector(s7_scheme *sc, s7_pointer args)
+{
+  #define H_make_complex_vector "(make-complex-vector len (init 0.0)) returns a complex-vector."
+  #define Q_make_complex_vector s7_make_signature(sc, 3, \
+                                sc->is_complex_vector_symbol, s7_make_signature(sc, 2, sc->is_integer_symbol, sc->is_pair_symbol), sc->is_complex_symbol)
+  s7_int len;
+  s7_pointer x, p = car(args);
+  block_t *arr;
+
+  if ((is_pair(cdr(args))) || (!s7_is_integer(p)))
+    {
+      s7_pointer init;
+      if (is_pair(cdr(args)))
+	{
+	  init = cadr(args);
+	  if (!is_number(init))
+	    return(method_or_bust(sc, init, sc->make_complex_vector_symbol, args, sc->type_names[T_COMPLEX], 2));
+#if WITH_GMP
+	  if (s7_is_bignum(init))
+	    return(g_make_vector_1(sc, set_plist_2(sc, p, wrap_complex(sc, s7_to_c_complex(init))), sc->make_float_complexr_symbol));
+#endif
+	  if (is_rational(init))
+	    return(g_make_vector_1(sc, set_plist_2(sc, p, wrap_real(sc, rational_to_double(sc, init))), sc->make_complex_vector_symbol));
+	}
+      else init = real_zero;
+      if (s7_is_integer(p))
+	len = s7_integer_clamped_if_gmp(sc, p);
+      else
+	{
+	  if (!is_pair(p))
+	    return(method_or_bust(sc, p, sc->make_complex_vector_symbol, args, wrap_string(sc, "an integer or a list of integers", 32), 1));
+	  len = multivector_length(sc, p, sc->make_complex_vector_symbol);
+	}
+      x = make_vector_1(sc, len, NOT_FILLED, T_COMPLEX_VECTOR);
+      complex_vector_fill(x, s7_to_c_complex(init));
+      if (!s7_is_integer(p))
+	return(make_multivector(sc, x, p));
+      add_vector(sc, x);
+      return(x);
+    }
+
+  len = s7_integer_clamped_if_gmp(sc, p);
+  if (len < 0)
+    out_of_range_error_nr(sc, sc->make_complex_vector_symbol, int_one, p, it_is_negative_string);
+  if (len > sc->max_vector_length)
+    error_nr(sc, sc->out_of_range_symbol,
+	     set_elist_3(sc, wrap_string(sc, "make-complex-vector first argument ~D is greater than (*s7* 'max-vector-length), ~D", 81),
+			 wrap_integer(sc, len), wrap_integer(sc, sc->max_vector_length)));
+
+  arr = mallocate_vector(sc, len * sizeof(s7_complex));
+  new_cell(sc, x, T_COMPLEX_VECTOR | T_SAFE_PROCEDURE);
+  vector_length(x) = len;
+  vector_block(x) = arr;
+  complex_vector_complexs(x) = (s7_complex *)block_data(arr);
+  if (len > 0)
+    {
+      if (STEP_8(len))
+	memclr64((void *)complex_vector_complexs(x), len * sizeof(s7_complex));
+      else memclr((void *)complex_vector_complexs(x), len * sizeof(s7_complex));
+    }
+  vector_set_dimension_info(x, NULL);
+  vector_getter(x) = complex_vector_getter;
+  vector_setter(x) = complex_vector_setter;
+
+  add_vector(sc, x);
+  return(x);
+}
+
+static s7_pointer make_complex_vector_p_pp(s7_scheme *sc, s7_pointer len, s7_pointer fill)
+{
+  if ((is_t_integer(len)) && (is_number(fill)) &&
+      (integer(len)>= 0) && (integer(len) < sc->max_vector_length))
+    {
+      s7_pointer fv = make_simple_complex_vector(sc, integer(len));
+      complex_vector_fill(fv, s7_to_c_complex(fill));
+      return(fv);
+    }
+  return(g_make_complex_vector(sc, set_plist_2(sc, len, fill)));
 }
 
 
@@ -42118,6 +42481,7 @@ static s7_pointer g_vector_typer(s7_scheme *sc, s7_pointer args)
   if (is_float_vector(v)) return(global_value(sc->is_float_symbol));
   if (is_int_vector(v)) return(global_value(sc->is_integer_symbol));
   if (is_byte_vector(v)) return(global_value(sc->is_byte_symbol));
+  if (is_complex_vector(v)) return(global_value(sc->is_number_symbol));
   return(sc->F);
 }
 
@@ -42134,6 +42498,7 @@ static s7_pointer g_set_vector_typer(s7_scheme *sc, s7_pointer args)
     {
       if (((is_int_vector(v)) && (typer != global_value(sc->is_integer_symbol))) ||
 	  ((is_float_vector(v)) && (typer != global_value(sc->is_float_symbol))) ||
+	  ((is_complex_vector(v)) && (typer != global_value(sc->is_number_symbol))) ||
 	  ((is_byte_vector(v)) && (typer != global_value(sc->is_byte_symbol))))
 	error_nr(sc, sc->wrong_type_arg_symbol, set_elist_3(sc, wrap_string(sc, "vector-typer can't set ~S typer to ~S", 37), v, typer));
       return(typer);
@@ -42274,7 +42639,6 @@ static s7_pointer g_multivector(s7_scheme *sc, s7_int dims, s7_pointer data)
 
 static s7_pointer g_int_multivector(s7_scheme *sc, s7_int dims, s7_pointer data)
 {
-  /* dims > 1, sc->value is a pair (not null) */
   s7_pointer *src;
   s7_int len;
   sc->value = g_multivector(sc, dims, data);
@@ -42289,7 +42653,6 @@ static s7_pointer g_int_multivector(s7_scheme *sc, s7_int dims, s7_pointer data)
 
 static s7_pointer g_byte_multivector(s7_scheme *sc, s7_int dims, s7_pointer data)
 {
-  /* dims > 1, sc->value is a pair (not null) */
   s7_pointer *src;
   s7_int len;
   sc->value = g_multivector(sc, dims, data);
@@ -42304,7 +42667,6 @@ static s7_pointer g_byte_multivector(s7_scheme *sc, s7_int dims, s7_pointer data
 
 static s7_pointer g_float_multivector(s7_scheme *sc, s7_int dims, s7_pointer data)
 {
-  /* dims > 1, sc->value is a pair (not null) */
   s7_pointer *src;
   s7_int len;
   sc->value = g_multivector(sc, dims, data);
@@ -42315,6 +42677,20 @@ static s7_pointer g_float_multivector(s7_scheme *sc, s7_int dims, s7_pointer dat
       wrong_type_error_nr(sc, wrap_string(sc, "#r(...)", 7), i + 1, src[i], sc->type_names[T_REAL]);
   sc->args = g_make_vector_1(sc, set_plist_2(sc, g_vector_dimensions(sc, set_plist_1(sc, sc->value)), real_zero), sc->make_float_vector_symbol);
   return(s7_copy_1(sc, sc->float_vector_symbol, set_plist_2(sc, sc->value, sc->args)));
+}
+
+static s7_pointer g_complex_multivector(s7_scheme *sc, s7_int dims, s7_pointer data)
+{
+  s7_pointer *src;
+  s7_int len;
+  sc->value = g_multivector(sc, dims, data);
+  src = (s7_pointer *)vector_elements(sc->value);
+  len = vector_length(sc->value);
+  for (s7_int i = 0; i < len; i++)
+    if (!is_number(src[i]))
+      wrong_type_error_nr(sc, wrap_string(sc, "#c(...)", 7), i + 1, src[i], sc->type_names[T_COMPLEX]);
+  sc->args = g_make_vector_1(sc, set_plist_2(sc, g_vector_dimensions(sc, set_plist_1(sc, sc->value)), real_zero), sc->make_complex_vector_symbol);
+  return(s7_copy_1(sc, sc->complex_vector_symbol, set_plist_2(sc, sc->value, sc->args)));
 }
 
 static Vectorized s7_pointer s7_vector_copy_1(s7_scheme *sc, s7_pointer old_vect)
@@ -42342,7 +42718,6 @@ static Vectorized s7_pointer s7_vector_copy_1(s7_scheme *sc, s7_pointer old_vect
       for (s7_int i = len; i > 0; i--) *dst++ = *src++;
       return(new_vect);
     }
-
   if (is_float_vector(old_vect))
     {
       const s7_double *src = (s7_double *)float_vector_floats(old_vect);
@@ -42354,7 +42729,6 @@ static Vectorized s7_pointer s7_vector_copy_1(s7_scheme *sc, s7_pointer old_vect
       for (s7_int i = len; i > 0; i--) *dst++ = *src++;  /* same speed as memcpy(dst, src, len * sizeof(s7_double)); */
       return(new_vect);
     }
-
   if (is_int_vector(old_vect))
     {
       const s7_int *src = (s7_int *)int_vector_ints(old_vect);
@@ -42366,7 +42740,6 @@ static Vectorized s7_pointer s7_vector_copy_1(s7_scheme *sc, s7_pointer old_vect
       for (s7_int i = len; i > 0; i--) *dst++ = *src++;
       return(new_vect);
     }
-
   if (is_byte_vector(old_vect))
     {
       const uint8_t *src = (const uint8_t *)byte_vector_bytes(old_vect);
@@ -42375,6 +42748,17 @@ static Vectorized s7_pointer s7_vector_copy_1(s7_scheme *sc, s7_pointer old_vect
 	new_vect = g_make_vector_1(sc, set_plist_2(sc, g_vector_dimensions(sc, set_plist_1(sc, old_vect)), int_zero), sc->make_byte_vector_symbol);
       else new_vect = make_simple_byte_vector(sc, len);
       dst = (uint8_t *)byte_vector_bytes(new_vect);
+      for (s7_int i = len; i > 0; i--) *dst++ = *src++;
+      return(new_vect);
+    }
+  if (is_complex_vector(old_vect))
+    {
+      const s7_complex *src = (s7_complex *)complex_vector_complexs(old_vect);
+      s7_complex *dst;
+      if (vector_rank(old_vect) > 1)
+	new_vect = g_make_vector_1(sc, set_plist_2(sc, g_vector_dimensions(sc, set_plist_1(sc, old_vect)), real_zero), sc->make_complex_vector_symbol);
+      else new_vect = make_simple_complex_vector(sc, len);
+      dst = (s7_complex *)complex_vector_complexs(new_vect);
       for (s7_int i = len; i > 0; i--) *dst++ = *src++;
       return(new_vect);
     }
@@ -42427,6 +42811,8 @@ static s7_pointer univect_ref(s7_scheme *sc, s7_pointer args, s7_pointer caller,
     }
   if (typ == T_FLOAT_VECTOR)
     return(make_real(sc, float_vector(v, ind)));
+  if (typ == T_COMPLEX_VECTOR)
+    return(make_complex(sc, creal(complex_vector(v, ind)), cimag(complex_vector(v, ind))));
   return((typ == T_INT_VECTOR) ? make_integer(sc, int_vector(v, ind)) : small_int(byte_vector(v, ind)));
 }
 
@@ -42494,12 +42880,39 @@ static s7_pointer univect_set(s7_scheme *sc, s7_pointer args, s7_pointer caller,
 	int_vector(vec, ind) = s7_integer_clamped_if_gmp(sc, val);
       }
     else
-      {
-	if (!is_byte(val))
-	  return(method_or_bust(sc, val, caller, args, sc->type_names[T_INTEGER], 3));
-	byte_vector(vec, ind) = (uint8_t)s7_integer_clamped_if_gmp(sc, val);
-      }
+      if (typ == T_BYTE_VECTOR)
+	{
+	  if (!is_byte(val))
+	    return(method_or_bust(sc, val, caller, args, sc->type_names[T_INTEGER], 3));
+	  byte_vector(vec, ind) = (uint8_t)s7_integer_clamped_if_gmp(sc, val);
+	}
+      else
+	{
+	  if (!is_number(val))
+	    return(method_or_bust(sc, val, caller, args, sc->type_names[T_COMPLEX], 3));
+	  complex_vector(vec, ind) = s7_to_c_complex(val);
+	}
   return(val);
+}
+
+
+/* -------------------------------- complex-vector-ref -------------------------------- */
+static s7_pointer g_complex_vector_ref(s7_scheme *sc, s7_pointer args)
+{
+  #define H_complex_vector_ref "(complex-vector-ref v ...) returns an element of the complex-vector v."
+  #define Q_complex_vector_ref s7_make_circular_signature(sc, 2, 3, \
+                               s7_make_signature(sc, 2, sc->is_complex_symbol, sc->is_complex_vector_symbol), \
+                               sc->is_complex_vector_symbol, sc->is_integer_symbol)
+  return(univect_ref(sc, args, sc->complex_vector_ref_symbol, T_COMPLEX_VECTOR));
+}
+
+/* -------------------------------- complex-vector-set! -------------------------------- */
+static s7_pointer g_complex_vector_set(s7_scheme *sc, s7_pointer args)
+{
+  #define H_complex_vector_set "(complex-vector-set! v i ... value) sets the i-th element of the complex-vector v to value."
+  #define Q_complex_vector_set s7_make_circular_signature(sc, 3, 4, \
+                               sc->is_complex_symbol, sc->is_complex_vector_symbol, sc->is_integer_symbol, sc->is_integer_or_number_at_end_symbol)
+  return(univect_set(sc, args, sc->complex_vector_set_symbol, T_COMPLEX_VECTOR));
 }
 
 
@@ -44181,9 +44594,14 @@ static s7_int hash_map_real(s7_scheme *sc, s7_pointer table, s7_pointer key)
   return(hash_float_location(real(key)));
 }
 
+static s7_int hash_complex_location(s7_double x)
+{
+  return(hash_float_location(x)); /* + hash_float_location(imag_part(key)) -- imag-part confuses epsilon distance calcs */
+}
+
 static s7_int hash_map_complex(s7_scheme *sc, s7_pointer table, s7_pointer key)
 {
-  return(hash_float_location(real_part(key))/* + hash_float_location(imag_part(key)) */); /* imag-part confuses epsilon distance calcs */
+  return(hash_complex_location(real_part(key)));
 }
 
 #if WITH_GMP
@@ -44635,6 +45053,15 @@ static s7_int hash_map_float_vector(s7_scheme *sc, s7_pointer table, s7_pointer 
   if (vector_length(key) == 1)
     return(hash_float_location(float_vector(key, 0)));
   return(vector_length(key) + hash_float_location(float_vector(key, 0)) + hash_float_location(float_vector(key, 1)));
+}
+
+static s7_int hash_map_complex_vector(s7_scheme *sc, s7_pointer table, s7_pointer key)
+{
+  if (vector_length(key) == 0)
+    return(0);
+  if (vector_length(key) == 1)
+    return(hash_complex_location(creal(complex_vector(key, 0))));
+  return(vector_length(key) + hash_complex_location(creal(complex_vector(key, 0))) + hash_complex_location(creal(complex_vector(key, 1))));
 }
 
 static s7_int hash_map_vector(s7_scheme *sc, s7_pointer table, s7_pointer key)
@@ -45327,6 +45754,7 @@ static void init_hash_maps(void)
   default_hash_map[T_VECTOR] =        hash_map_vector;
   default_hash_map[T_INT_VECTOR] =    hash_map_int_vector;
   default_hash_map[T_FLOAT_VECTOR] =  hash_map_float_vector;
+  default_hash_map[T_COMPLEX_VECTOR] = hash_map_complex_vector;
   default_hash_map[T_LET] =           hash_map_let;
   default_hash_map[T_PAIR] =          hash_map_pair;
   default_hash_map[T_C_POINTER] =     hash_map_c_pointer;
@@ -46639,6 +47067,7 @@ static void init_signatures(s7_scheme *sc)
   sc->byte_vector_signature =  s7_make_circular_signature(sc, 2, 3, sc->is_byte_symbol, sc->is_byte_vector_symbol, sc->is_integer_symbol);
   sc->vector_signature =       s7_make_circular_signature(sc, 2, 3, sc->T, sc->is_vector_symbol, sc->is_integer_symbol);
   sc->float_vector_signature = s7_make_circular_signature(sc, 2, 3, sc->is_float_symbol, sc->is_float_vector_symbol, sc->is_integer_symbol);
+  sc->complex_vector_signature = s7_make_circular_signature(sc, 2, 3, sc->is_complex_symbol, sc->is_complex_vector_symbol, sc->is_integer_symbol);
   sc->int_vector_signature =   s7_make_circular_signature(sc, 2, 3, sc->is_integer_symbol, sc->is_int_vector_symbol, sc->is_integer_symbol);
   sc->c_object_signature =     s7_make_circular_signature(sc, 2, 3, sc->T, sc->is_c_object_symbol, sc->T);
   sc->let_signature =          s7_make_circular_signature(sc, 2, 3, sc->T, sc->is_let_symbol, sc->is_symbol_symbol);
@@ -46679,6 +47108,7 @@ static s7_pointer g_signature(s7_scheme *sc, s7_pointer args)
       }
 
     case T_FLOAT_VECTOR: return((vector_length(p) == 0) ? sc->F : sc->float_vector_signature);
+    case T_COMPLEX_VECTOR: return((vector_length(p) == 0) ? sc->F : sc->complex_vector_signature);
     case T_INT_VECTOR:   return((vector_length(p) == 0) ? sc->F : sc->int_vector_signature);
     case T_BYTE_VECTOR:  return((vector_length(p) == 0) ? sc->F : sc->byte_vector_signature);
     case T_PAIR:         return(sc->pair_signature);
@@ -47428,7 +47858,7 @@ s7_pointer s7_arity(s7_scheme *sc, s7_pointer x)
       if (vector_length(x) == 0) return(sc->F);
       if (has_simple_elements(x)) return(cons(sc, int_one, make_integer(sc, vector_rank(x))));
       return(cons(sc, int_one, max_arity));
-    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR:
+    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR: case T_COMPLEX_VECTOR:
       return((vector_length(x) == 0) ? sc->F : cons(sc, int_one, make_integer(sc, vector_rank(x))));
     case T_PAIR: case T_HASH_TABLE:
       return(cons(sc, int_one, max_arity));
@@ -47518,7 +47948,7 @@ bool s7_is_aritable(s7_scheme *sc, s7_pointer x, s7_int args)
 	return((is_safe_procedure(x)) && (args == 1)); /* TODO: can we get arity from x in that case? */
       }
 
-    case T_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR:
+    case T_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR: case T_COMPLEX_VECTOR:
       return((args > 0) &&
 	     (vector_length(x) > 0) &&   /* (#() 0) -> error */
 	     (args <= vector_rank(x)));
@@ -47614,6 +48044,7 @@ static s7_pointer b_is_char_setter(s7_scheme *sc, s7_pointer args)         {retu
 static s7_pointer b_is_continuation_setter(s7_scheme *sc, s7_pointer args) {return(b_simple_setter(sc, T_CONTINUATION, args));}
 static s7_pointer b_is_eof_object_setter(s7_scheme *sc, s7_pointer args)   {return(b_simple_setter(sc, T_EOF, args));}
 static s7_pointer b_is_float_vector_setter(s7_scheme *sc, s7_pointer args) {return(b_simple_setter(sc, T_FLOAT_VECTOR, args));}
+static s7_pointer b_is_complex_vector_setter(s7_scheme *sc, s7_pointer args) {return(b_simple_setter(sc, T_COMPLEX_VECTOR, args));}
 static s7_pointer b_is_goto_setter(s7_scheme *sc, s7_pointer args)         {return(b_simple_setter(sc, T_GOTO, args));}
 static s7_pointer b_is_hash_table_setter(s7_scheme *sc, s7_pointer args)   {return(b_simple_setter(sc, T_HASH_TABLE, args));}
 static s7_pointer b_is_input_port_setter(s7_scheme *sc, s7_pointer args)   {return(b_simple_setter(sc, T_INPUT_PORT, args));}
@@ -47751,6 +48182,7 @@ static s7_pointer setter_p_pp(s7_scheme *sc, s7_pointer p, s7_pointer e)
     case T_VECTOR:       return(global_value(sc->vector_set_symbol));
     case T_INT_VECTOR:   return(global_value(sc->int_vector_set_symbol));
     case T_FLOAT_VECTOR: return(global_value(sc->float_vector_set_symbol));
+    case T_COMPLEX_VECTOR: return(global_value(sc->complex_vector_set_symbol));
     case T_SLOT:         return((slot_has_setter(p)) ? slot_setter(p) : sc->F);
 
     case T_SYMBOL:                             /* (setter symbol let) */
@@ -48641,6 +49073,18 @@ static bool float_vector_equal(s7_scheme *sc, s7_pointer x, s7_pointer y, shared
   return(true);
 }
 
+static bool complex_vector_equal(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_t *ci)
+{
+  s7_int len;
+  if (!is_complex_vector(y))
+    return(vector_equal(sc, x, y, ci));
+  base_vector_equal(sc, x, y);
+  for (s7_int i = 0; i < len; i++)
+    if (complex_vector(x, i) != complex_vector(y, i))
+      return(false);
+  return(true);
+}
+
 static bool vector_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_t *ci)
 {
   /* if this is split like vector_equal above, remember it is called by iterator_equal_1 below */
@@ -48674,6 +49118,7 @@ static bool vector_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_
       return(true);
     }
 
+  /* TODO: complex_vector equivalent */
   if (is_float_vector(x))
     {
       s7_double *arr1 = float_vector_floats(x), *arr2 = float_vector_floats(y);
@@ -48732,7 +49177,7 @@ static bool iterator_equal_1(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_i
 	     (iterator_length(x) == iterator_length(y)) &&
 	     (string_equal(sc, x_seq, y_seq, ci)));
 
-    case T_VECTOR: case T_INT_VECTOR: case T_BYTE_VECTOR: case T_FLOAT_VECTOR:
+    case T_VECTOR: case T_INT_VECTOR: case T_BYTE_VECTOR: case T_FLOAT_VECTOR: case T_COMPLEX_VECTOR:
       return((is_any_vector(y_seq)) &&
 	     (iterator_position(x) == iterator_position(y)) &&
 	     (iterator_length(x) == iterator_length(y)) &&
@@ -48740,7 +49185,8 @@ static bool iterator_equal_1(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_i
 	      ((is_t_vector(x_seq)) ? (vector_equal(sc, x_seq, y_seq, ci)) :
 	       ((is_float_vector(x_seq)) ? (float_vector_equal(sc, x_seq, y_seq, ci)) :
 		((is_int_vector(x_seq)) ? (int_vector_equal(sc, x_seq, y_seq, ci)) :
-		 (byte_vector_equal(sc, x_seq, y_seq, ci)))))));
+		 ((is_byte_vector(x_seq)) ? (byte_vector_equal(sc, x_seq, y_seq, ci)) :
+		  (complex_vector_equal(sc, x_seq, y_seq, ci))))))));
 
       /* iterator_next is a function (pair_iterate, iterator_finished etc) */
     case T_PAIR:
@@ -49232,6 +49678,7 @@ static void init_equals(void)
   equals[T_C_OBJECT] =          c_objects_are_equal;
   equals[T_C_POINTER] =         c_pointer_equal;
   equals[T_FLOAT_VECTOR] =      float_vector_equal;
+  equals[T_COMPLEX_VECTOR] =    complex_vector_equal;
   equals[T_HASH_TABLE] =        hash_table_equal;
   equals[T_INPUT_PORT] =        port_equal;
   equals[T_INTEGER] =           integer_equal;
@@ -49267,6 +49714,7 @@ static void init_equals(void)
   equivalents[T_C_OBJECT] =     c_objects_are_equivalent;
   equivalents[T_C_POINTER] =    c_pointer_equivalent;
   equivalents[T_FLOAT_VECTOR] = vector_equivalent;
+  equivalents[T_COMPLEX_VECTOR] = vector_equivalent;
   equivalents[T_HASH_TABLE] =   hash_table_equivalent;
   equivalents[T_INPUT_PORT] =   port_equivalent;
   equivalents[T_INTEGER] =      integer_equivalent;
@@ -49391,6 +49839,7 @@ static void init_length_functions(void)
   length_functions[T_PAIR]         = pair_length;
   length_functions[T_VECTOR]       = v_length;
   length_functions[T_FLOAT_VECTOR] = v_length;
+  length_functions[T_COMPLEX_VECTOR] = v_length;
   length_functions[T_INT_VECTOR]   = v_length;
   length_functions[T_STRING]       = str_length;
   length_functions[T_BYTE_VECTOR]  = bv_length;
@@ -49563,7 +50012,7 @@ static s7_pointer copy_source_no_dest(s7_scheme *sc, s7_pointer source, s7_point
       check_method(sc, source, sc->copy_symbol, args);
       return(copy_closure(sc, source));
 
-    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR:
+    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR: case T_COMPLEX_VECTOR:
       return(s7_vector_copy(sc, source)); /* "shallow" copy */
 
     case T_VECTOR:
@@ -49682,6 +50131,9 @@ static s7_pointer copy_to_same_type(s7_scheme *sc, s7_pointer dest, s7_pointer s
     case T_FLOAT_VECTOR:
       memcpy((void *)((float_vector_floats(dest)) + dest_start), (void *)((float_vector_floats(source)) + source_start), source_len * sizeof(s7_double));
       return(dest);
+    case T_COMPLEX_VECTOR:
+      memcpy((void *)((complex_vector_complexs(dest)) + dest_start), (void *)((complex_vector_complexs(source)) + source_start), source_len * sizeof(s7_complex));
+      return(dest);
     case T_BYTE_VECTOR:
       if (is_string(dest))
 	memcpy((void *)(string_value(dest) + dest_start), (void *)((byte_vector_bytes(source)) + source_start), source_len * sizeof(uint8_t));
@@ -49798,7 +50250,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 	if (end < 0) end = -end;
       break;
 
-    case T_INT_VECTOR:  case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR:
+    case T_INT_VECTOR:  case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR: case T_COMPLEX_VECTOR:
       get = vector_getter(source);
       end = vector_length(source);
       break;
@@ -49891,12 +50343,15 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
       dest_len = source_len;
       break;
 
-    case T_INT_VECTOR:
-    case T_BYTE_VECTOR:
+    case T_INT_VECTOR: case T_BYTE_VECTOR:
       if (is_float_vector(source))
 	error_nr(sc, sc->wrong_type_arg_symbol,
 		 set_elist_4(sc, wrap_string(sc, "can't ~S ~S to ~A", 17), caller, source, sc->type_names[type(dest)]));
-    case T_FLOAT_VECTOR:
+    case T_FLOAT_VECTOR: 
+      if (is_complex_vector(source))
+	error_nr(sc, sc->wrong_type_arg_symbol,
+		 set_elist_4(sc, wrap_string(sc, "can't ~S ~S to ~A", 17), caller, source, sc->type_names[type(dest)]));
+    case T_COMPLEX_VECTOR:
       set = vector_setter(dest);
       dest_len = vector_length(dest);
       break;
@@ -50160,6 +50615,17 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 	      }
 	    return(dest);
 	  }
+	if (is_complex_vector(dest))
+	  {
+	    s7_complex *dst = complex_vector_complexs(dest);
+	    for (i = start, j = 0; i < end; i++, j++)
+	      {
+		if (!s7_is_number(vals[i]))
+		  copy_element_error_nr(sc, caller, i + 1, vals[i], T_COMPLEX);
+		dst[j] = s7_to_c_complex(vals[i]);
+	      }
+	    return(dest);
+	  }
 	if (is_string(dest))
 	  {
 	    char *dst = string_value(dest);
@@ -50410,6 +50876,20 @@ static s7_pointer float_vector_reverse(s7_scheme *sc, s7_pointer p)
   return(np);
 }
 
+static s7_pointer complex_vector_reverse(s7_scheme *sc, s7_pointer p)
+{
+  s7_pointer np;
+  s7_complex *dest, *source = complex_vector_complexs(p);
+  s7_int len = vector_length(p);
+  s7_complex *end = (s7_complex *)(source + len);
+  if (vector_rank(p) > 1)
+    np = g_make_vector_1(sc, set_plist_2(sc, g_vector_dimensions(sc, set_plist_1(sc, p)), real_zero), sc->make_complex_vector_symbol);
+  else np = make_simple_complex_vector(sc, len);
+  dest = (s7_complex *)(complex_vector_complexs(np) + len);
+  while (source < end) *(--dest) = *source++;
+  return(np);
+}
+
 static s7_pointer vector_reverse(s7_scheme *sc, s7_pointer p)
 {
   s7_pointer np;
@@ -50436,14 +50916,15 @@ static s7_pointer reverse_p_p(s7_scheme *sc, s7_pointer p)
   if (is_pair(p)) return(s7_reverse(sc, p)); /* by far the most common case */
   switch (type(p))
     {
-    case T_NIL:          return(sc->nil);
-    /* case T_PAIR:      return(s7_reverse(sc, p)); */
-    case T_STRING:       return(string_reverse(sc, p));
-    case T_BYTE_VECTOR:  return(byte_vector_reverse(sc, p));
-    case T_INT_VECTOR:   return(int_vector_reverse(sc, p));
-    case T_FLOAT_VECTOR: return(float_vector_reverse(sc, p));
-    case T_VECTOR:       return(vector_reverse(sc, p));
-    case T_HASH_TABLE:   return(hash_table_reverse(sc, p));
+    case T_NIL:            return(sc->nil);
+    /* case T_PAIR:        return(s7_reverse(sc, p)); */
+    case T_STRING:         return(string_reverse(sc, p));
+    case T_BYTE_VECTOR:    return(byte_vector_reverse(sc, p));
+    case T_INT_VECTOR:     return(int_vector_reverse(sc, p));
+    case T_FLOAT_VECTOR:   return(float_vector_reverse(sc, p));
+    case T_COMPLEX_VECTOR: return(complex_vector_reverse(sc, p));
+    case T_VECTOR:         return(vector_reverse(sc, p));
+    case T_HASH_TABLE:     return(hash_table_reverse(sc, p));
     case T_C_OBJECT:
       check_method(sc, p, sc->reverse_symbol, set_plist_1(sc, p));
       if (!c_object_reverse(sc, p))
@@ -50604,6 +51085,18 @@ static s7_pointer float_vector_reverse_in_place(s7_scheme *sc, s7_pointer p)
   return(p);
 }
 
+static s7_pointer complex_vector_reverse_in_place(s7_scheme *sc, s7_pointer p)
+{
+  s7_int len = vector_length(p);
+  s7_complex *s1 = complex_vector_complexs(p), *s2;
+  if (len < 2) return(p);
+  if (is_immutable_vector(p))
+    immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->reverseb_symbol, p));
+  s2 = (s7_complex *)(s1 + len - 1);
+  while (s1 < s2) {s7_complex c; c = *s1; *s1++ = *s2; *s2-- = c;}
+  return(p);
+}
+
 static s7_pointer vector_reverse_in_place(s7_scheme *sc, s7_pointer p)
 {
   s7_int len = vector_length(p);
@@ -50667,10 +51160,11 @@ static s7_pointer g_reverse_in_place(s7_scheme *sc, s7_pointer args)
        */
 
     case T_BYTE_VECTOR:
-    case T_STRING:       return(string_or_byte_vector_reverse_in_place(sc, p));
-    case T_INT_VECTOR:   return(int_vector_reverse_in_place(sc, p));
-    case T_FLOAT_VECTOR: return(float_vector_reverse_in_place(sc, p));
-    case T_VECTOR:       return(vector_reverse_in_place(sc, p));
+    case T_STRING:         return(string_or_byte_vector_reverse_in_place(sc, p));
+    case T_INT_VECTOR:     return(int_vector_reverse_in_place(sc, p));
+    case T_FLOAT_VECTOR:   return(float_vector_reverse_in_place(sc, p));
+    case T_COMPLEX_VECTOR: return(complex_vector_reverse_in_place(sc, p));
+    case T_VECTOR:         return(vector_reverse_in_place(sc, p));
 
     default:
       if (is_immutable(p))
@@ -50764,7 +51258,7 @@ s7_pointer s7_fill(s7_scheme *sc, s7_pointer args)
       if (!is_null(cddr(args)))  /* (fill! () 1 21 #\a)? */
 	syntax_error_nr(sc, "fill! () ... includes indices: ~S?", 34, cddr(args));
       return(cadr(args));        /* this parallels the empty vector case */
-    case T_BYTE_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR:
+    case T_BYTE_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_COMPLEX_VECTOR:
       return(g_vector_fill_1(sc, sc->fill_symbol, args));
     case T_LET:
       check_method(sc, p, sc->fill_symbol, args);
@@ -50818,6 +51312,7 @@ static s7_pointer vector_append(s7_scheme *sc, s7_pointer args, uint8_t typ, s7_
   s7_pointer new_vec, p, pargs, vtyper = NULL;
   s7_pointer *v_elements = NULL;
   s7_double *fv_elements = NULL;
+  s7_complex *cv_elements = NULL;
   s7_int *iv_elements = NULL;
   uint8_t *byte_elements = NULL;
   s7_int i, len;
@@ -50851,7 +51346,10 @@ static s7_pointer vector_append(s7_scheme *sc, s7_pointer args, uint8_t typ, s7_
     else
       if (typ == T_INT_VECTOR)
 	iv_elements = int_vector_ints(new_vec);
-      else byte_elements = byte_vector_bytes(new_vec);
+      else
+	if (typ == T_COMPLEX_VECTOR)
+	  cv_elements = complex_vector_complexs(new_vec);
+	else byte_elements = byte_vector_bytes(new_vec);
 
   pargs = list_2(sc, sc->F, new_vec); /* car set below */
   /* push_stack_no_let(sc, OP_GC_PROTECT, new_vec, pargs); */
@@ -50884,7 +51382,10 @@ static s7_pointer vector_append(s7_scheme *sc, s7_pointer args, uint8_t typ, s7_
 	    else
 	      if (typ == T_INT_VECTOR)
 		int_vector_ints(new_vec) = (s7_int *)(iv_elements + i);
-	      else byte_vector_bytes(new_vec) = (uint8_t *)(byte_elements + i);
+	      else
+		if (typ == T_COMPLEX_VECTOR)
+		  complex_vector_complexs(new_vec) = (s7_complex *)(cv_elements + i);
+		else byte_vector_bytes(new_vec) = (uint8_t *)(byte_elements + i);
 	}}
   /* unstack_gc_protect(sc); */
 
@@ -50896,7 +51397,10 @@ static s7_pointer vector_append(s7_scheme *sc, s7_pointer args, uint8_t typ, s7_
     else
       if (typ == T_INT_VECTOR)
 	int_vector_ints(new_vec) = iv_elements;
-      else byte_vector_bytes(new_vec) = byte_elements;
+      else
+	if (typ == T_COMPLEX_VECTOR)
+	  complex_vector_complexs(new_vec) = cv_elements;
+	else byte_vector_bytes(new_vec) = byte_elements;
   vector_length(new_vec) = len;
   if ((typed) && (vtyper))
     {
@@ -50986,7 +51490,7 @@ static s7_pointer g_append(s7_scheme *sc, s7_pointer args)
       /* should this work in the generic append: (append "12" #\3) -- currently an error, (append (list 1 2) 3) -> '(1 2 . 3), but vector is error */
     case T_HASH_TABLE: return(hash_table_append(sc, args));
     case T_LET:        return(let_append(sc, args));
-    case T_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR:
+    case T_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR: case T_COMPLEX_VECTOR:
       return(vector_append(sc, args, type(car(args)), sc->append_symbol));
     default: check_method(sc, car(args), sc->append_symbol, args);
     }
@@ -51157,7 +51661,7 @@ static s7_pointer object_to_list(s7_scheme *sc, s7_pointer obj) /* used only in 
     case T_HASH_TABLE:  return(hash_table_to_list(sc, obj));
     case T_ITERATOR:    return(iterator_to_list(sc, obj));
     case T_C_OBJECT:    return(c_obj_to_list(sc, obj));
-    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR:
+    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_COMPLEX_VECTOR:
       return(s7_vector_to_list(sc, obj));
     case T_LET:
 #if (!WITH_PURE_S7)
@@ -51228,10 +51732,11 @@ static s7_pointer vector_to_let(s7_scheme *sc, s7_pointer obj)
       s7_int pos = 0;
       switch (type(obj)) /* correct type matters here: gcc 10.2 with -O2 segfaults otherwise, cast to intptr_t has a similar role in earlier gcc's */
 	{
-	  case T_VECTOR:       pos = (s7_int)((intptr_t)(vector_elements(obj) - vector_elements(subvector_vector(obj))));         break;
-	  case T_INT_VECTOR:   pos = (s7_int)((intptr_t)(int_vector_ints(obj) - int_vector_ints(subvector_vector(obj))));         break;
-	  case T_FLOAT_VECTOR: pos = (s7_int)((intptr_t)(float_vector_floats(obj) - float_vector_floats(subvector_vector(obj)))); break;
-	  case T_BYTE_VECTOR:  pos = (s7_int)((intptr_t)(byte_vector_bytes(obj) - byte_vector_bytes(subvector_vector(obj))));     break;
+	  case T_VECTOR:         pos = (s7_int)((intptr_t)(vector_elements(obj) - vector_elements(subvector_vector(obj))));         break;
+	  case T_INT_VECTOR:     pos = (s7_int)((intptr_t)(int_vector_ints(obj) - int_vector_ints(subvector_vector(obj))));         break;
+	  case T_FLOAT_VECTOR:   pos = (s7_int)((intptr_t)(float_vector_floats(obj) - float_vector_floats(subvector_vector(obj)))); break;
+	  case T_COMPLEX_VECTOR: pos = (s7_int)((intptr_t)(complex_vector_complexs(obj) - complex_vector_complexs(subvector_vector(obj)))); break;
+	  case T_BYTE_VECTOR:    pos = (s7_int)((intptr_t)(byte_vector_bytes(obj) - byte_vector_bytes(subvector_vector(obj))));     break;
 	}
       s7_varlet(sc, let, sc->position_symbol, make_integer(sc, pos));
       s7_varlet(sc, let, sc->original_vector_symbol, subvector_vector(obj));
@@ -51672,7 +52177,7 @@ static s7_pointer object_to_let_p_p(s7_scheme *sc, s7_pointer obj)
 			    sc->type_symbol, sc->is_syntax_symbol,
 			    sc->documentation_symbol, s7_make_string(sc, syntax_documentation(obj))));
 
-    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR: case T_VECTOR:
+    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR: case T_VECTOR: case T_COMPLEX_VECTOR:
       return(vector_to_let(sc, obj));
 
     case T_CONTINUATION:  /* perhaps include the continuation-key */
@@ -53777,6 +54282,11 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
       set_car(sc->u1_1, sc->F);
       return(res);
 
+    case T_COMPLEX_VECTOR:
+      res = univect_ref(sc, set_ulist_1(sc, obj, indices), sc->complex_vector_ref_symbol, T_COMPLEX_VECTOR);
+      set_car(sc->u1_1, sc->F);
+      return(res);
+
     case T_INT_VECTOR:
       res = univect_ref(sc, set_ulist_1(sc, obj, indices), sc->int_vector_ref_symbol, T_INT_VECTOR);
       set_car(sc->u1_1, sc->F);
@@ -54230,6 +54740,7 @@ static void init_typers(s7_scheme *sc)
   sc->type_to_typers[T_DYNAMIC_WIND] =        sc->F;
   sc->type_to_typers[T_EOF] =                 sc->is_eof_object_symbol;
   sc->type_to_typers[T_FLOAT_VECTOR] =        sc->is_float_vector_symbol;
+  sc->type_to_typers[T_COMPLEX_VECTOR] =      sc->is_complex_vector_symbol;
   sc->type_to_typers[T_FREE] =                sc->F;
   sc->type_to_typers[T_GOTO] =                sc->is_goto_symbol;
   sc->type_to_typers[T_HASH_TABLE] =          sc->is_hash_table_symbol;
@@ -54980,7 +55491,7 @@ static s7_pointer fx_num_eq_length_i(s7_scheme *sc, s7_pointer arg)
     case T_C_OBJECT:   return(make_boolean(sc, c_object_length_to_int(sc, val) == ilen));
     case T_LET:        return(make_boolean(sc, let_length(sc, val) == ilen));
 
-    case T_BYTE_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR:
+    case T_BYTE_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_COMPLEX_VECTOR:
       return(make_boolean(sc, vector_length(val) == ilen));
 
     case T_ITERATOR:
@@ -55016,7 +55527,7 @@ static s7_pointer fx_less_length_i(s7_scheme *sc, s7_pointer arg)
     case T_C_OBJECT:   return(make_boolean(sc, c_object_length_to_int(sc, val) < ilen));
     case T_LET:        return(make_boolean(sc, let_length(sc, val) < ilen));  /* this works because let_length handles the length method itself! */
 
-    case T_BYTE_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR:
+    case T_BYTE_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_COMPLEX_VECTOR:
       return(make_boolean(sc, vector_length(val) < ilen));
 
     case T_ITERATOR:
@@ -69551,33 +70062,47 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* 
 		  res = proper_list_reverse_in_place(sc, map_unwind_list(sc));
 		}
 	      else
-		if (is_t_vector(seq))
+		if (is_complex_vector(seq))
 		  {
-		    s7_pointer *vals = vector_elements(seq);
+		    s7_complex *vals = complex_vector_complexs(seq);
 		    s7_int len = vector_length(seq);
 		    set_map_unwind_list(sc, sc->nil);
 		    for (s7_int i = 0; i < len; i++)
 		      {
-			slot_set_value(slot, vals[i]);
+			slot_set_value(slot, c_complex_to_s7(sc, vals[i]));
 			z = func(sc);
 			if (z != sc->no_value) set_map_unwind_list(sc, cons(sc, z, map_unwind_list(sc)));
 		      }
 		    res = proper_list_reverse_in_place(sc, map_unwind_list(sc));
 		  }
 		else
-		  if (is_string(seq))
+		  if (is_t_vector(seq))
 		    {
-		      s7_int len = string_length(seq);
-		      const char *str = string_value(seq);
+		      s7_pointer *vals = vector_elements(seq);
+		      s7_int len = vector_length(seq);
 		      set_map_unwind_list(sc, sc->nil);
 		      for (s7_int i = 0; i < len; i++)
 			{
-			  slot_set_value(slot, chars[(uint8_t)(str[i])]);
+			  slot_set_value(slot, vals[i]);
 			  z = func(sc);
 			  if (z != sc->no_value) set_map_unwind_list(sc, cons(sc, z, map_unwind_list(sc)));
 			}
 		      res = proper_list_reverse_in_place(sc, map_unwind_list(sc));
 		    }
+		  else
+		    if (is_string(seq))
+		      {
+			s7_int len = string_length(seq);
+			const char *str = string_value(seq);
+			set_map_unwind_list(sc, sc->nil);
+			for (s7_int i = 0; i < len; i++)
+			  {
+			    slot_set_value(slot, chars[(uint8_t)(str[i])]);
+			    z = func(sc);
+			    if (z != sc->no_value) set_map_unwind_list(sc, cons(sc, z, map_unwind_list(sc)));
+			  }
+			res = proper_list_reverse_in_place(sc, map_unwind_list(sc));
+		      }
 	  sc->map_call_ctr--;
 	  unstack_with(sc, OP_MAP_UNWIND);
 	  if ((S7_DEBUGGING) && (sc->map_call_ctr < 0)) {fprintf(stderr, "%s[%d]: map ctr: %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr); sc->map_call_ctr = 0;}
@@ -72174,7 +72699,7 @@ static opt_t optimize_func_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer fu
 	  }
 	break;
 
-    case T_PAIR: case T_VECTOR: case T_INT_VECTOR: case T_BYTE_VECTOR: case T_FLOAT_VECTOR:
+    case T_PAIR: case T_VECTOR: case T_INT_VECTOR: case T_BYTE_VECTOR: case T_FLOAT_VECTOR: case T_COMPLEX_VECTOR:
       if (is_fxable(sc, arg1))
 	{
 	  set_unsafe_optimize_op(expr, (is_pair(func) ? OP_IMPLICIT_PAIR_REF_A : OP_IMPLICIT_VECTOR_REF_A));
@@ -75312,15 +75837,13 @@ static bool check_recur(s7_scheme *sc, s7_pointer name, int32_t pars, s7_pointer
 				  happy = true;
 				}
 			      else
-				if ((pars == 2) &&
+				if ((pars == 2) && (is_fxable(sc, la1)) &&
 				    (is_proper_list_3(sc, la2)) && (car(la2) == name) && (is_fxable(sc, cadr(la2))) && (is_fxable(sc, caddr(la2))))
 				  {
-				    if (is_fxable(sc, la1))
-				      {
-					set_safe_optimize_op(body, OP_RECUR_COND_A_A_A_A_opA_L2Aq); /* see if_a_a_if_a_l2a_opa_l2a, first l2a->a */
-					fx_annotate_arg(sc, cdr(la_clause), args);
-					happy = true;
-				      }}
+				    set_safe_optimize_op(body, OP_RECUR_COND_A_A_A_A_opA_L2Aq); /* see if_a_a_if_a_l2a_opa_l2a, first l2a->a */
+				    fx_annotate_arg(sc, cdr(la_clause), args);
+				    happy = true;
+				  }
 			      if (happy)
 				{
 				  fx_annotate_args(sc, clause, args);
@@ -79207,8 +79730,9 @@ static void check_define(s7_scheme *sc)
 	error_nr(sc, sc->syntax_error_symbol,
 		 set_elist_3(sc, wrap_string(sc, "~A: more than one value? ~A", 27), caller, print_truncate(sc, sc->code)));
       if (starred)
-	syntax_error_nr(sc, "define* is restricted to functions: ~S", 38, sc->code);
-
+	error_nr(sc, sc->syntax_error_symbol,
+		 set_elist_4(sc, wrap_string(sc, "~A's first argument, ~A, is ~A but should be a list: (name ...)", 63),
+			     caller, car(code), object_type_name(sc, car(code))));
       func = car(code);
       if (!is_symbol(func))                                                      /* (define 3 a) */
 	syntax_error_with_caller2_nr(sc, "~A: can't define ~W (~A); it should be a symbol", 47, caller, func, object_type_name(sc, func));
@@ -80879,7 +81403,10 @@ static bool set_pair4(s7_scheme *sc, s7_pointer obj, s7_pointer index1, s7_point
       return(set_pair3(sc, sc->value, index2, value));
 
     case T_FLOAT_VECTOR:
-      sc->value = g_float_vector_set(sc, set_plist_4(sc, obj, index1, index2, value)); /* fv_unchecked_set_4? */
+      sc->value = g_float_vector_set(sc, set_plist_4(sc, obj, index1, index2, value));
+      break;
+    case T_COMPLEX_VECTOR:
+      sc->value = g_complex_vector_set(sc, set_plist_4(sc, obj, index1, index2, value));
       break;
     case T_INT_VECTOR:
       sc->value = g_int_vector_set(sc, set_plist_4(sc, obj, index1, index2, value));
@@ -81775,7 +82302,7 @@ static goto_t call_set_implicit(s7_scheme *sc, s7_pointer obj, s7_pointer inds, 
     case T_ITERATOR:   return(set_implicit_iterator(sc, obj));    /* not sure this makes sense */
     case T_SYNTAX:     return(set_implicit_syntax(sc, obj));
 
-    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR:
+    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR: case T_COMPLEX_VECTOR:
       return(set_implicit_vector(sc, obj, inds, val, form));
 
     case T_C_MACRO: case T_C_FUNCTION_STAR:
@@ -90514,7 +91041,8 @@ static void back_up_stack(s7_scheme *sc)
       pop_stack(sc);
       top_op = stack_top_op(sc);
     }
-  if ((top_op == OP_READ_VECTOR) || (top_op == OP_READ_BYTE_VECTOR) || (top_op == OP_READ_INT_VECTOR) || (top_op == OP_READ_FLOAT_VECTOR))
+  if ((top_op == OP_READ_VECTOR) || (top_op == OP_READ_BYTE_VECTOR) || (top_op == OP_READ_INT_VECTOR) || 
+      (top_op == OP_READ_FLOAT_VECTOR) || (top_op == OP_READ_COMPLEX_VECTOR))
    {
       pop_stack(sc);
       top_op = stack_top_op(sc);
@@ -90639,6 +91167,12 @@ static token_t read_sharp(s7_scheme *sc, s7_pointer pt)
       backchar('r', pt);
       break;
 
+    case 'c':                      /* #c(...) */
+      if (read_sharp(sc, pt) == TOKEN_VECTOR)
+	return(TOKEN_COMPLEX_VECTOR);
+      backchar('c', pt);
+      break;
+
     case 'u':                      /* #u(...) or #u8(...) */
       if (s7_peek_char(sc, pt) == chars[(int32_t)('8')]) /* backwards compatibility: #u8(...) == #u(...) */
 	{
@@ -90705,6 +91239,7 @@ static token_t read_sharp(s7_scheme *sc, s7_pointer pt)
 		sc->w = make_integer(sc, dims);
 		if (d == 'd') return(TOKEN_VECTOR);
 		if (d == 'r') return(TOKEN_FLOAT_VECTOR);
+		if (d == 'c') return(TOKEN_COMPLEX_VECTOR);
 		return((d == 'u') ? TOKEN_BYTE_VECTOR : TOKEN_INT_VECTOR);
 	      }}
 	/* try to back out */
@@ -91062,6 +91597,11 @@ static s7_pointer read_expression(s7_scheme *sc)
 	  sc->tok = TOKEN_LEFT_PAREN;
 	  break;
 
+	case TOKEN_COMPLEX_VECTOR:
+	  push_stack_no_let_no_code(sc, OP_READ_COMPLEX_VECTOR, sc->w);
+	  sc->tok = TOKEN_LEFT_PAREN;
+	  break;
+
 	case TOKEN_VECTOR:         /* already read #( -- TOKEN_VECTOR is triggered by #( */
 	  push_stack_no_let_no_code(sc, OP_READ_VECTOR, sc->w);  /* sc->w is the dimensions */
 	  /* fall through */
@@ -91385,6 +91925,14 @@ static bool op_read_float_vector(s7_scheme *sc)
    */
 }
 
+static bool op_read_complex_vector(s7_scheme *sc)
+{
+  /* sc->value is the list of values, #c(...sc->value...), sc->args = dimensions */
+  sc->value = (sc->args == int_one) ? g_complex_vector(sc, sc->value) : g_complex_multivector(sc, integer(sc->args), sc->value);
+  if (sc->safety > IMMUTABLE_VECTOR_SAFETY) set_immutable(sc->value);
+  return(stack_top_op(sc) != OP_READ_LIST);
+}
+
 static bool op_read_byte_vector(s7_scheme *sc)
 {
   sc->value = (sc->args == int_one) ? g_byte_vector(sc, sc->value) : g_byte_multivector(sc, integer(sc->args), sc->value);
@@ -91608,7 +92156,7 @@ static bool op_unknown_s(s7_scheme *sc)
       set_opt3_arglen(cdr(code), 1);
       return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_GOTO_A));
 
-    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR:
+    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR: case T_COMPLEX_VECTOR:
       fx_annotate_arg(sc, cdr(code), sc->curlet);
       return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_VECTOR_REF_A));
 
@@ -91697,7 +92245,7 @@ static bool op_unknown_a(s7_scheme *sc)
       if (fxify_closure_star_g(sc, f, code)) return(true);
       break;
 
-    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR:
+    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR: case T_COMPLEX_VECTOR:
       return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_VECTOR_REF_A));
 
     case T_STRING:       return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_STRING_REF_A));
@@ -91843,7 +92391,7 @@ static bool op_unknown_gg(s7_scheme *sc)
 	}
       break;
 
-    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR: case T_PAIR:
+    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR: case T_PAIR: case T_COMPLEX_VECTOR:
       set_opt3_arglen(cdr(code), 2);
       fx_annotate_args(sc, cdr(code), sc->curlet);
       if ((!is_pair(f)) && (vector_rank(f) != 2))
@@ -92001,7 +92549,7 @@ static bool op_unknown_aa(s7_scheme *sc)
       else set_optimize_op(code, OP_S_AA);
       return(true);
 
-    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR:
+    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_VECTOR: case T_BYTE_VECTOR: case T_COMPLEX_VECTOR:
       if (vector_rank(f) != 2)
 	return(fixup_unknown_op(sc, code, f, OP_S_AA));
       return(fixup_unknown_op(sc, code, f, OP_IMPLICIT_VECTOR_REF_AA));
@@ -93290,7 +93838,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	    case T_HASH_TABLE:	        apply_hash_table(sc);           continue;
 	    case T_ITERATOR:	        apply_iterator(sc);	        continue;
 	    case T_LET:	                apply_let(sc);	                continue;
-	    case T_INT_VECTOR: case T_BYTE_VECTOR: case T_FLOAT_VECTOR:
+	    case T_INT_VECTOR: case T_BYTE_VECTOR: case T_FLOAT_VECTOR: case T_COMPLEX_VECTOR:
 	    case T_VECTOR: 	        apply_vector(sc);	        continue;
 	    case T_SYNTAX:	        apply_syntax(sc); 	        goto TOP_NO_POP;
 	    case T_PAIR:	        if (apply_pair(sc)) continue;   goto APPLY;
@@ -94158,14 +94706,15 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	    case goto_pop_read_list: goto POP_READ_LIST;
 	    default: goto READ_TOK;
 	    }
-	case OP_READ_QUOTE:        if (op_read_quote(sc)) continue;        goto POP_READ_LIST;
-	case OP_READ_QUASIQUOTE:   if (op_read_quasiquote(sc)) continue;   goto POP_READ_LIST;
-	case OP_READ_UNQUOTE:      if (op_read_unquote(sc)) continue;      goto POP_READ_LIST;
-	case OP_READ_APPLY_VALUES: if (op_read_apply_values(sc)) continue; goto POP_READ_LIST;
-	case OP_READ_VECTOR:       if (op_read_vector(sc)) continue;       goto POP_READ_LIST;
-	case OP_READ_INT_VECTOR:   if (op_read_int_vector(sc)) continue;   goto POP_READ_LIST;
-	case OP_READ_FLOAT_VECTOR: if (op_read_float_vector(sc)) continue; goto POP_READ_LIST;
-	case OP_READ_BYTE_VECTOR:  if (op_read_byte_vector(sc)) continue;  goto POP_READ_LIST;
+	case OP_READ_QUOTE:          if (op_read_quote(sc)) continue;          goto POP_READ_LIST;
+	case OP_READ_QUASIQUOTE:     if (op_read_quasiquote(sc)) continue;     goto POP_READ_LIST;
+	case OP_READ_UNQUOTE:        if (op_read_unquote(sc)) continue;        goto POP_READ_LIST;
+	case OP_READ_APPLY_VALUES:   if (op_read_apply_values(sc)) continue;   goto POP_READ_LIST;
+	case OP_READ_VECTOR:         if (op_read_vector(sc)) continue;         goto POP_READ_LIST;
+	case OP_READ_INT_VECTOR:     if (op_read_int_vector(sc)) continue;     goto POP_READ_LIST;
+	case OP_READ_FLOAT_VECTOR:   if (op_read_float_vector(sc)) continue;   goto POP_READ_LIST;
+	case OP_READ_COMPLEX_VECTOR: if (op_read_complex_vector(sc)) continue; goto POP_READ_LIST;
+	case OP_READ_BYTE_VECTOR:    if (op_read_byte_vector(sc)) continue;    goto POP_READ_LIST;
 
 	case OP_CLEAR_OPTS:
 	  break;
@@ -94286,7 +94835,7 @@ static void save_holder_data(s7_scheme *sc, s7_pointer p)
 	if (vector_element(p, i)) mark_holdee(p, vector_element(p, i), NULL);
       break;
 
-    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR:
+    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR: case T_COMPLEX_VECTOR:
       if (is_subvector(p)) mark_holdee(p, subvector_vector(p), NULL);
       break;
 
@@ -94908,7 +95457,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
 
   /* vectors */
   {
-    s7_int vlen = 0, vs = 0, flen = 0, fvs = 0, ilen = 0, ivs = 0, blen = 0, bvs = 0;
+    s7_int vlen = 0, vs = 0, flen = 0, fvs = 0, clen = 0, cvs = 0, ilen = 0, ivs = 0, blen = 0, bvs = 0;
     for (k = 0, gp = sc->vectors; k < 2; k++, gp = sc->multivectors)
       for (i = 0; i < gp->loc; i++)
 	{
@@ -94919,20 +95468,24 @@ static s7_pointer memory_usage(s7_scheme *sc)
 	    if (is_int_vector(v))
 	      {ivs++; ilen += vector_length(v);}
 	    else
-	      if (is_byte_vector(v))
-		{bvs++; blen += vector_length(v);}
-	      else {vs++; vlen += vector_length(v);}
+	      if (is_complex_vector(v))
+		{cvs++; clen += vector_length(v);}
+	      else
+		if (is_byte_vector(v))
+		  {bvs++; blen += vector_length(v);}
+		else {vs++; vlen += vector_length(v);}
 	}
     all_len += blen + ilen * sizeof(s7_int) + flen * sizeof(s7_double) + vlen * sizeof(s7_pointer);
     add_slot_unchecked_with_id(sc, mu_let,
 			       make_symbol(sc, "vectors", 7),
 			       s7_inlet(sc,
-			         s7_list(sc, 10,
-				   make_symbol(sc, "total", 5),  make_integer(sc, sc->vectors->loc + sc->multivectors->loc),
-				   make_symbol(sc, "normal", 6), cons(sc, make_integer(sc, vs), make_integer(sc, vlen)),
-				   make_symbol(sc, "float", 5),  cons(sc, make_integer(sc, fvs), make_integer(sc, flen)),
-				   make_symbol(sc, "int", 3),    cons(sc, make_integer(sc, ivs), make_integer(sc, ilen)),
-				   make_symbol(sc, "byte", 4),   cons(sc, make_integer(sc, bvs), make_integer(sc, blen)))));
+			         s7_list(sc, 12,
+				   make_symbol(sc, "total", 5),   make_integer(sc, sc->vectors->loc + sc->multivectors->loc),
+				   make_symbol(sc, "normal", 6),  cons(sc, make_integer(sc, vs), make_integer(sc, vlen)),
+				   make_symbol(sc, "float", 5),   cons(sc, make_integer(sc, fvs), make_integer(sc, flen)),
+				   make_symbol(sc, "int", 3),     cons(sc, make_integer(sc, ivs), make_integer(sc, ilen)),
+				   make_symbol(sc, "complex", 7), cons(sc, make_integer(sc, cvs), make_integer(sc, clen)),
+				   make_symbol(sc, "byte", 4),    cons(sc, make_integer(sc, bvs), make_integer(sc, blen)))));
   }
   /* hash-tables */
   {
@@ -95756,6 +96309,7 @@ static void init_starlet_immutable_field(void)
 
 #define NUM_INTEGER_WRAPPERS 4
 #define NUM_REAL_WRAPPERS 4
+#define NUM_COMPLEX_WRAPPERS 4
 
 /* ---------------- gdbinit annotated stacktrace ---------------- */
 #if (!MS_WINDOWS)
@@ -95794,6 +96348,7 @@ static const char *decoded_name(s7_scheme *sc, const s7_pointer p)
     for (i = 0, wrapper = sc->string_wrappers; i < NUM_STRING_WRAPPERS; i++, wrapper = cdr(wrapper)) if (car(wrapper) == p) return("string-wrapper");
     for (i = 0, wrapper = sc->integer_wrappers; i < NUM_INTEGER_WRAPPERS; i++, wrapper = cdr(wrapper)) if (car(wrapper) == p) return("integer-wrapper");
     for (i = 0, wrapper = sc->real_wrappers; i < NUM_REAL_WRAPPERS; i++, wrapper = cdr(wrapper)) if (car(wrapper) == p) return("real-wrapper");
+    for (i = 0, wrapper = sc->complex_wrappers; i < NUM_COMPLEX_WRAPPERS; i++, wrapper = cdr(wrapper)) if (car(wrapper) == p) return("complex-wrapper");
     for (i = 0, wrapper = sc->c_pointer_wrappers; i < NUM_C_POINTER_WRAPPERS; i++, wrapper = cdr(wrapper)) if (car(wrapper) == p) return("c-pointer-wrapper");
   }
   return((p == sc->stack) ? "stack" : NULL);
@@ -96745,6 +97300,17 @@ static void init_wrappers(s7_scheme *sc)
     }
   unchecked_set_cdr(qp, sc->real_wrappers);
 
+  sc->complex_wrappers = semipermanent_list(sc, NUM_COMPLEX_WRAPPERS);
+  for (cp = sc->complex_wrappers, qp = sc->complex_wrappers; is_pair(cp); qp = cp, cp = cdr(cp))
+    {
+      s7_pointer p = alloc_pointer(sc);
+      full_type(p) = T_COMPLEX | T_IMMUTABLE | T_MUTABLE | T_UNHEAP;
+      set_real_part(p, 0.0);
+      set_imag_part(p, 0.0);
+      set_car(cp, p);
+    }
+  unchecked_set_cdr(qp, sc->complex_wrappers);
+
   sc->string_wrappers = semipermanent_list(sc, NUM_STRING_WRAPPERS);
   for (cp = sc->string_wrappers, qp = sc->string_wrappers; is_pair(cp); qp = cp, cp = cdr(cp))
     {
@@ -96887,6 +97453,7 @@ static void init_setters(s7_scheme *sc)
   set_is_safe_setter(sc->byte_vector_set_symbol);
   set_is_safe_setter(sc->int_vector_set_symbol);
   set_is_safe_setter(sc->float_vector_set_symbol);
+  set_is_safe_setter(sc->complex_vector_set_symbol);
   set_is_safe_setter(sc->string_set_symbol);
 
 #if (WITH_PURE_S7)
@@ -96913,6 +97480,7 @@ static void init_setters(s7_scheme *sc)
   c_function_set_setter(global_value(sc->hash_table_ref_symbol),   global_value(sc->hash_table_set_symbol));
   c_function_set_setter(global_value(sc->vector_ref_symbol),       global_value(sc->vector_set_symbol));
   c_function_set_setter(global_value(sc->float_vector_ref_symbol), global_value(sc->float_vector_set_symbol));
+  c_function_set_setter(global_value(sc->complex_vector_ref_symbol), global_value(sc->complex_vector_set_symbol));
   c_function_set_setter(global_value(sc->int_vector_ref_symbol),   global_value(sc->int_vector_set_symbol));
   c_function_set_setter(global_value(sc->byte_vector_ref_symbol),  global_value(sc->byte_vector_set_symbol));
   c_function_set_setter(global_value(sc->list_ref_symbol),         global_value(sc->list_set_symbol));
@@ -97136,6 +97704,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->is_pair_symbol =            bool_defun("pair?",	         is_pair,	     0, T_PAIR,         mark_vector_1,      false);
   sc->is_vector_symbol =          bool_defun("vector?",	         is_vector,	     0, T_FREE,         mark_vector_1,      false);
   sc->is_float_vector_symbol =    bool_defun("float-vector?",    is_float_vector,    0, T_FLOAT_VECTOR, mark_simple_vector, true);
+  sc->is_complex_vector_symbol =  bool_defun("complex-vector?",  is_complex_vector,  0, T_COMPLEX_VECTOR, mark_simple_vector, true);
   sc->is_int_vector_symbol =      bool_defun("int-vector?",      is_int_vector,	     0, T_INT_VECTOR,   mark_simple_vector, true);
   sc->is_byte_vector_symbol =     bool_defun("byte-vector?",     is_byte_vector,     0, T_BYTE_VECTOR,  mark_simple_vector, true);
   sc->is_hash_table_symbol =      bool_defun("hash-table?",      is_hash_table,      0, T_HASH_TABLE,   mark_vector_1,      false);
@@ -97156,6 +97725,7 @@ static void init_rootlet(s7_scheme *sc)
   /* these are for signatures */
   sc->not_symbol = defun("not",	not, 1, 0, false);
   sc->is_integer_or_real_at_end_symbol = make_symbol(sc, "integer:real?", 13);
+  sc->is_integer_or_number_at_end_symbol = make_symbol(sc, "integer:number?", 15);
   sc->is_integer_or_any_at_end_symbol =  make_symbol(sc, "integer:any?", 12);
 
   sc->pl_p =   s7_make_signature(sc, 2, sc->T, sc->is_pair_symbol);
@@ -97549,6 +98119,11 @@ static void init_rootlet(s7_scheme *sc)
   sc->make_float_vector_symbol =     defun("make-float-vector", make_float_vector,	1, 1, false);
   sc->float_vector_set_symbol =      defun("float-vector-set!", float_vector_set,	3, 0, true);
   sc->float_vector_ref_symbol =      defun("float-vector-ref",  float_vector_ref,	2, 0, true);
+
+  sc->complex_vector_symbol =        defun("complex-vector",	complex_vector,		0, 0, true);
+  sc->make_complex_vector_symbol =   defun("make-complex-vector", make_complex_vector,	1, 1, false);
+  sc->complex_vector_set_symbol =    defun("complex-vector-set!", complex_vector_set,	3, 0, true);
+  sc->complex_vector_ref_symbol =    defun("complex-vector-ref",  complex_vector_ref,	2, 0, true);
 
   sc->int_vector_symbol =            defun("int-vector",	int_vector,		0, 0, true);
   sc->make_int_vector_symbol =       defun("make-int-vector",	make_int_vector,	1, 1, false);
@@ -98324,7 +98899,7 @@ s7_scheme *s7_init(void)
   s7_define_function(sc, "report-missed-calls", g_report_missed_calls, 0, 0, false, NULL); /* tc/recur tests in s7test.scm */
   if (strcmp(op_names[HOP_SAFE_C_PP], "h_safe_c_pp") != 0) fprintf(stderr, "c op_name: %s\n", op_names[HOP_SAFE_C_PP]);
   if (strcmp(op_names[OP_SET_WITH_LET_2], "set_with_let_2") != 0) fprintf(stderr, "set op_name: %s\n", op_names[OP_SET_WITH_LET_2]);
-  if (NUM_OPS != 911) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
+  if (NUM_OPS != 912) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 280 */
   if (false) gdb_break();
 #endif
@@ -98759,10 +99334,12 @@ int main(int argc, char **argv)
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * safe_do hop bit in other do cases and let
- * perhaps complex-vector (stored as rl,im...), could use existing float-vectors?) #c(...) for vector (read-time complex is a+bi)
- *    (make-complex-vector size): (make-float-vector (* 2 size))
- *    ref/set map/for-each, opt/do, implicit ref/set, fill! reverse copy append s7test
- *    iterator ->str ->list ->let equal subvector sort?!? hash unknown-ops cload! wrapper [also wrap_complex -- not useful in s7.c currently]
+ * complex-vector:
+ *    ref/set map/for-each, opt/do, implicit ref/set, fill! reverse copy append 
+ *    iterator ->str ->list ->let equal subvector hash unknown-ops cload! wrapper, "z" maybe in optimizer?? lint
+ *    s7test: t816.scm, s7.html, ffitest (needs s7_with_complex_vectors flag), tests7+s7_with_complex_vectors
+ *    gsl_vector|matrix_complex like the float-vector->gsl_vector cases (memcpy should work?) [see float-vector->gsl_vector|matrix]
+ *    should reader accept 0+-i? no: use number_to_string_base_10 in complex_vector_to_port (and check in s7test that 0+-i is a symbol)
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
  *   extend oprec_i* and also to oprec_p[air]* where base p is protected but locals need not be?
