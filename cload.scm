@@ -290,6 +290,7 @@
 	     (lambda (header)
 	       (format p "#include <~A>~%" header))
 	     headers))
+	(format p "#define S7_WITH_COMPLEX_VECTORS 1~%")
 	(format p "#include \"s7.h\"~%~%")
 	(format p "static s7_pointer fsym, s7_F, s7_unspec, ffunc, c_pointer_string, string_string, character_string, boolean_string, real_string, complex_string, integer_string;~%"))
       

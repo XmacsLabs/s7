@@ -194,7 +194,7 @@ repl s7test.scm
 echo ' '
 echo '-------- main version --------'
 echo ' '
-gcc s7.c -c -DS7_DEBUGGING=1 -DWITH_HISTORY=1 -DGSL_DISABLE_DEPRECATED -DDISABLE_DEPRECATED -Wall -Wextra -I. -g3 -Wduplicated-cond -Wlogical-op -Wjump-misses-init -Wfatal-errors -Wformat -Wno-implicit-fallthrough -Wpointer-arith -Wduplicated-branches -Wdangling-else -Wno-unused-parameter -Wunused-function -DTRAP_SEGFAULT -DS7_ALIGNED=1 -DINITIAL_HEAP_SIZE=6400 -DNUM_SMALL_INTS=256 -DWITH_NUMBER_SEPARATOR -DWITH_IMMUTABLE_UNQUOTE=1 -Wunreachable-code -Wstrict-aliasing -Wcast-align -Wmissing-declarations -Wmissing-include-dirs -Wuninitialized -Wwrite-strings -Wdouble-promotion -DWITH_ALLOC_COUNTERS=0
+gcc s7.c -c -DS7_DEBUGGING=1 -DWITH_HISTORY=1 -DGSL_DISABLE_DEPRECATED -DDISABLE_DEPRECATED -Wall -Wextra -I. -g3 -Wduplicated-cond -Wlogical-op -Wjump-misses-init -Wfatal-errors -Wformat -Wno-implicit-fallthrough -Wpointer-arith -Wduplicated-branches -Wdangling-else -Wno-unused-parameter -Wunused-function -DTRAP_SEGFAULT -DS7_ALIGNED=1 -DINITIAL_HEAP_SIZE=6400 -DNUM_SMALL_INTS=256 -DWITH_NUMBER_SEPARATOR -DWITH_IMMUTABLE_UNQUOTE=1 -Wunreachable-code -Wstrict-aliasing -Wcast-align -Wmissing-declarations -Wmissing-include-dirs -Wuninitialized -Wwrite-strings -Wdouble-promotion -DS7_WITH_COMPLEX_VECTORS=1
 gcc -o repl repl.c -g3 -Wall s7.o -I. -Wl,-export-dynamic -lm -ldl
 repl s7test.scm
 

@@ -397,13 +397,13 @@
 #if HAVE_COMPLEX_NUMBERS
   #if __cplusplus
     #include <complex>
-    #ifndef S7_WITH_COMPLEX_VECTORS
+    #if (!S7_WITH_COMPLEX_VECTORS)
       using namespace std;  /* the code has to work in C as well as C++, so we can't scatter std:: all over the place */
       typedef std::complex<s7_double> s7_complex;
     #endif
   #else
     #include <complex.h>
-    #ifndef S7_WITH_COMPLEX_VECTORS
+    #if (!S7_WITH_COMPLEX_VECTORS)
       typedef double complex s7_complex;
     #endif
     #if defined(__sun) && defined(__SVR4)
@@ -1258,7 +1258,7 @@ struct s7_scheme {
   c_proc_t *alloc_function_cells;
   uint32_t alloc_big_pointer_k;
   s7_big_cell *alloc_big_pointer_cells;
-  s7_pointer string_wrappers, integer_wrappers, real_wrappers, complex_wrappers, c_pointer_wrappers;
+  s7_pointer string_wrappers, integer_wrappers, real_wrappers, c_pointer_wrappers;
   uint8_t *alloc_symbol_cells;
   char *num_to_str;
 
@@ -13643,18 +13643,6 @@ static s7_complex cpow(s7_complex x, s7_complex y)
   static s7_complex catanh_1(s7_complex z) {return(clog((1.0 + z) / (1.0 - z)) / 2.0);}
   static s7_complex casinh_1(s7_complex z) {return(clog(z + csqrt(1.0 + z * z)));}
 #endif
-
-static s7_pointer wrap_complex(s7_scheme *sc, s7_complex x)
-{
-  s7_pointer p = car(sc->complex_wrappers);
-#if S7_DEBUGGING
-  if ((full_type(p) & (~T_GC_MARK)) != (T_COMPLEX | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
-#endif
-  set_real_part(p, creal(x));
-  set_imag_part(p, cimag(x));
-  sc->complex_wrappers = cdr(sc->complex_wrappers);
-  return(p);
-}
 
 bool s7_is_number(s7_pointer p)   {return(is_number(p));}
 bool s7_is_complex(s7_pointer p)  {return(is_number(p));}
@@ -33758,6 +33746,33 @@ static void float_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port
     port_write_character(port)(sc, ')', port);
 }
 
+static char *complex_to_string_base_10(s7_scheme *sc, s7_complex obj, s7_int width, s7_int precision,
+				      char float_choice, s7_int *nlen, use_write_t choice)
+{
+  char *imag;
+  s7_int len = width + precision;
+  len = (len > 512) ? (512 + 2 * len) : 1024;
+  if (len > sc->num_to_str_size)
+    {
+      sc->num_to_str = (sc->num_to_str) ? (char *)Realloc(sc->num_to_str, len) : (char *)Malloc(len);
+      sc->num_to_str_size = len;
+    }
+  sc->num_to_str[0] = '\0';
+  imag = copy_string(number_to_string_base_10(sc, wrap_real(sc, cimag(obj)), 0, precision, float_choice, &len, choice));
+  sc->num_to_str[0] = '\0';
+  number_to_string_base_10(sc, wrap_real(sc, creal(obj)), 0, precision, float_choice, &len, choice);
+  sc->num_to_str[len] = '\0';
+  len = catstrs(sc->num_to_str, sc->num_to_str_size, ((imag[0] == '+') || (imag[0] == '-')) ? "" : "+", imag, "i", (char *)NULL);
+  free(imag);
+  if (width > len)
+    {
+      insert_spaces(sc, sc->num_to_str, width, len); /* this checks sc->num_to_str_size */
+      (*nlen) = width;
+    }
+  else (*nlen) = len;
+  return(sc->num_to_str);
+}
+
 static void complex_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port, use_write_t use_write, shared_info_t *unused_ci)
 {
   #define CV_BUFSIZE 1024 /* some floats can take around 312 bytes */
@@ -33782,10 +33797,9 @@ static void complex_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer po
 	  break;
       if (i == vlen)
 	{
+	  char *num = complex_to_string_base_10(sc, first, 0, sc->float_format_precision, 'g', &plen, use_write);
 	  make_vector_to_port(sc, vect, port);
-	  /* TODO: can't assume "+" here or below -- use number_to_string_base_10 */
-	  plen = snprintf(buf, CV_BUFSIZE, "%.*g+%.*gi)", sc->float_format_precision, creal(first), sc->float_format_precision, cimag(first));
-	  port_write_string(port)(sc, buf, clamp_length(plen, CV_BUFSIZE), port);
+	  port_write_string(port)(sc, num, clamp_length(plen, CV_BUFSIZE), port);
 	  if ((use_write == P_READABLE) &&
 	      (is_immutable_vector(vect)))
 	    port_write_character(port)(sc, ')', port);
@@ -33794,16 +33808,16 @@ static void complex_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer po
 
   if (vector_rank(vect) == 1)
     {
+      char *num = complex_to_string_base_10(sc, els[0], 0, sc->float_format_precision, 'g', &plen, use_write);
       port_write_string(port)(sc, "#c(", 3, port);
-      plen = snprintf(buf, CV_BUFSIZE - 8, "%.*g+%.*gi", sc->float_format_precision, creal(els[0]), sc->float_format_precision, cimag(els[0]));
       /* floatify(buf, &plen); */ /* TODO: comlexify?? also below */
-      port_write_string(port)(sc, buf, clamp_length(plen, CV_BUFSIZE), port);
+      port_write_string(port)(sc, num, clamp_length(plen, CV_BUFSIZE), port);
       for (i = 1; i < len; i++)
 	{
-	  plen = snprintf(buf, CV_BUFSIZE - 8, " %.*g+%.*gi", sc->float_format_precision, creal(els[i]), sc->float_format_precision, cimag(els[i]));
-	  plen--; /* fixup for the initial #\space */
+	  num = complex_to_string_base_10(sc, els[i], 0, sc->float_format_precision, 'g', &plen, use_write);
+	  port_write_character(port)(sc, ' ', port);
 	  /* floatify((char *)(buf + 1), &plen); */
-	  port_write_string(port)(sc, buf, clamp_length(plen + 1, CV_BUFSIZE), port);
+	  port_write_string(port)(sc, num, clamp_length(plen, CV_BUFSIZE), port);
 	}
       if (too_long)
 	port_write_string(port)(sc, " ...)", 5, port);
@@ -42203,7 +42217,7 @@ static s7_pointer g_make_complex_vector(s7_scheme *sc, s7_pointer args)
 	    return(method_or_bust(sc, init, sc->make_complex_vector_symbol, args, sc->type_names[T_COMPLEX], 2));
 #if WITH_GMP
 	  if (s7_is_bignum(init))
-	    return(g_make_vector_1(sc, set_plist_2(sc, p, wrap_complex(sc, s7_to_c_complex(init))), sc->make_float_complexr_symbol));
+	    return(g_make_vector_1(sc, set_plist_2(sc, p, init), sc->make_float_complexr_symbol));
 #endif
 	  if (is_rational(init))
 	    return(g_make_vector_1(sc, set_plist_2(sc, p, wrap_real(sc, rational_to_double(sc, init))), sc->make_complex_vector_symbol));
@@ -42252,6 +42266,7 @@ static s7_pointer g_make_complex_vector(s7_scheme *sc, s7_pointer args)
   return(x);
 }
 
+#if 0
 static s7_pointer make_complex_vector_p_pp(s7_scheme *sc, s7_pointer len, s7_pointer fill)
 {
   if ((is_t_integer(len)) && (is_number(fill)) &&
@@ -42263,6 +42278,7 @@ static s7_pointer make_complex_vector_p_pp(s7_scheme *sc, s7_pointer len, s7_poi
     }
   return(g_make_complex_vector(sc, set_plist_2(sc, len, fill)));
 }
+#endif
 
 
 /* -------------------------------- make-int-vector -------------------------------- */
@@ -96309,7 +96325,6 @@ static void init_starlet_immutable_field(void)
 
 #define NUM_INTEGER_WRAPPERS 4
 #define NUM_REAL_WRAPPERS 4
-#define NUM_COMPLEX_WRAPPERS 4
 
 /* ---------------- gdbinit annotated stacktrace ---------------- */
 #if (!MS_WINDOWS)
@@ -96348,7 +96363,6 @@ static const char *decoded_name(s7_scheme *sc, const s7_pointer p)
     for (i = 0, wrapper = sc->string_wrappers; i < NUM_STRING_WRAPPERS; i++, wrapper = cdr(wrapper)) if (car(wrapper) == p) return("string-wrapper");
     for (i = 0, wrapper = sc->integer_wrappers; i < NUM_INTEGER_WRAPPERS; i++, wrapper = cdr(wrapper)) if (car(wrapper) == p) return("integer-wrapper");
     for (i = 0, wrapper = sc->real_wrappers; i < NUM_REAL_WRAPPERS; i++, wrapper = cdr(wrapper)) if (car(wrapper) == p) return("real-wrapper");
-    for (i = 0, wrapper = sc->complex_wrappers; i < NUM_COMPLEX_WRAPPERS; i++, wrapper = cdr(wrapper)) if (car(wrapper) == p) return("complex-wrapper");
     for (i = 0, wrapper = sc->c_pointer_wrappers; i < NUM_C_POINTER_WRAPPERS; i++, wrapper = cdr(wrapper)) if (car(wrapper) == p) return("c-pointer-wrapper");
   }
   return((p == sc->stack) ? "stack" : NULL);
@@ -97299,17 +97313,6 @@ static void init_wrappers(s7_scheme *sc)
       set_car(cp, p);
     }
   unchecked_set_cdr(qp, sc->real_wrappers);
-
-  sc->complex_wrappers = semipermanent_list(sc, NUM_COMPLEX_WRAPPERS);
-  for (cp = sc->complex_wrappers, qp = sc->complex_wrappers; is_pair(cp); qp = cp, cp = cdr(cp))
-    {
-      s7_pointer p = alloc_pointer(sc);
-      full_type(p) = T_COMPLEX | T_IMMUTABLE | T_MUTABLE | T_UNHEAP;
-      set_real_part(p, 0.0);
-      set_imag_part(p, 0.0);
-      set_car(cp, p);
-    }
-  unchecked_set_cdr(qp, sc->complex_wrappers);
 
   sc->string_wrappers = semipermanent_list(sc, NUM_STRING_WRAPPERS);
   for (cp = sc->string_wrappers, qp = sc->string_wrappers; is_pair(cp); qp = cp, cp = cdr(cp))
@@ -99335,11 +99338,8 @@ int main(int argc, char **argv)
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * safe_do hop bit in other do cases and let
  * complex-vector:
- *    ref/set map/for-each, opt/do, implicit ref/set, fill! reverse copy append 
- *    iterator ->str ->list ->let equal subvector hash unknown-ops cload! wrapper, "z" maybe in optimizer?? lint
- *    s7test: t816.scm, s7.html, ffitest (needs s7_with_complex_vectors flag), tests7+s7_with_complex_vectors
- *    gsl_vector|matrix_complex like the float-vector->gsl_vector cases (memcpy should work?) [see float-vector->gsl_vector|matrix]
- *    should reader accept 0+-i? no: use number_to_string_base_10 in complex_vector_to_port (and check in s7test that 0+-i is a symbol)
+ *    opt/do, (hash)equivalent, hash, unknown-ops, cload! wrapper, "z" maybe in optimizer?? lint, s7.html
+ *    complex_iterate should have a temp?
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
  *   extend oprec_i* and also to oprec_p[air]* where base p is protected but locals need not be?
@@ -99352,4 +99352,8 @@ int main(int argc, char **argv)
  *   static const char *L_abs = __FILE__ "[" stringify(__LINE__) "]";
  *   then at init time: s7_set_location(abs, L_abs)|s7_location(abs)? maybe include s7_scheme arg
  *   object->let, *function*, maybe procedure-location, (scheme funcs have (*function* (curlet) 'file|line), but we'd want this via the function name)
+ *   or better? build a location function with the data
+ * (with-let curlet ...) does not give an error?? (with-let <any procedure> ...) seems happy -> rootlet?  maybe safety>0 warning?
+ * macro var setter that checks whether var is the macro version?
+ * there are more vector_complex entries in the h file, and need gsl_complex definition gsl/gsl_vector_complex.h
  */

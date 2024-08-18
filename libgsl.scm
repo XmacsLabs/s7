@@ -2677,6 +2677,26 @@
 	 (int gsl_matrix_complex_mul_elements (gsl_matrix_complex* gsl_matrix_complex*))
 	 (int gsl_matrix_complex_div_elements (gsl_matrix_complex* gsl_matrix_complex*))
 
+	 (void gsl_vector_complex_set_zero (gsl_vector_complex*))
+	 ;(void gsl_vector_complex_set_all (gsl_vector_complex* gsl_complex))
+	 (int gsl_vector_complex_set_basis (gsl_vector_complex* size_t))
+	 (int gsl_vector_complex_reverse (gsl_vector_complex*))
+	 (int gsl_vector_complex_swap (gsl_vector_complex* gsl_vector_complex*))
+	 (int gsl_vector_complex_swap_elements (gsl_vector_complex* size_t size_t))
+	 (int gsl_vector_complex_equal (gsl_vector_complex* gsl_vector_complex*))
+	 (int gsl_vector_complex_isnull (gsl_vector_complex*))
+	 (int gsl_vector_complex_ispos (gsl_vector_complex*))
+	 (int gsl_vector_complex_isneg (gsl_vector_complex*))
+	 (int gsl_vector_complex_isnonneg (gsl_vector_complex*))
+	 (int gsl_vector_complex_add (gsl_vector_complex* gsl_vector_complex*))
+	 (int gsl_vector_complex_sub (gsl_vector_complex* gsl_vector_complex*))
+	 (int gsl_vector_complex_mul (gsl_vector_complex* gsl_vector_complex*))
+	 (int gsl_vector_complex_div (gsl_vector_complex* gsl_vector_complex*))
+	 ;(int gsl_vector_complex_scale (gsl_vector_complex* gsl_complex))
+	 ;(int gsl_vector_complex_add_constant (gsl_vector_complex* gsl_complex))
+	 ;(int gsl_vector_complex_axpby (gsl_complex gsl_vector_complex* gsl_complex gsl_vector_complex*))
+	 ; what is gsl_complex?
+
 	 (in-C "
                 static s7_pointer g_gsl_matrix_complex_set_all(s7_scheme *sc, s7_pointer args)
                 {
@@ -2724,11 +2744,46 @@
                   g = gsl_vector_complex_get((gsl_vector_complex *)s7_c_pointer_with_type(sc, s7_car(args), gsl_vector_complex__symbol, __func__, 1), s7_integer(s7_cadr(args)));
                   return(GSL_TO_S7_COMPLEX(sc, g));
                 }
+                static s7_pointer g_gsl_vector_complex_set(s7_scheme *sc, s7_pointer args)
+                {
+                  gsl_complex g;
+                  s7_pointer cg;
+                  cg = s7_cadddr(args);
+                  S7_TO_GSL_COMPLEX(cg, g);
+                  gsl_vector_complex_set((gsl_vector_complex *)s7_c_pointer_with_type(sc, s7_car(args), gsl_vector_complex__symbol, __func__, 1), s7_integer(s7_cadr(args)), g);
+                  return(cg);
+                }
+                static s7_pointer g_complex_vector_to_gsl_vector_complex(s7_scheme *sc, s7_pointer args)
+                {
+                   gsl_vector_complex *g;
+                   int size;
+                   s7_pointer v;
+                   v = s7_car(args);
+                   size = s7_vector_length(v);
+                   g = (gsl_vector_complex *)s7_c_pointer_with_type(sc, s7_cadr(args), gsl_vector_complex__symbol, __func__, 2);
+                   memcpy((void *)(g->data), (void *)s7_complex_vector_elements(v), size * 2 * sizeof(double));
+                   return(s7_cadr(args));
+                }
+                static s7_pointer g_gsl_vector_complex_to_complex_vector(s7_scheme *sc, s7_pointer args)
+                {
+                   gsl_vector_complex *g;
+                   int size;
+                   s7_pointer v;
+                   v = s7_cadr(args);
+                   size = s7_vector_length(v);
+                   g = (gsl_vector_complex *)s7_c_pointer_with_type(sc, s7_car(args), gsl_vector_complex__symbol, __func__, 1);
+                   memcpy((void *)s7_complex_vector_elements(v), (void *)(g->data), size * 2 * sizeof(double));
+                   return(s7_cadr(args));
+                }
                 ")
+	 (C-function ("complex-vector->gsl_vector_complex" g_complex_vector_to_gsl_vector_complex "" 2))
+	 (C-function ("gsl_vector_complex->complex-vector" g_gsl_vector_complex_to_complex_vector "" 2))
+
 	 (C-function ("gsl_matrix_complex_set_all" g_gsl_matrix_complex_set_all "" 2))
 	 (C-function ("gsl_matrix_complex_set" g_gsl_matrix_complex_set "" 4))
 	 (C-function ("gsl_matrix_complex_get" g_gsl_matrix_complex_get "" 3))
 	 (C-function ("gsl_vector_complex_get" g_gsl_vector_complex_get "" 2))
+	 (C-function ("gsl_vector_complex_set" g_gsl_vector_complex_get "" 3))
 	 (C-function ("gsl_matrix_complex_scale" g_gsl_matrix_complex_scale "" 2))
 	 (C-function ("gsl_matrix_complex_add_constant" g_gsl_matrix_complex_add_constant "" 2))
 	 (C-function ("gsl_matrix_complex_add_diagonal" g_gsl_matrix_complex_add_diagonal "" 2))

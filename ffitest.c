@@ -18,6 +18,7 @@
 #include <mpc.h>
 #endif
 
+#define S7_WITH_COMPLEX_VECTORS 1
 #include "s7.h"
 
 #define ld64 PRId64
@@ -996,6 +997,11 @@ int main(int argc, char **argv)
     s7_pointer p;
     s7_double *els;
     uint8_t *bels;
+#if S7_WITH_COMPLEX_VECTORS
+    s7_complex cval;
+    s7_complex *cels;
+#endif
+
     dims = (s7_int *)malloc(2 * sizeof(s7_int));
     dims[0] = 2;
     dims[1] = 3;
@@ -1008,11 +1014,25 @@ int main(int argc, char **argv)
     if (s7_vector_dimension(p, 1) != 3) fprintf(stderr, "%d: s7_vector_dimension 1: %" ld64 "\n", __LINE__, s7_vector_dimension(p, 1));
 
     p = s7_make_float_vector(sc, 6, 1, NULL);
+    if (!s7_is_float_vector(p)) fprintf(stderr, "not a float_vector?\n");
     s7_float_vector_set(p, 1, 32.0);
     if (s7_float_vector_ref(p, 1) != 32.0) fprintf(stderr, "float_vector[1] not 32.0?\n");
     els = s7_float_vector_elements(p);
     if (els[1] != 32.0) fprintf(stderr, "float_vector els[1] not 32.0?\n");
-    if (!s7_is_float_vector(p)) fprintf(stderr, "not a float_vector?\n");
+
+#if S7_WITH_COMPLEX_VECTORS
+    p = s7_make_complex_vector(sc, 6, 1, NULL);
+    if (!s7_is_complex_vector(p)) fprintf(stderr, "not a complex_vector?\n");
+    s7_complex_vector_set(p, 1, 32.0);
+    if (s7_complex_vector_ref(p, 1) != 32.0) fprintf(stderr, "complex_vector[1] not 32.0?\n");
+    s7_complex_vector_set(p, 0, 3+2.0i);
+    if (s7_complex_vector_ref(p, 0) != 3+2.0i) fprintf(stderr, "complex_vector[0] not 3+2.0i?\n");
+    cels = s7_complex_vector_elements(p);
+    if (creal(cels[1]) != 32.0) fprintf(stderr, "complex_vector creal(cels[1]) not 32.0?\n");
+    cval = cels[0];
+    if (creal(cval) != 3.0) fprintf(stderr, "complex_vector creal(cels[0]) not 3.0?\n");
+    if (cimag(cval) != 2.0) fprintf(stderr, "complex_vector cimag(cels[0]) not 2.0?\n");
+#endif
 
     p = s7_make_byte_vector(sc, 6, 2, dims);
     s7_byte_vector_set(p, 1, 32);

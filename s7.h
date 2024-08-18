@@ -1,10 +1,10 @@
 #ifndef S7_H
 #define S7_H
 
-#define S7_VERSION "10.12"
+#define S7_VERSION "11.0"
 #define S7_DATE "19-Aug-2024"
-#define S7_MAJOR_VERSION 10
-#define S7_MINOR_VERSION 12
+#define S7_MAJOR_VERSION 11
+#define S7_MINOR_VERSION 0
 
 #include <stdint.h>           /* for int64_t */
 
@@ -316,6 +316,7 @@ s7_int *s7_int_vector_elements(s7_pointer vec);
 uint8_t *s7_byte_vector_elements(s7_pointer vec);
 s7_double *s7_float_vector_elements(s7_pointer vec);
 bool s7_is_float_vector(s7_pointer p);                                      /* (float-vector? p) */
+bool s7_is_complex_vector(s7_pointer p);                                    /* (complex-vector? p) */
 bool s7_is_int_vector(s7_pointer p);                                        /* (int-vector? p) */
 bool s7_is_byte_vector(s7_pointer p);                                       /* (byte-vector? p) */
 

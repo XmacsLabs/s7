@@ -119,8 +119,8 @@
 	      cddar cdddar cddddr cdddr cddr cdr ceiling char->integer char-alphabetic? char-ci<=?
 	      char-ci<? char-ci=? char-ci>=? char-ci>? char-downcase char-lower-case? char-numeric?
 	      char-position char-ready? char-upcase char-upper-case? char-whitespace? char<=? char<?
-	      char=? char>=? char>? char? complex complex? cond cons continuation? cos constant?
-	      cosh curlet current-error-port current-input-port current-output-port cyclic-sequences
+	      char=? char>=? char>? char? complex complex? complex-vector? complex-vector complex-vector-ref complex-vector-set!
+	      cond cons continuation? cos constant? cosh curlet current-error-port current-input-port current-output-port cyclic-sequences
 	      defined? denominator dilambda? do dynamic-wind
 	      eof-object? eq? equal? eqv? even? exact->inexact exact? exp expt
 	      float? float-vector float-vector-ref float-vector? floor for-each funclet
@@ -164,7 +164,7 @@
 			       (lambda (op)
 				 (set! (ht op) #t))
 			       '(symbol? gensym? keyword? let? openlet? iterator? macro? c-pointer? c-object? c-object-type constant? subvector?
-			         input-port? output-port? eof-object? integer? number? real? complex? rational? random-state?
+			         input-port? output-port? eof-object? integer? number? real? complex? complex-vector? rational? random-state?
 			         char? string? list? pair? vector? float-vector? int-vector? byte-vector? hash-table?
 			         continuation? procedure? dilambda? boolean? float? proper-list? sequence? null? gensym
 			         symbol->string string->symbol symbol symbol->value symbol->dynamic-value
@@ -197,6 +197,7 @@
 			         make-vector subvector vector float-vector make-float-vector float-vector-set! vector-rank vector-typer
 			         float-vector-ref int-vector make-int-vector int-vector-set! int-vector-ref string->byte-vector
 			         byte-vector make-byte-vector hash-table  make-hash-table hash-table-ref hash-table-key-typer hash-table-value-typer
+				 complex-vector make-complex-vector complex-vector-ref complex-vector-set!
 			         hash-table-set! hash-table-entries cyclic-sequences call/cc call-with-current-continuation
 			         call-with-exit load autoload eval eval-string apply for-each map dynamic-wind values
 			         catch throw error documentation signature help procedure-arglist procedure-source funclet
@@ -208,7 +209,7 @@
 				 tree-count tree-set-memq tree-cyclic?))
 			      ht))
 
-	(side-effect-functions '(provide list-set! fill! reverse! sort! vector-fill! vector-set! float-vector-set! int-vector-set! byte-vector-set!
+	(side-effect-functions '(provide list-set! fill! reverse! sort! vector-fill! vector-set! float-vector-set! int-vector-set! byte-vector-set! complex-vector-set!
 				 string->byte-vector string-set! hash-table-set! call/cc call-with-current-continuation load autoload eval eval-string
 				 apply set-current-error-port display set-current-input-port set-current-output-port write close-input-port
 				 close-output-port flush-output-port open-input-file open-output-file open-input-string open-output-string
@@ -993,7 +994,7 @@
 				     cosh cyclic-sequences
 				     denominator dilambda?
 				     eof-object? eq? equal? eqv? even? exact->inexact exact? exp expt
-				     float? float-vector-ref float-vector? floor
+				     float? float-vector-ref float-vector? floor complex-vector? complex-vector-ref
 				     gcd gensym?
 				     hash-table-entries hash-table-ref hash-table?
 				     imag-part immutable? inexact->exact inexact? infinite? inlet input-port?
