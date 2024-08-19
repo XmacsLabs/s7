@@ -221,6 +221,7 @@
 (define-constant L_6 (let ((L (inlet 'a #f))) (let-set! L 'a L) (immutable! L)))
 
 (define fvref float-vector-ref)
+(define cvref complex-vector-ref)
 (define ivref int-vector-ref)
 (define bvref byte-vector-ref)
 (define vref vector-ref)
@@ -713,6 +714,7 @@
 (define-constant imiv2 (immutable! #i2d((1 2 3) (4 5 6))))
 (define-constant imiv3 (immutable! #i3d(((1 2 3) (1 2 4)) ((1 2 5) (1 2 6)) ((1 2 7) (1 2 8)))))
 (define-constant imfv (immutable! (float-vector 0 1 2)))
+(define-constant cmfv (immutable! (complex-vector 0+i 1+i 2+2i)))
 (define-constant imfv2 (immutable! #r2d((1 2 3) (4 5 6))))
 (define-constant imfv3 (immutable! #r3d(((1 2 3) (1 2 4)) ((1 2 5) (1 2 6)) ((1 2 7) (1 2 8)))))
 (define-constant imi (immutable! (let ((a 3) (b 2)) (immutable! 'a) (immutable! 'b) (curlet))))
@@ -791,6 +793,7 @@
 			 (immutable! ht)))
 
 (define-constant fvset float-vector-set!)
+(define-constant cvset complex-vector-set!)
 (define-constant htset hash-table-set!)
 
 (set! (hook-functions *unbound-variable-hook*) ())
@@ -970,17 +973,17 @@
 			  '*autoload*
 			  'sequence? 'directory? 'hash-table-entries
 			  'arity 'logbit?
-			  'random-state? 'throw 'float-vector-set! 'make-iterator 'complex
+			  'random-state? 'throw 'float-vector-set! 'make-iterator 'complex 'complex-vector-set!
 			  'let-ref 'int-vector 'aritable? 'gensym? 'syntax? 'iterator-at-end? 'let?
-			  'subvector 'float-vector 'iterator-sequence 'getenv 'float-vector-ref
+			  'subvector 'float-vector 'iterator-sequence 'getenv 'float-vector-ref 'complex-vector 'complex-vector-ref
 			  'cyclic-sequences 'let->list
 
 			  'setter 'int-vector?
 			  'int-vector-set! 'c-object? 'c-object-type 'proper-list?
 			  'symbol->dynamic-value
 			  'vector-append
-			  'flush-output-port 'c-pointer 'make-float-vector
-			  'iterate 'float-vector?
+			  'flush-output-port 'c-pointer 'make-float-vector 'make-complex-vector
+			  'iterate 'float-vector? 'complex-vector?
 			  'apply-values
 			  'values
 			  'byte-vector-ref 'file-exists? 'make-int-vector 'string-downcase 'string-upcase
@@ -1011,7 +1014,7 @@
 			  'make-cycle
 			  ;'make-c-tag1 ; from s7test.scm, as above
 
-			  'fvref 'ivref 'bvref 'vref 'fvset 'ivset 'bvset 'vset 'adder
+			  'fvref 'cvref 'ivref 'bvref 'vref 'fvset 'ivset 'bvset 'vset 'adder 'cvset
 
 			  'undefined-function
 			  'subsequence
@@ -1040,7 +1043,7 @@
 			  'ifa 'ifb ; see fix-op below
 
 			  '_asdf_
-			  'ims 'imbv 'imv 'imiv 'imfv 'imi 'imp 'imh 'ilt
+			  'ims 'imbv 'imv 'imiv 'imfv 'imi 'imp 'imh 'ilt 'cmfv
 			  'imv2 'imv3 'imfv2 'imfv3 'imiv2 'imiv3 'imbv2 'imbv3
 			  'vvv 'vvvi 'vvvf 'typed-hash 'typed-vector 'typed-let 'constant-let 'bight
 			  'a1 'a2 'a3 'a4 'a5 'a6
@@ -1261,12 +1264,12 @@
 
 		    "(gensym \"g_123\")"
 		    "(make-list 256 1)" "(make-list 512 '(1))" "big-let" "big-hash"
-		    "(make-vector 256 #f)" "(make-byte-vector 256 0)" "(make-float-vector 256 0.0)" "(make-int-vector 256 0)"
+		    "(make-vector 256 #f)" "(make-byte-vector 256 0)" "(make-float-vector 256 0.0)" "(make-int-vector 256 0)" "(make-complex-vector 256 0.0)"
 		    "(make-vector '(2 3) 1)"             "(make-vector '(12 14) #<undefined>)"
 		    "(make-byte-vector '(2 3) 1)"        "(make-byte-vector '(4 32) 255)"
 		    "(make-string 256 #\\1)"             "(make-string 64 #\\a)"
 		    "(make-int-vector '(2 3) 1)"         "(make-int-vector '(2 128) -1)"
-		    "(make-float-vector '(2 3) 1)"       "(make-float-vector '(128 3) pi)"
+		    "(make-float-vector '(2 3) 1)"       "(make-float-vector '(128 3) pi)" "(make-complex-vector '(128 3) 0+i)"
 		    "(make-vector 3 'a symbol?)"         "(make-vector '(2 3 4 3 2 3 4) 1)"
 		    "(make-vector 3 1+i complex?)"       "(make-vector (make-list 10 2))"
 		    "(make-vector 3 #<eof> eof-object?)" "(make-vector (make-list 256 1))"
@@ -1319,8 +1322,8 @@
 
 		    "(let loop ((i 2)) (if (> i 0) (loop (- i 1)) i))"
 
-		    "(rootlet)" ; why was this commented out? -- very verbose useless diffs
-		    "(unlet)"
+		    ;"(rootlet)" ; why was this commented out? -- very verbose useless diffs
+		    ;"(unlet)"   ; same as above
 		    "(let? (curlet))"
 		    ;"*s7*"     ;variable
 
@@ -1892,32 +1895,15 @@
 	  ;(gc) (gc)
 	  (set! (*s7* 'print-length) 4096)
 	  (same-type? val1 val2 val3 val4 str str1 str2 str3 str4))
-	;(when (eq? outer-funcs last-func) (reseed))
 	(set! last-func outer-funcs))
 
-#|
-      (let ((size (memory-rusage)))
-	(if (> (- size current-size) 100)
-	    (format *stderr* "size: ~S -> ~S, ~S~%" current-size size estr))
-	(set! current-size size))
-|#
-
+      (when (setter Hk) (set! (setter Hk) #f))
       ;(unless (output-port? imfo) (format *stderr* "(new) imfo ~S -> ~S~%" estr imfo) (abort)) ; with-mock-data
       (set! *features* (copy %features%))
       (set! error-info #f)
       (set! error-type 'no-error)
       (set! error-code "")
-;     (when (pair? x) (format *stderr* "x is pair, estr: ~S~%" estr))
       (set! x 0)
-#|
-      (when (string-position "H_" str)
-	(if (string-position "H_1" str) (fill! H_1 #f))
-	(if (string-position "H_2" str) (fill! H_2 #f))
-	(if (string-position "H_3" str) (fill! H_3 #f))
-	(if (string-position "H_4" str) (fill! H_4 #f))
-	(if (string-position "H_5" str) (fill! H_5 #f))
-	(when (string-position "H_6" str) (fill! H_6 #f) (hash-table-set! H_6 'a H_6)))
-|#
       )
 
     (define dots (vector "." "-" "+" "-" "." "-" "+" "-"))
@@ -1933,22 +1919,6 @@
 	  (when (= n 8)
 	    (set! n 0)
 	    (format *stderr* " ~A " (daytime))
-;	    (format *stderr* " ~A " current-size)
-#|
-	    ;; these two tend to become seriously bloated -- maybe add setters
-	    (set! big-let (let ((e (inlet)))
-			    (let-temporarily (((*s7* 'print-length) 80))
-			      (do ((i 0 (+ i 1)))
-				  ((= i 100))
-				(varlet e (symbol "abc" (number->string i)) i)))
-			    e))
-	    (set! big-hash (let ((e (hash-table)))
-			     (let-temporarily (((*s7* 'print-length) 80))
-			       (do ((i 0 (+ i 1)))
-				   ((= i 100))
-				 (hash-table-set! e (symbol "abc" (number->string i)) i)))
-			     e))
-|#
 	    )
 	  (format *stderr* "~A" (vector-ref dots n)))
 

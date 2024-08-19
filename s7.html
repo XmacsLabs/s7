@@ -2319,8 +2319,8 @@ and vector-dimension returns the nth member of the list (the size of the nth dim
 <em class="gray">#2d((1 1 1) (2 2 2) (3 3 3))</em>
 </pre>
 
-<p>make-int-vector, make-float-vector, and make-byte-vector produce homogeneous vectors holding
-s7_ints, s7_doubles, or unsigned bytes.
+<p>make-int-vector, make-float-vector, make-complex-vector and make-byte-vector produce homogeneous vectors holding
+s7_ints, s7_doubles, s7_complexs or unsigned bytes.
 </p>
 
 <pre class="indented">
@@ -2528,7 +2528,7 @@ the old subvector to the new:
 
 <p>Multidimensional vector constant syntax is modelled after CL: #nd(...)
 signals that the lists specify the elements of an 'n' dimensional vector: <code>#2d((1 2 3) (4 5 6))</code>
-int-vector constants use #i, float-vectors use #r.  I wanted to use #f, but that is already taken.
+int-vector constants use #i, float-vectors use #r, complex-vectors use #c.
 Append the "nd" business after the type indication: <code>#i2d((1 2) (3 4))</code>.  This syntax
 collides with the r7rs byte-vector notation "#u8"; s7 uses "#u" for byte-vectors.  "#u2d(...)" is a two-dimensional byte-vector.
 For backwards compatibility, you can use "#u8" for one-dimensional byte-vectors.
@@ -10213,9 +10213,9 @@ s7_vector_to_list is vector-&gt;list.  s7_vector_fill is fill! (as applied to a 
 </p>
 <p>s7_make_int_vector returns an int-vector.  Its elements are s7_ints (int64_t), and the array of s7_ints can be accessed
 via s7_int_vector_elements.  Similarly for float-vectors (the elements are s7_doubles which
-are C doubles).  s7_make_float_vector_wrapper provides a way to pass a C array of doubles
-through scheme; it wraps up the array as a scheme float-vector.  Both s7_make_int_vector
-and s7_make_float_vector can return multidimensional vectors.  The "dims" parameter specifies
+are C doubles), and complex-vectors (s7_complex which uses C doubles)  s7_make_float_vector_wrapper provides a way to pass a C array of doubles
+through scheme; it wraps up the array as a scheme float-vector.  s7_make_int_vector,
+s7_make_float_vector, and s7_make_complex_vector can return multidimensional vectors.  The "dims" parameter specifies
 the number of dimensions, and the "dim_info" parameter the individual dimensions.  If dims
 is 1, dim_info can be NULL.  If the s7_make_float_vector_wrapper "free_data" parameter is true, s7 will free the "data"
 array when the float-vector is garbage-collected. In ffitest.c, the g_block example calls:
@@ -10229,6 +10229,11 @@ is done.  g1-&gt;data is freed by g_block_free when the c-object is garbage coll
 </p>
 <p>s7_vector_ref and s7_vector_set apply to one-dimensional vectors; the "_n" cases
 apply to multidimensional cases.  All four functions can be used on any type of vector.
+</p>
+<p>s7_make_complex_vector_wrapper creates a complex-vector that accesses data
+allocated elsewhere, for example a gsl_vector_complex (see s7test.scm).
+The complex_vector functions in s7.h are included only if the compile-time switch S7_WITH_COMPLEX_VECTORS
+is set.
 </p>
 
 

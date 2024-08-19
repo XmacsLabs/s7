@@ -25,6 +25,13 @@ repl fulltest.scm
 repl tauto.scm
 
 echo ' '
+echo '-------- g++ -Wall -Wextra --------'
+echo ' '
+g++ s7.c -c -I. -g -O2 -Wall -Wextra -ldl -lm -Wl,-export-dynamic
+g++ -o repl repl.c -g -O2 -Wall -Wextra s7.o -I. -lm -ldl -Wl,-export-dynamic
+repl s7test.scm
+
+echo ' '
 echo '-------- base case + nrepl --------'
 echo ' '
 gcc s7.c -c -I. -g3 -ldl -lm -Wl,-export-dynamic
@@ -38,6 +45,13 @@ gcc s7.c -c -I. -g3 -DWITH_GMP -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lgmp -lmpfr -lmpc -lm -ldl -Wl,-export-dynamic
 # repl s7test.scm
 repl t101.scm
+
+echo ' '
+echo '-------- with-gmp + g++ --------'
+echo ' '
+g++ s7.c -c -I. -g3 -DWITH_GMP -ldl -lm -Wl,-export-dynamic
+g++ -o repl repl.c -g3 -Wall s7.o -I. -lgmp -lmpfr -lmpc -lm -ldl -Wl,-export-dynamic
+repl s7test.scm
 
 echo ' '
 echo '-------- with-gmp precision --------'

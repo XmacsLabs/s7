@@ -2,7 +2,7 @@
 #define S7_H
 
 #define S7_VERSION "11.0"
-#define S7_DATE "19-Aug-2024"
+#define S7_DATE "20-Aug-2024"
 #define S7_MAJOR_VERSION 11
 #define S7_MINOR_VERSION 0
 
@@ -30,13 +30,6 @@ typedef double s7_double;
   #include <mpc.h>
 #endif
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-typedef struct s7_scheme s7_scheme;
-typedef struct s7_cell *s7_pointer;
-
 #if S7_WITH_COMPLEX_VECTORS
   #if __cplusplus
     #include <complex>
@@ -46,6 +39,13 @@ typedef struct s7_cell *s7_pointer;
     typedef double complex s7_complex;
   #endif
 #endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct s7_scheme s7_scheme;
+typedef struct s7_cell *s7_pointer;
 
 s7_scheme *s7_init(void);
   /* s7_scheme is our interpreter

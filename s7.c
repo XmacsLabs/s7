@@ -397,10 +397,8 @@
 #if HAVE_COMPLEX_NUMBERS
   #if __cplusplus
     #include <complex>
-    #if (!S7_WITH_COMPLEX_VECTORS)
-      using namespace std;  /* the code has to work in C as well as C++, so we can't scatter std:: all over the place */
-      typedef std::complex<s7_double> s7_complex;
-    #endif
+    using namespace std;  /* the code has to work in C as well as C++, so we can't scatter std:: all over the place */
+    typedef std::complex<s7_double> s7_complex;
   #else
     #include <complex.h>
     #if (!S7_WITH_COMPLEX_VECTORS)
@@ -33559,9 +33557,10 @@ static int32_t print_vector_length(s7_scheme *sc, s7_pointer vect, s7_pointer po
 {
   int32_t plen, len = vector_length(vect);
   char buf[128];
-  const char *vtype = "r";
+  const char *vtype = "r"; /* "const" here for g++ */
 
   if (is_int_vector(vect)) vtype = "i";
+  else if (is_complex_vector(vect)) vtype = "c";
   else if (is_byte_vector(vect)) vtype = "u";
   if (len == 0)
     {
@@ -33802,7 +33801,8 @@ static void complex_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer po
 	  port_write_string(port)(sc, num, clamp_length(plen, CV_BUFSIZE), port);
 	  if ((use_write == P_READABLE) &&
 	      (is_immutable_vector(vect)))
-	    port_write_character(port)(sc, ')', port);
+	    port_write_string(port)(sc, "))", 2, port);
+	  else port_write_character(port)(sc, ')', port);
 	  return;
 	}}
 
@@ -33810,7 +33810,7 @@ static void complex_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer po
     {
       char *num = complex_to_string_base_10(sc, els[0], 0, sc->float_format_precision, 'g', &plen, use_write);
       port_write_string(port)(sc, "#c(", 3, port);
-      /* floatify(buf, &plen); */ /* TODO: comlexify?? also below */
+      /* floatify(buf, &plen); */ /* TODO: complexify?? also below */
       port_write_string(port)(sc, num, clamp_length(plen, CV_BUFSIZE), port);
       for (i = 1; i < len; i++)
 	{
@@ -42217,7 +42217,7 @@ static s7_pointer g_make_complex_vector(s7_scheme *sc, s7_pointer args)
 	    return(method_or_bust(sc, init, sc->make_complex_vector_symbol, args, sc->type_names[T_COMPLEX], 2));
 #if WITH_GMP
 	  if (s7_is_bignum(init))
-	    return(g_make_vector_1(sc, set_plist_2(sc, p, init), sc->make_float_complexr_symbol));
+	    return(g_make_vector_1(sc, set_plist_2(sc, p, init), sc->make_complex_vector_symbol));
 #endif
 	  if (is_rational(init))
 	    return(g_make_vector_1(sc, set_plist_2(sc, p, wrap_real(sc, rational_to_double(sc, init))), sc->make_complex_vector_symbol));
@@ -48985,7 +48985,7 @@ static bool vector_rank_match(s7_scheme *sc, s7_pointer x, s7_pointer y)
   return(true);
 }
 
-static bool iv_meq(const s7_int *ex, const s7_int *ey, s7_int len)
+static bool iv_equivalent(const s7_int *ex, const s7_int *ey, s7_int len)
 {
   s7_int i = 0, left = len - 8;
   while (i <= left)
@@ -49007,7 +49007,7 @@ static bool byte_vector_equal_1(s7_scheme *sc, s7_pointer x, s7_pointer y)
   return(true);
 }
 
-static bool biv_meq(s7_pointer x, s7_pointer y)
+static bool biv_equivalent(s7_pointer x, s7_pointer y)
 {
   s7_int len = vector_length(x);
   const uint8_t *xp = byte_vector_bytes(x);
@@ -49015,6 +49015,50 @@ static bool biv_meq(s7_pointer x, s7_pointer y)
   for (s7_int i = 0; i < len; i++)
     if ((s7_int)(xp[i]) != yp[i])
       return(false);
+  return(true);
+}
+
+static bool fv_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, s7_int len)
+{
+  s7_double *arr1 = float_vector_floats(x), *arr2 = float_vector_floats(y);
+  s7_double fudge = sc->equivalent_float_epsilon;
+  if (fudge == 0.0)
+    {
+      for (s7_int i = 0; i < len; i++)
+	if ((arr1[i] != arr2[i]) &&
+	    ((!is_NaN(arr1[i])) || (!is_NaN(arr2[i]))))
+	  return(false);
+    }
+  else
+    if ((len & 0x3) == 0)
+      for (s7_int i = 0; i < len; )
+	LOOP_4(if (!floats_are_equivalent(sc, arr1[i], arr2[i])) return(false); i++);
+    else
+      for (s7_int i = 0; i < len; i++)
+	if (!floats_are_equivalent(sc, arr1[i], arr2[i]))
+	  return(false);
+  return(true);
+}
+
+static bool cv_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, s7_int len)
+{
+  s7_complex *arr1 = complex_vector_complexs(x), *arr2 = complex_vector_complexs(y);
+  s7_double fudge = sc->equivalent_float_epsilon;
+  if (fudge == 0.0)
+    {
+      for (s7_int i = 0; i < len; i++)
+	if (((creal(arr1[i]) != creal(arr2[i])) || (cimag(arr1[i]) != cimag(arr2[i]))) &&
+	    ((!is_NaN(creal(arr1[i]))) || (!is_NaN(creal(arr2[i]))) || (!is_NaN(cimag(arr1[i]))) || (!is_NaN(cimag(arr2[i])))))
+	  return(false);
+    }
+  else
+    if ((len & 0x3) == 0)
+      for (s7_int i = 0; i < len; )
+	LOOP_4(if ((!floats_are_equivalent(sc, creal(arr1[i]), creal(arr2[i]))) || (!floats_are_equivalent(sc, cimag(arr1[i]), cimag(arr2[i])))) return(false); i++);
+    else
+      for (s7_int i = 0; i < len; i++)
+	if ((!floats_are_equivalent(sc, creal(arr1[i]), creal(arr2[i]))) || (!floats_are_equivalent(sc, cimag(arr1[i]), cimag(arr2[i]))))
+	  return(false);
   return(true);
 }
 
@@ -49037,9 +49081,9 @@ static bool vector_equal(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_
   if (type(x) != type(y))
     {
       if ((is_int_vector(x)) && (is_byte_vector(y)))
-	return(biv_meq(y, x));
+	return(biv_equivalent(y, x));
       if ((is_byte_vector(x)) && (is_int_vector(y)))
-	return(biv_meq(x, y));
+	return(biv_equivalent(x, y));
       for (s7_int i = 0; i < len; i++)
 	if (!is_equal_1(sc, vector_getter(x)(sc, x, i), vector_getter(y)(sc, y, i), NULL)) /* this could be greatly optimized */
 	  return(false);
@@ -49074,7 +49118,7 @@ static bool int_vector_equal(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_i
   if (!is_int_vector(y))
     return(vector_equal(sc, x, y, ci));
   base_vector_equal(sc, x, y);
-  return(iv_meq(int_vector_ints(x), int_vector_ints(y), len));
+  return(iv_equivalent(int_vector_ints(x), int_vector_ints(y), len));
 }
 
 static bool float_vector_equal(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_t *ci)
@@ -49104,7 +49148,7 @@ static bool complex_vector_equal(s7_scheme *sc, s7_pointer x, s7_pointer y, shar
 static bool vector_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_t *ci)
 {
   /* if this is split like vector_equal above, remember it is called by iterator_equal_1 below */
-  s7_int i, len;
+  s7_int len;
   shared_info_t *nci = ci;
 
   if (x == y)
@@ -49125,41 +49169,23 @@ static bool vector_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_
        * (equivalent? (make-float-vector 3 1.0) (vector 1 1 1)) -> #t
        */
       if ((is_int_vector(x)) && (is_byte_vector(y)))
-	return(biv_meq(y, x));
+	return(biv_equivalent(y, x));
       if ((is_byte_vector(x)) && (is_int_vector(y)))
-	return(biv_meq(x, y));
-      for (i = 0; i < len; i++)
+	return(biv_equivalent(x, y));
+      for (s7_int i = 0; i < len; i++)
 	if (!is_equivalent_1(sc, vector_getter(x)(sc, x, i), vector_getter(y)(sc, y, i), NULL)) /* this could be greatly optimized */
 	  return(false);
       return(true);
     }
 
-  /* TODO: complex_vector equivalent */
   if (is_float_vector(x))
-    {
-      s7_double *arr1 = float_vector_floats(x), *arr2 = float_vector_floats(y);
-      s7_double fudge = sc->equivalent_float_epsilon;
-      if (fudge == 0.0)
-	{
-	  for (i = 0; i < len; i++)
-	    if ((arr1[i] != arr2[i]) &&
-		((!is_NaN(arr1[i])) || (!is_NaN(arr2[i]))))
-	      return(false);
-	}
-      else
-	if ((len & 0x3) == 0)
-	  for (i = 0; i < len; )
-	    LOOP_4(if (!floats_are_equivalent(sc, arr1[i], arr2[i])) return(false); i++);
-	else
-	  for (i = 0; i < len; i++)
-	    if (!floats_are_equivalent(sc, arr1[i], arr2[i]))
-	      return(false);
-      return(true);
-    }
+    return(fv_equivalent(sc, x, y, len));
   if (is_int_vector(x))
-    return(iv_meq(int_vector_ints(x), int_vector_ints(y), len));
+    return(iv_equivalent(int_vector_ints(x), int_vector_ints(y), len));
   if (is_byte_vector(x))
     return(byte_vector_equal_1(sc, x, y));
+  if (is_complex_vector(x))
+    return(cv_equivalent(sc, x, y, len));
 
   if (!has_simple_elements(x))
     {
@@ -49169,7 +49195,7 @@ static bool vector_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_
 	}
       else nci = clear_shared_info(sc->circle_info);
     }
-  for (i = 0; i < len; i++)
+  for (s7_int i = 0; i < len; i++)
     if (!(is_equivalent_1(sc, vector_element(x, i), vector_element(y, i), nci)))
       return(false);
   return(true);
@@ -80360,10 +80386,8 @@ static void check_with_let(s7_scheme *sc)
     syntax_error_nr(sc, "with-let has no body: ~A", 24, sc->code);
   if (!s7_is_proper_list(sc, cdr(form)))         /* (with-let e . 3) */
     syntax_error_nr(sc, "stray dot in with-let body: ~S", 30, sc->code);
-
-  pair_set_syntax_op(sc->code, ((is_normal_symbol(car(form))) &&
-				(is_normal_symbol(cadr(form))) && /* (with-let lt a) is not the same as (with-let lt :a) */
-				(is_null(cddr(form)))) ? OP_WITH_LET_S : OP_WITH_LET_UNCHECKED);
+  if ((sc->safety > 1) && (is_symbol(car(form))) && (is_c_function(initial_value(car(form)))))
+    s7_warn(sc, 256, "%s is a strange first argument to with-let\n", display(car(form)));  /* (with-let curlet ...) where they probably meant (with-let (curlet) ...) */
   set_current_code(sc, sc->code);
 }
 
@@ -97232,6 +97256,9 @@ static void init_features(s7_scheme *sc)
 #if POINTER_32
   s7_provide(sc, "32-bit");
 #endif
+#if S7_WITH_COMPLEX_VECTORS
+  s7_provide(sc, "FFI-for-complex-vectors");
+#endif
 
 #ifdef __APPLE__
   s7_provide(sc, "osx");
@@ -99337,23 +99364,27 @@ int main(int argc, char **argv)
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * safe_do hop bit in other do cases and let
- * complex-vector:
- *    opt/do, (hash)equivalent, hash, unknown-ops, cload! wrapper, "z" maybe in optimizer?? lint, s7.html
- *    complex_iterate should have a temp?
+ *
+ * complex-vector: cload wrapper?, opt/do: "z" maybe in optimizer?? lint, gsl_complex = double?
+ *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
  *   extend oprec_i* and also to oprec_p[air]* where base p is protected but locals need not be?
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
+ *
  * function location info for C/FFI funcs (cload could do this, but it would be the FFI location):
  *   #define stringify_1(x) #x
  *   #define stringify(x) stringify_1(x)
  *   static const char *L_abs = __FILE__ "[" stringify(__LINE__) "]";
  *   then at init time: s7_set_location(abs, L_abs)|s7_location(abs)? maybe include s7_scheme arg
  *   object->let, *function*, maybe procedure-location, (scheme funcs have (*function* (curlet) 'file|line), but we'd want this via the function name)
- *   or better? build a location function with the data
- * (with-let curlet ...) does not give an error?? (with-let <any procedure> ...) seems happy -> rootlet?  maybe safety>0 warning?
+ *   or better? build a location function with the data, funcs alphabetized, etc
+ *
  * macro var setter that checks whether var is the macro version?
- * there are more vector_complex entries in the h file, and need gsl_complex definition gsl/gsl_vector_complex.h
+ * there are more vector_complex entries in the h file
+ * complex_iterate should have a temp? also int/float-vector mutable num but how to ask for one? #t for carrier arg?
+ * lint: check provided? for unknown *features*?
+ * t818 extended and full-s7test?
  */

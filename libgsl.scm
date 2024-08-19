@@ -2753,6 +2753,7 @@
                   gsl_vector_complex_set((gsl_vector_complex *)s7_c_pointer_with_type(sc, s7_car(args), gsl_vector_complex__symbol, __func__, 1), s7_integer(s7_cadr(args)), g);
                   return(cg);
                 }
+                #if S7_WITH_COMPLEX_VECTORS
                 static s7_pointer g_complex_vector_to_gsl_vector_complex(s7_scheme *sc, s7_pointer args)
                 {
                    gsl_vector_complex *g;
@@ -2775,9 +2776,18 @@
                    memcpy((void *)s7_complex_vector_elements(v), (void *)(g->data), size * 2 * sizeof(double));
                    return(s7_cadr(args));
                 }
+                static s7_pointer g_gsl_vector_complex_to_complex_vector_wrapper(s7_scheme *sc, s7_pointer args)
+                {
+                   gsl_vector_complex *g;
+                   g = (gsl_vector_complex *)s7_c_pointer_with_type(sc, s7_car(args), gsl_vector_complex__symbol, __func__, 1);
+                   return(s7_make_complex_vector_wrapper(sc, g->size, (s7_complex *)(g->data), 1, NULL, false));
+                }
+                #endif
                 ")
-	 (C-function ("complex-vector->gsl_vector_complex" g_complex_vector_to_gsl_vector_complex "" 2))
-	 (C-function ("gsl_vector_complex->complex-vector" g_gsl_vector_complex_to_complex_vector "" 2))
+	 (reader-cond ((provided? 'FFI-for-complex-vectors)
+		       (C-function ("gsl_vector_complex->complex-vector-wrapper" g_gsl_vector_complex_to_complex_vector_wrapper "" 1))
+		       (C-function ("complex-vector->gsl_vector_complex" g_complex_vector_to_gsl_vector_complex "" 2))
+		       (C-function ("gsl_vector_complex->complex-vector" g_gsl_vector_complex_to_complex_vector "" 2))))
 
 	 (C-function ("gsl_matrix_complex_set_all" g_gsl_matrix_complex_set_all "" 2))
 	 (C-function ("gsl_matrix_complex_set" g_gsl_matrix_complex_set "" 4))
