@@ -80388,6 +80388,10 @@ static void check_with_let(s7_scheme *sc)
     syntax_error_nr(sc, "stray dot in with-let body: ~S", 30, sc->code);
   if ((sc->safety > 1) && (is_symbol(car(form))) && (is_c_function(initial_value(car(form)))))
     s7_warn(sc, 256, "%s is a strange first argument to with-let\n", display(car(form)));  /* (with-let curlet ...) where they probably meant (with-let (curlet) ...) */
+
+  pair_set_syntax_op(sc->code, ((is_normal_symbol(car(form))) &&
+				(is_normal_symbol(cadr(form))) && /* (with-let lt a) is not the same as (with-let lt :a) */
+				(is_null(cddr(form)))) ? OP_WITH_LET_S : OP_WITH_LET_UNCHECKED);
   set_current_code(sc, sc->code);
 }
 
