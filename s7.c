@@ -9285,7 +9285,8 @@ static s7_pointer add_slot_unchecked_with_id(s7_scheme *sc, s7_pointer let, s7_p
   return(slot);
 }
 
-static Inline s7_pointer inline_add_slot_at_end(s7_scheme *sc, uint64_t id, s7_pointer last_slot, s7_pointer symbol, s7_pointer value)
+/* TODO: is Inline actually needed here? Use add_slot_at_end below for the checked version */
+static /* Inline */ inline s7_pointer inline_add_slot_at_end(s7_scheme *sc, uint64_t id, s7_pointer last_slot, s7_pointer symbol, s7_pointer value)
 {
   s7_pointer slot;
   new_cell_no_check(sc, slot, T_SLOT);
@@ -9297,8 +9298,14 @@ static Inline s7_pointer inline_add_slot_at_end(s7_scheme *sc, uint64_t id, s7_p
 }
 
 static s7_pointer add_slot_at_end(s7_scheme *sc, uint64_t id, s7_pointer last_slot, s7_pointer symbol, s7_pointer value)
-{
-  return(inline_add_slot_at_end(sc, id, last_slot, symbol, value));
+{ /* same as above but new_cell is checked */
+  s7_pointer slot;
+  new_cell(sc, slot, T_SLOT);
+  slot_set_symbol_and_value(slot, symbol, value);
+  slot_set_next(slot, slot_end);
+  symbol_set_local_slot(symbol, id, slot);
+  slot_set_next(last_slot, slot);
+  return(slot);
 }
 
 static s7_pointer add_slot_at_end_no_local(s7_scheme *sc, s7_pointer last_slot, s7_pointer symbol, s7_pointer value)
@@ -10034,8 +10041,8 @@ static s7_pointer sublet_1(s7_scheme *sc, s7_pointer e, s7_pointer bindings, s7_
 	    sp = add_slot_checked_with_id(sc, new_e, sym, val);
 	  else
 	    {
-	      if (sc->free_heap_top <= sc->free_heap_trigger) try_to_call_gc(sc); /* or maybe add add_slot_at_end_checked? */
-	      sp = inline_add_slot_at_end(sc, let_id(new_e), sp, sym, val);
+	      /* if (sc->free_heap_top <= sc->free_heap_trigger) try_to_call_gc(sc);*/ /* or maybe add add_slot_at_end_checked? */
+	      sp = add_slot_at_end(sc, let_id(new_e), sp, sym, val);
 	      set_local(sym); /* ? */
 	    }
 	  check_let_fallback(sc, sym, new_e);
@@ -10116,7 +10123,7 @@ static s7_pointer g_simple_inlet(s7_scheme *sc, s7_pointer args)
 	  add_slot_unchecked(sc, new_e, symbol, cadr(x), id);
 	  sp = let_slots(new_e);
 	}
-      else sp = inline_add_slot_at_end(sc, id, sp, symbol, cadr(x));
+      else sp = add_slot_at_end(sc, id, sp, symbol, cadr(x));
     }
   sc->temp3 = sc->unused;
   return(new_e);
@@ -37894,7 +37901,7 @@ static inline bool pair_set_memq(s7_scheme *sc, s7_pointer tree)
 
 static bool tree_set_memq_b_7pp(s7_scheme *sc, s7_pointer syms, s7_pointer tree)
 {
-  bool non_symbols = false;
+  bool non_symbols = false, result;
   if (!is_list(syms))
     wrong_type_error_nr(sc, sc->tree_set_memq_symbol, 1, syms, a_list_string);
   if (is_null(syms)) return(false);
@@ -37913,8 +37920,9 @@ static bool tree_set_memq_b_7pp(s7_scheme *sc, s7_pointer syms, s7_pointer tree)
     if (is_symbol(car(p)))
       add_symbol_to_list(sc, car(p));
     else non_symbols = true;
-
-  if /* ((!is_quote(car(tree))) && */ (pair_set_memq(sc, tree)) return(true);
+  result = pair_set_memq(sc, tree);
+  clear_symbol_list(sc);
+  if (result) return(true);
 
   if (non_symbols)
     for (s7_pointer p = syms; is_pair(p); p = cdr(p))
@@ -37938,6 +37946,7 @@ static s7_pointer g_tree_set_memq(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer tree_set_memq_syms_direct(s7_scheme *sc, s7_pointer syms, s7_pointer tree)
 {
+  bool result;
   if (!is_list(tree))
     wrong_type_error_nr(sc, sc->tree_set_memq_symbol, 2, tree, a_list_string);
   if (is_null(tree)) return(sc->F);
@@ -37947,7 +37956,9 @@ static s7_pointer tree_set_memq_syms_direct(s7_scheme *sc, s7_pointer syms, s7_p
   clear_symbol_list(sc);
   for (s7_pointer p = syms; is_pair(p); p = cdr(p))
     add_symbol_to_list(sc, car(p));
-  return(make_boolean(sc, pair_set_memq(sc, tree)));
+  result = pair_set_memq(sc, tree);
+  clear_symbol_list(sc);
+  return(make_boolean(sc, result));
 }
 
 static s7_pointer g_tree_set_memq_syms(s7_scheme *sc, s7_pointer args)
@@ -52500,8 +52511,10 @@ static s7_pointer stacktrace_1(s7_scheme *sc, s7_int frames_max, s7_int code_col
 
 		      frames++;
 		      if (frames > frames_max)
-			return(block_to_string(sc, strp, safe_strlen((char *)block_data(strp))));
-
+			{
+			  clear_symbol_list(sc);
+			  return(block_to_string(sc, strp, safe_strlen((char *)block_data(strp))));
+			}
 		      if ((is_let(e)) && (e != sc->rootlet))
 			notes = stacktrace_walker(sc, code, e, NULL, code_cols, total_cols, notes_start_col, as_comment, 0);
 		      newp = stacktrace_add_func(sc, f, code, codestr, notes, code_cols, as_comment);
@@ -52519,6 +52532,7 @@ static s7_pointer stacktrace_1(s7_scheme *sc, s7_int frames_max, s7_int code_col
 		      strp = catp;
 		      str = (char *)block_data(strp);
 		    }}}}}
+  clear_symbol_list(sc);
   return((strp) ? block_to_string(sc, strp, safe_strlen((char *)block_data(strp))) : nil_string);
 }
 
@@ -53080,6 +53094,7 @@ static s7_pointer cull_history(s7_scheme *sc, s7_pointer code)
 	set_car(p, sc->nil);
       if (cdr(p) == code) break;
     }
+  clear_symbol_list(sc);
   return(code);
 }
 #endif
@@ -68150,6 +68165,7 @@ static bool stop_is_safe(s7_scheme *sc, s7_pointer stop, s7_pointer body)
 
 static bool tree_has_setters(s7_scheme *sc, s7_pointer tree)
 {
+  bool result;
   if (is_quote(car(tree))) return(false);
   clear_symbol_list(sc);
   add_symbol_to_list(sc, sc->set_symbol);
@@ -68159,7 +68175,9 @@ static bool tree_has_setters(s7_scheme *sc, s7_pointer tree)
   add_symbol_to_list(sc, sc->hash_table_set_symbol);
   add_symbol_to_list(sc, sc->set_car_symbol);
   add_symbol_to_list(sc, sc->set_cdr_symbol);
-  return(pair_set_memq(sc, tree));
+  result = pair_set_memq(sc, tree);
+  clear_symbol_list(sc);
+  return(result);
 }
 
 static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_pointer var_list, s7_pointer step_vars, bool *has_set);
@@ -68252,8 +68270,12 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	  add_symbol_to_list(sc, sym);
 	  add_slot(sc, let, sym, sc->undefined);
 	}
-      else return_false(sc, car_x);
-    }
+      else 
+	{
+	  clear_symbol_list(sc);
+	  return_false(sc, car_x);
+	}}
+  clear_symbol_list(sc);
   if (tis_slot(let_slots(let)))
     let_set_slots(let, reverse_slots(let_slots(let)));
 
@@ -74963,6 +74985,8 @@ static void check_lambda_args(s7_scheme *sc, s7_pointer args, int32_t *arity, s7
       if (arity) (*arity) = -1;
       return;
     }
+
+  clear_symbol_list(sc);
   for (i = 0, x = args; is_pair(x); i++, x = cdr(x))
     {
       s7_pointer car_x = car(x);
@@ -74982,18 +75006,26 @@ static void check_lambda_args(s7_scheme *sc, s7_pointer args, int32_t *arity, s7
 		   set_elist_4(sc, wrap_string(sc, "lambda parameter ~S is a constant: (~S ~S ...)", 46),
 			       car_x, car(form), cadr(form)));
 	}
+      if (symbol_is_in_list(sc, car_x))
+	error_nr(sc, sc->syntax_error_symbol,
+		 set_elist_4(sc, wrap_string(sc, "lambda parameter ~S is used twice in the parameter list, (~S ~S ...)", 68),
+			     car_x, car(form), cadr(form)));
+      add_symbol_to_list(sc, car_x);
+#if 0      
       if (symbol_is_in_arg_list(car_x, cdr(x)))       /* (lambda (a a) ...) or (lambda (a . a) ...) */
 	error_nr(sc, sc->syntax_error_symbol,
 		 set_elist_4(sc, wrap_string(sc, "lambda parameter ~S is used twice in the parameter list, (~S ~S ...)", 68),
 			     car_x, car(form), cadr(form)));
+#endif
       set_local(car_x);
     }
   if (is_not_null(x))
     {
+      if ((is_symbol(x)) && (symbol_is_in_list(sc, x)))
+	error_nr(sc, sc->syntax_error_symbol, set_elist_2(sc, wrap_string(sc, "lambda :rest parameter ~S is used earlier in the parameter list", 63), x));
       if (is_constant(sc, x))                         /* (lambda (a . 0.0) a) or (lambda (a . :b) a) */
 	error_nr(sc, sc->syntax_error_symbol,
-		 set_elist_4(sc, wrap_string(sc, "lambda :rest parameter ~S is a constant in (~S ~S ...)", 54),
-			     x, car(form), cadr(form)));
+		 set_elist_4(sc, wrap_string(sc, "lambda :rest parameter ~S is a constant in (~S ~S ...)", 54), x, car(form), cadr(form)));
       i = -i - 1;
     }
   if (arity) (*arity) = i;
@@ -77787,13 +77819,13 @@ static bool op_let_1(s7_scheme *sc)
       return(true);
     }
   id = let_id(sc->curlet);
-  check_free_heap_size(sc, 1024); /* all the slots below are unchecked */
+  /* check_free_heap_size(sc, 1024); */
   if (is_pair(y))
     {
       s7_pointer args = cdr(y), last_slot, x = car(sc->code);
       last_slot = add_slot_unchecked_with_id(sc, sc->curlet, caar(x), unchecked_car(y));
       for (x = cdr(x), y = args; is_not_null(y); x = cdr(x), y = cdr(y))
-	last_slot = inline_add_slot_at_end(sc, id, last_slot, caar(x), unchecked_car(y));
+	last_slot = add_slot_at_end(sc, id, last_slot, caar(x), unchecked_car(y)); /* not unchecked -- tlimit.scm */
     }
   sc->code = T_Pair(cdr(sc->code));
   sc->temp8 = sc->unused;
@@ -78344,7 +78376,7 @@ static /* inline */ bool op_let_star1(s7_scheme *sc)
 	      add_slot_checked(sc, sc->curlet, caar(sc->code), sc->value);
 	      sp = let_slots(sc->curlet);
 	    }
-	  else sp = inline_add_slot_at_end(sc, let_id(sc->curlet), sp, caar(sc->code), sc->value);
+	  else sp = add_slot_at_end(sc, let_id(sc->curlet), sp, caar(sc->code), sc->value); /* was unchecked */
 	}
       else
 	{
@@ -80388,11 +80420,11 @@ static void check_with_let(s7_scheme *sc)
     syntax_error_nr(sc, "stray dot in with-let body: ~S", 30, sc->code);
   if ((sc->safety > 1) && (is_symbol(car(form))) && (is_c_function(initial_value(car(form)))))
     s7_warn(sc, 256, "%s is a strange first argument to with-let\n", display(car(form)));  /* (with-let curlet ...) where they probably meant (with-let (curlet) ...) */
+  set_current_code(sc, sc->code);
 
   pair_set_syntax_op(sc->code, ((is_normal_symbol(car(form))) &&
 				(is_normal_symbol(cadr(form))) && /* (with-let lt a) is not the same as (with-let lt :a) */
 				(is_null(cddr(form)))) ? OP_WITH_LET_S : OP_WITH_LET_UNCHECKED);
-  set_current_code(sc, sc->code);
 }
 
 static bool op_with_let_unchecked(s7_scheme *sc)
@@ -82797,7 +82829,8 @@ static bool is_simple_end(s7_scheme *sc, s7_pointer end)
 static s7_pointer fxify_step_exprs(s7_scheme *sc, s7_pointer code)
 {
   s7_pointer vars = car(code);
-  s7_pointer e = NULL;
+  s7_pointer e = NULL, pre_e = cons(sc, sc->nil, sc->nil);
+  gc_protect_via_stack(sc, pre_e);
 
   for (s7_pointer p = vars; is_pair(p); p = cdr(p))
     {
@@ -82819,12 +82852,16 @@ static s7_pointer fxify_step_exprs(s7_scheme *sc, s7_pointer code)
 		  for (sc->w = sc->nil, e = vars; is_pair(e); e = cdr(e)) sc->w = cons(sc, caar(e), sc->w);
 		  e = sc->w; /* only valid in step exprs, not in inits; also all vars are valid at any point in step exprs */
 		  sc->w = sc->nil;
+		  set_cdr(pre_e, e);   /* we'll put each current var at top of this list to speed up the most likely search (arg_findable -> pair_symbol_is_safe) */
 		}
-	      optimize_expression(sc, car(expr), 0, e, false);
+	      set_car(pre_e, caar(p)); /* caar(p) == current var, highly likely it's in the step expr */
+	      optimize_expression(sc, car(expr), 0, pre_e, false);
 	    }
 	  callee = fx_choose(sc, expr, vars, do_symbol_is_safe);  /* fx_proc can be nil! */
 	  if (callee) set_fx(expr, callee);
 	}}
+  unstack_gc_protect(sc);
+
   if ((is_pair(cdr(code))) &&
       (is_pair(cadr(code))))
     {
@@ -91663,8 +91700,8 @@ static s7_pointer read_expression(s7_scheme *sc)
 	    }
 	  if (sc->tok == TOKEN_EOF)
 	    missing_close_paren_error_nr(sc);
+	  check_stack_size(sc);                                  /* s7test, tlimit */
 	  push_stack_no_let_no_code(sc, OP_READ_LIST, sc->nil);  /* here we need to clear args, but code is ignored */
-	  check_stack_size(sc);                                  /* s7test */
 	  break;
 
 	case TOKEN_QUOTE:
@@ -99315,36 +99352,36 @@ int main(int argc, char **argv)
  * index            1016    973    967    972    975
  * tmock            1145   1082   1042   1045   1035
  * tvect     3408   2464   1772   1669   1497   1454
- * tauto                   2562   2048   1729   1724
  * thook     7651   ----   2590   2030   2046   1754
  * texit     1884   1950   1778   1741   1770   1759
- * s7test           1831   1818   1829   1830   1855
+ * tauto                   2562   2048   1729   1766
+ * s7test           1831   1818   1829   1830   1867
  * lt        2222   2172   2150   2185   1950   1913
- * dup              3788   2492   2239   2097   1933
- * tread            2421   2419   2408   2405   2241
- * tcopy            5546   2539   2375   2386   2340
+ * dup              3788   2492   2239   2097   1948
+ * tread            2421   2419   2408   2405   2245
+ * tcopy            5546   2539   2375   2386   2346
  * trclo     8031   2574   2454   2445   2449   2359
  * titer     3657   2842   2641   2509   2449   2458
- * tmat             3042   2524   2578   2590   2519
- * tload                   3046   2404   2566   2535
+ * tmat             3042   2524   2578   2590   2528
+ * tload                   3046   2404   2566   2548
  * fbench    2933   2583   2460   2430   2478   2571
  * tsort     3683   3104   2856   2804   2858   2858
  * tio              3752   3683   3620   3583   3122
  * tobj             3970   3828   3577   3508   3440
  * tmac             3873   3033   3677   3677   3513
- * teq              4045   3536   3486   3544   3548
+ * teq              4045   3536   3486   3544   3563
  * tcase            4793   4439   4430   4439   4377
  * tmap             8774   4489   4541   4586   4384
- * tlet      11.0   6974   5609   5980   5965   4498
+ * tlet      11.0   6974   5609   5980   5965   4505
  * tfft             7729   4755   4476   4536   4541
  * tshoot           5447   5183   5055   5034   4850
  * tstar            6705   5834   5278   5177   5047
- * tform            5348   5307   5316   5084   5066
- * tstr      10.0   6342   5488   5162   5180   5194
+ * tform            5348   5307   5316   5084   5074
+ * tstr      10.0   6342   5488   5162   5180   5231
  * tnum             6013   5433   5396   5409   5430
- * tlist     9219   7546   6558   6240   6300   5764
- * trec      19.6   6980   6599   6656   6658   5981
- * tset                           6260   6364   6174
+ * tlist     9219   7546   6558   6240   6300   5771
+ * trec      19.6   6980   6599   6656   6658   6010
+ * tset                           6260   6364   6263
  * tari      15.0   12.7   6827   6543   6278   6180
  * tgsl             7802   6373   6282   6208   6218
  * tleft     12.2   9753   7537   7331   7331   6393
@@ -99360,8 +99397,8 @@ int main(int argc, char **argv)
  * timp             24.4   20.0   19.6   19.7   15.6
  * tmv              21.9   21.1   20.7   20.6   17.3
  * calls            37.5   37.0   37.5   37.1   37.2
- * sg                      55.9   55.8   55.4   55.4
- * tbig            175.8  156.5  148.1  146.2  146.1
+ * sg                      55.9   55.8   55.4   55.6
+ * tbig            175.8  156.5  148.1  146.2  146.4
  * ----------------------------------------------------
  *
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
@@ -99370,6 +99407,11 @@ int main(int argc, char **argv)
  * safe_do hop bit in other do cases and let
  *
  * complex-vector: cload wrapper?, opt/do: "z" maybe in optimizer?? lint, gsl_complex = double?
+ *   complex_iterate should have a temp? also int/float-vector mutable num but how to ask for one? #t for carrier arg?
+ *   gsl: there are more vector_complex entries in the h file
+ *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
+ *   check (and tests7?) gsl without s7_with_complex_vectors
+ *   'complex? as type maybe shouldn't use complex-vector because it's only scheme complex via the getter
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
@@ -99387,8 +99429,18 @@ int main(int argc, char **argv)
  *   or better? build a location function with the data, funcs alphabetized, etc
  *
  * macro var setter that checks whether var is the macro version?
- * there are more vector_complex entries in the h file
- * complex_iterate should have a temp? also int/float-vector mutable num but how to ask for one? #t for carrier arg?
  * lint: check provided? for unknown *features*?
- * t818 extended and full-s7test?
+ * map vector -> vector? ambiguous if two args not same type, (apply vector (map...)) where the optimizer could omit the intermediate list
+ *
+ * tlimit extended and full-s7test? -> t103 and t101, valcall
+ *   dup and tlet show fx trouble (maybe trec), rest are complex-vector unopt (see old s7)
+ *   lambda args slow: args_findable again and check_lambda_args (symbol_is_in_arg_list) -- change symbol_is_in_arg_list to symbol_is_in_list
+ *        check_lambda_star_args and check_let_star?!?
+ *     arg_findable is called from symbols_are_safe in optimize_func_many_args -- surely in the symbol_list?
+ *     optimize(?) -> optimize_expression -> optimize_funcs -> optimize_func_many_args
+ *   s7test func calling s7 as thread (threads.c) to add 1 to a global -> tlimit?
+ *   probably lambda* bug:
+ *     10000 lambda args:                     0.399
+ *     add_slot_unchecked[9220]: free heap exhausted
+ *   loop for each might hit more of these unchecked cases
  */
