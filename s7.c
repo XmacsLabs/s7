@@ -73993,7 +73993,9 @@ static bool symbols_are_safe(s7_scheme *sc, s7_pointer args, s7_pointer e)
   for (s7_pointer p = args; is_pair(p); p = cdr(p))
     {
       s7_pointer arg = car(p);
+      if ((S7_DEBUGGING) && (symbol_is_in_list(sc, arg)) && (!arg_findable(sc, arg, e))) fprintf(stderr, "find: %s\n", display(arg));
       if ((is_normal_symbol(arg)) &&
+	  (!symbol_is_in_list(sc, arg)) &&
 	  (!arg_findable(sc, arg, e)))
 	return(false);
     }
@@ -74958,16 +74960,6 @@ static opt_t optimize(s7_scheme *sc, s7_pointer code, int32_t hop, s7_pointer e)
 }
 
 
-static bool symbol_is_in_arg_list(const s7_pointer sym, s7_pointer lst)
-{
-  s7_pointer x;
-  for (x = lst; is_pair(x); x = cdr(x))
-    if ((sym == car(x)) ||
-	((is_pair(car(x))) && (sym == caar(x))))
-      return(true);
-  return(sym == x);
-}
-
 static void check_lambda_args(s7_scheme *sc, s7_pointer args, int32_t *arity, s7_pointer form)
 {
   s7_pointer x;
@@ -75011,12 +75003,6 @@ static void check_lambda_args(s7_scheme *sc, s7_pointer args, int32_t *arity, s7
 		 set_elist_4(sc, wrap_string(sc, "lambda parameter ~S is used twice in the parameter list, (~S ~S ...)", 68),
 			     car_x, car(form), cadr(form)));
       add_symbol_to_list(sc, car_x);
-#if 0      
-      if (symbol_is_in_arg_list(car_x, cdr(x)))       /* (lambda (a a) ...) or (lambda (a . a) ...) */
-	error_nr(sc, sc->syntax_error_symbol,
-		 set_elist_4(sc, wrap_string(sc, "lambda parameter ~S is used twice in the parameter list, (~S ~S ...)", 68),
-			     car_x, car(form), cadr(form)));
-#endif
       set_local(car_x);
     }
   if (is_not_null(x))
@@ -75047,6 +75033,7 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
 
   has_defaults = false;
   top = args;
+  clear_symbol_list(sc);
   for (v = args, w = args; is_pair(w); v = w, w = cdr(w))
     {
       s7_pointer car_w = car(w);
@@ -75057,10 +75044,11 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
 	    error_nr(sc, sc->syntax_error_symbol,
 		     set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S is a constant: (~S ~S ...)", 47),
 				 car(car_w), car(form), cadr(form)));
-	  if (symbol_is_in_arg_list(caar(w), cdr(w)))           /* (lambda* ((a 1) a) ...) */
+	  if (symbol_is_in_list(sc, car(car_w)))
 	    error_nr(sc, sc->syntax_error_symbol,
-		     set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S occurs twice in the argument list: (~S ~S ...)", 67),
+		     set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S is used twice in the parameter list, (~S ~S ...)", 69),
 				 car(car_w), car(form), cadr(form)));
+	  add_symbol_to_list(sc, car(car_w));
 	  if (!is_pair(cdr(car_w)))
 	    {
 	      if (is_null(cdr(car_w)))                          /* (lambda* ((a)) ...) */
@@ -75103,11 +75091,11 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
 		set_allow_other_keys(top);
 		set_cdr(v, sc->nil);
 	      }
-	    if (symbol_is_in_arg_list(car_w, cdr(w)))           /* (lambda* (a a) ...) or (lambda* (a . a) ...) */
+	    if (symbol_is_in_list(sc, car_w))
 	      error_nr(sc, sc->syntax_error_symbol,
-		       set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S is used twice in the parameter list: (~S ~S ...)", 69),
+		       set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S is used twice in the parameter list, (~S ~S ...)", 69),
 				   car_w, car(form), cadr(form)));
-
+	    add_symbol_to_list(sc, car_w);
 	    if (!is_keyword(car_w)) set_local(car_w);
 	  }
 	else
@@ -75135,6 +75123,8 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
 	  }}
   if (is_not_null(w))
     {
+      if ((is_symbol(w)) && (symbol_is_in_list(sc, w)))
+	error_nr(sc, sc->syntax_error_symbol, set_elist_2(sc, wrap_string(sc, "lambda* :rest parameter ~S is used earlier in the parameter list", 64), w));
       if (is_constant(sc, w))                                   /* (lambda* (a . 0.0) a) or (lambda* (a . :b) a) */
 	error_nr(sc, sc->syntax_error_symbol,
 		 set_elist_4(sc, wrap_string(sc, "lambda* :rest parameter ~S is a constant, (~S ~S ...)", 53),
@@ -77770,7 +77760,12 @@ static void op_named_let_1(s7_scheme *sc, s7_pointer args) /* args = vals in dec
   add_slot(sc, sc->curlet, car(sc->code), sc->x);
   set_curlet(sc, make_let(sc, sc->curlet)); /* inner let */
   for (x = sc->w; is_not_null(args); x = cdr(x), args = cdr(args))
-    add_slot_unchecked_with_id(sc, sc->curlet, car(x), unchecked_car(args));
+    {
+      add_slot_unchecked_with_id(sc, sc->curlet, car(x), unchecked_car(args));
+      x = cdr(x); args = cdr(args);
+      if (is_null(args)) break;
+      add_slot_checked_with_id(sc, sc->curlet, car(x), unchecked_car(args));
+    }
   closure_set_let(sc->x, sc->curlet);
   let_set_slots(sc->curlet, reverse_slots(let_slots(sc->curlet)));
   sc->x = sc->unused;
@@ -78245,13 +78240,15 @@ static bool check_let_star(s7_scheme *sc)
       if (is_constant_symbol(sc, var))              /* (let* ((pi 3)) ...) */
 	error_nr(sc, sc->wrong_type_arg_symbol, set_elist_3(sc, cant_bind_immutable_string, sc->let_star_symbol, var_and_val));
 
-      if ((named_let) && (symbol_is_in_arg_list(var, cdr(vars)))) /* (let* loop ((a 1) (a 2)) ...) -- added 2-Dec-19 */
-	error_nr(sc, sc->syntax_error_symbol,
-		 set_elist_3(sc, wrap_string(sc, "named let* parameter, ~A, is used twice in the parameter list in ~A", 67),
-			     var, object_to_string_truncated(sc, form)));
-      /* currently (let* ((a 1) (a (+ a 1))) a) is 2, not an error */
-
-      if (symbol_is_in_list(sc, var)) shadowing = true;
+      if (symbol_is_in_list(sc, var))
+	{
+	  if (named_let) /* (let* loop ((a 1) (a 2)) ...) -- added 2-Dec-19 */
+	    error_nr(sc, sc->syntax_error_symbol,
+		     set_elist_3(sc, wrap_string(sc, "named let* parameter, ~A, is used twice in the parameter list in ~A", 67),
+				 var, object_to_string_truncated(sc, form)));
+	  /* currently (let* ((a 1) (a (+ a 1))) a) is 2, not an error */
+	  shadowing = true;
+	}
       add_symbol_to_list(sc, var);
       set_local(var);
     }
@@ -86138,7 +86135,7 @@ static bool apply_unsafe_closure_star_1(s7_scheme *sc)
 	}
       else
 	if (!is_keyword(car_z))
-	  add_slot(sc, sc->curlet, car_z, sc->F);
+	  add_slot_checked(sc, sc->curlet, car_z, sc->F); /* checked tlimit */
 	else
 	  if (car_z == sc->rest_keyword) /* else it's :allow-other-keys? */
 	    {
@@ -99349,6 +99346,7 @@ int main(int argc, char **argv)
  * ----------------------------------------------------
  * tpeak      148    114    108    105    102    103
  * tref      1081    687    463    459    464    410
+ * tlimit    2650   3715   3715   3815   3715    659 [6708 if 100k]
  * index            1016    973    967    972    975
  * tmock            1145   1082   1042   1045   1035
  * tvect     3408   2464   1772   1669   1497   1454
@@ -99411,7 +99409,6 @@ int main(int argc, char **argv)
  *   gsl: there are more vector_complex entries in the h file
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
  *   check (and tests7?) gsl without s7_with_complex_vectors
- *   'complex? as type maybe shouldn't use complex-vector because it's only scheme complex via the getter
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
@@ -99428,19 +99425,6 @@ int main(int argc, char **argv)
  *   object->let, *function*, maybe procedure-location, (scheme funcs have (*function* (curlet) 'file|line), but we'd want this via the function name)
  *   or better? build a location function with the data, funcs alphabetized, etc
  *
- * macro var setter that checks whether var is the macro version?
- * lint: check provided? for unknown *features*?
  * map vector -> vector? ambiguous if two args not same type, (apply vector (map...)) where the optimizer could omit the intermediate list
- *
- * tlimit extended and full-s7test? -> t103 and t101, valcall
- *   dup and tlet show fx trouble (maybe trec), rest are complex-vector unopt (see old s7)
- *   lambda args slow: args_findable again and check_lambda_args (symbol_is_in_arg_list) -- change symbol_is_in_arg_list to symbol_is_in_list
- *        check_lambda_star_args and check_let_star?!?
- *     arg_findable is called from symbols_are_safe in optimize_func_many_args -- surely in the symbol_list?
- *     optimize(?) -> optimize_expression -> optimize_funcs -> optimize_func_many_args
- *   s7test func calling s7 as thread (threads.c) to add 1 to a global -> tlimit?
- *   probably lambda* bug:
- *     10000 lambda args:                     0.399
- *     add_slot_unchecked[9220]: free heap exhausted
- *   loop for each might hit more of these unchecked cases
+ * tlimit: arg_findable replaced by symbol_is_in_list throughout?
  */

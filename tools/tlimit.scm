@@ -1,18 +1,19 @@
-(define size 10000)
+;; timing test for multi-parameter funcs and so on
+
+(define size 10000) ; tried also 100k and 1M -- most the time is in format_to_port
 (define tmp-output-file "too-many-lets.scm")
-(define time-column 40)
+(define time-column 32)
 
-(define-macro (report-time name value) ; this could be a function
-  `(begin
-     ;(format *stderr* "~D ~A output: ~NT~,4G~%" size ,name time-column (- (*s7* 'cpu-time) start))
-     ;(set! start (*s7* 'cpu-time))
+(define (report-time name value)
+  ;; (format *stderr* "~D ~A output: ~NT~,4G~%" size name time-column (- (*s7* 'cpu-time) start))
+  ;; (set! start (*s7* 'cpu-time))
 
-     (unless (equal? (load tmp-output-file) ,value)
-       (format *stderr* "~D ~A: ~S~%" size ,name (load tmp-output-file)))
+  (unless (equal? (load tmp-output-file) value)
+    (format *stderr* "~D ~A: ~S~%" size name (load tmp-output-file)))
 
-     (format *stderr* "~D ~A: ~NT~,4G~%" size ,name time-column (- (*s7* 'cpu-time) start))
-     (set! start (*s7* 'cpu-time))))
-     
+  (format *stderr* "~D ~A: ~NT~,4G~%" size name time-column (- (*s7* 'cpu-time) start))
+  (set! start (*s7* 'cpu-time)))
+  
 
 (define start (*s7* 'cpu-time))
 
@@ -340,6 +341,22 @@
 (report-time "lambda* args" (* (/ size 2) (- size 1)))
 
 
+;; -------- lambda* args + defaults --------
+(call-with-output-file tmp-output-file
+  (lambda (p)
+    (format p "((lambda* (")
+    (do ((i 0 (+ i 1)))
+	((= i size))
+      (format p "(f_~D ~D) " i i))
+    (format p ") (+ ")
+    (do ((i 0 (+ i 1)))
+	((= i size))
+      (format p "f_~D " i))
+    (format p ")))")))
+
+(report-time "lambda* args + defaults" (* (/ size 2) (- size 1)))
+
+
 ;; -------- named let args --------
 (call-with-output-file tmp-output-file
   (lambda (p)
@@ -392,7 +409,7 @@
 (report-time "let-temporarily args" (* (/ size 2) (- size 1)))
 
 
-;; -------- memq list --------
+;; -------- memq --------
 (call-with-output-file tmp-output-file
   (lambda (p)
     (format p "(memq 'f_~D '(" (- size 1)) ; not ints here -- not eq?!
@@ -401,10 +418,10 @@
       (format p "f_~D " i))
     (format p "))")))
 
-(report-time "memq list" (list (symbol "f_" (number->string (- size 1)))))
+(report-time "memq" (list (symbol "f_" (number->string (- size 1)))))
 
 
-;; -------- assq list --------
+;; -------- assq --------
 (call-with-output-file tmp-output-file
   (lambda (p)
     (format p "(assq 'f_~D '(" (- size 1))
@@ -413,26 +430,82 @@
       (format p "(f_~D ~D) " i (* i 2)))
     (format p "))")))
 
-(report-time "assq list" (list (symbol "f_" (number->string (- size 1))) (* 2 (- size 1))))
+(report-time "assq" (list (symbol "f_" (number->string (- size 1))) (* 2 (- size 1))))
 
 
-;(set! size 1000)
-;; -------- N lets nested --------
+;; -------- read-time vector --------
 (call-with-output-file tmp-output-file
   (lambda (p)
+    (format p "(apply + (vector->list #(")
     (do ((i 0 (+ i 1)))
 	((= i size))
-      (format p "(let ((f_~D ~D)) " i i))
+      (format p "~D " i))
+    (format p ")))")))
+
+(report-time "read-time vector" (* (/ size 2) (- size 1)))
+
+
+;; -------- N lets nested --------
+(let-temporarily ((size (min size (min size 1000))))
+  (call-with-output-file tmp-output-file
+    (lambda (p)
+      (do ((i 0 (+ i 1)))
+	  ((= i size))
+	(format p "(let ((f_~D ~D)) " i i))
+      (format p "(+ ")
+      (do ((i 0 (+ i 1)))
+	  ((= i size))
+	(format p "f_~D " i))
+      (do ((i 0 (+ i 1)))
+	  ((= i size))
+	(format p ")"))
+      (format p ")")))
+  
+  (report-time "lets nested" (* (/ size 2) (- size 1))))
+
+
+;; -------- N let vars + set + add --------
+(call-with-output-file tmp-output-file
+  (lambda (p)
+    (format p "(let (")
+    (do ((i 0 (+ i 1)))
+	((= i size))
+      (format p "  (f_~D ~D)~%" i i))
+    (format p "   )~%")
+    (do ((i 0 (+ i 1)))
+	((= i size))
+      (format p "  (set! f_~D (* 2 f_~D))~%" i i))
     (format p "(+ ")
     (do ((i 0 (+ i 1)))
 	((= i size))
       (format p "f_~D " i))
-    (do ((i 0 (+ i 1)))
-	((= i size))
-      (format p ")"))
-    (format p ")")))
+    (format p "))")))
 
-(report-time "lets nested" (* (/ size 2) (- size 1)))
+(report-time "let vars + set + add" (* size (- size 1)))
+
+
+;; -------- N lambdas nested --------
+(let-temporarily ((size (min size (min size 1000))))
+  (call-with-output-file tmp-output-file
+    (lambda (p)
+      (do ((i 0 (+ i 1)))
+	  ((= i size))
+	(format p "("))
+      (do ((i 0 (+ i 1)))
+	  ((= i size))
+	(format p "(lambda (f_~D)~%" i))
+      (format p "(+ ")
+      (do ((i 0 (+ i 1)))
+	  ((= i size))
+	(format p "f_~D " i))
+      (do ((i 0 (+ i 1)))
+	  ((= i (+ size 1)))
+	(format p ")"))
+      (do ((i 0 (+ i 1)))
+	  ((= i size))
+	(format p " ~D)" i))))
+  
+  (report-time "lambdas nested" (* (/ size 2) (- size 1))))
 
 
 (delete-file tmp-output-file)

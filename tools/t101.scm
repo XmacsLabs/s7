@@ -280,6 +280,9 @@
 (format *stderr* "~NC tcase ~NC~%" 20 #\- 20 #\-)
 (system "./repl tcase.scm")
 
+(format *stderr* "~NC tlimit ~NC~%" 20 #\- 20 #\-)
+(system "./repl tlimit.scm")
+
 (format *stderr* "~NC index ~NC~%" 20 #\- 20 #\-)
 (system "./snd make-index.scm")
 
