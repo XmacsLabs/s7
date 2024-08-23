@@ -887,23 +887,23 @@ typedef struct s7_cell {
       s7_pointer obj, cur;
       union {
 	s7_int loc;
-	s7_pointer lcur;
+	s7_pointer slot;            /* let iterator current slow */
       } lc;
       union {
 	s7_int len;
-	s7_pointer slow;
-	hash_entry_t *hcur;
+	s7_pointer slow;            /* pair iterator cycle check */
+	hash_entry_t *entry;        /* hash-table iterator current entry */
       } lw;
       s7_pointer (*next)(s7_scheme *sc, s7_pointer iterator);
     } iter;
 
     struct {
-      c_proc_t *c_proc;              /* C functions, macros */
+      c_proc_t *c_proc;             /* C functions, macros */
       s7_function ff;
       s7_int required_args, optional_args, all_args; /* these could be uint32_t */
     } fnc;
 
-    struct {                         /* pairs */
+    struct {                        /* pairs */
       s7_pointer car, cdr, opt1;
       union
       {
@@ -2422,8 +2422,8 @@ static void init_types(void)
 #define set_has_keyword(p)             set_mid_type_bit(T_Sym(p), T_HAS_KEYWORD)
 
 #define T_MARK_SEQ                     T_MID_MUTABLE
-#define is_mark_seq(p)                 has_mid_type_bit(T_Itr(p), T_MARK_SEQ)
-#define set_mark_seq(p)                set_mid_type_bit(T_Itr(p), T_MARK_SEQ)
+#define has_carrier(p)                 has_mid_type_bit(T_Itr(p), T_MARK_SEQ)
+#define set_has_carrier(p)                set_mid_type_bit(T_Itr(p), T_MARK_SEQ)
 /* used in iterators for GC mark of sequence */
 
 #define T_HAS_LOOP_END                 T_MID_MUTABLE
@@ -3428,14 +3428,15 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define iterator_position(p)           (T_Itr_Pos(p))->object.iter.lc.loc
 #define iterator_length(p)             (T_Itr_Len(p))->object.iter.lw.len
 #define iterator_next(p)               (T_Itr(p))->object.iter.next
-#define iterator_is_at_end(p)          (!iter_ok(p))                /* ((full_type(T_Itr(p)) & T_ITER_OK) == 0) */
-#define iterator_slow(p)               T_Lst((T_Itr_Pair(p))->object.iter.lw.slow)
-#define iterator_set_slow(p, Val)      (T_Itr_Pair(p))->object.iter.lw.slow = T_Lst(Val)
-#define iterator_hash_current(p)       (T_Itr_Hash(p))->object.iter.lw.hcur
 #define iterator_current(p)            (T_Itr(p))->object.iter.cur
-#define iterator_current_slot(p)       T_Sln((T_Itr_Let(p))->object.iter.lc.lcur)
-#define iterator_set_current_slot(p, Val) (T_Itr_Let(p))->object.iter.lc.lcur = T_Sln(Val)
-#define iterator_let_cons(p)           (T_Itr_Let(p))->object.iter.cur
+#define iterator_carrier(p)            (T_Itr(p))->object.iter.cur
+#define iterator_is_at_end(p)          (!iter_ok(p))                /* ((full_type(T_Itr(p)) & T_ITER_OK) == 0) */
+
+#define pair_iterator_slow(p)          T_Lst((T_Itr_Pair(p))->object.iter.lw.slow)        /* applies only to pairs */
+#define pair_iterator_set_slow(p, Val) (T_Itr_Pair(p))->object.iter.lw.slow = T_Lst(Val)
+#define hash_iterator_entry(p)         (T_Itr_Hash(p))->object.iter.lw.entry      /* applies only to hash-tables */
+#define let_iterator_slot(p)           T_Sln((T_Itr_Let(p))->object.iter.lc.slot) /* applies only to lets */
+#define let_iterator_set_slot(p, Val)  (T_Itr_Let(p))->object.iter.lc.slot = T_Sln(Val)
 
 #define ITERATOR_END                   eof_object
 #define ITERATOR_END_NAME              "#<eof>"
@@ -7415,8 +7416,8 @@ static void mark_iterator(s7_pointer p)
 {
   set_mark(p);
   gc_mark(iterator_sequence(p));
-  if (is_mark_seq(p))
-    gc_mark(iterator_current(p));
+  if (has_carrier(p))
+    gc_mark(iterator_carrier(p));
 }
 
 static void mark_input_port(s7_pointer p)
@@ -9774,8 +9775,8 @@ static void append_let(s7_scheme *sc, s7_pointer new_e, s7_pointer old_e)
       {
 	s7_pointer iter = s7_make_iterator(sc, sc->starlet);
 	s7_int gc_loc = gc_protect_1(sc, iter);
-	iterator_current(iter) = cons_unchecked(sc, sc->F, sc->F);
-	set_mark_seq(iter); /* so carrier is GC protected by mark_iterator */
+	iterator_carrier(iter) = cons_unchecked(sc, sc->F, sc->F);
+	set_has_carrier(iter); /* so carrier is GC protected by mark_iterator */
 	while (true)
 	  {
 	    s7_pointer y = s7_iterate(sc, iter);
@@ -13858,6 +13859,15 @@ s7_pointer s7_make_complex(s7_scheme *sc, s7_double a, s7_double b)
       set_real_part(x, a);
       set_imag_part(x, b);
     }
+  return(x);
+}
+
+static s7_pointer make_mutable_complex(s7_scheme *sc, s7_double rl, s7_double im)
+{
+  s7_pointer x;
+  new_cell(sc, x, T_COMPLEX | T_MUTABLE | T_IMMUTABLE); /* do we need to change to real if imag==0? */
+  set_real_part(x, rl);
+  set_imag_part(x, im);
   return(x);
 }
 
@@ -32026,7 +32036,6 @@ static bool is_iterator_b_7p(s7_scheme *sc, s7_pointer obj) {return(g_is_iterato
 
 static s7_pointer iterator_copy(s7_scheme *sc, s7_pointer p)
 {
-  /* fields are obj cur [loc|lcur] [len|slow|hcur] next, but untangling them in debugging case is a pain */
   s7_pointer iter;
   new_cell(sc, iter, T_ITERATOR | T_SAFE_PROCEDURE);
   memcpy((void *)iter, (void *)p, sizeof(s7_cell)); /* picks up ITER_OK I hope */
@@ -32044,11 +32053,11 @@ static s7_pointer iterator_quit(s7_pointer iterator)
 
 static s7_pointer let_iterate(s7_scheme *sc, s7_pointer iterator)
 {
-  s7_pointer p, slot = iterator_current_slot(iterator);
+  s7_pointer p, slot = let_iterator_slot(iterator);
   if (!tis_slot(slot))
     return(iterator_quit(iterator));
-  iterator_set_current_slot(iterator, next_slot(slot));
-  p = iterator_let_cons(iterator);
+  let_iterator_set_slot(iterator, next_slot(slot));
+  p = iterator_carrier(iterator);
   if (!p)
     return(cons(sc, slot_symbol(slot), slot_value(slot)));
   set_car(p, slot_symbol(slot));
@@ -32070,12 +32079,12 @@ static s7_pointer hash_table_iterate(s7_scheme *sc, s7_pointer iterator)
   s7_pointer table;
   s7_int len;
   hash_entry_t **elements;
-  hash_entry_t *lst = iterator_hash_current(iterator);
+  hash_entry_t *lst = hash_iterator_entry(iterator);
 
   if (lst)
     {
-      iterator_hash_current(iterator) = hash_entry_next(lst);
-      return(hash_entry_to_cons(sc, lst, iterator_current(iterator)));
+      hash_iterator_entry(iterator) = hash_entry_next(lst);
+      return(hash_entry_to_cons(sc, lst, iterator_carrier(iterator)));
     }
   table = iterator_sequence(iterator); /* using iterator_length and hash_table_entries here was slightly slower */
   len = hash_table_size(table);
@@ -32087,8 +32096,8 @@ static s7_pointer hash_table_iterate(s7_scheme *sc, s7_pointer iterator)
       if (x)
 	{
 	  iterator_position(iterator) = loc;
-	  iterator_hash_current(iterator) = hash_entry_next(x);
-	  return(hash_entry_to_cons(sc, x, iterator_current(iterator)));
+	  hash_iterator_entry(iterator) = hash_entry_next(x);
+	  return(hash_entry_to_cons(sc, x, iterator_carrier(iterator)));
 	}}
   if (is_weak_hash_table(table))
     {
@@ -32115,21 +32124,43 @@ static s7_pointer byte_vector_iterate(s7_scheme *sc, s7_pointer obj)
 static s7_pointer float_vector_iterate(s7_scheme *sc, s7_pointer obj)
 {
   if (iterator_position(obj) < iterator_length(obj))
-    return(make_real(sc, float_vector(iterator_sequence(obj), iterator_position(obj)++)));
+    {
+      if (iterator_carrier(obj))
+	{
+	  set_real(iterator_carrier(obj), float_vector(iterator_sequence(obj), iterator_position(obj)++));
+	  return(iterator_carrier(obj));
+	}
+      return(make_real(sc, float_vector(iterator_sequence(obj), iterator_position(obj)++)));
+    }
   return(iterator_quit(obj));
 }
 
 static s7_pointer complex_vector_iterate(s7_scheme *sc, s7_pointer obj)
 {
   if (iterator_position(obj) < iterator_length(obj))
-    return(c_complex_to_s7(sc, complex_vector(iterator_sequence(obj), iterator_position(obj)++)));
+    {
+      if (iterator_carrier(obj))
+	{
+	  set_real_part(iterator_carrier(obj), creal(complex_vector(iterator_sequence(obj), iterator_position(obj))));
+	  set_imag_part(iterator_carrier(obj), cimag(complex_vector(iterator_sequence(obj), iterator_position(obj)++)));
+	  return(iterator_carrier(obj));
+	}
+      return(c_complex_to_s7(sc, complex_vector(iterator_sequence(obj), iterator_position(obj)++)));
+    }
   return(iterator_quit(obj));
 }
 
 static s7_pointer int_vector_iterate(s7_scheme *sc, s7_pointer obj)
 {
   if (iterator_position(obj) < iterator_length(obj))
-    return(make_integer(sc, int_vector(iterator_sequence(obj), iterator_position(obj)++)));
+    {
+      if (iterator_carrier(obj))
+	{
+	  set_integer(iterator_carrier(obj), int_vector(iterator_sequence(obj), iterator_position(obj)++));
+	  return(iterator_carrier(obj));
+	}
+      return(make_integer(sc, int_vector(iterator_sequence(obj), iterator_position(obj)++)));
+    }
   return(iterator_quit(obj));
 }
 
@@ -32176,7 +32207,7 @@ static s7_pointer c_object_iterate(s7_scheme *sc, s7_pointer obj)
   if (iterator_position(obj) >= iterator_length(obj))
     return(iterator_quit(obj));
   p = iterator_sequence(obj);
-  cur = iterator_current(obj);
+  cur = iterator_carrier(obj);
   set_car(cur, p);
   set_car(cdr(cur), make_integer(sc, iterator_position(obj))); /* perhaps wrap_mutable_integer, c_object_ref->c_object_getter is c_function in scheme? */
   result = (*(c_object_ref(sc, p)))(sc, cur); /* used to save/restore sc->x|z here */
@@ -32197,7 +32228,7 @@ static s7_pointer pair_iterate(s7_scheme *sc, s7_pointer obj)
     return(iterator_quit(obj));
   result = car(iterator_current(obj));
   iterator_current(obj) = cdr(iterator_current(obj));
-  if (iterator_current(obj) == iterator_slow(obj))
+  if (iterator_current(obj) == pair_iterator_slow(obj))
     iterator_current(obj) = sc->nil;
   iterator_next(obj) = pair_iterate_1;
   return(result);
@@ -32210,9 +32241,9 @@ static s7_pointer pair_iterate_1(s7_scheme *sc, s7_pointer obj)
     return(iterator_quit(obj));
   result = car(iterator_current(obj));
   iterator_current(obj) = cdr(iterator_current(obj));
-  if (iterator_current(obj) == iterator_slow(obj))
+  if (iterator_current(obj) == pair_iterator_slow(obj))
     iterator_current(obj) = sc->nil;
-  else iterator_set_slow(obj, cdr(iterator_slow(obj)));
+  else pair_iterator_set_slow(obj, cdr(pair_iterator_slow(obj)));
   iterator_next(obj) = pair_iterate;
   return(result);
 }
@@ -32259,9 +32290,11 @@ s7_pointer s7_make_iterator(s7_scheme *sc, s7_pointer e)
     {
       iterator_current(iter) = e;
       iterator_next(iter) = pair_iterate;
-      iterator_set_slow(iter, e);
+      pair_iterator_set_slow(iter, e);
       return(iter);
     }
+
+  iterator_carrier(iter) = NULL;
   if (!is_let(e))
     iterator_position(iter) = 0;
 
@@ -32270,23 +32303,20 @@ s7_pointer s7_make_iterator(s7_scheme *sc, s7_pointer e)
     case T_LET:
       if (e == sc->rootlet)
 	{
-	  iterator_set_current_slot(iter, sc->rootlet_slots);
+	  let_iterator_set_slot(iter, sc->rootlet_slots);
 	  iterator_next(iter) = let_iterate;
-	  iterator_let_cons(iter) = NULL;
 	  return(iter);
 	}
       if (e == sc->starlet)
 	return(starlet_make_iterator(sc, iter));
       p = find_make_iterator_method(sc, e, iter);
       if (p) return(p);
-      iterator_set_current_slot(iter, let_slots(e));
+      let_iterator_set_slot(iter, let_slots(e));
       iterator_next(iter) = let_iterate;
-      iterator_let_cons(iter) = NULL;
       break;
 
     case T_HASH_TABLE:
-      iterator_hash_current(iter) = NULL;
-      iterator_current(iter) = NULL;
+      hash_iterator_entry(iter) = NULL;
       iterator_position(iter) = -1;
       iterator_next(iter) = hash_table_iterate;
       if (is_weak_hash_table(e))
@@ -32339,8 +32369,8 @@ s7_pointer s7_make_iterator(s7_scheme *sc, s7_pointer e)
       if (is_iterable_closure(sc, e))
 	{
 	  p = list_1_unchecked(sc, int_zero);
-	  iterator_current(iter) = p;
-	  set_mark_seq(iter);
+	  iterator_carrier(iter) = p;
+	  set_has_carrier(iter);
 	  iterator_next(iter) = closure_iterate;
 	  iterator_length(iter) = (has_active_methods(sc, e)) ? closure_length(sc, e) : S7_INT64_MAX;
 	}
@@ -32353,8 +32383,8 @@ s7_pointer s7_make_iterator(s7_scheme *sc, s7_pointer e)
       iterator_length(iter) = c_object_length_to_int(sc, e);
       p = find_make_iterator_method(sc, e, iter);
       if (p) return(p);
-      iterator_current(iter) = list_2_unchecked(sc, e, int_zero); /* if not unchecked, gc protect iter */
-      set_mark_seq(iter);
+      iterator_carrier(iter) = list_2_unchecked(sc, e, int_zero); /* if not unchecked, gc protect iter */
+      set_has_carrier(iter);
       iterator_next(iter) = c_object_iterate;
       break;
 
@@ -32367,8 +32397,9 @@ s7_pointer s7_make_iterator(s7_scheme *sc, s7_pointer e)
 static s7_pointer g_make_iterator(s7_scheme *sc, s7_pointer args)
 {
   #define H_make_iterator "(make-iterator sequence carrier) returns an iterator object that returns the next value \
-in the sequence each time it is called.  When it reaches the end, it returns " ITERATOR_END_NAME "."
-  #define Q_make_iterator s7_make_signature(sc, 3, sc->is_iterator_symbol, sc->is_sequence_symbol, sc->is_pair_symbol)
+in the sequence each time it is called.  When it reaches the end, it returns " ITERATOR_END_NAME ".  If carrier is #t, \
+s7 chooses an appropriate value."
+  #define Q_make_iterator s7_make_signature(sc, 3, sc->is_iterator_symbol, sc->is_sequence_symbol, s7_make_signature(sc, 2, sc->is_boolean_symbol, sc->is_pair_symbol))
 
   /* we need to call s7_make_iterator before fixing up the optional second arg in case let->method */
   s7_pointer seq = car(args);
@@ -32377,23 +32408,39 @@ in the sequence each time it is called.  When it reaches the end, it returns " I
 
   if (carrier)
     {
-      if (!is_pair(carrier))
-	sole_arg_wrong_type_error_nr(sc, sc->make_iterator_symbol, carrier, sc->type_names[T_PAIR]);
-      if (is_immutable_pair(carrier))
-	immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->make_iterator_symbol, carrier));
-
-      if (is_hash_table(iterator_sequence(iter)))
+      /* no carrier needed if seq is t_vector, string, c-object, nil or list, else cons for hash/let, 
+       *   mutable int|float|complex if int|byte|float|complex-vector, but scheme code can't create a mutable number, so use #t as carrier arg.
+       */
+      if (carrier == sc->T)  /* #t = conjure up an appropriate carrier */
 	{
-	  iterator_current(iter) = carrier;
-	  set_mark_seq(iter);
+	  switch (type(seq)) /* all types that have carriers use iterator_carrier */
+	    {
+	    case T_BYTE_VECTOR:
+	    case T_INT_VECTOR:     iterator_carrier(iter) = make_mutable_integer(sc, 0);        break;
+	    case T_FLOAT_VECTOR:   iterator_carrier(iter) = make_mutable_real(sc, 0.0);         break;
+	    case T_COMPLEX_VECTOR: iterator_carrier(iter) = make_mutable_complex(sc, 0.0, 0.0); break;
+	    case T_HASH_TABLE:     
+	    case T_LET:            iterator_carrier(iter) = cons(sc, sc->F, sc->F);             break;
+	    default: 
+	      return(iter);
+	    }
+	  set_has_carrier(iter);
 	}
       else
-	if ((is_let(iterator_sequence(iter))) &&
-	    (iterator_sequence(iter) != sc->rootlet))
-	  {
-	    iterator_let_cons(iter) = carrier;
-	    set_mark_seq(iter);
-	  }}
+	{
+	  if (!is_pair(carrier))
+	    sole_arg_wrong_type_error_nr(sc, sc->make_iterator_symbol, carrier, sc->type_names[T_PAIR]);
+	  if (is_immutable_pair(carrier))
+	    immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->make_iterator_symbol, carrier));
+	  if ((!is_hash_table(seq)) && (!is_let(seq)))
+	    error_nr(sc, sc->wrong_type_arg_symbol,
+		     set_elist_4(sc, wrap_string(sc, "make-iterator carrier argument ~S is a pair, but ~S is a ~S, not a hash-table or let", 81),
+				 carrier, seq, object_type_name(sc, seq)));
+	  if (seq != sc->rootlet)
+	    {
+	      iterator_carrier(iter) = carrier;
+	      set_has_carrier(iter);
+	    }}}
   return(iter);
 }
 
@@ -34438,8 +34485,8 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
   iterator = s7_make_iterator(sc, hash);
   gc_iter = gc_protect_1(sc, iterator);
   p = cons_unchecked(sc, sc->F, sc->F);
-  iterator_current(iterator) = p;
-  set_mark_seq(iterator);
+  iterator_carrier(iterator) = p;
+  set_has_carrier(iterator);
   hash_cyclic = ((ci) && (is_cyclic(hash)) && ((href = peek_shared_ref(ci, hash)) != 0));
 
   if (use_write == P_READABLE)
@@ -34561,7 +34608,7 @@ static void hash_table_to_port(s7_scheme *sc, s7_pointer hash, s7_pointer port, 
 	port_write_string(port)(sc, ") (immutable! <h>))", 19, port);
     }
   s7_gc_unprotect_at(sc, gc_iter);
-  iterator_current(iterator) = sc->nil;
+  iterator_carrier(iterator) = sc->nil;
 }
 
 static void slot_list_to_port(s7_scheme *sc, s7_pointer slot, s7_pointer port, shared_info_t *ci, bool bindings) /* bindings=let/inlet choice */
@@ -35287,7 +35334,7 @@ static void iterator_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 		      port_write_string(port)(sc, "(let ((iter (make-iterator ", 27, port);
 		      object_to_port_with_circle_check(sc, seq, port, use_write, ci);
 		      port_write_string(port)(sc, "))) ", 4, port);
-		      for (s7_pointer slot = let_slots(seq); slot != iterator_current_slot(obj); slot = next_slot(slot))
+		      for (s7_pointer slot = let_slots(seq); slot != let_iterator_slot(obj); slot = next_slot(slot))
 			port_write_string(port)(sc, "(iter) ", 7, port);
 		      port_write_string(port)(sc, "iter)", 5, port);
 		    }
@@ -49287,8 +49334,8 @@ static bool iterator_equal_1(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_i
 	  return(false);
 
       for (xs = let_slots(x_seq), ys = let_slots(y_seq); tis_slot(xs) && tis_slot(ys); xs = next_slot(xs), ys = next_slot(ys))
-	if (xs == iterator_current_slot(x))
-	  return(ys == iterator_current_slot(y));
+	if (xs == let_iterator_slot(x))
+	  return(ys == let_iterator_slot(y));
       return(is_slot_end(xs) && is_slot_end(ys));
 
     case T_HASH_TABLE:
@@ -80469,8 +80516,8 @@ static void activate_starlet(s7_scheme *sc)
   s7_pointer new_e = let_copy(sc, sc->starlet); /* get fallback methods */
   s7_pointer iter = s7_make_iterator(sc, sc->starlet);
   gc_protect_2_via_stack(sc, new_e, iter);
-  iterator_current(iter) = cons_unchecked(sc, sc->F, sc->F);
-  set_mark_seq(iter);
+  iterator_carrier(iter) = cons_unchecked(sc, sc->F, sc->F);
+  set_has_carrier(iter);
   while (true)
     {
       s7_pointer y = s7_iterate(sc, iter);
@@ -94897,7 +94944,7 @@ static void save_holder_data(s7_scheme *sc, s7_pointer p)
 
     case T_ITERATOR:
       mark_holdee(p, iterator_sequence(p), NULL);
-      if (is_mark_seq(p)) mark_holdee(p, iterator_current(p), NULL);
+      if (has_carrier(p)) mark_holdee(p, iterator_carrier(p), NULL);
       break;
 
     case T_SLOT:
@@ -95900,9 +95947,9 @@ static s7_pointer starlet_iterate(s7_scheme *sc, s7_pointer iterator)
       value = starlet(sc, starlet_symbol_id(symbol));
       sc->w = osw;
     }
-  if (iterator_let_cons(iterator))
+  if (iterator_carrier(iterator))
     {
-      s7_pointer p = iterator_let_cons(iterator);
+      s7_pointer p = iterator_carrier(iterator);
       set_car(p, symbol);
       set_cdr(p, value);
       return(p);
@@ -95914,7 +95961,7 @@ static s7_pointer starlet_make_iterator(s7_scheme *sc, s7_pointer iter)
 {
   iterator_position(iter) = SL_NO_FIELD;
   iterator_next(iter) = starlet_iterate;
-  iterator_let_cons(iter) = NULL;
+  iterator_carrier(iter) = NULL;
   return(iter);
 }
 
@@ -99359,7 +99406,7 @@ int main(int argc, char **argv)
  * tread            2421   2419   2408   2405   2245
  * tcopy            5546   2539   2375   2386   2346
  * trclo     8031   2574   2454   2445   2449   2359
- * titer     3657   2842   2641   2509   2449   2458
+ * titer     3657   2842   2641   2509   2449   2458  2386
  * tmat             3042   2524   2578   2590   2528
  * tload                   3046   2404   2566   2548
  * fbench    2933   2583   2460   2430   2478   2571
@@ -99404,11 +99451,11 @@ int main(int argc, char **argv)
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * safe_do hop bit in other do cases and let
  *
- * complex-vector: cload wrapper?, opt/do: "z" maybe in optimizer?? lint, gsl_complex = double?
- *   complex_iterate should have a temp? also int/float-vector mutable num but how to ask for one? #t for carrier arg?
+ * complex-vector: cload wrapper?, opt/do: "z" maybe in optimizer?? lint
  *   gsl: there are more vector_complex entries in the h file
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
  *   check (and tests7?) gsl without s7_with_complex_vectors
+ *   got find +signature+ twice 74043
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
@@ -99425,6 +99472,7 @@ int main(int argc, char **argv)
  *   object->let, *function*, maybe procedure-location, (scheme funcs have (*function* (curlet) 'file|line), but we'd want this via the function name)
  *   or better? build a location function with the data, funcs alphabetized, etc
  *
- * map vector -> vector? ambiguous if two args not same type, (apply vector (map...)) where the optimizer could omit the intermediate list
- * tlimit: arg_findable replaced by symbol_is_in_list throughout?
+ * map vector -> vector? ambiguous if two args not same type, (apply vector (map...)) where the optimizer could omit the intermediate list, tapply
+ *   lint?
+ * tlimit: arg_findable replaced by symbol_is_in_list throughout?  tlimit+vars+ 1-call func etc
  */
