@@ -2221,7 +2221,7 @@ is <b>iterator-sequence</b>.
 If the sequence is a hash-table or let, the iterator normally returns a cons of the key and value.
 There are many cases where this overhead is objectionable, so make-iterator takes a third optional
 argument, carrier, which should be the cons to use. Similarly,
-for numeric vectors, the carrier argument can be #t which tells s7 to use a mutable number of the
+for int, float, and complex vectors, the carrier argument can be #t which tells s7 to use a mutable number of the
 correct type.  In both cases, the returned carrier is the same across all iterator calls, so
 copy the carrier value if you need to save it.
 </p>

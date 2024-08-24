@@ -9132,7 +9132,7 @@ s7_pointer s7_symbol_set_initial_value(s7_scheme *sc, s7_pointer symbol, s7_poin
 
 
 /* -------- symbol sets -------- */
-static inline s7_pointer add_symbol_to_list(s7_scheme *sc, s7_pointer sym)
+static /* inline */ s7_pointer add_symbol_to_list(s7_scheme *sc, s7_pointer sym)
 {
   symbol_set_tag(sym, sc->syms_tag);
   symbol_set_tag2(sym, sc->syms_tag2);
@@ -32408,14 +32408,13 @@ s7 chooses an appropriate value."
 
   if (carrier)
     {
-      /* no carrier needed if seq is t_vector, string, c-object, nil or list, else cons for hash/let, 
+      /* no carrier needed if seq is t_vector, byte_vector, string, c-object, nil or list, else cons for hash/let, 
        *   mutable int|float|complex if int|byte|float|complex-vector, but scheme code can't create a mutable number, so use #t as carrier arg.
        */
       if (carrier == sc->T)  /* #t = conjure up an appropriate carrier */
 	{
 	  switch (type(seq)) /* all types that have carriers use iterator_carrier */
 	    {
-	    case T_BYTE_VECTOR:
 	    case T_INT_VECTOR:     iterator_carrier(iter) = make_mutable_integer(sc, 0);        break;
 	    case T_FLOAT_VECTOR:   iterator_carrier(iter) = make_mutable_real(sc, 0.0);         break;
 	    case T_COMPLEX_VECTOR: iterator_carrier(iter) = make_mutable_complex(sc, 0.0, 0.0); break;
@@ -72289,6 +72288,22 @@ static bool arg_findable(s7_scheme *sc, s7_pointer arg1, s7_pointer e)
 	 (is_slot(s7_slot(sc, arg1))));
 }
 
+static bool symbol_is_safe(s7_scheme *sc, s7_pointer arg, s7_pointer e)
+{
+  if (is_symbol(arg)) /* maybe normal here but check clo* key (see below) */
+    {
+      if (is_keyword(arg)) 
+	return(true);
+      if (sc->in_with_let)
+	return(pair_symbol_is_safe(sc, arg, e));
+      if (/* (!symbol_is_in_list(sc, arg)) && */
+	  (!arg_findable(sc, arg, e)))
+	return(false);
+    }
+  return(true);
+}
+
+
 static bool safe_c_aa_to_ag_ga(s7_scheme *sc, s7_pointer arg, int32_t hop)
 {
   if (fx_proc(cddr(arg)) == fx_s) {set_opt3_sym(arg, caddr(arg));   set_safe_optimize_op(arg, hop + OP_SAFE_C_AS); return(true);}
@@ -72750,7 +72765,7 @@ static opt_t optimize_func_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer fu
   arg1 = cadr(expr);
   /* need in_with_let -> search only rootlet not lookup */
   if ((symbols == 1) &&
-      ((!arg_findable(sc, arg1, e)) || (sc->in_with_let))) /* (set! (with-let ...) ...) can involve an unbound variable otherwise bound */
+      ((!symbol_is_safe(sc, arg1, e)) || (sc->in_with_let))) /* (set! (with-let ...) ...) can involve an unbound variable otherwise bound */
     {
       /* wrap the bad arg in a check symbol lookup */
       if (s7_is_aritable(sc, func, 1))
@@ -72947,10 +72962,8 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 	  (is_constant_symbol(sc, car(expr))))
 	hop = 1;
     }
-  if (((is_symbol(arg1)) &&
-       (!arg_findable(sc, arg1, e))) ||
-      ((is_symbol(arg2)) &&
-       (!arg_findable(sc, arg2, e))))
+  if ((!symbol_is_safe(sc, arg1, e)) ||
+      (!symbol_is_safe(sc, arg2, e)))
     {
       /* wrap bad args */
       if ((is_fxable(sc, arg1)) &&
@@ -73742,12 +73755,9 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
   arg1 = cadr(expr);
   arg2 = caddr(expr);
   arg3 = cadddr(expr);
-  if (((is_symbol(arg1)) &&
-       (!arg_findable(sc, arg1, e))) ||
-      ((is_symbol(arg2)) &&
-       (!arg_findable(sc, arg2, e))) ||
-      ((is_symbol(arg3)) &&
-       (!arg_findable(sc, arg3, e))))
+  if ((!symbol_is_safe(sc, arg1, e)) ||
+      (!symbol_is_safe(sc, arg2, e)) ||
+      (!symbol_is_safe(sc, arg3, e)))
     {
       /* wrap bad args */
       if ((is_fxable(sc, arg1)) &&
@@ -74042,7 +74052,7 @@ static bool symbols_are_safe(s7_scheme *sc, s7_pointer args, s7_pointer e)
       s7_pointer arg = car(p);
       if ((S7_DEBUGGING) && (symbol_is_in_list(sc, arg)) && (!arg_findable(sc, arg, e))) fprintf(stderr, "find: %s\n", display(arg));
       if ((is_normal_symbol(arg)) &&
-	  (!symbol_is_in_list(sc, arg)) &&
+	  /* (!symbol_is_in_list(sc, arg)) && */
 	  (!arg_findable(sc, arg, e)))
 	return(false);
     }
@@ -74386,14 +74396,20 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 	  if ((export_ok) &&
 	      (is_symbol(car(vars))))
 	    {
-	      add_symbol_to_list(sc, car(vars));
 	      if (is_pair(e))
 		{
-		  if (car(e) != sc->if_keyword)
-		    set_cdr(e, cons(sc, car(vars), cdr(e))); /* export it */
-		  else add_symbol_to_list(sc, symbol_to_keyword(sc, car(vars)));
+		  if (car(e) != sc->if_keyword) 
+		    {
+		      add_symbol_to_list(sc, car(vars));
+		      set_cdr(e, cons(sc, car(vars), cdr(e))); /* export it */
+		    }
+		  /* else add_symbol_to_list(sc, symbol_to_keyword(sc, car(vars))); */
 		}
-	      else e = cons(sc, car(vars), e);
+	      else 
+		{
+		  add_symbol_to_list(sc, car(vars));
+		  e = cons(sc, car(vars), e);
+		}
 	    }
 	  e = collect_parameters(sc, cdr(vars), e);
 	  body_export_ok = export_ok;
@@ -74417,12 +74433,14 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 		  }
 	      sc->temp9 = sc->unused;
 
-	      add_symbol_to_list(sc, vars);
 	      if (is_pair(e))
 		{
-		  if (car(e) != sc->if_keyword)
-		    set_cdr(e, cons(sc, vars, cdr(e)));     /* export it */
-		  else add_symbol_to_list(sc, symbol_to_keyword(sc, vars));
+		  if (car(e) != sc->if_keyword) 
+		    {
+		      add_symbol_to_list(sc, vars);
+		      set_cdr(e, cons(sc, vars, cdr(e)));     /* export it */
+		    }
+		  /* else add_symbol_to_list(sc, symbol_to_keyword(sc, vars)); */
 		}
 	      /* else e = cons(sc, vars, e); */ /* ?? should this be set-cdr etc? */
 	      return(OPT_F);
@@ -97685,6 +97703,8 @@ then returns each var to its original value."
   sc->case_symbol =              syntax(sc, "case",                    OP_CASE,              int_two,  max_arity,  H_case);
   sc->macroexpand_symbol =       syntax(sc, "macroexpand",             OP_MACROEXPAND,       int_one,  int_one,    H_macroexpand);
   sc->let_temporarily_symbol =   syntax(sc, "let-temporarily",         OP_LET_TEMPORARILY,   int_two,  max_arity,  H_let_temporarily);
+  sc->with_baffle_symbol =       syntax(sc, "with-baffle",             OP_WITH_BAFFLE,       int_zero, max_arity,  H_with_baffle); /* (with-baffle) is () */
+  /* this was binder_syntax 24-Auf-24? */
   sc->define_symbol =            definer_syntax(sc, "define",          OP_DEFINE,            int_two,  max_arity,  H_define);
   sc->define_star_symbol =       definer_syntax(sc, "define*",         OP_DEFINE_STAR,       int_two,  max_arity,  H_define_star);
   sc->define_constant_symbol =   definer_syntax(sc, "define-constant", OP_DEFINE_CONSTANT,   int_two,  max_arity,  H_define_constant);
@@ -97706,7 +97726,6 @@ then returns each var to its original value."
   sc->bacro_symbol =             binder_syntax(sc, "bacro",            OP_BACRO,             int_two,  max_arity,  H_bacro);
   sc->bacro_star_symbol =        binder_syntax(sc, "bacro*",           OP_BACRO_STAR,        int_two,  max_arity,  H_bacro_star);
   sc->with_let_symbol =          binder_syntax(sc, "with-let",         OP_WITH_LET,          int_one,  max_arity,  H_with_let);
-  sc->with_baffle_symbol =       binder_syntax(sc, "with-baffle",      OP_WITH_BAFFLE,       int_zero, max_arity,  H_with_baffle); /* (with-baffle) is () */
   set_local_slot(sc->with_let_symbol, global_slot(sc->with_let_symbol)); /* for set_locals */
   set_immutable(sc->with_let_symbol);
   set_immutable_slot(global_slot(sc->with_let_symbol));
@@ -99393,27 +99412,27 @@ int main(int argc, char **argv)
  * ----------------------------------------------------
  * tpeak      148    114    108    105    102    103
  * tref      1081    687    463    459    464    410
- * tlimit    2650   3715   3715   3815   3715    659 [6708 if 100k]
+ * tlimit    3936   5371   5371   5371   5371    837
  * index            1016    973    967    972    975
  * tmock            1145   1082   1042   1045   1035
  * tvect     3408   2464   1772   1669   1497   1454
  * thook     7651   ----   2590   2030   2046   1754
  * texit     1884   1950   1778   1741   1770   1759
  * tauto                   2562   2048   1729   1766
- * s7test           1831   1818   1829   1830   1867
- * lt        2222   2172   2150   2185   1950   1913
- * dup              3788   2492   2239   2097   1948
+ * s7test           1831   1818   1829   1830   1852
+ * lt        2222   2172   2150   2185   1950   1911
+ * dup              3788   2492   2239   2097   1940
  * tread            2421   2419   2408   2405   2245
  * tcopy            5546   2539   2375   2386   2346
  * trclo     8031   2574   2454   2445   2449   2359
- * titer     3657   2842   2641   2509   2449   2458  2386
- * tmat             3042   2524   2578   2590   2528
- * tload                   3046   2404   2566   2548
+ * titer     3657   2842   2641   2509   2449   2386
+ * tmat             3042   2524   2578   2590   2523
+ * tload                   3046   2404   2566   2538
  * fbench    2933   2583   2460   2430   2478   2571
  * tsort     3683   3104   2856   2804   2858   2858
  * tio              3752   3683   3620   3583   3122
  * tobj             3970   3828   3577   3508   3440
- * tmac             3873   3033   3677   3677   3513
+ * tmac             3873   3033   3677   3677   3509
  * teq              4045   3536   3486   3544   3563
  * tcase            4793   4439   4430   4439   4377
  * tmap             8774   4489   4541   4586   4384
@@ -99421,18 +99440,18 @@ int main(int argc, char **argv)
  * tfft             7729   4755   4476   4536   4541
  * tshoot           5447   5183   5055   5034   4850
  * tstar            6705   5834   5278   5177   5047
- * tform            5348   5307   5316   5084   5074
+ * tform            5348   5307   5316   5084   5070
  * tstr      10.0   6342   5488   5162   5180   5231
  * tnum             6013   5433   5396   5409   5430
  * tlist     9219   7546   6558   6240   6300   5771
  * trec      19.6   6980   6599   6656   6658   6010
- * tset                           6260   6364   6263
  * tari      15.0   12.7   6827   6543   6278   6180
  * tgsl             7802   6373   6282   6208   6218
+ * tset                           6260   6364   6263
  * tleft     12.2   9753   7537   7331   7331   6393
  * tmisc                          7614   7115   7127
- * tclo             8025   7645   8809   7770   7604
- * tlamb                          8003   7941   7899
+ * tclo             8025   7645   8809   7770   7601
+ * tlamb                          8003   7941   7893
  * tgc              11.1   8177   7857   7986   8015
  * thash            11.7   9734   9479   9526   9250
  * cb        12.9   11.0   9658   9564   9609   9649
@@ -99442,7 +99461,7 @@ int main(int argc, char **argv)
  * timp             24.4   20.0   19.6   19.7   15.6
  * tmv              21.9   21.1   20.7   20.6   17.3
  * calls            37.5   37.0   37.5   37.1   37.2
- * sg                      55.9   55.8   55.4   55.6
+ * sg                      55.9   55.8   55.4   55.5
  * tbig            175.8  156.5  148.1  146.2  146.4
  * ----------------------------------------------------
  *
@@ -99455,7 +99474,6 @@ int main(int argc, char **argv)
  *   gsl: there are more vector_complex entries in the h file
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
  *   check (and tests7?) gsl without s7_with_complex_vectors
- *   got find +signature+ twice 74043
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
@@ -99474,5 +99492,5 @@ int main(int argc, char **argv)
  *
  * map vector -> vector? ambiguous if two args not same type, (apply vector (map...)) where the optimizer could omit the intermediate list, tapply
  *   lint?
- * tlimit: arg_findable replaced by symbol_is_in_list throughout?  tlimit+vars+ 1-call func etc
+ * +signature+ et al predefined as themselves?
  */

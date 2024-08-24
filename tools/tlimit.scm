@@ -464,7 +464,7 @@
   (report-time "lets nested" (* (/ size 2) (- size 1))))
 
 
-;; -------- N let vars + set + add --------
+;; -------- N let vars+set+add --------
 (call-with-output-file tmp-output-file
   (lambda (p)
     (format p "(let (")
@@ -481,7 +481,7 @@
       (format p "f_~D " i))
     (format p "))")))
 
-(report-time "let vars + set + add" (* size (- size 1)))
+(report-time "let vars+set+add" (* size (- size 1)))
 
 
 ;; -------- N lambdas nested --------
@@ -506,6 +506,55 @@
 	(format p " ~D)" i))))
   
   (report-time "lambdas nested" (* (/ size 2) (- size 1))))
+
+
+;; these are aimed at the optimizer
+;; -------- N vars + 1-arg func --------
+(call-with-output-file tmp-output-file
+  (lambda (p)
+    (format p "(define (f) (let (")
+    (do ((i 0 (+ i 1)))
+	((= i size))
+      (format p "  (f_~D 1)~%" i))
+    (format p "   )~%")
+    (do ((i 0 (+ i 1)))
+	((not (< i size)))
+      (format p "(+ (abs f_~D) (abs f_~D))~%" i (- size i 1)))
+    (format p ")) (f)~%")))
+
+(report-time "vars + 1-arg func" 2)
+
+
+;; -------- N vars + 2-arg func --------
+(call-with-output-file tmp-output-file
+  (lambda (p)
+    (format p "(define (f) (let (")
+    (do ((i 0 (+ i 1)))
+	((= i size))
+      (format p "  (f_~D 1)~%" i))
+    (format p "   )~%")
+    (do ((i 0 (+ i 1)))
+	((not (< i size)))
+      (format p "(ash f_~D f_~D)~%" i (- size i 1)))
+    (format p ")) (f)~%")))
+
+(report-time "vars + 2-arg func" 2)
+
+
+;; -------- N vars + 3-arg func --------
+(call-with-output-file tmp-output-file
+  (lambda (p)
+    (format p "(define (f) (let (")
+    (do ((i 0 (+ i 1)))
+	((= i size))
+      (format p "  (f_~D 1)~%" i))
+    (format p "   )~%")
+    (do ((i 0 (+ i 1)))
+	((not (< i size)))
+      (format p "(+ f_~D f_~D 1)~%" i (- size i 1)))
+    (format p ")) (f)~%")))
+
+(report-time "vars + 3-arg func" 3)
 
 
 (delete-file tmp-output-file)
