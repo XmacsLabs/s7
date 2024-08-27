@@ -1,10 +1,10 @@
 #ifndef S7_H
 #define S7_H
 
-#define S7_VERSION "11.0"
-#define S7_DATE "27-Aug-2024"
+#define S7_VERSION "11.1"
+#define S7_DATE "28-Aug-2024"
 #define S7_MAJOR_VERSION 11
-#define S7_MINOR_VERSION 0
+#define S7_MINOR_VERSION 1
 
 #include <stdint.h>           /* for int64_t */
 
@@ -475,7 +475,10 @@ bool s7_for_each_symbol(s7_scheme *sc, bool (*symbol_func)(const char *symbol_na
 s7_pointer s7_dynamic_wind(s7_scheme *sc, s7_pointer init, s7_pointer body, s7_pointer finish);
 
 bool s7_is_immutable(s7_pointer p);
-s7_pointer s7_immutable(s7_pointer p);
+s7_pointer s7_set_immutable(s7_scheme *sc, s7_pointer p);
+#if (!DISABLE_DEPRECATED)
+  s7_pointer s7_immutable(s7_pointer p);
+#endif
 
 void s7_define(s7_scheme *sc, s7_pointer env, s7_pointer symbol, s7_pointer value);
 bool s7_is_defined(s7_scheme *sc, const char *name);
@@ -929,6 +932,7 @@ bool s7_is_bignum(s7_pointer obj);
  *
  *        s7 changes
  *
+ * 26-Aug:    deprecate s7_immutable and add s7_set_immutable with s7_scheme* argument.
  * 16-Aug:    s7 complex vectors.
  * 2-July:    s7_make_typed_function_with_environment.
  * 31-May:    *s7* 'symbol-printer and 'symbol-quote?.

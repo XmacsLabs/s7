@@ -690,6 +690,14 @@ static s7_pointer wd1_inner_fn(s7_scheme *s, s7_pointer args)
   return s7_nil(s);
 }
 
+static s7_pointer make_and_free(s7_scheme *sc)
+{
+  s7_scheme *s7;
+  s7 = s7_init();
+  s7_eval_c_string(sc, "(+ 1 1)"); /* or load some file? */
+  s7_free(s7);
+  return(s7_f(sc));
+}
 
 
 int main(int argc, char **argv)
@@ -955,9 +963,9 @@ int main(int argc, char **argv)
     {fprintf(stderr, "%d: (number->string %s) is not \"1.0+1.0i\"?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
   free(s2);
 
-  s7_immutable(p);
+  s7_set_immutable(sc, p);
   if (!s7_is_immutable(p))
-    fprintf(stderr, "s7_immutable failed?\n");
+    fprintf(stderr, "s7_set_immutable failed?\n");
   s7_gc_unprotect_at(sc, gc_loc);
 
   p = s7_signature(sc, s7_name_to_value(sc, "abs"));
@@ -2494,6 +2502,8 @@ int main(int argc, char **argv)
 
     s7_eval_c_string(sc, "(set! (hook-functions *error-hook*) ())");
   }
+  
+  make_and_free(sc);
 
 #if WITH_GMP
   s7_define_function(sc, "add-1", big_add_1, 1, 0, false, "(add-1 num) adds 1 to num");
@@ -2867,6 +2877,8 @@ int main(int argc, char **argv)
 	s7_gc_protect_via_stack(sc, p);
 	s7_object_to_string(sc, p, false); /* for check_stack_size */
       }}
+
+  make_and_free(sc);
 
   s7_quit(sc);
   free(perm1);

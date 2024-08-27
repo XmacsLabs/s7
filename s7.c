@@ -942,7 +942,7 @@ typedef struct s7_cell {
       s7_pointer name, global_slot, local_slot;
       int64_t id;                  /* which let last bound the symbol -- for faster symbol lookup */
       uint32_t ctr;                /* how many times has symbol been bound */
-      uint32_t small_tag;          /* symbol as member of a (small) set (tree-set-memq etc) */
+      uint32_t small_symbol_tag;      /* symbol as member of a (small) set (tree-set-memq etc) */
     } sym;
 
     struct {                       /* syntax */
@@ -1272,8 +1272,12 @@ struct s7_scheme {
   int32_t c_object_types_size, num_c_object_types;
   s7_pointer type_to_typers[NUM_TYPES];
 
-  s7_int symbol_tag;
-  uint32_t symbol_small_tag;
+  s7_int big_symbol_tag;
+  uint32_t small_symbol_tag;
+#if S7_DEBUGGING
+  int32_t big_symbol_set_line, small_symbol_set_line, big_symbol_set_state, small_symbol_set_state;
+  const char *big_symbol_set_func, *small_symbol_set_func;
+#endif
   int32_t bignum_precision;
   s7_int baffle_ctr, map_call_ctr;
   s7_pointer default_random_state;
@@ -1468,7 +1472,7 @@ static s7_pointer wrap_string(s7_scheme *sc, const char *str, s7_int len);
   #define DISABLE_FILE_OUTPUT 0
 #endif
 
-static s7_scheme *cur_sc = NULL; /* intended for gdb (see gdbinit), but also used elsewhere unfortunately */
+static s7_scheme *cur_sc = NULL, *original_cur_sc; /* intended for gdb (see gdbinit), but also used elsewhere unfortunately */
 static s7_pointer set_elist_1(s7_scheme *sc, s7_pointer x1);
 
 #if DISABLE_FILE_OUTPUT
@@ -1970,7 +1974,7 @@ static void init_types(void)
   static s7_pointer check_ref_out(s7_pointer p, const char *func, int32_t line);
   static s7_pointer check_ref_sln(s7_pointer p, const char *func, int32_t line);
   static s7_pointer check_nref(s7_pointer p, const char *func, int32_t line);
-  static s7_pointer check_opcode(s7_pointer p, const char *func, int32_t line);
+  static s7_pointer check_opcode(s7_scheme *sc, s7_pointer p, const char *func, int32_t line);
   static s7_pointer check_let_ref(s7_pointer p, uint64_t role, const char *func, int32_t line);
   static s7_pointer check_ref_two(s7_pointer p, uint8_t expected_type, int32_t other_type, const char *func, int32_t line, const char *func1, const char *func2); /* for REPORT_ROOTLET_REDEF below */
   #define unchecked_type(p) ((p)->tf.type_field)
@@ -2020,7 +2024,7 @@ static void init_types(void)
   #define T_Num(P) check_ref_num(P,                      __func__, __LINE__)                /* any number (not bignums) */
   #define T_Nvc(P) check_ref_one(P, T_VECTOR,            __func__, __LINE__, "sweep", NULL)
   #define T_Obj(P) check_ref_one(P, T_C_OBJECT,          __func__, __LINE__, "sweep", "s7_c_object_value")
-  #define T_Op(P)  check_opcode(P,                       __func__, __LINE__)
+  #define T_Op(P)  check_opcode(sc, P,                   __func__, __LINE__)
   #define T_Out(P) check_ref_out(P,                      __func__, __LINE__)                /* let or NULL */
   #define T_Pair(P) check_ref_one(P, T_PAIR,             __func__, __LINE__, NULL, NULL)
   #define T_Pcs(P) check_ref_two(P, T_PAIR, T_CLOSURE_STAR, __func__, __LINE__, NULL, NULL)
@@ -3176,7 +3180,6 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 #endif
 #define is_global(p)                   (symbol_id(p) == 0)
 #define is_defined_global(p)           ((is_slot(global_slot(p))) && (symbol_id(p) == 0))
-/* or ((symbol_id(p) == 0) && (global_slot(p) != cur_sc->undefined)) but it's slower, both are slower than the T_GLOBAL bit from earlier */
 
 #define global_slot(p)                 T_Sld((T_Sym(p))->object.sym.global_slot)
 #define set_global_slot(p, Val)        (T_Sym(p))->object.sym.global_slot = T_Sld(Val)
@@ -3195,11 +3198,11 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 #define keyword_set_symbol(p, Val)     symbol_info(T_Key(p))->nx.ksym = T_Sym(Val)
 #define symbol_help(p)                 symbol_info(p)->nx.documentation
 #define symbol_set_help(p, Doc)        symbol_info(p)->nx.documentation = Doc
-#define symbol_tag(p)                  symbol_info(p)->dx.tag
-#define symbol_set_tag(p, Val)         symbol_info(p)->dx.tag = Val
+#define big_symbol_tag(p)                     symbol_info(p)->dx.tag
+#define set_big_symbol_tag(p, Val)            symbol_info(p)->dx.tag = Val
 
-#define symbol_small_tag(p)            (T_Sym(p))->object.sym.small_tag
-#define symbol_set_small_tag(p, Val)   (T_Sym(p))->object.sym.small_tag = Val
+#define small_symbol_tag(p)                   (T_Sym(p))->object.sym.small_symbol_tag
+#define set_small_symbol_tag(p, Val)          (T_Sym(p))->object.sym.small_symbol_tag = Val
 #define symbol_shadows(p)              symbol_info(p)->ln.iter_or_size
 #define symbol_set_shadows(p, Val)     symbol_info(p)->ln.iter_or_size = Val
 
@@ -3283,7 +3286,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define let_outlet(p)                  T_Out((T_Let(p))->object.envr.nxt)
 #define let_set_outlet(p, ol)          (T_Let(p))->object.envr.nxt = T_Out(ol)
 #if S7_DEBUGGING
-  #define let_set_slots(p, Slot)       check_let_set_slots(p, Slot, __func__, __LINE__)
+  #define let_set_slots(p, Slot)       check_let_set_slots(sc, p, Slot, __func__, __LINE__)
   #define C_Let(p, role)               check_let_ref(p, role, __func__, __LINE__)
   #define S_Let(p, role)               check_let_set(p, role, __func__, __LINE__)
 #else
@@ -5220,13 +5223,13 @@ static s7_pointer check_ref_one(s7_pointer p, uint8_t expected_type, const char 
   return(p);
 }
 
-static void check_let_set_slots(s7_pointer p, s7_pointer slot, const char *func, int32_t line)
+static void check_let_set_slots(s7_scheme *sc, s7_pointer p, s7_pointer slot, const char *func, int32_t line)
 {
   if ((!in_heap(p)) && (slot) && (in_heap(slot))) fprintf(stderr, "%s[%d]: let+slot mismatch\n", func, line);
-  if ((p == cur_sc->rootlet) && (slot != slot_end))
+  if ((p == sc->rootlet) && (slot != slot_end))
     {
       fprintf(stderr, "%s[%d]: setting rootlet slots!\n", func, line);
-      if (cur_sc->stop_at_error) abort();
+      if (sc->stop_at_error) abort();
     }
   T_Let(p)->object.envr.slots = T_Sln(slot);
 }
@@ -5520,13 +5523,13 @@ static s7_pointer check_ref_exs(s7_pointer p, const char *func, int32_t line)
   return(p);
 }
 
-static s7_pointer check_opcode(s7_pointer p, const char *func, int32_t line)
+static s7_pointer check_opcode(s7_scheme *sc, s7_pointer p, const char *func, int32_t line)
 {
   s7_int op = (s7_int)(intptr_t)p;
   if ((op < 0) || (op >= NUM_OPS))
     {
       fprintf(stderr, "%s%s[%d]: opcode_t: %" ld64 " == %p?%s\n", bold_text, func, line, op, p, unbold_text);
-      if (cur_sc->stop_at_error) abort();
+      if (sc->stop_at_error) abort();
     }
   return(p);
 }
@@ -6574,13 +6577,13 @@ static s7_pointer g_is_immutable(s7_scheme *sc, s7_pointer args)
 
 
 /* -------------------------------- immutable! -------------------------------- */
-s7_pointer s7_immutable(s7_pointer p)
+s7_pointer s7_set_immutable(s7_scheme *sc, s7_pointer p)
 {
   if (is_symbol(p)) /* trying to mimic g_immutable */
     {
       s7_pointer slot;
       if (is_keyword(p)) return(p);
-      slot = s7_slot(cur_sc, p);  /* ouch! we need the s7_scheme* argument */
+      slot = s7_slot(sc, p);
       if (is_slot(slot))
 	set_immutable_slot(slot);
       /* symbol is not set immutable (as below) */
@@ -6588,6 +6591,10 @@ s7_pointer s7_immutable(s7_pointer p)
   else set_immutable(p);
   return(p);
 }
+
+#if (!DISABLE_DEPRECATED)
+  s7_pointer s7_immutable(s7_pointer p) {return(s7_set_immutable(cur_sc, p));}
+#endif
 
 static s7_pointer g_immutable(s7_scheme *sc, s7_pointer args)
 {
@@ -7007,15 +7014,15 @@ static void sweep(s7_scheme *sc)
 #endif
 }
 
-static /* inline */ void add_to_gc_list(gc_list_t *gp, s7_pointer p)
+static void add_to_gc_list(s7_scheme *sc, gc_list_t *gp, s7_pointer p)
 {
 #if S7_DEBUGGING
-  if ((!in_heap(p)) && (gp != cur_sc->opt1_funcs))
+  if ((!in_heap(p)) && (gp != sc->opt1_funcs))
     {
-      char *s = describe_type_bits(cur_sc, p);
+      char *s = describe_type_bits(sc, p);
       fprintf(stderr, "%s[%d]: %s not in heap, %s\n", __func__, __LINE__, display(p), s);
       free(s);
-      if (cur_sc->stop_at_error) abort();
+      if (sc->stop_at_error) abort();
     }
 #endif
   if (gp->loc == gp->size)
@@ -7040,30 +7047,30 @@ static void just_mark(s7_pointer p) {set_mark(p);}
 
 static void add_gensym(s7_scheme *sc, s7_pointer p)
 {
-  add_to_gc_list(sc->gensyms, p);
+  add_to_gc_list(sc, sc->gensyms, p);
   mark_function[T_SYMBOL] = just_mark;
 }
 
-#define add_c_object(sc, p)          add_to_gc_list(sc->c_objects, p)
-#define add_hash_table(sc, p)        add_to_gc_list(sc->hash_tables, p)
-#define add_string(sc, p)            add_to_gc_list(sc->strings, p)
-#define add_input_port(sc, p)        add_to_gc_list(sc->input_ports, p)
-#define add_input_string_port(sc, p) add_to_gc_list(sc->input_string_ports, p)
-#define add_output_port(sc, p)       add_to_gc_list(sc->output_ports, p)
-#define add_continuation(sc, p)      add_to_gc_list(sc->continuations, p)
-#define add_undefined(sc, p)         add_to_gc_list(sc->undefineds, p)
-#define add_vector(sc, p)            add_to_gc_list(sc->vectors, p)
-#define add_multivector(sc, p)       add_to_gc_list(sc->multivectors, p)
-#define add_weak_ref(sc, p)          add_to_gc_list(sc->weak_refs, p)
-#define add_weak_hash_iterator(sc, p) add_to_gc_list(sc->weak_hash_iterators, p)
-#define add_opt1_func(sc, p) do {if (!opt1_func_listed(p)) add_to_gc_list(sc->opt1_funcs, p); set_opt1_func_listed(p);} while (0) /* called by set_opt1_lambda_add */
+#define add_c_object(sc, p)          add_to_gc_list(sc, sc->c_objects, p)
+#define add_hash_table(sc, p)        add_to_gc_list(sc, sc->hash_tables, p)
+#define add_string(sc, p)            add_to_gc_list(sc, sc->strings, p)
+#define add_input_port(sc, p)        add_to_gc_list(sc, sc->input_ports, p)
+#define add_input_string_port(sc, p) add_to_gc_list(sc, sc->input_string_ports, p)
+#define add_output_port(sc, p)       add_to_gc_list(sc, sc->output_ports, p)
+#define add_continuation(sc, p)      add_to_gc_list(sc, sc->continuations, p)
+#define add_undefined(sc, p)         add_to_gc_list(sc, sc->undefineds, p)
+#define add_vector(sc, p)            add_to_gc_list(sc, sc->vectors, p)
+#define add_multivector(sc, p)       add_to_gc_list(sc, sc->multivectors, p)
+#define add_weak_ref(sc, p)          add_to_gc_list(sc, sc->weak_refs, p)
+#define add_weak_hash_iterator(sc, p) add_to_gc_list(sc, sc->weak_hash_iterators, p)
+#define add_opt1_func(sc, p) do {if (!opt1_func_listed(p)) add_to_gc_list(sc, sc->opt1_funcs, p); set_opt1_func_listed(p);} while (0) /* called by set_opt1_lambda_add */
 
 #if WITH_GMP
-#define add_big_integer(sc, p)       add_to_gc_list(sc->big_integers, p)
-#define add_big_ratio(sc, p)         add_to_gc_list(sc->big_ratios, p)
-#define add_big_real(sc, p)          add_to_gc_list(sc->big_reals, p)
-#define add_big_complex(sc, p)       add_to_gc_list(sc->big_complexes, p)
-#define add_big_random_state(sc, p)  add_to_gc_list(sc->big_random_states, p)
+#define add_big_integer(sc, p)       add_to_gc_list(sc, sc->big_integers, p)
+#define add_big_ratio(sc, p)         add_to_gc_list(sc, sc->big_ratios, p)
+#define add_big_real(sc, p)          add_to_gc_list(sc, sc->big_reals, p)
+#define add_big_complex(sc, p)       add_to_gc_list(sc, sc->big_complexes, p)
+#define add_big_random_state(sc, p)  add_to_gc_list(sc, sc->big_random_states, p)
 #endif
 
 static void init_gc_caches(s7_scheme *sc)
@@ -8652,8 +8659,8 @@ static /* inline */ s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_in
   symbol_info(x) = (block_t *)(base + 3 * sizeof(s7_cell));
   set_initial_value(x, sc->undefined);
   symbol_set_local_slot_unchecked_and_unincremented(x, 0LL, sc->nil);
-  symbol_set_tag(x, 0);
-  symbol_set_small_tag(x, 0);
+  set_big_symbol_tag(x, 0);
+  set_small_symbol_tag(x, 0);
   symbol_set_shadows(x, 0);
   symbol_clear_ctr(x); /* alloc_symbol uses malloc */
   symbol_clear_type(x);
@@ -8903,8 +8910,8 @@ static s7_pointer g_gensym(s7_scheme *sc, s7_pointer args)
   set_initial_value(x, sc->undefined);
   symbol_set_local_slot_unchecked(x, 0LL, sc->nil);
   symbol_clear_ctr(x);
-  symbol_set_tag(x, 0);
-  symbol_set_small_tag(x, 0);
+  set_big_symbol_tag(x, 0);
+  set_small_symbol_tag(x, 0);
   symbol_set_shadows(x, 0);
   symbol_clear_type(x);
   gensym_block(x) = b;
@@ -9143,40 +9150,111 @@ s7_pointer s7_symbol_set_initial_value(s7_scheme *sc, s7_pointer symbol, s7_poin
 }
 
 
-/* -------- small symbol list -------- */
-#define symbol_is_in_small_list(Sc, Sym) (symbol_small_tag(Sym) == Sc->symbol_small_tag)
+/* -------- small symbol set -------- */
+#if S7_DEBUGGING
+enum {SET_IGNORE, SET_BEGIN, SET_END};
 
-static /* inline */ s7_pointer add_symbol_to_small_list(s7_scheme *sc, s7_pointer sym)
+#define symbol_is_in_small_symbol_set(Sc, Sym) symbol_is_in_small_symbol_set_1(Sc, Sym, __func__, __LINE__)
+static bool symbol_is_in_small_symbol_set_1(s7_scheme *sc, s7_pointer sym, const char *func, int line)
 {
-  symbol_set_small_tag(sym, sc->symbol_small_tag);
+  if (sc->small_symbol_set_state == SET_END) fprintf(stderr, "%s[%d]: small_symbol_set membership test but it's not running\n", func, line);
+  return(small_symbol_tag(sym) == sc->small_symbol_tag);
+}
+
+#define add_symbol_to_small_symbol_set(Sc, Sym) add_symbol_to_small_symbol_set_1(Sc, Sym, __func__, __LINE__)
+static s7_pointer add_symbol_to_small_symbol_set_1(s7_scheme *sc, s7_pointer sym, const char *func, int line)
+{
+  if (sc->small_symbol_set_state == SET_END) fprintf(stderr, "%s[%d]: small_symbol_set add member but it's not running\n", func, line);
+  set_small_symbol_tag(sym, sc->small_symbol_tag);
   return(sym);
 }
 
-static /* inline */ void clear_symbol_small_list(s7_scheme *sc)
+#define clear_small_symbol_set(Sc) clear_small_symbol_set_1(Sc, SET_IGNORE, __func__, __LINE__)
+static void clear_small_symbol_set_1(s7_scheme *sc, int status, const char *func, int line)
 {
-  sc->symbol_small_tag++;
-  if (sc->symbol_small_tag == 0)
+  /* if running end is ok, begin is an error, if not running end is error, begin is ok */
+  if (status == SET_BEGIN) 
     {
-      for (int32_t i = 0; i < SYMBOL_TABLE_SIZE; i++) /* clear old small_tags */
+      if (sc->small_symbol_set_state == SET_BEGIN)
+	fprintf(stderr, "%s[%d]: small_symbol_set is running but begin requested (started at %s[%d])\n", func, line, sc->small_symbol_set_func, sc->small_symbol_set_line);
+      sc->small_symbol_set_func = func;
+      sc->small_symbol_set_line = line;
+    }
+  if ((status == SET_END) && (sc->small_symbol_set_state == SET_END))
+    fprintf(stderr, "%s[%d]: small_symbol_set is not running but end requested (started at %s[%d])\n", func, line, sc->small_symbol_set_func, sc->small_symbol_set_line);
+  sc->small_symbol_set_state = status;
+
+  sc->small_symbol_tag++;
+  if (sc->small_symbol_tag == 0)
+    {
+      for (int32_t i = 0; i < SYMBOL_TABLE_SIZE; i++) /* clear old small_symbol_tags */
 	for (s7_pointer p = vector_element(sc->symbol_table, i); is_not_null(p); p = cdr(p))
-	  symbol_set_small_tag(car(p), 0);
-      sc->symbol_small_tag = 1;
+	  set_small_symbol_tag(car(p), 0);
+      sc->small_symbol_tag = 1;
     }
 }
 
-/* -------- big symbol list -------- */
-#define symbol_is_in_list(Sc, Sym) (symbol_tag(Sym) == Sc->symbol_tag)
+#define begin_small_symbol_set(Sc) clear_small_symbol_set_1(Sc, SET_BEGIN, __func__, __LINE__)
+#define end_small_symbol_set(Sc)   clear_small_symbol_set_1(Sc, SET_END, __func__, __LINE__)
 
-#define OPT_DEBUG 0
-static /* inline */ s7_pointer add_symbol_to_list(s7_scheme *sc, s7_pointer sym)
+#else
+
+#define symbol_is_in_small_symbol_set(Sc, Sym) (small_symbol_tag(Sym) == Sc->small_symbol_tag)
+
+static /* inline */ s7_pointer add_symbol_to_small_symbol_set(s7_scheme *sc, s7_pointer sym)
 {
-  if (symbol_is_in_list(sc, sym)) symbol_shadows(sym)++; else symbol_set_shadows(sym, 0);
-  symbol_set_tag(sym, sc->symbol_tag);
-  /* this won't wrap around (it's 64-bits) but we could divide it in two if necessary someday and use the clear_symbol_small_tag code above */
+  set_small_symbol_tag(sym, sc->small_symbol_tag);
   return(sym);
 }
 
-static inline void clear_symbol_list(s7_scheme *sc) {sc->symbol_tag++;}
+static /* inline */ void clear_small_symbol_set(s7_scheme *sc)
+{
+  sc->small_symbol_tag++;
+  if (sc->small_symbol_tag == 0)
+    {
+      for (int32_t i = 0; i < SYMBOL_TABLE_SIZE; i++) /* clear old small_symbol_tags */
+	for (s7_pointer p = vector_element(sc->symbol_table, i); is_not_null(p); p = cdr(p))
+	  set_small_symbol_tag(car(p), 0);
+      sc->small_symbol_tag = 1;
+    }
+}
+
+#define begin_small_symbol_set(Sc) clear_small_symbol_set(Sc)
+#define end_small_symbol_set(Sc)
+#endif
+
+/* -------- big symbol set -------- */
+#if S7_DEBUGGING
+static bool symbol_is_in_big_symbol_set(s7_scheme *sc, s7_pointer sym)
+{
+  return(big_symbol_tag(sym) == sc->big_symbol_tag);
+}
+
+static s7_pointer add_symbol_to_big_symbol_set(s7_scheme *sc, s7_pointer sym)
+{
+  if (symbol_is_in_big_symbol_set(sc, sym)) symbol_shadows(sym)++; else symbol_set_shadows(sym, 0);
+  set_big_symbol_tag(sym, sc->big_symbol_tag);
+  return(sym);
+}
+
+static inline void clear_big_symbol_set(s7_scheme *sc) 
+{
+  sc->big_symbol_tag++;
+}
+
+#define begin_big_symbol_set(Sc) do 
+#else
+#define symbol_is_in_big_symbol_set(Sc, Sym) (big_symbol_tag(Sym) == Sc->big_symbol_tag)
+#define clear_big_symbol_set(Sc) Sc->big_symbol_tag++
+
+static /* inline */ s7_pointer add_symbol_to_big_symbol_set(s7_scheme *sc, s7_pointer sym)
+{
+  if (symbol_is_in_big_symbol_set(sc, sym)) symbol_shadows(sym)++; else symbol_set_shadows(sym, 0);
+  set_big_symbol_tag(sym, sc->big_symbol_tag);
+  /* this won't wrap around (it's 64-bits) but we could divide it in two if necessary someday and use the clear_small_symbol_tag code above */
+  return(sym);
+}
+#endif
 
 
 /* -------------------------------- lets/slots -------------------------------- */
@@ -11081,13 +11159,13 @@ static bool let_symbol_is_safe(s7_scheme *sc, s7_pointer sym, s7_pointer e)
 
 static bool let_symbol_is_safe_or_listed(s7_scheme *sc, s7_pointer sym, s7_pointer e)
 {
-  return((symbol_is_in_list(sc, sym)) ||
+  return((symbol_is_in_big_symbol_set(sc, sym)) ||
 	 (let_symbol_is_safe(sc, sym, e)));
 }
 
 static bool let_star_symbol_is_safe(s7_scheme *sc, s7_pointer sym, s7_pointer e)
 {
-  return((symbol_is_in_list(sc, sym)) ||
+  return((symbol_is_in_big_symbol_set(sc, sym)) ||
 	 (is_slot(global_slot(sym))) ||
 	 ((is_let(e)) && (!is_with_let_let(e)) && (is_slot(s7_slot(sc, sym)))));
 }
@@ -11103,7 +11181,7 @@ static s7_pointer collect_variables(s7_scheme *sc, s7_pointer lst, s7_pointer e)
   /* collect local variable names from let/do (pre-error-check), 20 overhead in tgen -> 14 if cons_unchecked below */
   sc->w = e;
   for (s7_pointer p = lst; is_pair(p); p = cdr(p))
-    sc->w = cons(sc, add_symbol_to_list(sc, caar(p)), sc->w);
+    sc->w = cons(sc, add_symbol_to_big_symbol_set(sc, caar(p)), sc->w);
   return(sc->w);
 }
 
@@ -11115,7 +11193,7 @@ static s7_pointer collect_parameters(s7_scheme *sc, s7_pointer lst, s7_pointer e
   if (is_normal_symbol(lst))
     {
       symbol_set_id(lst, the_un_id);
-      return(cons(sc, add_symbol_to_list(sc, lst), e));
+      return(cons(sc, add_symbol_to_big_symbol_set(sc, lst), e));
     }
   sc->w = e;
   for (p = lst; is_pair(p); p = cdr(p))
@@ -11126,12 +11204,12 @@ static s7_pointer collect_parameters(s7_scheme *sc, s7_pointer lst, s7_pointer e
       if (is_normal_symbol(car_p))
 	{
 	  symbol_set_id(car_p, the_un_id);
-	  sc->w = cons(sc, add_symbol_to_list(sc, car_p), sc->w);
+	  sc->w = cons(sc, add_symbol_to_big_symbol_set(sc, car_p), sc->w);
 	}}
   if (is_normal_symbol(p)) /* rest arg */
     {
       symbol_set_id(p, the_un_id);
-      sc->w = cons(sc, add_symbol_to_list(sc, p), sc->w);
+      sc->w = cons(sc, add_symbol_to_big_symbol_set(sc, p), sc->w);
     }
   return(sc->w);
 }
@@ -11256,11 +11334,11 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool named)
 	set_is_definer(mac_name);                       /* (list-values 'define ...) aux-13 */
     }
 
-  clear_symbol_list(sc);
+  clear_big_symbol_set(sc);
   if ((!is_either_bacro(mac)) &&
       (optimize(sc, body, 1, collect_parameters(sc, closure_args(mac), sc->nil)) == OPT_OOPS))
     clear_all_optimizations(sc, body);
-  clear_symbol_list(sc);
+  clear_big_symbol_set(sc);
 
   if (sc->debug > 1) /* no profile here */
     closure_set_body(mac, add_trace(sc, body));
@@ -31446,7 +31524,7 @@ in the file, or by the function."
 
   value = cadr(args);
   if (is_string(value))
-    return(s7_autoload(sc, sym, s7_immutable(make_string_with_length(sc, string_value(value), string_length(value)))));
+    return(s7_autoload(sc, sym, s7_set_immutable(sc, make_string_with_length(sc, string_value(value), string_length(value)))));
   if (((is_closure(value)) || (is_closure_star(value))) &&
       (s7_is_aritable(sc, value, 1)))
     return(s7_autoload(sc, sym, value));
@@ -37960,7 +38038,7 @@ static inline bool pair_set_memq(s7_scheme *sc, s7_pointer tree)
       s7_pointer p = car(tree);
       if (is_symbol(p))
 	{
-	  if (symbol_is_in_small_list(sc, p))
+	  if (symbol_is_in_small_symbol_set(sc, p))
 	    return(true);
 	}
       else
@@ -37970,7 +38048,7 @@ static inline bool pair_set_memq(s7_scheme *sc, s7_pointer tree)
       tree = cdr(tree);
       if (!is_pair(tree)) break;
     }
-  return((is_symbol(tree)) && (symbol_is_in_small_list(sc, tree)));
+  return((is_symbol(tree)) && (symbol_is_in_small_symbol_set(sc, tree)));
 }
 
 static bool tree_set_memq_b_7pp(s7_scheme *sc, s7_pointer syms, s7_pointer tree)
@@ -37989,12 +38067,13 @@ static bool tree_set_memq_b_7pp(s7_scheme *sc, s7_pointer syms, s7_pointer tree)
       if (tree_is_cyclic(sc, tree))
 	error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "tree-set-memq: tree is cyclic: ~S", 33), tree));
     }
-  clear_symbol_small_list(sc);
+  begin_small_symbol_set(sc);
   for (s7_pointer p = syms; is_pair(p); p = cdr(p))
     if (is_symbol(car(p)))
-      add_symbol_to_small_list(sc, car(p));
+      add_symbol_to_small_symbol_set(sc, car(p));
     else non_symbols = true;
   result = pair_set_memq(sc, tree);
+  end_small_symbol_set(sc);
   if (result) return(true);
 
   if (non_symbols)
@@ -38026,10 +38105,11 @@ static s7_pointer tree_set_memq_syms_direct(s7_scheme *sc, s7_pointer syms, s7_p
   if (is_quote(car(tree))) return(sc->F);
   if ((sc->safety > NO_SAFETY) && (tree_is_cyclic(sc, tree)))
     error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "tree-set-memq: tree is cyclic: ~S", 33), tree));
-  clear_symbol_small_list(sc);
+  begin_small_symbol_set(sc);
   for (s7_pointer p = syms; is_pair(p); p = cdr(p))
-    add_symbol_to_small_list(sc, car(p));
+    add_symbol_to_small_symbol_set(sc, car(p));
   result = pair_set_memq(sc, tree);
+  end_small_symbol_set(sc);
   return(make_boolean(sc, result));
 }
 
@@ -48914,38 +48994,38 @@ static bool let_equal_1(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_t
 
   if ((ci) && (equal_ref(sc, x, y, ci))) return(true);
 
-  clear_symbol_small_list(sc);
+  clear_small_symbol_set(sc); /* not begin, slots_match below calls equal_1 -> let_equal_1 */
   for (x_len = 0, ex = x; ex; ex = let_outlet(ex))
     for (px = let_slots(ex); tis_slot(px); px = next_slot(px))
-      if (!symbol_is_in_small_list(sc, slot_symbol(px)))
+      if (!symbol_is_in_small_symbol_set(sc, slot_symbol(px)))
 	{
-	  add_symbol_to_small_list(sc, slot_symbol(px));
+	  add_symbol_to_small_symbol_set(sc, slot_symbol(px));
 	  x_len++;
 	}
 
   for (ey = y; ey; ey = let_outlet(ey))
     for (py = let_slots(ey); tis_slot(py); py = next_slot(py))
-      if (!symbol_is_in_small_list(sc, slot_symbol(py)))           /* symbol in y, not in x */
+      if (!symbol_is_in_small_symbol_set(sc, slot_symbol(py)))           /* symbol in y, not in x */
 	return(false);
 
   for (y_len = 0, ey = y; ey; ey = let_outlet(ey))
     for (py = let_slots(ey); tis_slot(py); py = next_slot(py))
-      if (symbol_small_tag(slot_symbol(py)) != 0)
+      if (small_symbol_tag(slot_symbol(py)) != 0)
 	{
 	  y_len++;
-	  symbol_set_small_tag(slot_symbol(py), 0);
+	  set_small_symbol_tag(slot_symbol(py), 0);
 	}
 
-  if (x_len != y_len)                                               /* symbol in x, not in y */
+  if (x_len != y_len)                                             /* symbol in x, not in y */
     return(false);
 
   if (!nci) nci = clear_shared_info(sc->circle_info);
 
   for (ex = x; ex; ex = let_outlet(ex))
     for (px = let_slots(ex); tis_slot(px); px = next_slot(px))
-      if (symbol_small_tag(slot_symbol(px)) == 0)                    /* unshadowed */
+      if (small_symbol_tag(slot_symbol(px)) == 0)                    /* unshadowed */
 	{
-	  symbol_set_small_tag(slot_symbol(px), sc->symbol_small_tag); /* values don't match */
+	  set_small_symbol_tag(slot_symbol(px), sc->small_symbol_tag);  /* values don't match */
 	  if (((!equivalent) && (!slots_match(sc, px, y, nci))) ||
 	      ((equivalent) && (!slots_equivalent_match(sc, px, y, nci))))
 	    return(false);
@@ -52382,11 +52462,11 @@ static char *stacktrace_walker(s7_scheme *sc, s7_pointer code, s7_pointer e, cha
 {
   if (is_symbol(code))
     {
-      if ((!symbol_is_in_small_list(sc, code)) &&
+      if ((!symbol_is_in_small_symbol_set(sc, code)) &&
 	  (!is_slot(global_slot(code))))
 	{
 	  s7_pointer val;
-	  add_symbol_to_small_list(sc, code);
+	  add_symbol_to_small_symbol_set(sc, code);
 	  val = s7_symbol_local_value(sc, code, e);
 	  if ((val) &&
 	      (val != sc->undefined) &&
@@ -52534,7 +52614,7 @@ static s7_pointer stacktrace_1(s7_scheme *sc, s7_int frames_max, s7_int code_col
   block_t *strp = NULL;
   int64_t loc, frames = 0;
   int64_t top = (sc->stack_end - sc->stack_start) / 4; /* (*s7* 'stack_top), not stack_top(sc)! */
-  clear_symbol_small_list(sc);
+  begin_small_symbol_set(sc);
 
   if (stacktrace_in_error_handler(sc, top))
     {
@@ -52584,7 +52664,7 @@ static s7_pointer stacktrace_1(s7_scheme *sc, s7_int frames_max, s7_int code_col
 		      frames++;
 		      if (frames > frames_max)
 			{
-			  clear_symbol_small_list(sc);
+			  end_small_symbol_set(sc);
 			  return(block_to_string(sc, strp, safe_strlen((char *)block_data(strp))));
 			}
 		      if ((is_let(e)) && (e != sc->rootlet))
@@ -52604,7 +52684,7 @@ static s7_pointer stacktrace_1(s7_scheme *sc, s7_int frames_max, s7_int code_col
 		      strp = catp;
 		      str = (char *)block_data(strp);
 		    }}}}}
-  clear_symbol_small_list(sc);
+  end_small_symbol_set(sc);
   return((strp) ? block_to_string(sc, strp, safe_strlen((char *)block_data(strp))) : nil_string);
 }
 
@@ -53152,20 +53232,21 @@ static s7_pointer init_owlet(s7_scheme *sc)
 #if WITH_HISTORY
 static s7_pointer cull_history(s7_scheme *sc, s7_pointer code)
 {
-  clear_symbol_small_list(sc); /* make a list of words banned from the history */
-  add_symbol_to_small_list(sc, sc->starlet_symbol);
-  add_symbol_to_small_list(sc, sc->eval_symbol);
-  add_symbol_to_small_list(sc, make_symbol(sc, "debug", 5));
-  add_symbol_to_small_list(sc, make_symbol(sc, "trace-in", 8));
-  add_symbol_to_small_list(sc, make_symbol(sc, "trace-out", 9));
-  add_symbol_to_small_list(sc, sc->dynamic_unwind_symbol);
-  add_symbol_to_small_list(sc, make_symbol(sc, "history-enabled", 15));
+  begin_small_symbol_set(sc); /* make a list of words banned from the history */
+  add_symbol_to_small_symbol_set(sc, sc->starlet_symbol);
+  add_symbol_to_small_symbol_set(sc, sc->eval_symbol);
+  add_symbol_to_small_symbol_set(sc, make_symbol(sc, "debug", 5));
+  add_symbol_to_small_symbol_set(sc, make_symbol(sc, "trace-in", 8));
+  add_symbol_to_small_symbol_set(sc, make_symbol(sc, "trace-out", 9));
+  add_symbol_to_small_symbol_set(sc, sc->dynamic_unwind_symbol);
+  add_symbol_to_small_symbol_set(sc, make_symbol(sc, "history-enabled", 15));
   for (s7_pointer p = code; is_pair(p); p = cdr(p))
     {
       if ((is_pair(car(p))) && (!is_quote(car(p))) && (pair_set_memq(sc, car(p))))
 	set_car(p, sc->nil);
       if (cdr(p) == code) break;
     }
+  end_small_symbol_set(sc);
   return(code);
 }
 #endif
@@ -53658,6 +53739,10 @@ static noreturn void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
   sc->format_depth = -1;
   sc->object_out_locked = false;  /* possible error in obj->str method after object_out has set this flag */
   sc->has_openlets = true;        /*   same problem -- we need a cleaner way to handle this, op_?_unwind */
+#if S7_DEBUGGING
+  sc->small_symbol_set_state = SET_IGNORE;
+  sc->big_symbol_set_state = SET_IGNORE;
+#endif
   sc->value = info;               /* feeble GC protection (otherwise info is sometimes freed in this function), throw also protects type */
 
   if (sc->current_safe_list > 0)
@@ -54528,7 +54613,7 @@ static s7_pointer set_c_function_star_args(s7_scheme *sc)
 	s7_pointer kpar, karg;
 	int32_t ki;
 	/* oops -- there are keywords, change scanners (much duplicated code...)
-	 *   setting checked on the call_args here rather than parsing the parameters to use add_symbol_to_small_list
+	 *   setting checked on the call_args here rather than parsing the parameters to use add_symbol_to_small_symbol_set
 	 */
 	for (kpar = call_args; kpar != par; kpar = cdr(kpar))
 	  set_checked(kpar);
@@ -68236,16 +68321,19 @@ static bool stop_is_safe(s7_scheme *sc, s7_pointer stop, s7_pointer body)
 
 static bool tree_has_setters(s7_scheme *sc, s7_pointer tree)
 {
+  bool result;
   if (is_quote(car(tree))) return(false);
-  clear_symbol_small_list(sc);
-  add_symbol_to_small_list(sc, sc->set_symbol);
-  add_symbol_to_small_list(sc, sc->vector_set_symbol);
-  add_symbol_to_small_list(sc, sc->list_set_symbol);
-  add_symbol_to_small_list(sc, sc->let_set_symbol);
-  add_symbol_to_small_list(sc, sc->hash_table_set_symbol);
-  add_symbol_to_small_list(sc, sc->set_car_symbol);
-  add_symbol_to_small_list(sc, sc->set_cdr_symbol);
-  return(pair_set_memq(sc, tree));
+  begin_small_symbol_set(sc);
+  add_symbol_to_small_symbol_set(sc, sc->set_symbol);
+  add_symbol_to_small_symbol_set(sc, sc->vector_set_symbol);
+  add_symbol_to_small_symbol_set(sc, sc->list_set_symbol);
+  add_symbol_to_small_symbol_set(sc, sc->let_set_symbol);
+  add_symbol_to_small_symbol_set(sc, sc->hash_table_set_symbol);
+  add_symbol_to_small_symbol_set(sc, sc->set_car_symbol);
+  add_symbol_to_small_symbol_set(sc, sc->set_cdr_symbol);
+  result = pair_set_memq(sc, tree);
+  end_small_symbol_set(sc);
+  return(result);
 }
 
 static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_pointer var_list, s7_pointer step_vars, bool *has_set);
@@ -68322,7 +68410,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
   /* the vars have to be added to the let before evaluating the inits
    *    else symbol_id can be > let_id (see "(test (do ((i (do ((i (do ((i 0 (+ i 1)))...")
    */
-  clear_symbol_small_list(sc);
+  begin_small_symbol_set(sc);
   for (p = cadr(car_x); is_pair(p); p = cdr(p))
     {
       s7_pointer var = car(p);
@@ -68332,14 +68420,15 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	{
 	  s7_pointer sym = car(var);
 	  if (is_constant_symbol(sc, sym))
-	    return_false(sc, car_x);
-	  if (symbol_is_in_small_list(sc, sym))
+	    {end_small_symbol_set(sc); return_false(sc, car_x);}
+	  if (symbol_is_in_small_symbol_set(sc, sym))
 	    syntax_error_nr(sc, "duplicate identifier in do: ~A", 30, var);
-	  add_symbol_to_small_list(sc, sym);
+	  add_symbol_to_small_symbol_set(sc, sym);
 	  add_slot(sc, let, sym, sc->undefined);
 	}
-      else return_false(sc, car_x);
+      else {end_small_symbol_set(sc); return_false(sc, car_x);}
     }
+  end_small_symbol_set(sc);
   if (tis_slot(let_slots(let)))
     let_set_slots(let, reverse_slots(let_slots(let)));
 
@@ -72306,6 +72395,7 @@ static bool arg_findable(s7_scheme *sc, s7_pointer arg1, s7_pointer e)
 	 (is_slot(s7_slot(sc, arg1))));
 }
 
+#define OPT_DEBUG 0
 static bool symbol_is_safe(s7_scheme *sc, s7_pointer arg, s7_pointer e)
 {
   if (is_symbol(arg)) /* maybe normal here but check clo* key (see below) */
@@ -72317,11 +72407,11 @@ static bool symbol_is_safe(s7_scheme *sc, s7_pointer arg, s7_pointer e)
       if (is_slot(global_slot(arg))) 
 	return(true);
 #if OPT_DEBUG
-      if (symbol_is_in_list(sc, arg) != arg_findable(sc, arg, e))
-	fprintf(stderr, "%s%s[%d] %s: %d %d\n", (symbol_is_in_list(sc, arg) == 0) ? "  " : "", 
-		__func__, __LINE__, display(arg), symbol_is_in_list(sc, arg), arg_findable(sc, arg, e));
+      if (symbol_is_in_big_symbol_set(sc, arg) != arg_findable(sc, arg, e))
+	fprintf(stderr, "%s%s[%d] %s: %d %d\n", (symbol_is_in_big_symbol_set(sc, arg) == 0) ? "  " : "", 
+		__func__, __LINE__, display(arg), symbol_is_in_big_symbol_set(sc, arg), arg_findable(sc, arg, e));
 #endif
-      if ((!symbol_is_in_list(sc, arg)) &&
+      if ((!symbol_is_in_big_symbol_set(sc, arg)) &&
 	  (!arg_findable(sc, arg, e)))
 	return(false);
     }
@@ -72409,12 +72499,12 @@ static inline s7_pointer find_uncomplicated_symbol(s7_scheme *sc, s7_pointer sym
   s7_pointer x;
   int64_t id;
 
-  if ((symbol_is_in_list(sc, symbol)) &&
+  if ((symbol_is_in_big_symbol_set(sc, symbol)) &&
       (direct_memq(symbol, e)))   /* it's probably a local variable reference */
     return(sc->nil);
-  /* ((!symbol_is_in_list(sc, symbol)) && (direct_memq(symbol, e))) can happen if there's an intervening lambda:
+  /* ((!symbol_is_in_big_symbol_set(sc, symbol)) && (direct_memq(symbol, e))) can happen if there's an intervening lambda:
    *   (let loop () (with-let (for-each (lambda (a) a) (list))) (loop))
-   * misses 'loop (it's not in symbol_list when recursive call is encountered) -- tricky to fix
+   * misses 'loop (it's not in big_symbol_set when recursive call is encountered) -- tricky to fix
    */
 
   if (is_defined_global(symbol))
@@ -72425,7 +72515,7 @@ static inline s7_pointer find_uncomplicated_symbol(s7_scheme *sc, s7_pointer sym
    *   s7test.scm has a test case using acos.
    */
   if ((has_keyword(symbol)) &&
-      (symbol_is_in_list(sc, symbol_to_keyword(sc, symbol))))
+      (symbol_is_in_big_symbol_set(sc, symbol_to_keyword(sc, symbol))))
     return(sc->nil);
 
   for (x = sc->curlet, id = symbol_id(symbol); let_id(x) > id; x = let_outlet(x));
@@ -73424,7 +73514,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 	    {
 	      fx_annotate_arg(sc, cddr(expr), e);
 	      set_unsafe_optimize_op(expr, hop + OP_CL_FA);
-	      check_lambda(sc, arg1, true);        /* this changes symbol_small_list */
+	      check_lambda(sc, arg1, true);        /* this changes small_symbol_set */
 	      /* two seq args can't happen here (func_2_args = map + lambda + seq, arg1 is the lambda form, arg2 is fxable (see above) */
 	      choose_c_function(sc, expr, func, 2);
 	      if (((fn_proc(expr) == g_for_each) || (fn_proc(expr) == g_map)) &&
@@ -73931,7 +74021,7 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
 	      (is_symbol(cadadr(arg1))) && (!is_possibly_constant(cadadr(arg1))))
 	    {
 	      fx_annotate_args(sc, cddr(expr), e);
-	      check_lambda(sc, arg1, true);        /* this changes symbol_small_list */
+	      check_lambda(sc, arg1, true);        /* this changes small_symbol_set */
 	      set_fn(expr, (fn_proc(expr) == g_for_each) ? g_for_each_closure_2 : NULL);
 	      set_opt3_pair(expr, cdr(arg1));
 	      set_unsafe_optimize_op(expr, OP_MAP_FOR_EACH_FAA);
@@ -74057,13 +74147,15 @@ static bool symbols_are_safe(s7_scheme *sc, s7_pointer args, s7_pointer e)
   for (s7_pointer p = args; is_pair(p); p = cdr(p))
     {
       s7_pointer arg = car(p);
-      if ((OPT_DEBUG) && (symbol_is_in_list(sc, arg)) && (!arg_findable(sc, arg, e))) 
+      if ((OPT_DEBUG) && (symbol_is_in_big_symbol_set(sc, arg) != arg_findable(sc, arg, e)))
 	{
-	  fprintf(stderr, "%sfind: %s%s\n", bold_text, display(arg), unbold_text);
-	  abort();
+	  fprintf(stderr, "%s%s[%d] %s: %d %d\n", (symbol_is_in_big_symbol_set(sc, arg) == 0) ? "  " : "", 
+		  __func__, __LINE__, display(arg), symbol_is_in_big_symbol_set(sc, arg), arg_findable(sc, arg, e));
+	  if (!arg_findable(sc, arg, e))
+	    abort();
 	}
       if ((is_normal_symbol(arg)) &&
-	  (!symbol_is_in_list(sc, arg)) &&
+	  (!symbol_is_in_big_symbol_set(sc, arg)) &&
 	  (!arg_findable(sc, arg, e)))
 	return(false);
     }
@@ -74255,7 +74347,7 @@ static bool vars_opt_ok(s7_scheme *sc, s7_pointer vars, int32_t hop, s7_pointer 
   return(true);
 }
 
-static void clean_up_symbol_list(s7_scheme *sc, s7_pointer orig_e, s7_pointer cur_e)
+static void clean_up_big_symbol_set(s7_scheme *sc, s7_pointer orig_e, s7_pointer cur_e)
 {
   for (s7_pointer p = cur_e; ((is_pair(p)) && (p != orig_e)); p = cdr(p))
     {
@@ -74264,21 +74356,21 @@ static void clean_up_symbol_list(s7_scheme *sc, s7_pointer orig_e, s7_pointer cu
 	{
 	  if (symbol_shadows(sym) > 0)
 	    symbol_shadows(sym)--;
-	  else symbol_set_tag(sym, 0);
+	  else set_big_symbol_tag(sym, 0);
 	}}
   if (OPT_DEBUG)
     {
       for (s7_pointer var = orig_e; is_pair(var); var = cdr(var))
 	if ((is_normal_symbol(car(var))) &&
-	    (!symbol_is_in_list(sc, car(var))))
-	  fprintf(stderr, "%ssymbol_list missing %s%s\n", bold_text, display(car(var)), unbold_text);
+	    (!symbol_is_in_big_symbol_set(sc, car(var))))
+	  fprintf(stderr, "%s[%d]: %sbig_symbol_set missing %s%s\n", __func__, __LINE__, bold_text, display(car(var)), unbold_text);
       for (int32_t i = 0; i < SYMBOL_TABLE_SIZE; i++)
 	for (s7_pointer x = vector_element(sc->symbol_table, i); is_not_null(x); x = cdr(x))
-	  if ((symbol_is_in_list(sc, car(x))) &&
+	  if ((symbol_is_in_big_symbol_set(sc, car(x))) &&
 	      (!is_slot(global_slot(car(x)))) &&
 	      (!direct_memq(car(x), orig_e)))
 	    {
-	      fprintf(stderr, "%se missing: %s %" ld64 "%s\n", bold_text, display(car(x)), symbol_tag(car(x)), unbold_text);
+	      fprintf(stderr, "%s[%d]: %se missing: %s %" ld64 "%s\n", __func__, __LINE__, bold_text, display(car(x)), big_symbol_tag(car(x)), unbold_text);
 	      abort();
 	    }
     }
@@ -74298,7 +74390,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
     case OP_MACROEXPAND:
       if (is_proper_list_1(sc, body))
 	{
-	  clean_up_symbol_list(sc, init_e, e);      
+	  clean_up_big_symbol_set(sc, init_e, e);      
 	  return(OPT_F);
 	}
       return(OPT_OOPS);
@@ -74309,7 +74401,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 	{
 	  if (!is_pair(cddr(expr))) /* (let name . x) */
 	    {
-	      clean_up_symbol_list(sc, init_e, e);
+	      clean_up_big_symbol_set(sc, init_e, e);
 	      return(OPT_F);
 	    }
 	  vars = caddr(expr);
@@ -74352,12 +74444,12 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 		  (!is_checked(cadr(var))) &&
 		  (optimize_expression(sc, cadr(var), hop, e, false) == OPT_OOPS))
 		return(OPT_OOPS);
-	      e = cons(sc, add_symbol_to_list(sc, car(var)), e);
+	      e = cons(sc, add_symbol_to_big_symbol_set(sc, car(var)), e);
 	      sc->w = e;
 	    }
       if (is_symbol(cadr(expr)))
 	{
-	  e = cons(sc, add_symbol_to_list(sc, cadr(expr)), e);
+	  e = cons(sc, add_symbol_to_big_symbol_set(sc, cadr(expr)), e);
 	  sc->w = e;
 	}
       break;
@@ -74423,7 +74515,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 
     case OP_DEFINE_BACRO: case OP_DEFINE_BACRO_STAR:
     case OP_BACRO:  case OP_BACRO_STAR:
-      clean_up_symbol_list(sc, init_e, e);
+      clean_up_big_symbol_set(sc, init_e, e);
       return(OPT_F);
 
     case OP_DEFINE_MACRO:    case OP_DEFINE_MACRO_STAR:
@@ -74447,12 +74539,12 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 	    {
 	      if ((is_pair(e)) && (car(e) != sc->if_keyword))
 		{
-		  add_symbol_to_list(sc, car(vars));
+		  add_symbol_to_big_symbol_set(sc, car(vars));
 		  set_cdr(e, cons(sc, car(vars), cdr(e))); /* export it */
 		}
 	      else 
 		{
-		  add_symbol_to_list(sc, car(vars));
+		  add_symbol_to_big_symbol_set(sc, car(vars));
 		  e = cons(sc, car(vars), e);
 		}}
 	  e = collect_parameters(sc, cdr(vars), e);
@@ -74479,10 +74571,10 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 
 	      if ((is_pair(e)) && (car(e) != sc->if_keyword))
 		{
-		  add_symbol_to_list(sc, vars);
+		  add_symbol_to_big_symbol_set(sc, vars);
 		  set_cdr(e, cons(sc, vars, cdr(e)));     /* export it */
 		}
-	      clean_up_symbol_list(sc, init_e, e);
+	      clean_up_big_symbol_set(sc, init_e, e);
 	      return(OPT_F);
 	    }
 	  body_export_ok = false;
@@ -74529,10 +74621,10 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 
       if ((is_pair(cadr(expr))) && (caadr(expr) == sc->starlet_symbol))
 	{
-	  clean_up_symbol_list(sc, init_e, e);
+	  clean_up_big_symbol_set(sc, init_e, e);
 	  return(OPT_T);
 	}
-      clean_up_symbol_list(sc, init_e, e);
+      clean_up_big_symbol_set(sc, init_e, e);
       return(OPT_F);
 
     case OP_WITH_LET:
@@ -74542,7 +74634,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
        */
       {
 	bool old_with_let = sc->in_with_let;
-	clear_symbol_list(sc);
+	clear_big_symbol_set(sc);
 	sc->in_with_let = (old_with_let) || (!is_pair(body)) || (!is_pair(car(body))) ||
 	                  ((caar(body) != sc->unlet_symbol) && /* (caar(body) != sc->rootlet_symbol) && */ (caar(body) != sc->curlet_symbol));
 	/* not rootlet here: (let ((i 0)) (_rd3_ (with-let (rootlet) ((null? i) i)))) */
@@ -74555,7 +74647,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 	      return(OPT_OOPS);
 	    }
 	sc->in_with_let = old_with_let;
-	clean_up_symbol_list(sc, init_e, e);
+	clean_up_big_symbol_set(sc, init_e, e);
 	return(OPT_F);
       }
 
@@ -74572,7 +74664,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 		(!is_checked(car(rst))) &&
 		(optimize_expression(sc, car(rst), hop, e, false) == OPT_OOPS))
 	      return(OPT_OOPS);
-      clean_up_symbol_list(sc, init_e, e);
+      clean_up_big_symbol_set(sc, init_e, e);
       return(OPT_F);
 
     case OP_COND: /* split opt is necessary: (cond (lambda (x) ...)) */
@@ -74605,7 +74697,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 		break;
 	    if (!is_null(q)) break;
 	  }
-	if (!is_null(p)) {clean_up_symbol_list(sc, init_e, e); return(OPT_F);}
+	if (!is_null(p)) {clean_up_big_symbol_set(sc, init_e, e); return(OPT_F);}
 	set_safe_optimize_op(expr, OP_COND_NA_NA);
       }
       for (s7_pointer p = cdr(expr); is_pair(p); p = cdr(p))
@@ -74614,7 +74706,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 	  for (s7_pointer q = cdar(p); is_pair(q); q = cdr(q))
 	    set_fx_direct(q, fx_choose(sc, q, e, pair_symbol_is_safe));
 	}
-      clean_up_symbol_list(sc, init_e, e);
+      clean_up_big_symbol_set(sc, init_e, e);
       return(OPT_T);
 
     case OP_IF: case OP_WHEN: case OP_UNLESS:
@@ -74648,7 +74740,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 	  for (p = cdr(expr); is_pair(p); p = cdr(p))
 	    if (!is_fxable(sc, car(p)))
 	      {
-		clean_up_symbol_list(sc, init_e, e);
+		clean_up_big_symbol_set(sc, init_e, e);
 		return(OPT_F);
 	      }
 	  if (!is_null(p)) return(OPT_OOPS);
@@ -74669,7 +74761,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 		  set_safe_optimize_op(expr, OP_IF_A_C_C);
 		  set_opt1_con(expr, cadar(b1));
 		  set_opt2_con(expr, cadar(b2));
-		  clean_up_symbol_list(sc, init_e, e);
+		  clean_up_big_symbol_set(sc, init_e, e);
 		  return(OPT_T);
 		}
 	      set_opt1_pair(expr, b1);
@@ -74695,7 +74787,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 		      set_safe_optimize_op(expr, OP_IF_A_C_C);
 		      set_opt1_con(expr, car(b1));
 		      set_opt2_con(expr, car(b2));
-		      clean_up_symbol_list(sc, init_e, e);
+		      clean_up_big_symbol_set(sc, init_e, e);
 		      return(OPT_T);
 		    }
 		  if ((fx_proc(test) == fx_and_2a) && (fx_proc(b1) == fx_s))
@@ -74704,14 +74796,14 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 		      set_opt2_pair(expr, cddadr(expr));
 		      set_opt3_sym(expr, car(b1));
 		      set_safe_optimize_op(expr, OP_IF_AND2_S_A);
-		      clean_up_symbol_list(sc, init_e, e);
+		      clean_up_big_symbol_set(sc, init_e, e);
 		      return(OPT_T);
 		    }
 		  set_opt1_pair(expr, b1);
 		  if (is_pair(b2)) set_opt2_pair(expr, b2);
 		  set_safe_optimize_op(expr, (is_null(b2)) ? OP_IF_A_A : ((fx_proc(test) == fx_s) ? OP_IF_S_A_A : OP_IF_A_A_A));
 		}}
-	  clean_up_symbol_list(sc, init_e, e);
+	  clean_up_big_symbol_set(sc, init_e, e);
 	  return(OPT_T);
 	}
       else
@@ -74725,7 +74817,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 	      for (p = cdr(expr); is_pair(p); p = cdr(p))
 		if (!is_fxable(sc, car(p)))
 		  {
-		    clean_up_symbol_list(sc, init_e, e);
+		    clean_up_big_symbol_set(sc, init_e, e);
 		    return(OPT_F);
 		  }
 	      if (!is_null(p)) return(OPT_OOPS);
@@ -74759,7 +74851,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 		      set_opt3_sym(cdr(expr), cadadr(expr));
 		      set_safe_optimize_op(expr, OP_AND_S_2);
 		    }
-		  clean_up_symbol_list(sc, init_e, e);
+		  clean_up_big_symbol_set(sc, init_e, e);
 		  return(OPT_T);
 		}
 
@@ -74775,34 +74867,34 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 			set_safe_optimize_op(expr, OP_OR_3A);
 		      else set_safe_optimize_op(expr, OP_OR_N);
 		    }
-		  clean_up_symbol_list(sc, init_e, e);
+		  clean_up_big_symbol_set(sc, init_e, e);
 		  return(OPT_T);
 		}
 	      if (args == 2)
 		set_safe_optimize_op(expr, OP_AND_2A);
 	      else set_safe_optimize_op(expr, (args == 3) ? OP_AND_3A : OP_AND_N);
-	      clean_up_symbol_list(sc, init_e, e);
+	      clean_up_big_symbol_set(sc, init_e, e);
 	      return(OPT_T);
 	    }
 	  else
 	    if (op == OP_BEGIN)
 	      {
 		s7_pointer p;
-		if (!is_pair(cdr(expr))) {clean_up_symbol_list(sc, init_e, e); return(OPT_F);}
+		if (!is_pair(cdr(expr))) {clean_up_big_symbol_set(sc, init_e, e); return(OPT_F);}
 		for (p = cdr(expr); is_pair(p); p = cdr(p))
 		  if (!is_fxable(sc, car(p)))
 		    {
-		      clean_up_symbol_list(sc, init_e, e);
+		      clean_up_big_symbol_set(sc, init_e, e);
 		      return(OPT_F);
 		    }
 		if (!is_null(p)) return(OPT_OOPS);
 		for (p = cdr(expr); is_pair(p); p = cdr(p))
 		  set_fx_direct(p, fx_choose(sc, p, e, pair_symbol_is_safe));
 		set_safe_optimize_op(expr, ((is_pair(cddr(expr))) && (is_null(cdddr(expr)))) ? OP_BEGIN_AA : OP_BEGIN_NA);
-		clean_up_symbol_list(sc, init_e, e);
+		clean_up_big_symbol_set(sc, init_e, e);
 		return(OPT_T);
 	      }}}   /* fully fxable lets don't happen much: even let-2a-a is scarcely used */
-  clean_up_symbol_list(sc, init_e, e);
+  clean_up_big_symbol_set(sc, init_e, e);
   return(OPT_F);
 }
 
@@ -74926,7 +75018,7 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
       else
 	if ((sc->undefined_identifier_warnings) &&
 	    (slot == sc->undefined) &&           /* car_expr is not in e or global */
-	    (symbol_tag(car_expr) == 0))         /*    and we haven't looked it up earlier */
+	    (big_symbol_tag(car_expr) == 0))         /*    and we haven't looked it up earlier */
 	  {
 	    s7_pointer p = current_input_port(sc);
 	    if ((is_input_port(p)) &&
@@ -74935,7 +75027,7 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 		(port_filename(p)))
 	      s7_warn(sc, 1024, "%s might be undefined (%s %u)\n", display(car_expr), port_filename(p), port_line_number(p));
 	    else s7_warn(sc, 1024, "; %s might be undefined\n", display(car_expr));
-	    symbol_set_tag(car_expr, 1);        /* one warning is enough */
+	    set_big_symbol_tag(car_expr, 1);        /* one warning is enough */
 	  }
 
       /* car_expr is a symbol but it's not a built-in procedure or a safe case = vector etc */
@@ -75109,7 +75201,7 @@ static void check_lambda_args(s7_scheme *sc, s7_pointer args, int32_t *arity, s7
       return;
     }
 
-  clear_symbol_small_list(sc);
+  begin_small_symbol_set(sc);
   for (i = 0, x = args; is_pair(x); i++, x = cdr(x))
     {
       s7_pointer car_x = car(x);
@@ -75129,22 +75221,23 @@ static void check_lambda_args(s7_scheme *sc, s7_pointer args, int32_t *arity, s7
 		   set_elist_4(sc, wrap_string(sc, "lambda parameter ~S is a constant: (~S ~S ...)", 46),
 			       car_x, car(form), cadr(form)));
 	}
-      if (symbol_is_in_small_list(sc, car_x))
+      if (symbol_is_in_small_symbol_set(sc, car_x))
 	error_nr(sc, sc->syntax_error_symbol,
 		 set_elist_4(sc, wrap_string(sc, "lambda parameter ~S is used twice in the parameter list, (~S ~S ...)", 68),
 			     car_x, car(form), cadr(form)));
-      add_symbol_to_small_list(sc, car_x);
+      add_symbol_to_small_symbol_set(sc, car_x);
       set_local(car_x);
     }
   if (is_not_null(x))
     {
-      if ((is_symbol(x)) && (symbol_is_in_small_list(sc, x)))
+      if ((is_symbol(x)) && (symbol_is_in_small_symbol_set(sc, x)))
 	error_nr(sc, sc->syntax_error_symbol, set_elist_2(sc, wrap_string(sc, "lambda :rest parameter ~S is used earlier in the parameter list", 63), x));
       if (is_constant(sc, x))                         /* (lambda (a . 0.0) a) or (lambda (a . :b) a) */
 	error_nr(sc, sc->syntax_error_symbol,
 		 set_elist_4(sc, wrap_string(sc, "lambda :rest parameter ~S is a constant in (~S ~S ...)", 54), x, car(form), cadr(form)));
       i = -i - 1;
     }
+  end_small_symbol_set(sc);
   if (arity) (*arity) = i;
 }
 
@@ -75164,7 +75257,7 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
 
   has_defaults = false;
   top = args;
-  clear_symbol_small_list(sc);
+  begin_small_symbol_set(sc);
   for (v = args, w = args; is_pair(w); v = w, w = cdr(w))
     {
       s7_pointer car_w = car(w);
@@ -75175,11 +75268,11 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
 	    error_nr(sc, sc->syntax_error_symbol,
 		     set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S is a constant: (~S ~S ...)", 47),
 				 car(car_w), car(form), cadr(form)));
-	  if (symbol_is_in_small_list(sc, car(car_w)))
+	  if (symbol_is_in_small_symbol_set(sc, car(car_w)))
 	    error_nr(sc, sc->syntax_error_symbol,
 		     set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S is used twice in the parameter list, (~S ~S ...)", 69),
 				 car(car_w), car(form), cadr(form)));
-	  add_symbol_to_small_list(sc, car(car_w));
+	  add_symbol_to_small_symbol_set(sc, car(car_w));
 	  if (!is_pair(cdr(car_w)))
 	    {
 	      if (is_null(cdr(car_w)))                          /* (lambda* ((a)) ...) */
@@ -75221,11 +75314,11 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
 		set_allow_other_keys(top);
 		set_cdr(v, sc->nil);
 	      }
-	    if (symbol_is_in_small_list(sc, car_w))
+	    if (symbol_is_in_small_symbol_set(sc, car_w))
 	      error_nr(sc, sc->syntax_error_symbol,
 		       set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S is used twice in the parameter list, (~S ~S ...)", 69),
 				   car_w, car(form), cadr(form)));
-	    add_symbol_to_small_list(sc, car_w);
+	    add_symbol_to_small_symbol_set(sc, car_w);
 	    if (!is_keyword(car_w)) set_local(car_w);
 	  }
 	else
@@ -75253,7 +75346,7 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
 	  }}
   if (is_not_null(w))
     {
-      if ((is_symbol(w)) && (symbol_is_in_small_list(sc, w)))
+      if ((is_symbol(w)) && (symbol_is_in_small_symbol_set(sc, w)))
 	error_nr(sc, sc->syntax_error_symbol, set_elist_2(sc, wrap_string(sc, "lambda* :rest parameter ~S is used earlier in the parameter list", 64), w));
       if (is_constant(sc, w))                                   /* (lambda* (a . 0.0) a) or (lambda* (a . :b) a) */
 	error_nr(sc, sc->syntax_error_symbol,
@@ -75265,6 +75358,7 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
   else
     if ((body) && (!has_defaults) && (is_pair(args)))
       set_has_no_defaults(body);
+  end_small_symbol_set(sc);
   return(top);
 }
 
@@ -75424,7 +75518,7 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 		vars = caddr(x);
 		body = cdddr(x);
 		if (is_symbol(func))
-		  add_symbol_to_small_list(sc, func);
+		  add_symbol_to_small_symbol_set(sc, func);
 	      }
 	    else let_name = func;
 
@@ -75440,7 +75534,7 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 		    (var_name == let_name) || /* let var shadows caller */
 		    (var_name == func))
 		  return(UNSAFE_BODY);
-		add_symbol_to_small_list(sc, var_name);
+		add_symbol_to_small_symbol_set(sc, var_name);
 
 		if (is_pair(cadr(let_var)))
 		  {
@@ -75475,7 +75569,7 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 		      (!is_symbol(car(do_var))))
 		    return(UNSAFE_BODY);
 
-		  add_symbol_to_small_list(sc, car(do_var));
+		  add_symbol_to_small_symbol_set(sc, car(do_var));
 
 		  if (is_pair(cadr(do_var)))
 		    result = min_body(result, form_is_safe(sc, func, cadr(do_var), false));
@@ -75546,7 +75640,7 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 	  s7_pointer f, f_slot;
 	  bool c_safe;
 
-	  if (symbol_is_in_small_list(sc, expr)) return(UNSAFE_BODY);
+	  if (symbol_is_in_small_symbol_set(sc, expr)) return(UNSAFE_BODY);
 	  if ((is_slot(global_slot(expr))) && (is_syntax(global_value(expr))))
 	    return(UNSAFE_BODY); /* syntax hidden behind some other name */
 
@@ -75602,7 +75696,7 @@ static body_t form_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer x, bool at
 			    {
 			      if (!is_symbol(car(q)))
 				return(UNSAFE_BODY);
-			      add_symbol_to_small_list(sc, car(q));
+			      add_symbol_to_small_symbol_set(sc, car(q));
 			    }
 			  lresult = body_is_safe(sc, func, lbody, false);
 			  result = min_body(result, lresult);
@@ -75656,6 +75750,15 @@ static body_t body_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer body, bool
 	  follow = (!follow);
 	}}
   return((is_null(p)) ? result : UNSAFE_BODY);
+}
+
+static body_t wrapped_body_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer body, bool at_end)
+{
+  body_t result;
+  begin_small_symbol_set(sc);
+  result = body_is_safe(sc, func, body, at_end);
+  end_small_symbol_set(sc);
+  return(result);
 }
 
 static bool tree_has_definers_or_binders(s7_scheme *sc, s7_pointer tree)
@@ -76923,18 +77026,18 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
       body_t result;
       s7_pointer p, lst, cleared_pars;
 
-      clear_symbol_small_list(sc);
+      begin_small_symbol_set(sc);
       for (p = pars; is_pair(p); p = cdr(p))
-	add_symbol_to_small_list(sc, (is_symbol(car(p))) ? car(p) : caar(p));
+	add_symbol_to_small_symbol_set(sc, (is_symbol(car(p))) ? car(p) : caar(p));
       if (!is_null(p))
-	add_symbol_to_small_list(sc, p);
+	add_symbol_to_small_symbol_set(sc, p);
       sc->got_tc = false;
       sc->not_tc = false;
       sc->got_rec = false;
       sc->rec_tc_args = -1;
       /* I think cyclic code has already been caught in check_lambda et al */
-      result = ((is_symbol(func)) && (symbol_is_in_small_list(sc, func))) ? UNSAFE_BODY : body_is_safe(sc, func, body, true);  /* (define (f f)...) */
-      clear_symbol_small_list(sc);
+      result = ((is_symbol(func)) && (symbol_is_in_small_symbol_set(sc, func))) ? UNSAFE_BODY : body_is_safe(sc, func, body, true);  /* (define (f f)...) */
+      end_small_symbol_set(sc);
 
       /* if the body is safe, we can optimize the calling sequence */
       if (!unstarred_lambda)
@@ -76966,7 +77069,7 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
 	}
       if (is_symbol(func))
 	{
-	  lst = list_1(sc, add_symbol_to_list(sc, func));
+	  lst = list_1(sc, add_symbol_to_big_symbol_set(sc, func));
 	  sc->temp1 = lst;
 	}
       else lst = sc->nil;
@@ -77012,7 +77115,7 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
 		    (check_recur(sc, func, npars, cleared_pars, car(body))))
 		  set_safe_closure_body(body);
 	      }}
-      clear_symbol_list(sc);
+      clear_big_symbol_set(sc);
       if (is_symbol(func)) sc->temp1 = sc->unused;
       sc->got_tc = false;
       sc->not_tc = false;
@@ -77048,7 +77151,7 @@ static int32_t check_lambda(s7_scheme *sc, s7_pointer form, bool opt)
   /* OP_LET1 should work here also, (let ((f (lambda...)))), but subsequent calls assume a saved let if safe
    *   to mimic define, we need to parallel op_define_with_setter + make_funclet, I think
    */
-  clear_symbol_list(sc);
+  clear_big_symbol_set(sc);
   if ((opt) ||
       (stack_top_op(sc) == OP_DEFINE1) ||
       (((sc->stack_end - sc->stack_start) > 4) &&
@@ -77064,7 +77167,7 @@ static int32_t check_lambda(s7_scheme *sc, s7_pointer form, bool opt)
 		   collect_parameters(sc, car(code), sc->nil)) == OPT_OOPS)
 	clear_all_optimizations(sc, body);
     }
-  clear_symbol_list(sc);
+  clear_big_symbol_set(sc);
   pair_set_syntax_op(form, OP_LAMBDA_UNCHECKED);
   if (arity < -1) arity++; /* confusing! at least 0 = (), but (lambda arg...) has same "arity" here as (lambda (a . b)...)? */
   set_opt3_any(code, (s7_pointer)((intptr_t)arity));
@@ -77097,7 +77200,7 @@ static void check_lambda_star(s7_scheme *sc)
 
   set_car(code, check_lambda_star_args(sc, car(code), NULL, sc->code));
 
-  clear_symbol_list(sc);
+  clear_big_symbol_set(sc);
   if ((sc->safety > NO_SAFETY) ||
       (stack_top_op(sc) != OP_DEFINE1))
     {
@@ -77105,7 +77208,7 @@ static void check_lambda_star(s7_scheme *sc)
 	clear_all_optimizations(sc, cdr(code));
     }
   else optimize_lambda(sc, false, sc->unused, car(code), cdr(code));
-  clear_symbol_list(sc);
+  clear_big_symbol_set(sc);
   pair_set_syntax_op(sc->code, OP_LAMBDA_STAR_UNCHECKED);
   sc->code = code;
 }
@@ -77742,7 +77845,7 @@ static s7_pointer check_let(s7_scheme *sc) /* called only from op_let */
     }
   else start = car(code);
 
-  clear_symbol_small_list(sc);
+  begin_small_symbol_set(sc);
   for (vars = 0, x = start; is_pair(x); vars++, x = cdr(x))
     {
       s7_pointer y, carx = car(x);
@@ -77771,22 +77874,22 @@ static s7_pointer check_let(s7_scheme *sc) /* called only from op_let */
 		error_nr(sc, sc->syntax_error_symbol,
 			 set_elist_2(sc, wrap_string(sc, "variable name #_~S in let is a function, not a symbol", 53), y));
 	    }
-	  error_nr(sc, sc->syntax_error_symbol,
+	  error_nr(sc, sc->syntax_error_symbol,       /* (let ('1) quote) -> bad variable name #_quote in let (it is syntactic, not a symbol) */
 		   set_elist_4(sc, wrap_string(sc, "bad variable name ~W in let (it is ~A, not a symbol) in ~A", 58),
 			       y, object_type_name(sc, y),
 			       object_to_string_truncated(sc, form)));
 	}
-      if (is_constant_symbol(sc, y))
+      if (is_constant_symbol(sc, y))                 /* let ((pi 3)) ...) */
 	error_nr(sc, sc->wrong_type_arg_symbol, set_elist_3(sc, cant_bind_immutable_string, sc->let_symbol, x));
 
       /* check for name collisions -- not sure this is required by Scheme */
-      if (symbol_is_in_small_list(sc, y))
+      if (symbol_is_in_small_symbol_set(sc, y))
 	error_nr(sc, sc->syntax_error_symbol,
 		 set_elist_3(sc, wrap_string(sc, "duplicate identifier in let: ~S in ~S", 37), y, form));
-      add_symbol_to_small_list(sc, y);
+      add_symbol_to_small_symbol_set(sc, y);
       set_local(y);
     }
-  /* (let ('1) quote) -> 1 */
+  end_small_symbol_set(sc);
 
   if (is_not_null(x))                     /* (let* ((a 1) . b) a) */
     syntax_error_nr(sc, "let variable list improper?: ~A", 31, form);
@@ -77837,13 +77940,11 @@ static s7_pointer check_let(s7_scheme *sc) /* called only from op_let */
 		    set_opt2_pair(code, caddar(code));
 		  }}}}
 
-  /* if safe_c or safe_closure as car(body), null cdr(body), see if only vars as args
-   *   symbol_list is intact??
-   */
+  /* if safe_c or safe_closure as car(body), null cdr(body), see if only vars as args */
   if (optimize_op(form) >= OP_LET_NA_OLD)
     {
       if ((!in_heap(form)) &&
-	  (body_is_safe(sc, sc->unused, cdr(code), true) >= SAFE_BODY)) /* recur_body is apparently never hit */
+	  (wrapped_body_is_safe(sc, sc->unused, cdr(code), true) >= SAFE_BODY)) /* recur_body is apparently never hit */
 	set_opt3_let(code, make_semipermanent_let(sc, car(code)));
       else
 	{
@@ -78341,7 +78442,7 @@ static bool check_let_star(s7_scheme *sc)
     if (!is_list(car(code)))                        /* (let* x ... ) */
       syntax_error_nr(sc, "let* variable declaration value is missing: ~A", 46, form);
 
-  clear_symbol_small_list(sc);
+  begin_small_symbol_set(sc);
   for (vars = ((named_let) ? cadr(code) : car(code)); is_pair(vars); vars = cdr(vars))
     {
       s7_pointer var, var_and_val = car(vars);
@@ -78375,7 +78476,7 @@ static bool check_let_star(s7_scheme *sc)
       if (is_constant_symbol(sc, var))              /* (let* ((pi 3)) ...) */
 	error_nr(sc, sc->wrong_type_arg_symbol, set_elist_3(sc, cant_bind_immutable_string, sc->let_star_symbol, var_and_val));
 
-      if (symbol_is_in_small_list(sc, var))
+      if (symbol_is_in_small_symbol_set(sc, var))
 	{
 	  if (named_let) /* (let* loop ((a 1) (a 2)) ...) -- added 2-Dec-19 */
 	    error_nr(sc, sc->syntax_error_symbol,
@@ -78384,9 +78485,10 @@ static bool check_let_star(s7_scheme *sc)
 	  /* currently (let* ((a 1) (a (+ a 1))) a) is 2, not an error */
 	  shadowing = true;
 	}
-      add_symbol_to_small_list(sc, var);
+      add_symbol_to_small_symbol_set(sc, var);
       set_local(var);
     }
+  end_small_symbol_set(sc);
   if (!is_null(vars))
     error_nr(sc, sc->syntax_error_symbol,
 	     set_elist_3(sc, wrap_string(sc, "let* variable list is not a proper list: ~A in ~A", 49),
@@ -78444,7 +78546,7 @@ static bool check_let_star(s7_scheme *sc)
 	if (optimize_op(form) >= OP_LET_NA_OLD)
 	  {
 	    if ((!in_heap(form)) &&
-		(body_is_safe(sc, sc->unused, cdr(code), true) >= SAFE_BODY))
+		(wrapped_body_is_safe(sc, sc->unused, cdr(code), true) >= SAFE_BODY))
 	      set_opt3_let(code, make_semipermanent_let(sc, car(code)));
 	    else
 	      {
@@ -78638,7 +78740,7 @@ static void check_letrec(s7_scheme *sc, bool letrec)
   if (!is_pair(cdr(code)))                    /* (letrec ()) */
     syntax_error_with_caller_nr(sc, "~A has no body: ~A", 18, caller, sc->code);
 
-  clear_symbol_small_list(sc);
+  begin_small_symbol_set(sc);
   for (x = car(code); is_not_null(x); x = cdr(x))
     {
       s7_pointer y, carx;
@@ -78668,11 +78770,12 @@ static void check_letrec(s7_scheme *sc, bool letrec)
 	syntax_error_with_caller_nr(sc, "~A: variable declaration has more than one value?: ~A", 53, caller, carx);
 
       /* check for name collisions -- this is needed in letrec* else which of the two legit values does our "rec" refer to, so to speak */
-      if (symbol_is_in_small_list(sc, y))
+      if (symbol_is_in_small_symbol_set(sc, y))
 	syntax_error_with_caller_nr(sc, "~A: duplicate identifier: ~A", 28, caller, y);
-      add_symbol_to_small_list(sc, y);
+      add_symbol_to_small_symbol_set(sc, y);
       set_local(y);
     }
+  end_small_symbol_set(sc);
 
   if (!s7_is_proper_list(sc, cdr(code)))
     syntax_error_with_caller_nr(sc, "stray dot in ~A body: ~S", 24, caller, cdr(code));
@@ -82964,10 +83067,12 @@ static s7_pointer fxify_step_exprs(s7_scheme *sc, s7_pointer code)
   s7_pointer e = NULL, pre_e = cons(sc, sc->nil, sc->nil);
   gc_protect_via_stack(sc, pre_e);
 
+  /* clear_big_symbol_set(sc); */ /* an experiment -- slightly slower than pre_e? */
   for (s7_pointer p = vars; is_pair(p); p = cdr(p))
     {
       s7_function callee = NULL;
       s7_pointer expr = cdar(p);    /* init */
+      /* add_symbol_to_big_symbol_set(sc, caar(p)); */
       if (is_pair(expr))
 	{
 	  callee = fx_choose(sc, expr, sc->nil, do_symbol_is_safe); /* not vars -- they aren't defined yet */
@@ -82993,6 +83098,7 @@ static s7_pointer fxify_step_exprs(s7_scheme *sc, s7_pointer code)
 	  if (callee) set_fx(expr, callee);
 	}}
   unstack_gc_protect(sc);
+  /* clear_big_symbol_set(sc); */
 
   if ((is_pair(cdr(code))) &&
       (is_pair(cadr(code))))
@@ -83033,7 +83139,7 @@ static /* inline */ bool do_tree_has_definers(s7_scheme *sc, s7_pointer tree)
 	    {
 	      if (pp == sc->varlet_symbol) /* tlet case (varlet e1 ...) */
 		{
-		  if ((is_pair(cdr(p))) && (is_symbol(cadr(p))) && (!symbol_is_in_list(sc, cadr(p))))
+		  if ((is_pair(cdr(p))) && (is_symbol(cadr(p))) && (!symbol_is_in_big_symbol_set(sc, cadr(p))))
 		    return(true);
 		}
 	      else
@@ -83080,7 +83186,7 @@ static void check_do_for_obvious_errors(s7_scheme *sc, s7_pointer form)
 
   if (is_pair(car(code)))
     {
-      clear_symbol_small_list(sc);
+      begin_small_symbol_set(sc);
       for (x = car(code); is_pair(x); x = cdr(x))
 	{
 	  s7_pointer y = car(x);
@@ -83105,12 +83211,13 @@ static void check_do_for_obvious_errors(s7_scheme *sc, s7_pointer form)
 	      syntax_error_nr(sc, "do: step variable info has extra stuff after the increment: ~A", 62, x);
 	  set_local(car(y));
 
-	  if (symbol_is_in_small_list(sc, car(y)))          /* (do ((i 0 (+ i 1)) (i 2))...) */
+	  if (symbol_is_in_small_symbol_set(sc, car(y)))          /* (do ((i 0 (+ i 1)) (i 2))...) */
 	    syntax_error_nr(sc, "duplicate identifier in do: ~A", 30, x);
-	  add_symbol_to_small_list(sc, car(y));
+	  add_symbol_to_small_symbol_set(sc, car(y));
 	}
       if (is_not_null(x))                             /* (do ((i 0 i) . 1) ((= i 1))) */
 	syntax_error_nr(sc, "do: list of variables is improper: ~A", 37, form);
+      end_small_symbol_set(sc);
     }
   if (is_pair(cadr(code)))
     {
@@ -83190,7 +83297,7 @@ static s7_pointer check_do(s7_scheme *sc)
   if ((!is_pair(end)) || (!is_fxable(sc, car(end))))
     return(do_end_bad(sc, form)); /* can return code (not sc->nil) */
 
-  /* sc->curlet is the outer environment, local vars are in the symbol_list via check_do_for_obvious_error, and it's only needed for fx_unsafe_s */
+  /* sc->curlet is the outer environment, local vars are in the big_symbol_set via check_do_for_obvious_errors(???), and it's only needed for fx_unsafe_s */
   set_fx_direct(end, fx_choose(sc, end, sc->curlet, let_symbol_is_safe_or_listed));
   if ((is_pair(cdr(end))) &&
       (is_fxable(sc, cadr(end))))
@@ -98576,6 +98683,7 @@ s7_scheme *s7_init(void)
   pthread_mutex_unlock(&init_lock);
 #endif
   sc = (s7_scheme *)Calloc(1, sizeof(s7_scheme)); /* not malloc! */
+  if (!cur_sc) original_cur_sc = sc;
   cur_sc = sc;                                    /* for gdb/debugging */
   sc->gc_off = true;                              /* sc->args and so on are not set yet, so a gc during init -> segfault */
   sc->gc_in_progress = false;
@@ -98874,8 +98982,12 @@ s7_scheme *s7_init(void)
   sc->true_history_size = DEFAULT_HISTORY_SIZE;
   sc->baffle_ctr = 0;
   sc->map_call_ctr = 0;
-  sc->symbol_tag = 0;
-  sc->symbol_small_tag = 0;
+  sc->big_symbol_tag = 0;
+  sc->small_symbol_tag = 0;
+#if S7_DEBUGGING
+  sc->big_symbol_set_state = SET_IGNORE;
+  sc->small_symbol_set_state = SET_IGNORE;
+#endif
   sc->symbol_printer = sc->F;
   sc->make_function = sc->F;
   sc->class_name_symbol = make_symbol(sc, "class-name", 10);
@@ -99315,6 +99427,8 @@ void s7_free(s7_scheme *sc)
 	}
       free(sc->c_object_types);
     }
+  if (sc == cur_sc) cur_sc = original_cur_sc;
+  /* or maybe keep a stack of these -- how to tell which one is correct?  Pass the caller to s7_free (doesn't exist in threads.c)? Or get rid of cur_sc! */
   free(sc);
 }
 
@@ -99472,6 +99586,7 @@ int main(int argc, char **argv)
  *
  * valgrind --leak-check=full --show-reachable=no --suppressions=/home/bil/cl/free.supp repl s7test.scm
  * addr2line -e repl 0xd7237 -> s7.c:29697
+ * 24-Aug-24: cloc: blank 9043 comment 3880 code 86759, [gmp: 5619, s7_debugging: 2867 see search,scm] -> 78273 lines of code normally
  */
 #endif
 #endif
@@ -99525,7 +99640,7 @@ int main(int argc, char **argv)
  * thash            11.7   9734   9479   9526   9250
  * cb        12.9   11.0   9658   9564   9609   9649
  * tmap-hash                                    10.3
- * tgen             11.4   12.0   12.1   12.2   12.3 [clean_up_symbol_list 91]
+ * tgen             11.4   12.0   12.1   12.2   12.3 [clean_up_big_symbol_set 91]
  * tall      15.9   15.6   15.6   15.6   15.1   15.1
  * timp             24.4   20.0   19.6   19.7   15.6
  * tmv              21.9   21.1   20.7   20.6   17.3
@@ -99543,6 +99658,7 @@ int main(int argc, char **argv)
  *   gsl: there are more vector_complex entries in the h file
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
  *   check (and tests7?) gsl without s7_with_complex_vectors
+ *   tcomplex to test complex opts, complex fft
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
@@ -99562,7 +99678,12 @@ int main(int argc, char **argv)
  * map vector -> vector? ambiguous if two args not same type, (apply vector (map...)) where the optimizer could omit the intermediate list, tapply
  *   lint? display->wrapper
  *
- * symbol_list: do-vars? (tlimit), tlet fx trouble, tgen clean_up, dup?
- *   look at where symbol_list loses now
- *   tests for shadow counter
+ * get rid of cur_sc! [68 references, only 4 not under s7_debugging or special case junk like pointer_32]
+ *
+ * big_symbol_set: do-vars? (tlimit), tlet fx trouble, tgen clean_up, dup?
+ *   look at where big_symbol_set loses now (func pars at least and do vars)
+ *   tests for shadow counter (t718)
+ *   begin/end_big_symbol_set + running check if possible
+ *   t718: unbound variable error gives bogus code ref sometimes
+ *   tests7 t101 stacktrace complains about small test stuff stacktrace_watcher
  */
