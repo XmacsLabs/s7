@@ -10235,8 +10235,6 @@ apply to multidimensional cases.  All four functions can be used on any type of 
 </p>
 <p>s7_make_complex_vector_wrapper creates a complex-vector that accesses data
 allocated elsewhere, for example a gsl_vector_complex (see s7test.scm).
-The complex_vector functions in s7.h are included only if the compile-time switch S7_WITH_COMPLEX_VECTORS
-is set.
 </p>
 
 
@@ -10359,13 +10357,13 @@ bool s7_boolean(s7_scheme *sc, s7_pointer x);
 s7_pointer s7_make_boolean(s7_scheme *sc, bool x);
 
 bool s7_is_immutable(s7_pointer p);
-s7_pointer s7_immutable(s7_pointer p);
+s7_pointer s7_set_immutable(s7_scheme *sc, s7_pointer p);
 </pre>
 <p>These return the standard scheme or s7 constants: #f, #t, (), #&lt;undefined&gt;, #&lt;unspecified&gt;, and #&lt;eof&gt;.
 Also the s7 function unspecified?, and the scheme functions null?, and boolean?.  s7_make_boolean
 returns #t or #f depending on its argument.
 </p>
-<p>s7_immutable makes its argument immutable, and s7_is_immutable returns true if its argument is immutable.
+<p>s7_set_immutable makes its argument immutable, and s7_is_immutable returns true if its argument is immutable.
 They parallel s7's immutable! and immutable?.
 </p>
 

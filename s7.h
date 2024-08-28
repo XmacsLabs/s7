@@ -2,7 +2,7 @@
 #define S7_H
 
 #define S7_VERSION "11.1"
-#define S7_DATE "28-Aug-2024"
+#define S7_DATE "29-Aug-2024"
 #define S7_MAJOR_VERSION 11
 #define S7_MINOR_VERSION 1
 
@@ -30,7 +30,7 @@ typedef double s7_double;
   #include <mpc.h>
 #endif
 
-#if S7_WITH_COMPLEX_VECTORS
+#if (!__TINYC__)
   #if __cplusplus
     #include <complex>
     typedef std::complex<s7_double> s7_complex;
@@ -38,6 +38,8 @@ typedef double s7_double;
     #include <complex.h>
     typedef double complex s7_complex;
   #endif
+#else
+    typedef double s7_complex;
 #endif
 
 #ifdef __cplusplus
@@ -341,7 +343,8 @@ s7_pointer s7_make_int_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *di
 s7_pointer s7_make_byte_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info);
 s7_pointer s7_make_float_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info);
 s7_pointer s7_make_float_vector_wrapper(s7_scheme *sc, s7_int len, s7_double *data, s7_int dims, s7_int *dim_info, bool free_data);
-#if S7_WITH_COMPLEX_VECTORS
+
+#if (!__TINYC__)
   s7_pointer s7_make_complex_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info);
   s7_pointer s7_make_complex_vector_wrapper(s7_scheme *sc, s7_int len, s7_complex *data, s7_int dims, s7_int *dim_info, bool free_data);
   s7_complex *s7_complex_vector_elements(s7_pointer vec);

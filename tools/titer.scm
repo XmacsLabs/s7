@@ -1,6 +1,8 @@
 ;; iteration tests
 
-(set! (*s7* 'heap-size) (* 4 1024000))
+(set! (*s7* 'heap-size) (* 2 1024000))
+
+(define iter-carrier (and (defined? 'major-version *s7*) (>= (*s7* 'major-version) 11)))
 
 (let ((with-blocks #f))
   (when with-blocks
@@ -52,15 +54,25 @@
 			(find-if-c (make-iterator vc))
 			(find-if-d (make-iterator vc)))))
 	     (d (let ((fv (make-float-vector size 1.0)))
-		  (list (find-if-a (make-iterator fv #t))
-			(find-if-b (make-iterator fv #t))
-			(find-if-c (make-iterator fv #t))
-			(find-if-d (make-iterator fv #t)))))
+		  (list (find-if-a (if iter-carrier (make-iterator fv #t) (make-iterator fv)))
+			(find-if-b (if iter-carrier (make-iterator fv #t) (make-iterator fv)))
+			(find-if-c (if iter-carrier (make-iterator fv #t) (make-iterator fv)))
+			(find-if-d (if iter-carrier (make-iterator fv #t) (make-iterator fv))))))
 	     (e (let ((iv (make-int-vector size 0)))
-		  (list (find-if-a (make-iterator iv #t))
-			(find-if-b (make-iterator iv #t))
-			(find-if-c (make-iterator iv #t))
-			(find-if-d (make-iterator iv #t)))))
+		  (list (find-if-a (if iter-carrier (make-iterator iv #t) (make-iterator iv)))
+			(find-if-b (if iter-carrier (make-iterator iv #t) (make-iterator iv)))
+			(find-if-c (if iter-carrier (make-iterator iv #t) (make-iterator iv)))
+			(find-if-d (if iter-carrier (make-iterator iv #t) (make-iterator iv))))))
+	     (u (let ((iv (make-byte-vector size 0)))
+		  (list (find-if-a (make-iterator iv))
+			(find-if-b (make-iterator iv))
+			(find-if-c (make-iterator iv))
+			(find-if-d (make-iterator iv)))))
+	     (z (let ((iv (make-vector size 1-i complex?))) ; this will be a complex-vector in version 24.7 ff
+		  (list (find-if-a (if iter-carrier (make-iterator iv #t) (make-iterator iv)))
+			(find-if-b (if iter-carrier (make-iterator iv #t) (make-iterator iv)))
+			(find-if-c (if iter-carrier (make-iterator iv #t) (make-iterator iv)))
+			(find-if-d (if iter-carrier (make-iterator iv #t) (make-iterator iv))))))
 	     (f (let ((ht (let ((ht1 (make-hash-table size)))
 			    (do ((i 0 (+ i 1)))
 				((= i size) ht1)
@@ -88,6 +100,8 @@
 	 (if (not (equal? c '(#f #f #f #f))) (format *stderr* "c: ~A " c))
 	 (if (not (equal? d '(#f #f #f #f))) (format *stderr* "d: ~A " d))
 	 (if (not (equal? e '(#f #f #f #f))) (format *stderr* "e: ~A " e))
+	 (if (not (equal? u '(#f #f #f #f))) (format *stderr* "u: ~A " u))
+	 (if (not (equal? z '(#f #f #f #f))) (format *stderr* "z: ~A " z))
 	 (if (not (equal? f '(#f #f #f #f))) (format *stderr* "f: ~A " f))
 	 (if (not (equal? g '(#f #f #f #f))) (format *stderr* "g: ~A " g))
 	 (if (and with-blocks (not (equal? h '(#f #f #f #f)))) (format *stderr* "h: ~A " h))
@@ -96,6 +110,6 @@
   
   (itest)
 
-  (when (> (*s7* 'profile) 0)
+  (when (and (defined? 'profile *s7*) (> (*s7* 'profile) 0))
     (show-profile 200))
   (exit))

@@ -18,7 +18,6 @@
 #include <mpc.h>
 #endif
 
-#define S7_WITH_COMPLEX_VECTORS 1
 #include "s7.h"
 
 #define ld64 PRId64
@@ -1005,10 +1004,8 @@ int main(int argc, char **argv)
     s7_pointer p;
     s7_double *els;
     uint8_t *bels;
-#if S7_WITH_COMPLEX_VECTORS
     s7_complex cval;
     s7_complex *cels;
-#endif
 
     dims = (s7_int *)malloc(2 * sizeof(s7_int));
     dims[0] = 2;
@@ -1028,7 +1025,6 @@ int main(int argc, char **argv)
     els = s7_float_vector_elements(p);
     if (els[1] != 32.0) fprintf(stderr, "float_vector els[1] not 32.0?\n");
 
-#if S7_WITH_COMPLEX_VECTORS
     p = s7_make_complex_vector(sc, 6, 1, NULL);
     if (!s7_is_complex_vector(p)) fprintf(stderr, "not a complex_vector?\n");
     s7_complex_vector_set(p, 1, 32.0);
@@ -1040,7 +1036,6 @@ int main(int argc, char **argv)
     cval = cels[0];
     if (creal(cval) != 3.0) fprintf(stderr, "complex_vector creal(cels[0]) not 3.0?\n");
     if (cimag(cval) != 2.0) fprintf(stderr, "complex_vector cimag(cels[0]) not 2.0?\n");
-#endif
 
     p = s7_make_byte_vector(sc, 6, 2, dims);
     s7_byte_vector_set(p, 1, 32);

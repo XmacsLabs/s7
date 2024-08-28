@@ -247,7 +247,7 @@
   #ifndef HAVE_COMPLEX_NUMBERS
     #if __TINYC__
       #define HAVE_COMPLEX_NUMBERS 0
-      typedef double s7_complex;
+      /* typedef double s7_complex; */
     #else
       #define HAVE_COMPLEX_NUMBERS 1
     #endif
@@ -398,12 +398,10 @@
   #if __cplusplus
     #include <complex>
     using namespace std;  /* the code has to work in C as well as C++, so we can't scatter std:: all over the place */
-    typedef std::complex<s7_double> s7_complex;
+    /* typedef std::complex<s7_double> s7_complex; */
   #else
     #include <complex.h>
-    #if (!S7_WITH_COMPLEX_VECTORS)
-      typedef double complex s7_complex;
-    #endif
+    /* typedef double complex s7_complex; */
     #if defined(__sun) && defined(__SVR4)
       #undef _Complex_I
       #define _Complex_I 1.0i
@@ -556,7 +554,7 @@ typedef block_t vdims_t;
 
 
 typedef enum {TOKEN_EOF, TOKEN_LEFT_PAREN, TOKEN_RIGHT_PAREN, TOKEN_DOT, TOKEN_ATOM, TOKEN_QUOTE, TOKEN_DOUBLE_QUOTE,
-	      TOKEN_BACK_QUOTE, TOKEN_COMMA, TOKEN_AT_MARK, TOKEN_SHARP_CONST, 
+	      TOKEN_BACK_QUOTE, TOKEN_COMMA, TOKEN_AT_MARK, TOKEN_SHARP_CONST,
               TOKEN_VECTOR, TOKEN_BYTE_VECTOR, TOKEN_INT_VECTOR, TOKEN_FLOAT_VECTOR, TOKEN_COMPLEX_VECTOR} token_t;
 
 typedef enum {NO_ARTICLE, INDEFINITE_ARTICLE} article_t;
@@ -815,10 +813,13 @@ typedef struct s7_cell {
 	s7_int denominator;
       } fraction_value;
 
-      struct {                    /* complex numbers */
-	s7_double rl;
-	s7_double im;
-      } complex_value;
+      union {
+	s7_complex z;
+	struct {                  /* complex numbers */
+	  s7_double rl;
+	  s7_double im;
+	} complex_value;
+      } cz;
 
 #if WITH_GMP
       bigint *bgi;                /* bignums */
@@ -942,7 +943,7 @@ typedef struct s7_cell {
       s7_pointer name, global_slot, local_slot;
       int64_t id;                  /* which let last bound the symbol -- for faster symbol lookup */
       uint32_t ctr;                /* how many times has symbol been bound */
-      uint32_t small_symbol_tag;      /* symbol as member of a (small) set (tree-set-memq etc) */
+      uint32_t small_symbol_tag;   /* symbol as member of a (small) set (tree-set-memq etc) */
     } sym;
 
     struct {                       /* syntax */
@@ -1304,7 +1305,7 @@ struct s7_scheme {
              cddaar_symbol, cddadr_symbol, cddar_symbol, cdddar_symbol, cddddr_symbol, cdddr_symbol, cddr_symbol, cdr_symbol,
              ceiling_symbol, char_downcase_symbol, char_eq_symbol, char_geq_symbol, char_gt_symbol, char_leq_symbol, char_lt_symbol,
              char_position_symbol, char_to_integer_symbol, char_upcase_symbol, cload_directory_symbol, close_input_port_symbol,
-             close_output_port_symbol, complex_symbol, complex_vector_ref_symbol, complex_vector_set_symbol, complex_vector_symbol, 
+             close_output_port_symbol, complex_symbol, complex_vector_ref_symbol, complex_vector_set_symbol, complex_vector_symbol,
              cons_symbol, copy_symbol, cos_symbol, cosh_symbol, coverlet_symbol,
              curlet_symbol, current_error_port_symbol, current_input_port_symbol, current_output_port_symbol, cutlet_symbol, cyclic_sequences_symbol,
              denominator_symbol, dilambda_symbol, display_symbol, divide_symbol, documentation_symbol, dynamic_wind_symbol, dynamic_unwind_symbol,
@@ -1328,7 +1329,7 @@ struct s7_scheme {
              is_port_closed_symbol, is_positive_symbol, is_procedure_symbol, is_proper_list_symbol, is_provided_symbol,
              is_random_state_symbol, is_rational_symbol, is_real_symbol, is_sequence_symbol, is_string_symbol, is_subvector_symbol,
              is_symbol_symbol, is_syntax_symbol, is_vector_symbol, is_weak_hash_table_symbol, is_zero_symbol,
-             is_float_symbol, is_integer_or_real_at_end_symbol, is_integer_or_any_at_end_symbol, is_integer_or_number_at_end_symbol, 
+             is_float_symbol, is_integer_or_real_at_end_symbol, is_integer_or_any_at_end_symbol, is_integer_or_number_at_end_symbol,
              is_unspecified_symbol, is_undefined_symbol,
              iterate_symbol, iterator_is_at_end_symbol, iterator_sequence_symbol,
              keyword_to_symbol_symbol,
@@ -1336,7 +1337,7 @@ struct s7_scheme {
              let_set_symbol, let_temporarily_symbol, libraries_symbol, list_ref_symbol, list_set_symbol, list_symbol, list_tail_symbol, list_values_symbol,
              load_path_symbol, load_symbol, log_symbol, logand_symbol, logbit_symbol, logior_symbol, lognot_symbol, logxor_symbol, lt_symbol,
              local_documentation_symbol, local_signature_symbol, local_setter_symbol, local_iterator_symbol,
-             macro_symbol, macro_star_symbol, magnitude_symbol, 
+             macro_symbol, macro_star_symbol, magnitude_symbol,
              make_byte_vector_symbol, make_complex_vector_symbol, make_float_vector_symbol, make_hash_table_symbol,
              make_weak_hash_table_symbol, make_int_vector_symbol, make_iterator_symbol, make_list_symbol, make_string_symbol,
              make_vector_symbol, map_symbol, max_symbol, member_symbol, memq_symbol, memv_symbol, min_symbol, modulo_symbol, multiply_symbol,
@@ -3198,11 +3199,11 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 #define keyword_set_symbol(p, Val)     symbol_info(T_Key(p))->nx.ksym = T_Sym(Val)
 #define symbol_help(p)                 symbol_info(p)->nx.documentation
 #define symbol_set_help(p, Doc)        symbol_info(p)->nx.documentation = Doc
-#define big_symbol_tag(p)                     symbol_info(p)->dx.tag
-#define set_big_symbol_tag(p, Val)            symbol_info(p)->dx.tag = Val
+#define big_symbol_tag(p)              symbol_info(p)->dx.tag
+#define set_big_symbol_tag(p, Val)     symbol_info(p)->dx.tag = Val
 
-#define small_symbol_tag(p)                   (T_Sym(p))->object.sym.small_symbol_tag
-#define set_small_symbol_tag(p, Val)          (T_Sym(p))->object.sym.small_symbol_tag = Val
+#define small_symbol_tag(p)            (T_Sym(p))->object.sym.small_symbol_tag
+#define set_small_symbol_tag(p, Val)   (T_Sym(p))->object.sym.small_symbol_tag = Val
 #define symbol_shadows(p)              symbol_info(p)->ln.iter_or_size
 #define symbol_set_shadows(p, Val)     symbol_info(p)->ln.iter_or_size = Val
 
@@ -3686,10 +3687,12 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define set_denominator(p, x)          denominator(p) = x
 #define fraction(p)                    (((long_double)numerator(p)) / ((long_double)denominator(p)))
 #define inverted_fraction(p)           (((long_double)denominator(p)) / ((long_double)numerator(p)))
-#define real_part(p)                   (T_Cmp(p))->object.number.complex_value.rl
+#define real_part(p)                   (T_Cmp(p))->object.number.cz.complex_value.rl
 #define set_real_part(p, x)            real_part(p) = x
-#define imag_part(p)                   (T_Cmp(p))->object.number.complex_value.im
+#define imag_part(p)                   (T_Cmp(p))->object.number.cz.complex_value.im
 #define set_imag_part(p, x)            imag_part(p) = x
+#define a_bi(p)                        (T_Cmp(p))->object.number.cz.z
+#define set_a_bi(p, x)                 a_bi(p) = x
 #if HAVE_COMPLEX_NUMBERS
   #define to_c_complex(p)              CMPLX(real_part(p), imag_part(p))
 #endif
@@ -9173,7 +9176,7 @@ static s7_pointer add_symbol_to_small_symbol_set_1(s7_scheme *sc, s7_pointer sym
 static void clear_small_symbol_set_1(s7_scheme *sc, int status, const char *func, int line)
 {
   /* if running end is ok, begin is an error, if not running end is error, begin is ok */
-  if (status == SET_BEGIN) 
+  if (status == SET_BEGIN)
     {
       if (sc->small_symbol_set_state == SET_BEGIN)
 	fprintf(stderr, "%s[%d]: small_symbol_set is running but begin requested (started at %s[%d])\n", func, line, sc->small_symbol_set_func, sc->small_symbol_set_line);
@@ -9225,10 +9228,7 @@ static /* inline */ void clear_small_symbol_set(s7_scheme *sc)
 
 /* -------- big symbol set -------- */
 #if S7_DEBUGGING
-static bool symbol_is_in_big_symbol_set(s7_scheme *sc, s7_pointer sym)
-{
-  return(big_symbol_tag(sym) == sc->big_symbol_tag);
-}
+static bool symbol_is_in_big_symbol_set(s7_scheme *sc, s7_pointer sym) {return(big_symbol_tag(sym) == sc->big_symbol_tag);}
 
 static s7_pointer add_symbol_to_big_symbol_set(s7_scheme *sc, s7_pointer sym)
 {
@@ -9237,15 +9237,18 @@ static s7_pointer add_symbol_to_big_symbol_set(s7_scheme *sc, s7_pointer sym)
   return(sym);
 }
 
-static inline void clear_big_symbol_set(s7_scheme *sc) 
-{
-  sc->big_symbol_tag++;
-}
+static /* inline */ void clear_big_symbol_set(s7_scheme *sc) {sc->big_symbol_tag++;}
 
-#define begin_big_symbol_set(Sc) do 
+#define begin_big_symbol_set(Sc) Sc->big_symbol_tag++;
+#define end_big_symbol_set(Sc) Sc->big_symbol_tag++;
+
 #else
+
 #define symbol_is_in_big_symbol_set(Sc, Sym) (big_symbol_tag(Sym) == Sc->big_symbol_tag)
 #define clear_big_symbol_set(Sc) Sc->big_symbol_tag++
+
+#define begin_big_symbol_set(Sc) Sc->big_symbol_tag++
+#define end_big_symbol_set(Sc)
 
 static /* inline */ s7_pointer add_symbol_to_big_symbol_set(s7_scheme *sc, s7_pointer sym)
 {
@@ -22842,7 +22845,7 @@ static s7_pointer modulo_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
   s7_int n1, n2, d1, d2;
   if ((is_t_integer(x)) && (is_t_integer(y))) /* this is nearly always the case */
     return(make_integer(sc, modulo_i_ii(integer(x), integer(y))));
-  
+
   switch (type(x))
     {
     case T_INTEGER:
@@ -25996,7 +25999,7 @@ Pass this as the second argument to 'random' to get a repeatable random number s
   s7_pointer r, seed;
   if (is_null(args))
     seed = s7_int_to_big_integer(sc, 1234); /* ?? */
-  else 
+  else
     {
       seed = car(args);
       if (!s7_is_integer(seed))
@@ -32158,15 +32161,22 @@ static s7_pointer iterator_quit(s7_pointer iterator)
   return(ITERATOR_END);
 }
 
-static s7_pointer let_iterate(s7_scheme *sc, s7_pointer iterator)
+static s7_pointer let_iterate_uncarried(s7_scheme *sc, s7_pointer iterator)
+{
+  s7_pointer slot = let_iterator_slot(iterator);
+  if (!tis_slot(slot))
+    return(iterator_quit(iterator));
+  let_iterator_set_slot(iterator, next_slot(slot));
+  return(cons(sc, slot_symbol(slot), slot_value(slot)));
+}
+
+static s7_pointer let_iterate_carried(s7_scheme *sc, s7_pointer iterator)
 {
   s7_pointer p, slot = let_iterator_slot(iterator);
   if (!tis_slot(slot))
     return(iterator_quit(iterator));
   let_iterator_set_slot(iterator, next_slot(slot));
   p = iterator_carrier(iterator);
-  if (!p)
-    return(cons(sc, slot_symbol(slot), slot_value(slot)));
   set_car(p, slot_symbol(slot));
   set_cdr(p, slot_value(slot));
   return(p);
@@ -32228,45 +32238,53 @@ static s7_pointer byte_vector_iterate(s7_scheme *sc, s7_pointer obj)
   return(iterator_quit(obj));
 }
 
-static s7_pointer float_vector_iterate(s7_scheme *sc, s7_pointer obj)
+static s7_pointer float_vector_iterate_uncarried(s7_scheme *sc, s7_pointer obj)
+{
+  if (iterator_position(obj) < iterator_length(obj))
+    return(make_real(sc, float_vector(iterator_sequence(obj), iterator_position(obj)++)));
+  return(iterator_quit(obj));
+}
+
+static s7_pointer float_vector_iterate_carried(s7_scheme *sc, s7_pointer obj)
 {
   if (iterator_position(obj) < iterator_length(obj))
     {
-      if (iterator_carrier(obj))
-	{
-	  set_real(iterator_carrier(obj), float_vector(iterator_sequence(obj), iterator_position(obj)++));
-	  return(iterator_carrier(obj));
-	}
-      return(make_real(sc, float_vector(iterator_sequence(obj), iterator_position(obj)++)));
+      set_real(iterator_carrier(obj), float_vector(iterator_sequence(obj), iterator_position(obj)++));
+      return(iterator_carrier(obj));
     }
   return(iterator_quit(obj));
 }
 
-static s7_pointer complex_vector_iterate(s7_scheme *sc, s7_pointer obj)
+static s7_pointer complex_vector_iterate_uncarried(s7_scheme *sc, s7_pointer obj)
+{
+  if (iterator_position(obj) < iterator_length(obj))
+    return(c_complex_to_s7(sc, complex_vector(iterator_sequence(obj), iterator_position(obj)++)));
+  return(iterator_quit(obj));
+}
+
+static s7_pointer complex_vector_iterate_carried(s7_scheme *sc, s7_pointer obj)
 {
   if (iterator_position(obj) < iterator_length(obj))
     {
-      if (iterator_carrier(obj))
-	{
-	  set_real_part(iterator_carrier(obj), creal(complex_vector(iterator_sequence(obj), iterator_position(obj))));
-	  set_imag_part(iterator_carrier(obj), cimag(complex_vector(iterator_sequence(obj), iterator_position(obj)++)));
-	  return(iterator_carrier(obj));
-	}
-      return(c_complex_to_s7(sc, complex_vector(iterator_sequence(obj), iterator_position(obj)++)));
+      set_a_bi(iterator_carrier(obj), complex_vector(iterator_sequence(obj), iterator_position(obj)++));
+      return(iterator_carrier(obj));
     }
   return(iterator_quit(obj));
 }
 
-static s7_pointer int_vector_iterate(s7_scheme *sc, s7_pointer obj)
+static s7_pointer int_vector_iterate_uncarried(s7_scheme *sc, s7_pointer obj)
+{
+  if (iterator_position(obj) < iterator_length(obj))
+    return(make_integer(sc, int_vector(iterator_sequence(obj), iterator_position(obj)++)));
+  return(iterator_quit(obj));
+}
+
+static s7_pointer int_vector_iterate_carried(s7_scheme *sc, s7_pointer obj)
 {
   if (iterator_position(obj) < iterator_length(obj))
     {
-      if (iterator_carrier(obj))
-	{
-	  set_integer(iterator_carrier(obj), int_vector(iterator_sequence(obj), iterator_position(obj)++));
-	  return(iterator_carrier(obj));
-	}
-      return(make_integer(sc, int_vector(iterator_sequence(obj), iterator_position(obj)++)));
+      set_integer(iterator_carrier(obj), int_vector(iterator_sequence(obj), iterator_position(obj)++));
+      return(iterator_carrier(obj));
     }
   return(iterator_quit(obj));
 }
@@ -32411,7 +32429,7 @@ s7_pointer s7_make_iterator(s7_scheme *sc, s7_pointer e)
       if (e == sc->rootlet)
 	{
 	  let_iterator_set_slot(iter, sc->rootlet_slots);
-	  iterator_next(iter) = let_iterate;
+	  iterator_next(iter) = let_iterate_uncarried;
 	  return(iter);
 	}
       if (e == sc->starlet)
@@ -32419,7 +32437,7 @@ s7_pointer s7_make_iterator(s7_scheme *sc, s7_pointer e)
       p = find_make_iterator_method(sc, e, iter);
       if (p) return(p);
       let_iterator_set_slot(iter, let_slots(e));
-      iterator_next(iter) = let_iterate;
+      iterator_next(iter) = let_iterate_uncarried;
       break;
 
     case T_HASH_TABLE:
@@ -32451,17 +32469,17 @@ s7_pointer s7_make_iterator(s7_scheme *sc, s7_pointer e)
 
     case T_INT_VECTOR:
       iterator_length(iter) = vector_length(e);
-      iterator_next(iter) = int_vector_iterate;
+      iterator_next(iter) = int_vector_iterate_uncarried;
       break;
 
     case T_FLOAT_VECTOR:
       iterator_length(iter) = vector_length(e);
-      iterator_next(iter) = float_vector_iterate;
+      iterator_next(iter) = float_vector_iterate_uncarried;
       break;
 
     case T_COMPLEX_VECTOR:
       iterator_length(iter) = vector_length(e);
-      iterator_next(iter) = complex_vector_iterate;
+      iterator_next(iter) = complex_vector_iterate_uncarried;
       break;
 
     case T_NIL: /* (make-iterator #()) -> #<iterator: vector>, so I guess () should also work */
@@ -32515,19 +32533,33 @@ s7 chooses an appropriate value."
 
   if (carrier)
     {
-      /* no carrier needed if seq is t_vector, byte_vector, string, c-object, nil or list, else cons for hash/let, 
+      /* no carrier needed if seq is t_vector, byte_vector, string, c-object, nil or list, else cons for hash/let,
        *   mutable int|float|complex if int|byte|float|complex-vector, but scheme code can't create a mutable number, so use #t as carrier arg.
        */
       if (carrier == sc->T)  /* #t = conjure up an appropriate carrier */
 	{
 	  switch (type(seq)) /* all types that have carriers use iterator_carrier */
 	    {
-	    case T_INT_VECTOR:     iterator_carrier(iter) = make_mutable_integer(sc, 0);        break;
-	    case T_FLOAT_VECTOR:   iterator_carrier(iter) = make_mutable_real(sc, 0.0);         break;
-	    case T_COMPLEX_VECTOR: iterator_carrier(iter) = make_mutable_complex(sc, 0.0, 0.0); break;
-	    case T_HASH_TABLE:     
-	    case T_LET:            iterator_carrier(iter) = cons(sc, sc->F, sc->F);             break;
-	    default: 
+	    case T_INT_VECTOR:
+	      iterator_carrier(iter) = make_mutable_integer(sc, 0);
+	      iterator_next(iter) = int_vector_iterate_carried;
+	      break;
+	    case T_FLOAT_VECTOR:
+	      iterator_carrier(iter) = make_mutable_real(sc, 0.0);
+	      iterator_next(iter) = float_vector_iterate_carried;
+	      break;
+	    case T_COMPLEX_VECTOR:
+	      iterator_carrier(iter) = make_mutable_complex(sc, 0.0, 0.0);
+	      iterator_next(iter) = complex_vector_iterate_carried;
+	      break;
+	    case T_HASH_TABLE:
+	      iterator_carrier(iter) = cons(sc, sc->F, sc->F);
+	      break;
+	    case T_LET:
+	      iterator_carrier(iter) = cons(sc, sc->F, sc->F);
+	      iterator_next(iter) = let_iterate_carried;
+	      break;
+	    default:
 	      return(iter);
 	    }
 	  set_has_carrier(iter);
@@ -32546,6 +32578,8 @@ s7 chooses an appropriate value."
 	    {
 	      iterator_carrier(iter) = carrier;
 	      set_has_carrier(iter);
+	      if ((is_let(seq)) && (seq != sc->starlet))
+		iterator_next(iter) = let_iterate_carried;
 	    }}}
   return(iter);
 }
@@ -41707,7 +41741,7 @@ a vector that points to the same elements as the original-vector but with differ
     else
       if (is_t_vector(x))
 	vector_elements(x) = (s7_pointer *)(vector_elements(orig) + offset);
-      else 
+      else
 	if (is_byte_vector(x))
 	  byte_vector_bytes(x) = (uint8_t *)(byte_vector_bytes(orig) + offset);
 	else complex_vector_complexs(x) = (s7_complex *)(complex_vector_complexs(orig) + offset);
@@ -49426,7 +49460,6 @@ static bool iterator_equal_1(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_i
 
     case T_LET:
       if (!is_let(y_seq)) return(false);
-      if (iterator_next(x) != iterator_next(y)) return(false);
       if (x_seq == sc->rootlet)
 	return(iterator_position(x) == iterator_position(y)); /* y_seq must also be sc->rootlet since nexts are the same (rootlet_iterate) */
       if (equivalent)
@@ -50552,7 +50585,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
       if (is_float_vector(source))
 	error_nr(sc, sc->wrong_type_arg_symbol,
 		 set_elist_4(sc, wrap_string(sc, "can't ~S ~S to ~A", 17), caller, source, sc->type_names[type(dest)]));
-    case T_FLOAT_VECTOR: 
+    case T_FLOAT_VECTOR:
       if (is_complex_vector(source))
 	error_nr(sc, sc->wrong_type_arg_symbol,
 		 set_elist_4(sc, wrap_string(sc, "can't ~S ~S to ~A", 17), caller, source, sc->type_names[type(dest)]));
@@ -72400,15 +72433,15 @@ static bool symbol_is_safe(s7_scheme *sc, s7_pointer arg, s7_pointer e)
 {
   if (is_symbol(arg)) /* maybe normal here but check clo* key (see below) */
     {
-      if (is_keyword(arg)) 
+      if (is_keyword(arg))
 	return(true);
       if (sc->in_with_let)
 	return(pair_symbol_is_safe(sc, arg, e));
-      if (is_slot(global_slot(arg))) 
+      if (is_slot(global_slot(arg)))
 	return(true);
 #if OPT_DEBUG
       if (symbol_is_in_big_symbol_set(sc, arg) != arg_findable(sc, arg, e))
-	fprintf(stderr, "%s%s[%d] %s: %d %d\n", (symbol_is_in_big_symbol_set(sc, arg) == 0) ? "  " : "", 
+	fprintf(stderr, "%s%s[%d] %s: %d %d\n", (symbol_is_in_big_symbol_set(sc, arg) == 0) ? "  " : "",
 		__func__, __LINE__, display(arg), symbol_is_in_big_symbol_set(sc, arg), arg_findable(sc, arg, e));
 #endif
       if ((!symbol_is_in_big_symbol_set(sc, arg)) &&
@@ -74149,7 +74182,7 @@ static bool symbols_are_safe(s7_scheme *sc, s7_pointer args, s7_pointer e)
       s7_pointer arg = car(p);
       if ((OPT_DEBUG) && (symbol_is_in_big_symbol_set(sc, arg) != arg_findable(sc, arg, e)))
 	{
-	  fprintf(stderr, "%s%s[%d] %s: %d %d\n", (symbol_is_in_big_symbol_set(sc, arg) == 0) ? "  " : "", 
+	  fprintf(stderr, "%s%s[%d] %s: %d %d\n", (symbol_is_in_big_symbol_set(sc, arg) == 0) ? "  " : "",
 		  __func__, __LINE__, display(arg), symbol_is_in_big_symbol_set(sc, arg), arg_findable(sc, arg, e));
 	  if (!arg_findable(sc, arg, e))
 	    abort();
@@ -74381,7 +74414,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
   opcode_t op = syntax_opcode(func);
   s7_pointer body = cdr(expr), vars, init_e = e;
   bool body_export_ok = true;
-  if (SHOW_EVAL_OPS) fprintf(stderr, "  %s[%d]: expr: %s, func: %s, e: %s, op: %s\n", __func__, __LINE__, 
+  if (SHOW_EVAL_OPS) fprintf(stderr, "  %s[%d]: expr: %s, func: %s, e: %s, op: %s\n", __func__, __LINE__,
 			     display_truncated(expr), display(func), display(e), op_names[op]);
   sc->w = e;
   switch (op)
@@ -74390,7 +74423,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
     case OP_MACROEXPAND:
       if (is_proper_list_1(sc, body))
 	{
-	  clean_up_big_symbol_set(sc, init_e, e);      
+	  clean_up_big_symbol_set(sc, init_e, e);
 	  return(OPT_F);
 	}
       return(OPT_OOPS);
@@ -74542,7 +74575,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 		  add_symbol_to_big_symbol_set(sc, car(vars));
 		  set_cdr(e, cons(sc, car(vars), cdr(e))); /* export it */
 		}
-	      else 
+	      else
 		{
 		  add_symbol_to_big_symbol_set(sc, car(vars));
 		  e = cons(sc, car(vars), e);
@@ -75893,7 +75926,7 @@ static bool check_recur_if(s7_scheme *sc, const s7_pointer name, int32_t pars, s
 		      ((pars == 1) || ((is_fxable(sc, caddr(la1))) && (is_fxable(sc, caddr(la2))))) &&
 		      ((pars <= 2) || ((is_fxable(sc, cadddr(la1))) && (is_fxable(sc, cadddr(la2))))))
 		    {
-		      set_safe_optimize_op(body, (pars == 1) ? OP_RECUR_IF_A_A_IF_A_A_opLA_LAq : 
+		      set_safe_optimize_op(body, (pars == 1) ? OP_RECUR_IF_A_A_IF_A_A_opLA_LAq :
 					           ((pars == 2) ? OP_RECUR_IF_A_A_IF_A_A_opL2A_L2Aq : OP_RECUR_IF_A_A_IF_A_A_opL3A_L3Aq));
 		      fx_annotate_arg(sc, cdr(body), args);
 		      fx_annotate_arg(sc, obody, args);
@@ -75988,7 +76021,7 @@ static bool check_recur_if(s7_scheme *sc, const s7_pointer name, int32_t pars, s
 		  }
 		else return(false);
 	      fx_annotate_arg(sc, cdr(body), args);      /* test */
-	      if (call == cadddr(body)) 
+	      if (call == cadddr(body))
 		{
 		  set_true_is_done(body);
 		  fx_annotate_arg(sc, cddr(body), args); /* result */
@@ -87968,7 +88001,7 @@ static bool op_tc_if_a_z_la(s7_scheme *sc, s7_pointer code)
 	      while (o->v[0].fb(o) != true_quits) {set_integer(val, o1->v[0].fi(o1));}
 	      return(op_tc_z(sc, if_done));
 	    }}}
-  if (fx_proc(la) == fx_cdr_t) 
+  if (fx_proc(la) == fx_cdr_t)
     while ((fx_call(sc, if_test) != sc->F) != true_quits) {slot_set_value(la_slot, cdr(slot_value(la_slot)));}
   else while ((fx_call(sc, if_test) != sc->F) != true_quits) {slot_set_value(la_slot, fx_call(sc, la));}
   return(op_tc_z(sc, if_done));
@@ -89112,7 +89145,7 @@ static inline void recur_push(s7_scheme *sc, s7_pointer value)
   sc->rec_loc++;
 }
 
-static inline void recur_push_unchecked(s7_scheme *sc, s7_pointer value) 
+static inline void recur_push_unchecked(s7_scheme *sc, s7_pointer value)
 {
   if ((S7_DEBUGGING) && (sc->rec_loc == sc->rec_len)) fprintf(stderr, "%s[%d]: recur stack resize skipped\n", __func__, __LINE__);
   sc->rec_els[sc->rec_loc++] = value;
@@ -91361,7 +91394,7 @@ static void back_up_stack(s7_scheme *sc)
       pop_stack(sc);
       top_op = stack_top_op(sc);
     }
-  if ((top_op == OP_READ_VECTOR) || (top_op == OP_READ_BYTE_VECTOR) || (top_op == OP_READ_INT_VECTOR) || 
+  if ((top_op == OP_READ_VECTOR) || (top_op == OP_READ_BYTE_VECTOR) || (top_op == OP_READ_INT_VECTOR) ||
       (top_op == OP_READ_FLOAT_VECTOR) || (top_op == OP_READ_COMPLEX_VECTOR))
    {
       pop_stack(sc);
@@ -93947,7 +93980,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_TC_WHEN_L3A:              sc->value = op_tc_when_l3a(sc, sc->code);          continue;
 	case OP_TC_IF_A_Z_LA:             if (op_tc_if_a_z_la(sc, sc->code))                 continue; goto EVAL;
 	case OP_TC_IF_A_Z_L2A:            if (op_tc_if_a_z_l2a(sc, sc->code))                continue; goto EVAL;
-	case OP_TC_IF_A_Z_L3A:            if (op_tc_if_a_z_l3a(sc, sc->code))                continue; goto EVAL; 
+	case OP_TC_IF_A_Z_L3A:            if (op_tc_if_a_z_l3a(sc, sc->code))                continue; goto EVAL;
 
 	case OP_TC_IF_A_Z_IF_A_Z_LA:      if (op_tc_if_a_z_if_a_z_la(sc, sc->code, true))    continue; goto EVAL;
 	case OP_TC_IF_A_Z_IF_A_LA_Z:      if (op_tc_if_a_z_if_a_z_la(sc, sc->code, false))   continue; goto EVAL;
@@ -94362,6 +94395,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 		return(sc->F);
 	    }
 	case OP_BEGIN_NO_HOOK:
+	  set_current_code(sc, car(sc->code)); /* better error message if unbound variable: (define (func) (let ((sig 0)) 0) (lcm sig)) (func) */
 	  goto BEGIN;
 
 	case OP_BEGIN_2_UNCHECKED:
@@ -97536,9 +97570,6 @@ static void init_features(s7_scheme *sc)
 #if POINTER_32
   s7_provide(sc, "32-bit");
 #endif
-#if S7_WITH_COMPLEX_VECTORS
-  s7_provide(sc, "FFI-for-complex-vectors");
-#endif
 
 #ifdef __APPLE__
   s7_provide(sc, "osx");
@@ -99609,11 +99640,11 @@ int main(int argc, char **argv)
  * tread            2421   2419   2408   2405   2245
  * tcopy            5546   2539   2375   2386   2346
  * trclo     8031   2574   2454   2445   2449   2359
- * titer     3657   2842   2641   2509   2449   2386
  * tmat             3042   2524   2578   2590   2523
  * tload                   3046   2404   2566   2538
  * fbench    2933   2583   2460   2430   2478   2571
  * tsort     3683   3104   2856   2804   2858   2858
+ * titer     4550   3349   3070   2985   2966   2918
  * tio              3752   3683   3620   3583   3122
  * tobj             3970   3828   3577   3508   3440
  * tmac             3873   3033   3677   3677   3509
@@ -99654,11 +99685,11 @@ int main(int argc, char **argv)
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * safe_do hop bit in other do cases and let
  *
- * complex-vector: cload wrapper?, opt/do: "z" maybe in optimizer?? lint
- *   gsl: there are more vector_complex entries in the h file
+ * complex-vector: cload wrapper?, opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
- *   check (and tests7?) gsl without s7_with_complex_vectors
- *   tcomplex to test complex opts, complex fft
+ *   tcomplex to test complex opts, complex fft, dsp: dolph z-transform cfft! (already used in tfft -- fft-bench)
+ *   in titer (complex-vector-set! v i (complex ...)) can skip the complex variable creation
+ *      similarly for + etc? (z=s7_complex etc)
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
@@ -99668,22 +99699,17 @@ int main(int argc, char **argv)
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
  * function location info for C/FFI funcs (cload could do this, but it would be the FFI location):
- *   #define stringify_1(x) #x
- *   #define stringify(x) stringify_1(x)
- *   static const char *L_abs = __FILE__ "[" stringify(__LINE__) "]";
+ *   #define stringify_1(x) #x, #define stringify(x) stringify_1(x), static const char *L_abs = __FILE__ "[" stringify(__LINE__) "]";
  *   then at init time: s7_set_location(abs, L_abs)|s7_location(abs)? maybe include s7_scheme arg
  *   object->let, *function*, maybe procedure-location, (scheme funcs have (*function* (curlet) 'file|line), but we'd want this via the function name)
  *   or better? build a location function with the data, funcs alphabetized, etc
  *
  * map vector -> vector? ambiguous if two args not same type, (apply vector (map...)) where the optimizer could omit the intermediate list, tapply
  *   lint? display->wrapper
- *
  * get rid of cur_sc! [68 references, only 4 not under s7_debugging or special case junk like pointer_32]
  *
  * big_symbol_set: do-vars? (tlimit), tlet fx trouble, tgen clean_up, dup?
  *   look at where big_symbol_set loses now (func pars at least and do vars)
- *   tests for shadow counter (t718)
  *   begin/end_big_symbol_set + running check if possible
- *   t718: unbound variable error gives bogus code ref sometimes
  *   tests7 t101 stacktrace complains about small test stuff stacktrace_watcher
  */
