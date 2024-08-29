@@ -1538,7 +1538,7 @@ static void add_saved_pointer(s7_scheme *sc, void *p)
   if (sc->saved_pointers_loc == sc->saved_pointers_size)
     {
       sc->saved_pointers_size *= 2;
-      sc->saved_pointers = (void **)Realloc(Sc, sc->saved_pointers, sc->saved_pointers_size * sizeof(void *));
+      sc->saved_pointers = (void **)Realloc(sc, sc->saved_pointers, sc->saved_pointers_size * sizeof(void *));
     }
   sc->saved_pointers[sc->saved_pointers_loc++] = p;
 }
@@ -6676,7 +6676,7 @@ static void resize_gc_protect(s7_scheme *sc)
   vector_elements(sc->protected_objects) = (s7_pointer *)block_data(nb);
   vector_length(sc->protected_objects) = new_size;
   sc->protected_objects_size = new_size;
-  sc->protected_objects_free_list = (s7_int *)Realloc(Sc, sc->protected_objects_free_list, new_size * sizeof(s7_int));
+  sc->protected_objects_free_list = (s7_int *)Realloc(sc, sc->protected_objects_free_list, new_size * sizeof(s7_int));
   for (s7_int i = size; i < new_size; i++)
     {
       vector_element(sc->protected_objects, i) = sc->unused;
@@ -7037,7 +7037,7 @@ static void add_to_gc_list(s7_scheme *sc, gc_list_t *gp, s7_pointer p)
   if (gp->loc == gp->size)
     {
       gp->size *= 2;
-      gp->list = (s7_pointer *)Realloc(Sc, gp->list, gp->size * sizeof(s7_pointer));
+      gp->list = (s7_pointer *)Realloc(sc, gp->list, gp->size * sizeof(s7_pointer));
     }
   gp->list[gp->loc++] = p;
 }
@@ -7130,7 +7130,7 @@ static void add_setter(s7_scheme *sc, s7_pointer p, s7_pointer setter)
   if (sc->setters_loc == sc->setters_size)
     {
       sc->setters_size *= 2;
-      sc->setters = (s7_pointer *)Realloc(Sc, sc->setters, sc->setters_size * sizeof(s7_pointer));
+      sc->setters = (s7_pointer *)Realloc(sc, sc->setters, sc->setters_size * sizeof(s7_pointer));
     }
   sc->setters[sc->setters_loc++] = semipermanent_cons(sc, p, setter, T_PAIR | T_IMMUTABLE);
 }
@@ -7860,7 +7860,7 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
       sc->heap_size = old_size + 64000;
     }
 #endif
-  cp = (s7_cell **)Realloc(Sc, sc->heap, sc->heap_size * sizeof(s7_cell *));
+  cp = (s7_cell **)Realloc(sc, sc->heap, sc->heap_size * sizeof(s7_cell *));
   if (cp)
     sc->heap = cp;
   else /* can this happen? */
@@ -7868,9 +7868,9 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
       s7_warn(sc, 256, "heap reallocation failed! tried to get %" ld64 " bytes (will retry with a smaller amount)\n",
 	      (int64_t)(sc->heap_size * sizeof(s7_cell *)));
       sc->heap_size = old_size + 64000;
-      sc->heap = (s7_cell **)Realloc(Sc, sc->heap, sc->heap_size * sizeof(s7_cell *));
+      sc->heap = (s7_cell **)Realloc(sc, sc->heap, sc->heap_size * sizeof(s7_cell *));
     }
-  sc->free_heap = (s7_cell **)Realloc(Sc, sc->free_heap, sc->heap_size * sizeof(s7_cell *));
+  sc->free_heap = (s7_cell **)Realloc(sc, sc->free_heap, sc->heap_size * sizeof(s7_cell *));
   sc->free_heap_trigger = (s7_cell **)(sc->free_heap + GC_TRIGGER_SIZE);
   sc->free_heap_top = sc->free_heap + old_free; /* incremented below, added old_free 21-Aug-12?!? */
 
@@ -8193,7 +8193,7 @@ static void resize_op_stack(s7_scheme *sc)
 #else
     error_nr(sc, make_symbol(sc, "stack-too-big", 13), set_elist_1(sc, wrap_string(sc, "op stack has grown past (*s7* 'max-stack-size)", 46)));
 #endif
-  sc->op_stack = (s7_pointer *)Realloc(Sc, (void *)(sc->op_stack), new_size * sizeof(s7_pointer));
+  sc->op_stack = (s7_pointer *)Realloc(sc, (void *)(sc->op_stack), new_size * sizeof(s7_pointer));
   for (uint32_t i = sc->op_stack_size; i < new_size; i++) sc->op_stack[i] = sc->unused;
   sc->op_stack_size = (uint32_t)new_size;
   sc->op_stack_now = (s7_pointer *)(sc->op_stack + loc);
@@ -11549,7 +11549,7 @@ static bool tree_is_cyclic_1(s7_scheme *sc, s7_pointer tree)
 	  else
 	    {
 	      sc->tree_pointers_size *= 2;
-	      sc->tree_pointers = (s7_pointer *)Realloc(Sc, sc->tree_pointers, sc->tree_pointers_size * sizeof(s7_pointer));
+	      sc->tree_pointers = (s7_pointer *)Realloc(sc, sc->tree_pointers, sc->tree_pointers_size * sizeof(s7_pointer));
 	    }}
       sc->tree_pointers[sc->tree_pointers_top++] = p;
       if (is_unquoted_pair(car(p)))
@@ -14744,7 +14744,7 @@ static void insert_spaces(s7_scheme *sc, const char *src, s7_int width, s7_int l
   if (width >= sc->num_to_str_size)
     {
       sc->num_to_str_size = width + 1;
-      sc->num_to_str = (char *)Realloc(Sc, sc->num_to_str, sc->num_to_str_size);
+      sc->num_to_str = (char *)Realloc(sc, sc->num_to_str, sc->num_to_str_size);
     }
   sc->num_to_str[width] = '\0';
   memmove((void *)(sc->num_to_str + spaces), (const void *)src, len);
@@ -14763,7 +14763,7 @@ static char *number_to_string_base_10(s7_scheme *sc, s7_pointer obj, s7_int widt
   len = (len > 512) ? (512 + 2 * len) : 1024;
   if (len > sc->num_to_str_size)
     {
-      sc->num_to_str = (sc->num_to_str) ? (char *)Realloc(Sc, sc->num_to_str, len) : (char *)Malloc(sc, len);
+      sc->num_to_str = (sc->num_to_str) ? (char *)Realloc(sc, sc->num_to_str, len) : (char *)Malloc(sc, len);
       sc->num_to_str_size = len;
     }
 
@@ -15312,7 +15312,7 @@ static void resize_strbuf(s7_scheme *sc, s7_int needed_size)
 {
   s7_int old_size = sc->strbuf_size;
   while (sc->strbuf_size <= needed_size) sc->strbuf_size *= 2;
-  sc->strbuf = (char *)Realloc(Sc, sc->strbuf, sc->strbuf_size);
+  sc->strbuf = (char *)Realloc(sc, sc->strbuf, sc->strbuf_size);
   for (s7_int i = old_size; i < sc->strbuf_size; i++) sc->strbuf[i] = '\0';
 }
 
@@ -29311,7 +29311,7 @@ static s7_pointer file_read_line(s7_scheme *sc, s7_pointer port, bool with_eol)
 
       /* need more data */
       sc->read_line_buf_size *= 2;
-      sc->read_line_buf = (char *)Realloc(Sc, sc->read_line_buf, sc->read_line_buf_size);
+      sc->read_line_buf = (char *)Realloc(sc, sc->read_line_buf, sc->read_line_buf_size);
       buf = (char *)(sc->read_line_buf + cur_size);
       str = fgets(buf, read_size, port_file(port));
       if (!str) return(eof_object);
@@ -29947,7 +29947,7 @@ static int32_t remember_file_name(s7_scheme *sc, const char *file)
 	{
 	  old_size = sc->file_names_size;
 	  sc->file_names_size *= 2;
-	  sc->file_names = (s7_pointer *)Realloc(Sc, sc->file_names, sc->file_names_size * sizeof(s7_pointer));
+	  sc->file_names = (s7_pointer *)Realloc(sc, sc->file_names, sc->file_names_size * sizeof(s7_pointer));
 	}
       for (int32_t i = old_size; i < sc->file_names_size; i++)
 	sc->file_names[i] = sc->F;
@@ -30564,7 +30564,7 @@ static /* inline */ void push_input_port(s7_scheme *sc, s7_pointer new_port)
   if (sc->input_port_stack_loc >= sc->input_port_stack_size)
     {
       sc->input_port_stack_size *= 2;
-      sc->input_port_stack = (s7_pointer *)Realloc(Sc, sc->input_port_stack, sc->input_port_stack_size * sizeof(s7_pointer));
+      sc->input_port_stack = (s7_pointer *)Realloc(sc, sc->input_port_stack, sc->input_port_stack_size * sizeof(s7_pointer));
     }
   sc->input_port_stack[sc->input_port_stack_loc++] = current_input_port(sc);
   set_current_input_port(sc, new_port);
@@ -31448,9 +31448,9 @@ void s7_autoload_set_names(s7_scheme *sc, const char **names, s7_int size)
     if (sc->autoload_names_loc >= sc->autoload_names_top)
       {
 	sc->autoload_names_top *= 2;
-	sc->autoload_names = (const char ***)Realloc(Sc, sc->autoload_names, sc->autoload_names_top * sizeof(const char **));
-	sc->autoload_names_sizes = (s7_int *)Realloc(Sc, sc->autoload_names_sizes, sc->autoload_names_top * sizeof(s7_int));
-	sc->autoloaded_already = (bool **)Realloc(Sc, sc->autoloaded_already, sc->autoload_names_top * sizeof(bool *));
+	sc->autoload_names = (const char ***)Realloc(sc, sc->autoload_names, sc->autoload_names_top * sizeof(const char **));
+	sc->autoload_names_sizes = (s7_int *)Realloc(sc, sc->autoload_names_sizes, sc->autoload_names_top * sizeof(s7_int));
+	sc->autoloaded_already = (bool **)Realloc(sc, sc->autoloaded_already, sc->autoload_names_top * sizeof(bool *));
 	for (s7_int i = sc->autoload_names_loc; i < sc->autoload_names_top; i++)
 	  {
 	    sc->autoload_names[i] = NULL;
@@ -32709,9 +32709,9 @@ static void enlarge_shared_info(shared_info_t *ci)
 {
   ci->size *= 2;
   ci->size2 = ci->size - 2;
-  ci->objs = (s7_pointer *)Realloc(Sc, ci->objs, ci->size * sizeof(s7_pointer));
-  ci->refs = (int32_t *)Realloc(Sc, ci->refs, ci->size * sizeof(int32_t));
-  ci->defined = (bool *)Realloc(Sc, ci->defined, ci->size * sizeof(bool));
+  ci->objs = (s7_pointer *)Realloc(sc, ci->objs, ci->size * sizeof(s7_pointer));
+  ci->refs = (int32_t *)Realloc(sc, ci->refs, ci->size * sizeof(int32_t));
+  ci->defined = (bool *)Realloc(sc, ci->defined, ci->size * sizeof(bool));
   /* this clearing is needed, memclr is not faster */
   for (int32_t i = ci->top; i < ci->size; i++)
     {
@@ -33952,7 +33952,7 @@ static char *complex_to_string_base_10(s7_scheme *sc, s7_complex obj, s7_int wid
   len = (len > 512) ? (512 + 2 * len) : 1024;
   if (len > sc->num_to_str_size)
     {
-      sc->num_to_str = (sc->num_to_str) ? (char *)Realloc(Sc, sc->num_to_str, len) : (char *)Malloc(sc, len);
+      sc->num_to_str = (sc->num_to_str) ? (char *)Realloc(sc, sc->num_to_str, len) : (char *)Malloc(sc, len);
       sc->num_to_str_size = len;
     }
   sc->num_to_str[0] = '\0';
@@ -36827,7 +36827,7 @@ static format_data_t *open_format_data(s7_scheme *sc)
   if (sc->format_depth >= sc->num_fdats)
     {
       int32_t new_num_fdats = sc->format_depth * 2;
-      sc->fdats = (format_data_t **)Realloc(Sc, sc->fdats, sizeof(format_data_t *) * new_num_fdats);
+      sc->fdats = (format_data_t **)Realloc(sc, sc->fdats, sizeof(format_data_t *) * new_num_fdats);
       for (int32_t k = sc->num_fdats; k < new_num_fdats; k++) sc->fdats[k] = NULL;
       sc->num_fdats = new_num_fdats;
     }
@@ -37717,7 +37717,7 @@ system captures the output as a string and returns it."
 	  if (cur_len + buf_len >= full_len)
 	    {
 	      full_len += BUF_SIZE * 2;
-	      str = (str) ? (char *)Realloc(Sc, str, full_len) : (char *)Malloc(sc, full_len);
+	      str = (str) ? (char *)Realloc(sc, str, full_len) : (char *)Malloc(sc, full_len);
 	    }
 	  memcpy((void *)(str + cur_len), (void *)buf, buf_len);
 	  cur_len += buf_len;
@@ -47702,7 +47702,7 @@ s7_int s7_make_c_type(s7_scheme *sc, const char *name) /* shouldn't this be s7_m
       else
 	{
 	  sc->c_object_types_size = tag * 2;
-	  sc->c_object_types = (c_object_t **)Realloc(Sc, (void *)(sc->c_object_types), sc->c_object_types_size * sizeof(c_object_t *));
+	  sc->c_object_types = (c_object_t **)Realloc(sc, (void *)(sc->c_object_types), sc->c_object_types_size * sizeof(c_object_t *));
 	}}
   c_type = (c_object_t *)Calloc(sc, 1, sizeof(c_object_t)); /* Malloc+field=NULL is slightly faster here */
   sc->c_object_types[tag] = c_type;
@@ -52919,15 +52919,15 @@ static s7_pointer g_profile_in(s7_scheme *sc, s7_pointer args) /* only external 
       if (pos >= pd->size)
 	{
 	  s7_int new_size = 2 * pos;
-	  pd->funcs = (s7_pointer *)Realloc(Sc, pd->funcs, new_size * sizeof(s7_pointer));
+	  pd->funcs = (s7_pointer *)Realloc(sc, pd->funcs, new_size * sizeof(s7_pointer));
 	  memclr((void *)(pd->funcs + pd->size), (new_size - pd->size) * sizeof(s7_pointer));
-	  pd->timing_data = (s7_int *)Realloc(Sc, pd->timing_data, new_size * PD_BLOCK_SIZE * sizeof(s7_int));
+	  pd->timing_data = (s7_int *)Realloc(sc, pd->timing_data, new_size * PD_BLOCK_SIZE * sizeof(s7_int));
           memclr((void *)(pd->timing_data + (pd->size * PD_BLOCK_SIZE)), (new_size - pd->size) * PD_BLOCK_SIZE * sizeof(s7_int));
-	  pd->let_names = (s7_pointer *)Realloc(Sc, pd->let_names, new_size * sizeof(s7_pointer));
+	  pd->let_names = (s7_pointer *)Realloc(sc, pd->let_names, new_size * sizeof(s7_pointer));
 	  memclr((void *)(pd->let_names + pd->size), (new_size - pd->size) * sizeof(s7_pointer));
-	  pd->files = (s7_pointer *)Realloc(Sc, pd->files, new_size * sizeof(s7_pointer));
+	  pd->files = (s7_pointer *)Realloc(sc, pd->files, new_size * sizeof(s7_pointer));
 	  memclr((void *)(pd->files + pd->size), (new_size - pd->size) * sizeof(s7_pointer));
-	  pd->lines = (s7_int *)Realloc(Sc, pd->lines, new_size * sizeof(s7_int));
+	  pd->lines = (s7_int *)Realloc(sc, pd->lines, new_size * sizeof(s7_int));
 	  memclr((void *)(pd->lines + pd->size), (new_size - pd->size) * sizeof(s7_int));
 	  pd->size = new_size;
 	}
@@ -52957,7 +52957,7 @@ static s7_pointer g_profile_in(s7_scheme *sc, s7_pointer args) /* only external 
 	  if (pd->excl_top == pd->excl_size)
 	    {
 	      pd->excl_size *= 2;
-	      pd->excl = (s7_int *)Realloc(Sc, pd->excl, pd->excl_size * sizeof(s7_int));
+	      pd->excl = (s7_int *)Realloc(sc, pd->excl, pd->excl_size * sizeof(s7_int));
 	    }
 	  pd->excl[pd->excl_top] = 0;
 	}
@@ -99701,6 +99701,7 @@ int main(int argc, char **argv)
  *   tcomplex to test complex opts, complex fft, dsp: dolph z-transform cfft! (already used in tfft -- fft-bench)
  *   in tari (complex-vector-set! v i (complex ...)) can skip the complex variable creation
  *      similarly for + etc? (z=s7_complex etc), mpc tests?  (complex -> (c-complex)) in chooser
+ * opt_d_7p additions?
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
