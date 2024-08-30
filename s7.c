@@ -1351,7 +1351,7 @@ struct s7_scheme {
              port_file_symbol, port_position_symbol, port_string_symbol, procedure_source_symbol, provide_symbol,
              qq_append_symbol, quotient_symbol,
              random_state_symbol, random_state_to_list_symbol, random_symbol, rationalize_symbol, read_byte_symbol,
-             read_char_symbol, read_line_symbol, read_string_symbol, read_symbol, real_part_symbol, remainder_symbol,
+             read_char_symbol, read_line_symbol, read_string_symbol, read_symbol, reader_cond_symbol, real_part_symbol, remainder_symbol,
              require_symbol, reverse_symbol, reverseb_symbol, rootlet_symbol, round_symbol,
              setter_symbol, set_car_symbol, set_cdr_symbol,
              set_current_error_port_symbol, set_current_input_port_symbol, set_current_output_port_symbol,
@@ -1398,9 +1398,9 @@ struct s7_scheme {
 
   /* optimizer s7_functions */
   s7_pointer add_1x, add_2, add_3, add_i_random, add_x1, append_2, bv_ref_2, bv_ref_3, bv_set_3, cdr_let_ref, cdr_let_set, char_equal_2, char_greater_2,
-             char_less_2, char_position_csi, curlet_ref, display_2, display_f, dynamic_wind_body, dynamic_wind_init, dynamic_wind_unchecked, format_as_objstr,
-             format_f, format_just_control_string, format_no_column, fv_ref_2, fv_ref_3, fv_set_3, fv_set_unchecked, geq_2, get_output_string_uncopied,
-             hash_table_2, hash_table_ref_2, int_log2, is_defined_in_rootlet, is_defined_in_unlet, iv_ref_2, iv_ref_3, iv_set_3,
+             char_less_2, char_position_csi, curlet_ref, cv_ref_2, display_2, display_f, dynamic_wind_body, dynamic_wind_init, dynamic_wind_unchecked,
+             format_as_objstr, format_f, format_just_control_string, format_no_column, fv_ref_2, fv_ref_3, fv_set_3, fv_set_unchecked, geq_2,
+             get_output_string_uncopied, hash_table_2, hash_table_ref_2, int_log2, is_defined_in_rootlet, is_defined_in_unlet, iv_ref_2, iv_ref_3, iv_set_3,
              list_0, list_1, list_2, list_3, list_4, list_ref_at_0, list_ref_at_1, list_ref_at_2, list_set_i, memq_2, memq_3, memq_4, memq_any,
              outlet_unlet, profile_out, read_char_1, restore_setter, rootlet_ref, simple_char_eq, simple_inlet, simple_list_values, starlet_ref, starlet_set,
              string_append_2, string_c1, string_equal_2, string_equal_2c, string_greater_2, string_less_2, sublet_curlet, substring_uncopied, subtract_1,
@@ -1485,15 +1485,15 @@ static s7_pointer set_elist_1(s7_scheme *sc, s7_pointer x1);
 #if DISABLE_FILE_OUTPUT
 static FILE *old_fopen(const char *pathname, const char *mode) {return(fopen(pathname, mode));}
 
+#if (!WITH_GCC)
+/* I assume that MS C can't handle the ({...}) business (WITH_GCC include clang and tinyc) */
 #define fwrite local_fwrite
-#define fopen local_fopen   /* open only used for file_probe (O_RDONLY), creat and write not used */
-
 static size_t local_fwrite(const void *ptr, size_t size, size_t nmemb, FILE *stream)
 {
   error_nr(cur_sc, cur_sc->io_error_symbol,
 	   set_elist_1(cur_sc, wrap_string(cur_sc, "writing a file is not allowed in this version of s7", 51)));
+  return(0);
 }
-
 static FILE *local_fopen(const char *pathname, const char *mode)
 {
   if ((mode[0] == 'w') || (mode[0] == 'a'))
@@ -1501,8 +1501,14 @@ static FILE *local_fopen(const char *pathname, const char *mode)
 	     set_elist_1(cur_sc, wrap_string(cur_sc, "opening a file is not allowed in this version of s7", 51)));
   return(old_fopen(pathname, mode));
 }
+#else
+#define fwrite(Ptr, Size, N, Stream) ({error_nr(sc, sc->io_error_symbol, set_elist_1(sc, wrap_string(sc, "writing a file is not allowed in this version of s7", 51))); 0;})
+#define fopen(Path, Mode) \
+  ({if ((Mode[0] == 'w') || (Mode[0] == 'a')) \
+      error_nr(sc, sc->io_error_symbol, set_elist_1(cur_sc, wrap_string(cur_sc, "opening a file is not allowed in this version of s7", 51))); \
+    old_fopen(Path, Mode);})
 #endif
-
+#endif /* DISABLE_FILE_OUTPUT */
 
 #if POINTER_32
 static void *Malloc(s7_scheme *sc, size_t bytes)
@@ -4817,7 +4823,8 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj)
 	  /* bit 13 */
 	  ((full_typ & T_DONT_EVAL_ARGS) != 0) ? (((is_any_macro(obj)) || (is_syntax(obj))) ? " dont-eval-args" : " ?5?") : "",
 	  /* bit 14 */
-	  ((full_typ & T_EXPANSION) != 0) ?      (((is_normal_symbol(obj)) || (is_either_macro(obj))) ? " expansion" : " ?6?") : "",
+	  ((full_typ & T_EXPANSION) != 0) ?      (((is_normal_symbol(obj)) || (is_any_macro(obj))) ? " expansion" :
+						  " ?6?") : "",
 	  /* bit 15 */
 	  ((full_typ & T_MULTIPLE_VALUE) != 0) ? ((is_symbol(obj)) ? " matched" :
 						  ((is_pair(obj)) ? " values|matched" :
@@ -5028,7 +5035,7 @@ static bool has_odd_bits(s7_pointer obj)
   if (((full_typ & T_OPTIMIZED) != 0) && (!is_c_function(obj)) && (!is_pair(obj))) return(true);
   if (((full_typ & T_SAFE_CLOSURE) != 0) && (!is_any_closure(obj)) && (!is_pair(obj))) return(true);
   if (((full_typ & T_SAFE_PROCEDURE) != 0) && (!is_applicable(obj))) return(true);
-  if (((full_typ & T_EXPANSION) != 0) && (!is_normal_symbol(obj)) && (!is_either_macro(obj))) return(true);
+  if (((full_typ & T_EXPANSION) != 0) && (!is_normal_symbol(obj)) && (!is_any_macro(obj))) return(true);
   if (((full_typ & T_MULTIPLE_VALUE) != 0) && (!is_symbol(obj)) && (!is_pair(obj))) return(true);
   if (((full_typ & T_UNSAFE_DO) != 0) && (!is_pair(obj)) && (!is_let(obj)) && (!is_any_c_function(obj))) return(true);
   if (((full_typ & T_ITER_OK) != 0) && (!is_iterator(obj)) && (!is_pair(obj)) && (!is_slot(obj)) && (!is_c_function(obj)) && (!is_symbol(obj))) return(true);
@@ -43120,6 +43127,30 @@ static s7_pointer g_complex_vector_ref(s7_scheme *sc, s7_pointer args)
   return(univect_ref(sc, args, sc->complex_vector_ref_symbol, T_COMPLEX_VECTOR));
 }
 
+static s7_pointer complex_vector_ref_p_pp(s7_scheme *sc, s7_pointer v, s7_pointer index)
+{
+  s7_int ind;
+  if (!is_complex_vector(v))
+    return(method_or_bust_pp(sc, v, sc->complex_vector_ref_symbol, v, index, sc->type_names[T_COMPLEX_VECTOR], 1));
+  if (vector_rank(v) != 1)
+    return(univect_ref(sc, set_plist_2(sc, v, index), sc->complex_vector_ref_symbol, T_COMPLEX_VECTOR));
+  if (!s7_is_integer(index))
+    return(method_or_bust_pp(sc, index, sc->complex_vector_ref_symbol, v, index, sc->type_names[T_INTEGER], 2));
+  ind = s7_integer_clamped_if_gmp(sc, index);
+  if ((ind < 0) || (ind >= vector_length(v)))
+    out_of_range_error_nr(sc, sc->complex_vector_ref_symbol, int_two, index, (ind < 0) ? it_is_negative_string : it_is_too_large_string);
+  return(c_complex_to_s7(sc, complex_vector(v, ind)));
+}
+
+static s7_pointer g_cv_ref_2(s7_scheme *sc, s7_pointer args) {return(complex_vector_ref_p_pp(sc, car(args), cadr(args)));}
+static s7_pointer complex_vector_ref_p_pi_direct(s7_scheme *sc, s7_pointer v, s7_int i) {return(c_complex_to_s7(sc, complex_vector(v, i)));}
+
+static s7_pointer complex_vector_ref_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer unused_expr)
+{
+  return((args == 2) ? sc->cv_ref_2 : f);
+}
+
+
 /* -------------------------------- complex-vector-set! -------------------------------- */
 static s7_pointer g_complex_vector_set(s7_scheme *sc, s7_pointer args)
 {
@@ -43127,6 +43158,12 @@ static s7_pointer g_complex_vector_set(s7_scheme *sc, s7_pointer args)
   #define Q_complex_vector_set s7_make_circular_signature(sc, 3, 4, \
                                sc->is_complex_symbol, sc->is_complex_vector_symbol, sc->is_integer_symbol, sc->is_integer_or_number_at_end_symbol)
   return(univect_set(sc, args, sc->complex_vector_set_symbol, T_COMPLEX_VECTOR));
+}
+
+static s7_pointer complex_vector_set_p_pip_direct(s7_scheme *sc, s7_pointer v, s7_int i, s7_pointer p)
+{
+  complex_vector(v, i) = s7_to_c_complex(p);
+  return(p);
 }
 
 
@@ -43955,11 +43992,17 @@ static int32_t closure_sort_begin(const void *v1, const void *v2, void *arg)
   return((sc->value != sc->F) ? -1 : 1);
 }
 
+#define OPT_PRINT 0 /* print out info about the opt_* optimizations */
 static s7_b_7pp_t s7_b_7pp_function(s7_pointer f);
 static opt_info *alloc_opt_info(s7_scheme *sc);
 static bool bool_optimize(s7_scheme *sc, s7_pointer expr);
 static bool bool_optimize_nw(s7_scheme *sc, s7_pointer expr);
+#if OPT_PRINT
+#define cell_optimize(Sc, Expr) cell_optimize_with_line(Sc, Expr, __LINE__)
+static bool cell_optimize_with_line(s7_scheme *sc, s7_pointer expr, int line);
+#else
 static bool cell_optimize(s7_scheme *sc, s7_pointer expr);
+#endif
 
 static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 {
@@ -44216,6 +44259,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 
     case T_INT_VECTOR:
     case T_FLOAT_VECTOR:
+      /* TODO: complex vector */
       {
 	s7_int i;
 	s7_pointer vec;
@@ -47131,6 +47175,20 @@ s7_pointer s7_define_macro(s7_scheme *sc, const char *name, s7_function fnc,
   s7_define(sc, sc->rootlet, sym, func);
   return(sym);
 }
+
+#define READER_COND_C 0
+#if READER_COND_C
+s7_pointer s7_define_expansion(s7_scheme *sc, const char *name, s7_function fnc,
+			       s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc)
+{
+  s7_pointer func = s7_make_function(sc, name, fnc, required_args, optional_args, rest_arg, doc);
+  s7_pointer sym = make_symbol_with_strlen(sc, name);
+  set_full_type(func, T_C_MACRO | T_EXPANSION | T_DONT_EVAL_ARGS | T_UNHEAP); /* s7_make_function includes T_UNHEAP */
+  s7_define(sc, sc->rootlet, sym, func);
+  set_full_type(sym, full_type(sym) | T_EXPANSION);
+  return(sym);
+}
+#endif
 
 
 /* -------------------------------- macro? -------------------------------- */
@@ -50893,6 +50951,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 	  }}
       break;
 
+      /* TODO: complex vector */
     case T_FLOAT_VECTOR:
       {
 	s7_double *src = float_vector_floats(source);
@@ -51558,7 +51617,7 @@ static s7_pointer vector_append(s7_scheme *sc, s7_pointer args, uint8_t typ, s7_
   bool typed;
 
   gc_protect_via_stack(sc, args);
-  len = total_sequence_length(sc, args, caller, (typ == T_VECTOR) ? T_FREE : ((typ == T_FLOAT_VECTOR) ? T_REAL : T_INTEGER));
+  len = total_sequence_length(sc, args, caller, (typ == T_VECTOR) ? T_FREE : ((typ == T_COMPLEX_VECTOR) ? T_COMPLEX : ((typ == T_FLOAT_VECTOR) ? T_REAL : T_INTEGER)));
   if (len > sc->max_vector_length)
     {
       unstack_gc_protect(sc);
@@ -60123,9 +60182,7 @@ static opt_info *alloc_opt_info(s7_scheme *sc)
 
 #define backup_pc(sc) sc->pc--
 
-#define OPT_PRINT 0 /* print out info about the opt_* optimizations */
 #if OPT_PRINT
-
 #define return_false(Sc, Expr) return(return_false_1(Sc, Expr, __func__, __LINE__))
 static bool return_false_1(s7_scheme *sc, s7_pointer expr, const char *func, int32_t line)
 {
@@ -60158,7 +60215,7 @@ static s7_pfunc return_null_1(s7_scheme *sc, s7_pointer expr, const char *func, 
   return(NULL);
 }
 
-#define return_bool(Sc, Bool, Expr) return_bool_1(Sc, Bool, Expr, __func__, __LINE__)
+#define return_bool(Sc, Bool, Expr) return(return_bool_1(Sc, Bool, Expr, __func__, __LINE__))
 static bool return_bool_1(s7_scheme *sc, bool ok, s7_pointer expr, const char *func, int32_t line)
 {
   if (expr)
@@ -60166,7 +60223,6 @@ static bool return_bool_1(s7_scheme *sc, bool ok, s7_pointer expr, const char *f
   else fprintf(stderr, "   %s%s[%d]%s: %s\n", (ok) ? blue_text : "", func, line, (ok)? uncolor_text : "", (ok) ? "true" : "false");
   return(ok);
 }
-
 #else
 #define return_false(Sc, Expr) return(false)
 #define return_true(Sc, Expr) return(true)
@@ -63776,6 +63832,8 @@ static s7_pointer opt_arg_type(s7_scheme *sc, s7_pointer argp)
 		      if ((car(sig) == sc->is_float_symbol) ||
 			  ((is_pair(car(sig))) && (direct_memq(sc->is_float_symbol, car(sig)))))
 			return(sc->is_float_symbol);
+		      if (car(sig) == sc->is_complex_symbol)
+			return(sc->is_complex_symbol);
 		      if ((car(sig) == sc->is_byte_symbol) ||
 			  ((is_pair(car(sig))) && (direct_memq(sc->is_byte_symbol, car(sig)))))
 			return(sc->is_integer_symbol);  /* or '(integer? byte)? */
@@ -63807,6 +63865,7 @@ static s7_pointer opt_arg_type(s7_scheme *sc, s7_pointer argp)
 				{
 				  if (is_int_vector(v))	    return(sc->is_integer_symbol);
 				  if (is_float_vector(v))   return(sc->is_float_symbol);
+				  if (is_complex_vector(v)) return(sc->is_complex_symbol);
 				  if (is_byte_vector(v))    return(sc->is_byte_symbol);
 				  if (is_typed_t_vector(v)) return(typed_vector_typer_symbol(sc, v)); /* includes closure name ?? */
 				}
@@ -64818,6 +64877,7 @@ static s7_pointer opt_p_pi_ss_sref_direct(opt_info *o) {return(string_ref_p_pi_d
 static s7_pointer opt_p_pi_ss_vref(opt_info *o) {return(t_vector_ref_p_pi_unchecked(o->sc, slot_value(o->v[1].p), integer(slot_value(o->v[2].p))));}
 static s7_pointer opt_p_pi_ss_vref_direct(opt_info *o) {return(t_vector_ref_p_pi_direct(o->sc, slot_value(o->v[1].p), integer(slot_value(o->v[2].p))));}
 static s7_pointer opt_p_pi_ss_fvref_direct(opt_info *o) {return(float_vector_ref_p_pi_direct(o->sc, slot_value(o->v[1].p), integer(slot_value(o->v[2].p))));}
+static s7_pointer opt_p_pi_ss_cvref_direct(opt_info *o) {return(complex_vector_ref_p_pi_direct(o->sc, slot_value(o->v[1].p), integer(slot_value(o->v[2].p))));}
 static s7_pointer opt_p_pi_ss_ivref_direct(opt_info *o) {return(int_vector_ref_p_pi_direct(o->sc, slot_value(o->v[1].p), integer(slot_value(o->v[2].p))));}
 static s7_pointer opt_p_pi_ss_fvref_direct_wrapped(opt_info *o) {return(float_vector_ref_p_pi_direct_wrapped(o->sc, slot_value(o->v[1].p), integer(slot_value(o->v[2].p))));}
 static s7_pointer opt_p_pi_ss_ivref_direct_wrapped(opt_info *o) {return(int_vector_ref_p_pi_direct_wrapped(o->sc, slot_value(o->v[1].p), integer(slot_value(o->v[2].p))));}
@@ -64868,6 +64928,11 @@ static void check_unchecked(s7_scheme *sc, s7_pointer obj, s7_pointer slot, opt_
 	  (loop_end(slot) <= vector_length(obj)))
 	opc->v[3].p_pi_f = float_vector_ref_p_pi_direct;
       break;
+    case T_COMPLEX_VECTOR:
+      if (((!expr) || (car(expr) == sc->complex_vector_ref_symbol) || (car(expr) == sc->vector_ref_symbol)) &&
+	  (loop_end(slot) <= vector_length(obj)))
+	opc->v[3].p_pi_f = complex_vector_ref_p_pi_direct;
+      break;
     case T_INT_VECTOR:
       if (((!expr) || (car(expr) == sc->int_vector_ref_symbol) || (car(expr) == sc->vector_ref_symbol)) &&
 	  (loop_end(slot) <= vector_length(obj)))
@@ -64882,9 +64947,10 @@ static void fixup_p_pi_ss(opt_info *opc)
     ((opc->v[3].p_pi_f == string_ref_p_pi_direct) ? opt_p_pi_ss_sref_direct :
      ((opc->v[3].p_pi_f == t_vector_ref_p_pi_unchecked) ? opt_p_pi_ss_vref :
       ((opc->v[3].p_pi_f == float_vector_ref_p_pi_direct) ? opt_p_pi_ss_fvref_direct :
-       ((opc->v[3].p_pi_f == int_vector_ref_p_pi_direct) ? opt_p_pi_ss_ivref_direct :
-	((opc->v[3].p_pi_f == t_vector_ref_p_pi_direct) ? opt_p_pi_ss_vref_direct :
-	 ((opc->v[3].p_pi_f == list_ref_p_pi_unchecked) ? opt_p_pi_ss_pref : opt_p_pi_ss))))));
+       ((opc->v[3].p_pi_f == complex_vector_ref_p_pi_direct) ? opt_p_pi_ss_cvref_direct :
+	((opc->v[3].p_pi_f == int_vector_ref_p_pi_direct) ? opt_p_pi_ss_ivref_direct :
+	 ((opc->v[3].p_pi_f == t_vector_ref_p_pi_direct) ? opt_p_pi_ss_vref_direct :
+	  ((opc->v[3].p_pi_f == list_ref_p_pi_unchecked) ? opt_p_pi_ss_pref : opt_p_pi_ss)))))));
 }
 
 static bool p_pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer sig, s7_pointer car_x)
@@ -64928,7 +64994,7 @@ static bool p_pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
       opc->v[2].p = slot1;
       if ((obj) &&
 	  (has_loop_end(slot1)))
-	check_unchecked(sc, obj, slot1, opc, car_x);
+	check_unchecked(sc, obj, slot1, opc, car_x); /* TODO: this is a no-op?? car_x should be NULL as below. */
       fixup_p_pi_ss(opc);
       return_true(sc, car_x);
     }
@@ -65536,6 +65602,11 @@ static bool p_pip_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 		if (loop_end(slot2) <= vector_length(obj))
 		  opc->v[3].p_pip_f = float_vector_set_p_pip_direct;
 		break;
+	      case T_COMPLEX_VECTOR:
+		if ((val_type != sc->is_complex_symbol) && (val_type != sc->is_real_symbol)) return_false(sc, car_x);
+		if (loop_end(slot2) <= vector_length(obj))
+		  opc->v[3].p_pip_f = complex_vector_set_p_pip_direct;
+		break;
 	      case T_STRING:
 		if (loop_end(slot2) <= string_length(obj))
 		  opc->v[3].p_pip_f = string_set_p_pip_direct;
@@ -65851,14 +65922,13 @@ static bool use_ppf_slot_set(s7_scheme *sc, opt_info *opc, s7_pointer let, s7_po
 }
 
 static bool p_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x)
-{
+{  
   s7_pointer arg1 = cadr(car_x);
   s7_pointer arg2 = caddr(car_x);
   s7_pointer arg3 = cadddr(car_x);
   int32_t start = sc->pc;
   s7_p_ppp_t func = s7_p_ppp_function(s_func);
-  if (!func)
-    return_false(sc, car_x);
+  if (!func) return_false(sc, car_x);
   opc->v[3].p_ppp_f = func;
   if (is_symbol(arg1))
     {
@@ -66259,6 +66329,7 @@ static bool p_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, in
 	case T_BYTE_VECTOR:
 	case T_INT_VECTOR:
 	case T_FLOAT_VECTOR:
+	  /* TODO: complex vector */
 	  if (vector_rank(obj) != 1)
 	    return_false(sc, car_x);
 	  opc->v[3].p_pi_f = vector_ref_p_pi_unchecked;
@@ -66390,11 +66461,12 @@ static bool p_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, in
 	      opc->v[0].fp = opt_p_call_any;
 	      switch (type(obj))     /* string can't happen here (no multidimensional strings), for pair/hash/let see above */
 		{
-		case T_INT_VECTOR:   opc->v[2].call = g_int_vector_ref;     break;
-		case T_BYTE_VECTOR:  opc->v[2].call = g_byte_vector_ref;    break;
-		case T_FLOAT_VECTOR: opc->v[2].call = g_float_vector_ref;   break;
-		case T_VECTOR:       opc->v[2].call = g_vector_ref;  	    break;
-		default:	     return_false(sc, car_x);
+		case T_INT_VECTOR:     opc->v[2].call = g_int_vector_ref;     break;
+		case T_BYTE_VECTOR:    opc->v[2].call = g_byte_vector_ref;    break;
+		case T_FLOAT_VECTOR:   opc->v[2].call = g_float_vector_ref;   break;
+		case T_COMPLEX_VECTOR: opc->v[2].call = g_complex_vector_ref; break;
+		case T_VECTOR:         opc->v[2].call = g_vector_ref;  	      break;
+		default:	       return_false(sc, car_x);
 		}
 	      return_true(sc, car_x);
 	    }}}
@@ -66877,6 +66949,7 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
 	      return_true(sc, car_x);
 	    }
 	  return_false(sc, car_x);
+	  /* TODO: complex vector? */
 
 	case T_BYTE_VECTOR:
 	case T_INT_VECTOR:
@@ -68252,6 +68325,7 @@ static s7_pointer opt_do_very_simple(opt_info *o)
 	{ /* vector-set from vector-ref (i.e. copy), but treating vector-* as generic */
 	  if (((let_dox_slot1(do_curlet_unchecked(o)) == o1->v[2].p) && (o1->v[2].p == o1->v[4].p)) &&
 	      (((o1->v[5].p_pip_f == float_vector_set_p_pip_direct) && (o1->v[6].p_pi_f == float_vector_ref_p_pi_direct)) ||
+	       ((o1->v[5].p_pip_f == complex_vector_set_p_pip_direct) && (o1->v[6].p_pi_f == complex_vector_ref_p_pi_direct)) ||
 	       ((o1->v[5].p_pip_f == int_vector_set_p_pip_direct) &&   (o1->v[6].p_pi_f == int_vector_ref_p_pi_direct))   ||
 	       ((o1->v[5].p_pip_f == string_set_p_pip_direct) &&       (o1->v[6].p_pi_f == string_ref_p_pi_direct))       ||
 	       ((o1->v[5].p_pip_f == byte_vector_set_p_pip_direct) &&  (o1->v[6].p_pi_f == byte_vector_ref_p_pi_direct))))
@@ -69158,11 +69232,17 @@ static bool p_5x_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
   return_false(sc, car_x);
 }
 
+#if OPT_PRINT
+static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr, int line)
+#else
 static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
+#endif
 {
   s7_pointer car_x = car(expr), head, s_func, s_slot = NULL;
   s7_int len;
-  if (OPT_PRINT) fprintf(stderr, "     cell_optimize %s\n", display(expr));
+#if OPT_PRINT
+  fprintf(stderr, "     cell_optimize[%d] %s\n", line, display(expr));
+#endif
   if (WITH_GMP) return(false);
   if (!is_pair(car_x)) /* wrap constants/symbols */
     return(opt_cell_not_pair(sc, car_x));
@@ -69258,7 +69338,11 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
   return_false(sc, car_x);
 }
 
+#if OPT_PRINT
+static bool cell_optimize_with_line(s7_scheme *sc, s7_pointer expr, int line) {return((cell_optimize_1(sc, expr, line)) && (sc->pc < OPTS_SIZE));}
+#else
 static bool cell_optimize(s7_scheme *sc, s7_pointer expr) {return((cell_optimize_1(sc, expr)) && (sc->pc < OPTS_SIZE));}
+#endif
 
 static bool bool_optimize_nw_1(s7_scheme *sc, s7_pointer expr)
 {
@@ -71880,6 +71964,10 @@ static void init_choosers(s7_scheme *sc)
   f = set_function_chooser(sc->vector_set_symbol, vector_set_chooser);
   sc->vector_set_3 = make_function_with_class(sc, f, "vector-set!", g_vector_set_3, 3, 0, false);
   sc->vector_set_4 = make_function_with_class(sc, f, "vector-set!", g_vector_set_4, 4, 0, false);
+
+  /* complex-vector-ref */
+  f = set_function_chooser(sc->complex_vector_ref_symbol, complex_vector_ref_chooser);
+  sc->cv_ref_2 = make_function_with_class(sc, f, "complex-vector-ref", g_cv_ref_2, 2, 0, false);
 
   /* float-vector-ref */
   f = set_function_chooser(sc->float_vector_ref_symbol, float_vector_ref_chooser);
@@ -80529,13 +80617,21 @@ static goto_t op_expansion(s7_scheme *sc)
       else slot = s7_slot(sc, symbol);
 
       sc->code = (is_slot(slot)) ? slot_value(slot) : sc->undefined;
-      if ((!is_either_macro(sc->code)) || (!is_expansion(sc->code)))
+      if ((!is_any_macro(sc->code)) || (!is_expansion(sc->code)))
 	clear_expansion(symbol);
       else
 	{
 	  /* call the reader macro */
 	  sc->args = cdr(sc->value);
 	  push_stack_no_code(sc, OP_EXPANSION, sc->nil);
+#if READER_COND_C
+	  if (is_c_macro(sc->code))
+	    {
+	      sc->value = c_macro_call(sc->code)(sc, sc->args);
+	      /* return(goto_start); */
+	      return(goto_eval);
+	    }
+#endif
 	  set_curlet(sc, make_let(sc, closure_let(sc->code)));
 	  transfer_macro_info(sc, sc->code);
 	  if (!is_macro_star(sc->code))
@@ -81541,6 +81637,7 @@ static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer 
     case T_FLOAT_VECTOR:
       sc->value = g_fv_set_3(sc, with_list_t3(obj, arg, value));
       break;
+      /* TODO: complex vector */
     case T_INT_VECTOR:
       sc->value = g_iv_set_3(sc, with_list_t3(obj, arg, value));
       break;
@@ -95045,8 +95142,11 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 		  (sc->is_expanding))
 		switch (op_expansion(sc))
 		  {
-		  case goto_begin: goto BEGIN;
+		  case goto_begin:        goto BEGIN;
 		  case goto_apply_lambda: goto APPLY_LAMBDA;
+#if READER_COND_C
+		  case goto_start:        continue;
+#endif
 		  default: break;
 		  }
 	      break;
@@ -95138,6 +95238,40 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
   return(sc->F); /* this never happens (make the compiler happy) */
 }
+
+#if READER_COND_C
+static s7_pointer g_reader_cond(s7_scheme *sc, s7_pointer args)
+{
+  #define H_reader_cond "(reader-cond clauses) is a read-time cond."
+  if (is_null(args))
+    error_nr(sc, sc->syntax_error_symbol, set_elist_1(sc, wrap_string(sc, "reader-cond: no clauses?", 24)));
+  for (s7_pointer clauses = args; is_pair(clauses); clauses = cdr(clauses))
+    {
+      s7_pointer clause = car(clauses), val;
+      if (!is_pair(clause))
+	error_nr(sc, sc->syntax_error_symbol, set_elist_2(sc, wrap_string(sc, "reader-cond: clause is not a pair, ~S", 37), clause));
+      val = s7_eval(sc, car(clause), sc->rootlet);
+      if (val != sc->F)
+	{
+	  if (is_null(cdr(clause)))
+	    return(val);
+	  if (cadr(clause) == sc->feed_to_symbol)
+	    {
+	      s7_pointer func = s7_eval(sc, caddr(clause), sc->rootlet);
+	      return(s7_apply_function(sc, func, list_1(sc, val)));
+	    }
+	  if (is_null(cddr(clause)))
+	    return(cadr(clause));
+	  /* return(list_3(sc, sc->apply_symbol, sc->values_symbol, cdr(clause))); */
+	  /* return(cons(sc, sc->values_symbol, cdr(clause))); *//*fails in gf13 and let-temp */
+	  /* return(g_apply_values(sc, cdr(clause))); *//*fails everywhere */
+	  /* return(g_apply_values(sc, list_1(sc, cdr(clause)))); *//* t822 ok, s7test: error_nr[53831]: slot value is a multiple-value */
+	  /* TODO: see op_expansion in splice_in_values -- maybe as above with values but push OP_EXPANSION first? or just repeat the splice code */
+	}}
+  return(sc->no_value);
+}
+#endif
+
 
 
 /* -------------------------------- s7_heap_scan -------------------------------- */
@@ -97045,6 +97179,8 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_p_function(sc, global_value(sc->inexact_to_exact_symbol), inexact_to_exact_p_p);
 #endif
 
+  s7_set_p_pp_function(sc, global_value(sc->complex_vector_ref_symbol), complex_vector_ref_p_pp);
+
   s7_set_p_pp_function(sc, global_value(sc->float_vector_ref_symbol), float_vector_ref_p_pp);
   s7_set_d_7pi_function(sc, global_value(sc->float_vector_ref_symbol), float_vector_ref_d_7pi);
   s7_set_d_7pii_function(sc, global_value(sc->float_vector_ref_symbol), float_vector_ref_d_7pii);
@@ -97431,7 +97567,7 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_p_function(sc, global_value(sc->real_part_symbol), real_part_p_p);
   s7_set_p_p_function(sc, global_value(sc->imag_part_symbol), imag_part_p_p);
   s7_set_d_7p_function(sc, global_value(sc->real_part_symbol), real_part_d_7p);
-  s7_set_d_7p_function(sc, global_value(sc->imag_part_symbol), imag_part_d_7p);
+  s7_set_d_7p_function(sc, global_value(sc->imag_part_symbol), imag_part_d_7p); /* also angle, magnitude, but angle might return int etc */
   s7_set_b_i_function(sc, global_value(sc->is_positive_symbol), is_positive_i);
   s7_set_b_d_function(sc, global_value(sc->is_positive_symbol), is_positive_d);
   s7_set_b_i_function(sc, global_value(sc->is_negative_symbol), is_negative_i);
@@ -98616,6 +98752,9 @@ static void init_rootlet(s7_scheme *sc)
 
   sc->quasiquote_symbol = s7_define_macro(sc, "quasiquote", g_quasiquote, 1, 0, false, H_quasiquote); /* is this considered syntax? r7rs says yes; also unquote */
   sc->quasiquote_function = initial_value(sc->quasiquote_symbol);
+#if READER_COND_C
+  sc->reader_cond_symbol = s7_define_expansion(sc, "reader-cond", g_reader_cond, 1, 0, true, H_reader_cond);
+#endif
   sc->profile_in_symbol = unsafe_defun("profile-in", profile_in, 2, 0, false); /* calls dynamic-unwind */
   sc->profile_out = NULL;
 
@@ -98722,7 +98861,7 @@ s7_scheme *s7_init(void)
   pthread_mutex_unlock(&init_lock);
 #endif
   sc = (s7_scheme *)Calloc(sc, 1, sizeof(s7_scheme)); /* not malloc! */
-#if S7_DEBUGGING || DISABLE_FILE_OUTPUT
+#if S7_DEBUGGING || (DISABLE_FILE_OUTPUT && (!WITH_GCC))
   if (!cur_sc) original_cur_sc = sc;
   cur_sc = sc;
 #endif
@@ -99195,6 +99334,7 @@ s7_scheme *s7_init(void)
   sc->temp_error_hook = s7_eval_c_string(sc, "(make-hook 'type 'data)");
   /* internal; this is holding error-hook functions during an evaluation where error-hook is temporarily nil -- do we actually need a hook for this? */
 
+#if (!READER_COND_C)
   s7_eval_c_string(sc, "(define-expansion (reader-cond . clauses)                                         \n\
                           (if (null? clauses)                                                             \n\
                               (error 'syntax-error \"reader-cond: no clauses?\"))                         \n\
@@ -99213,7 +99353,7 @@ s7_scheme *s7_init(void)
                                               (else (apply values (cdr clause))))))))                     \n\
                                 clauses)                                                                  \n\
                               (values))))"); /* this is not redundant */
-
+#endif
 #if (!WITH_PURE_S7)
   {
     s7_pointer rs = s7_define_variable(sc, "make-rectangular", global_value(sc->complex_symbol));
@@ -99468,7 +99608,7 @@ void s7_free(s7_scheme *sc)
 	}
       free(sc->c_object_types);
     }
-#if S7_DEBUGGING || DISABLE_FILE_OUTPUT
+#if S7_DEBUGGING || (DISABLE_FILE_OUTPUT && (!WITH_GCC))
   if (sc == cur_sc) cur_sc = original_cur_sc;
 #endif
   free(sc);
@@ -99698,10 +99838,13 @@ int main(int argc, char **argv)
  *
  * complex-vector: cload wrapper?, opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
- *   tcomplex to test complex opts, complex fft, dsp: dolph z-transform cfft! (already used in tfft -- fft-bench)
+ *   tcomplex.scm to test complex opts, complex fft, dsp: dolph z-transform cfft! (already used in tfft -- fft-bench)
  *   in tari (complex-vector-set! v i (complex ...)) can skip the complex variable creation
  *      similarly for + etc? (z=s7_complex etc), mpc tests?  (complex -> (c-complex)) in chooser
- * opt_d_7p additions?
+ *
+ * (do ((i 1.0 #\c)) ) etc for opt_do tests
+ * make-hook, reader-cond [see g_reader_cond above -- c_macro was not supported here], cond-expand to C (make_c_function_star for hook)
+ * growable opt_info*, does this require opts array to be opt_info**?
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
@@ -99715,6 +99858,7 @@ int main(int argc, char **argv)
  *   then at init time: s7_set_location(abs, L_abs)|s7_location(abs)? maybe include s7_scheme arg
  *   object->let, *function*, maybe procedure-location, (scheme funcs have (*function* (curlet) 'file|line), but we'd want this via the function name)
  *   or better? build a location function with the data, funcs alphabetized, etc
+ *   or better? info field in c_proc exported
  *
  * map vector -> vector? ambiguous if two args not same type, (apply vector (map...)) where the optimizer could omit the intermediate list, tapply
  *   lint? display->wrapper
