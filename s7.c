@@ -43143,6 +43143,14 @@ static s7_pointer complex_vector_ref_p_pp(s7_scheme *sc, s7_pointer v, s7_pointe
 }
 
 static s7_pointer g_cv_ref_2(s7_scheme *sc, s7_pointer args) {return(complex_vector_ref_p_pp(sc, car(args), cadr(args)));}
+
+static s7_pointer complex_vector_ref_p_pi(s7_scheme *sc, s7_pointer v, s7_int i)
+{
+  if ((!is_complex_vector(v)) || (vector_rank(v) > 1) || (i < 0) || (i >= vector_length(v)))
+    return(g_complex_vector_ref(sc, set_plist_2(sc, v, make_integer(sc, i))));
+  return(c_complex_to_s7(sc, complex_vector(v, i)));
+}
+
 static s7_pointer complex_vector_ref_p_pi_direct(s7_scheme *sc, s7_pointer v, s7_int i) {return(c_complex_to_s7(sc, complex_vector(v, i)));}
 
 static s7_pointer complex_vector_ref_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer unused_expr)
@@ -43160,11 +43168,37 @@ static s7_pointer g_complex_vector_set(s7_scheme *sc, s7_pointer args)
   return(univect_set(sc, args, sc->complex_vector_set_symbol, T_COMPLEX_VECTOR));
 }
 
+
+static s7_pointer complex_vector_set_p_pip(s7_scheme *sc, s7_pointer v, s7_int i, s7_pointer p)
+{
+  if ((!is_complex_vector(v)) || (!is_number(p)) || (vector_rank(v) > 1) || (i < 0) || (i >= vector_length(v)))
+    return(univect_set(sc, set_plist_3(sc, v, make_integer(sc, i), p), sc->complex_vector_set_symbol, T_COMPLEX_VECTOR));
+  complex_vector(v, i) = s7_to_c_complex(p);
+  return(p);
+}
+
 static s7_pointer complex_vector_set_p_pip_direct(s7_scheme *sc, s7_pointer v, s7_int i, s7_pointer p)
 {
   complex_vector(v, i) = s7_to_c_complex(p);
   return(p);
 }
+
+static s7_pointer complex_vector_set_p_ppp(s7_scheme *sc, s7_pointer vec, s7_pointer ind, s7_pointer val)
+{
+  s7_int index;
+  if ((!is_complex_vector(vec)) || (vector_rank(vec) > 1))
+    return(g_vector_set(sc, set_plist_3(sc, vec, ind, val)));
+  if (is_immutable_vector(vec))
+    immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->complex_vector_set_symbol, vec));
+  if (!s7_is_integer(ind))
+    return(g_vector_set(sc, set_plist_3(sc, vec, ind, val)));
+  index = s7_integer_clamped_if_gmp(sc, ind);
+  if ((index < 0) || (index >= vector_length(vec)))
+    out_of_range_error_nr(sc, sc->complex_vector_set_symbol, int_two, wrap_integer(sc, index), (index < 0) ? it_is_negative_string : it_is_too_large_string);
+  complex_vector(vec, index) = s7_to_c_complex(val);
+  return(val);
+}
+
 
 
 /* -------------------------------- float-vector-ref -------------------------------- */
@@ -43224,6 +43258,14 @@ static inline s7_int ref_check_index(s7_scheme *sc, s7_pointer v, s7_int i)
   if ((i < 0) || (i >= vector_length(v)))
     out_of_range_error_nr(sc, sc->float_vector_ref_symbol, int_two, wrap_integer(sc, i), (i < 0) ? it_is_negative_string : it_is_too_large_string);
   return(i);
+}
+
+static s7_pointer float_vector_set_p_pip(s7_scheme *sc, s7_pointer v, s7_int i, s7_pointer p)
+{
+  if ((!is_float_vector(v)) || (!is_real(p)) || (vector_rank(v) > 1) || (i < 0) || (i >= vector_length(v)))
+    return(univect_set(sc, set_plist_3(sc, v, make_integer(sc, i), p), sc->float_vector_set_symbol, T_FLOAT_VECTOR));
+  float_vector(v, i) = s7_real(p);
+  return(p);
 }
 
 static inline s7_double float_vector_ref_d_7pi(s7_scheme *sc, s7_pointer v, s7_int i) {return(float_vector(v, ref_check_index(sc, v, i)));}
@@ -43373,6 +43415,23 @@ static s7_pointer float_vector_set_p_pip_direct(s7_scheme *sc, s7_pointer v, s7_
   return(p);
 }
 
+static s7_pointer float_vector_set_p_ppp(s7_scheme *sc, s7_pointer vec, s7_pointer ind, s7_pointer val)
+{
+  s7_int index;
+  if ((!is_float_vector(vec)) || (vector_rank(vec) > 1))
+    return(g_vector_set(sc, set_plist_3(sc, vec, ind, val)));
+  if (is_immutable_vector(vec))
+    immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->float_vector_set_symbol, vec));
+  if (!s7_is_integer(ind))
+    return(g_vector_set(sc, set_plist_3(sc, vec, ind, val)));
+  index = s7_integer_clamped_if_gmp(sc, ind);
+  if ((index < 0) || (index >= vector_length(vec)))
+    out_of_range_error_nr(sc, sc->float_vector_set_symbol, int_two, wrap_integer(sc, index), (index < 0) ? it_is_negative_string : it_is_too_large_string);
+  if (!is_real(val))
+    wrong_type_error_nr(sc, sc->float_vector_set_symbol, 3, val, sc->type_names[T_REAL]);
+  float_vector(vec, index) = real(val);
+  return(val);
+}
 
 /* -------------------------------- int-vector-ref -------------------------------- */
 static s7_pointer g_int_vector_ref(s7_scheme *sc, s7_pointer args)
@@ -43471,6 +43530,14 @@ static s7_pointer g_int_vector_set(s7_scheme *sc, s7_pointer args)
 }
 
 static s7_int int_vector_set_i_7pii_direct(s7_scheme *unused_sc, s7_pointer v, s7_int i, s7_int x) {int_vector(v, i) = x; return(x);}
+
+static s7_pointer int_vector_set_p_pip(s7_scheme *sc, s7_pointer v, s7_int i, s7_pointer p)
+{
+  if ((!is_int_vector(v)) || (!is_t_integer(p)) || (vector_rank(v) > 1) || (i < 0) || (i >= vector_length(v)))
+    return(univect_set(sc, set_plist_3(sc, v, make_integer(sc, i), p), sc->int_vector_set_symbol, T_INT_VECTOR));
+  int_vector(v, i) = integer(p);
+  return(p);
+}
 
 static s7_pointer int_vector_set_p_pip_direct(s7_scheme *sc, s7_pointer v, s7_int i, s7_pointer p)
 {
@@ -43992,7 +44059,7 @@ static int32_t closure_sort_begin(const void *v1, const void *v2, void *arg)
   return((sc->value != sc->F) ? -1 : 1);
 }
 
-#define OPT_PRINT 0 /* print out info about the opt_* optimizations */
+#define OPT_PRINT 0           /* print info about the opt_* optimizations */
 static s7_b_7pp_t s7_b_7pp_function(s7_pointer f);
 static opt_info *alloc_opt_info(s7_scheme *sc);
 static bool bool_optimize(s7_scheme *sc, s7_pointer expr);
@@ -47176,7 +47243,7 @@ s7_pointer s7_define_macro(s7_scheme *sc, const char *name, s7_function fnc,
   return(sym);
 }
 
-#define READER_COND_C 0
+#define READER_COND_C 1
 #if READER_COND_C
 s7_pointer s7_define_expansion(s7_scheme *sc, const char *name, s7_function fnc,
 			       s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc)
@@ -63832,7 +63899,8 @@ static s7_pointer opt_arg_type(s7_scheme *sc, s7_pointer argp)
 		      if ((car(sig) == sc->is_float_symbol) ||
 			  ((is_pair(car(sig))) && (direct_memq(sc->is_float_symbol, car(sig)))))
 			return(sc->is_float_symbol);
-		      if (car(sig) == sc->is_complex_symbol)
+		      if ((car(sig) == sc->is_complex_symbol) || 
+			  ((is_pair(car(sig))) && (direct_memq(sc->is_complex_symbol, car(sig)))))
 			return(sc->is_complex_symbol);
 		      if ((car(sig) == sc->is_byte_symbol) ||
 			  ((is_pair(car(sig))) && (direct_memq(sc->is_byte_symbol, car(sig)))))
@@ -69146,13 +69214,7 @@ static bool p_3x_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
       if ((is_pair(sig)) && (is_pair(cdr(sig))) && (is_pair(cddr(sig))) &&
 	  (caddr(sig) == sc->is_integer_symbol))
 	{
-	  if (p_pii_ok(sc, opc, s_func, car_x))
-	    return_true(sc, car_x);
-	  if (p_pip_ok(sc, opc, s_func, car_x))
-	    return_true(sc, car_x);
-
-	  if (((car(sig) == sc->is_float_symbol) ||
-	       (car(sig) == sc->is_real_symbol)) &&
+	  if (((car(sig) == sc->is_float_symbol) || (car(sig) == sc->is_real_symbol)) &&
 	      (s7_d_7pid_function(s_func)) &&
 	      (d_7pid_ok(sc, opc, s_func, car_x)))
 	    {
@@ -69172,6 +69234,11 @@ static bool p_3x_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
 	      return_true(sc, car_x);
 	    }
 	  sc->pc = pstart;
+
+	  if (p_pii_ok(sc, opc, s_func, car_x))
+	    return_true(sc, car_x);
+	  if (p_pip_ok(sc, opc, s_func, car_x))
+	    return_true(sc, car_x);
 	}}
   return_bool(sc, ((p_ppi_ok(sc, opc, s_func, car_x)) ||
 		   (p_ppp_ok(sc, opc, s_func, car_x)) ||
@@ -80628,7 +80695,6 @@ static goto_t op_expansion(s7_scheme *sc)
 	  if (is_c_macro(sc->code))
 	    {
 	      sc->value = c_macro_call(sc->code)(sc, sc->args);
-	      /* return(goto_start); */
 	      return(goto_eval);
 	    }
 #endif
@@ -95262,10 +95328,7 @@ static s7_pointer g_reader_cond(s7_scheme *sc, s7_pointer args)
 	    }
 	  if (is_null(cddr(clause)))
 	    return(cadr(clause));
-	  /* return(list_3(sc, sc->apply_symbol, sc->values_symbol, cdr(clause))); */
-	  /* return(cons(sc, sc->values_symbol, cdr(clause))); *//*fails in gf13 and let-temp */
-	  /* return(g_apply_values(sc, cdr(clause))); *//*fails everywhere */
-	  /* return(g_apply_values(sc, list_1(sc, cdr(clause)))); *//* t822 ok, s7test: error_nr[53831]: slot value is a multiple-value */
+	  return(g_apply_values(sc, list_1(sc, cdr(clause))));
 	  /* TODO: see op_expansion in splice_in_values -- maybe as above with values but push OP_EXPANSION first? or just repeat the splice code */
 	}}
   return(sc->no_value);
@@ -97180,11 +97243,16 @@ static void init_opt_functions(s7_scheme *sc)
 #endif
 
   s7_set_p_pp_function(sc, global_value(sc->complex_vector_ref_symbol), complex_vector_ref_p_pp);
+  s7_set_p_pi_function(sc, global_value(sc->complex_vector_ref_symbol), complex_vector_ref_p_pi);
+  s7_set_p_pip_function(sc, global_value(sc->complex_vector_set_symbol), complex_vector_set_p_pip);
+  s7_set_p_ppp_function(sc, global_value(sc->complex_vector_set_symbol), complex_vector_set_p_ppp);
 
   s7_set_p_pp_function(sc, global_value(sc->float_vector_ref_symbol), float_vector_ref_p_pp);
   s7_set_d_7pi_function(sc, global_value(sc->float_vector_ref_symbol), float_vector_ref_d_7pi);
   s7_set_d_7pii_function(sc, global_value(sc->float_vector_ref_symbol), float_vector_ref_d_7pii);
   s7_set_d_7piii_function(sc, global_value(sc->float_vector_ref_symbol), float_vector_ref_d_7piii);
+  s7_set_p_pip_function(sc, global_value(sc->float_vector_set_symbol), float_vector_set_p_pip);
+  s7_set_p_ppp_function(sc, global_value(sc->float_vector_set_symbol), float_vector_set_p_ppp);
   s7_set_d_7pid_function(sc, global_value(sc->float_vector_set_symbol), float_vector_set_d_7pid);
   s7_set_d_7piid_function(sc, global_value(sc->float_vector_set_symbol), float_vector_set_d_7piid);
   s7_set_d_7piiid_function(sc, global_value(sc->float_vector_set_symbol), float_vector_set_d_7piiid);
@@ -97193,6 +97261,8 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_i_7pi_function(sc, global_value(sc->int_vector_ref_symbol), int_vector_ref_i_7pi);
   s7_set_i_7pii_function(sc, global_value(sc->int_vector_ref_symbol), int_vector_ref_i_7pii);
   s7_set_i_7piii_function(sc, global_value(sc->int_vector_ref_symbol), int_vector_ref_i_7piii);
+  s7_set_p_pip_function(sc, global_value(sc->int_vector_set_symbol), int_vector_set_p_pip);
+  s7_set_p_ppp_function(sc, global_value(sc->int_vector_set_symbol), int_vector_set_p_ppp);
   s7_set_i_7pii_function(sc, global_value(sc->int_vector_set_symbol), int_vector_set_i_7pii);
   s7_set_i_7piii_function(sc, global_value(sc->int_vector_set_symbol), int_vector_set_i_7piii);
 
@@ -97209,7 +97279,6 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_pi_unchecked_function(sc, global_value(sc->vector_ref_symbol), vector_ref_p_pi_unchecked);
   s7_set_p_pip_unchecked_function(sc, global_value(sc->vector_set_symbol), vector_set_p_pip_unchecked);
   s7_set_p_ppp_function(sc, global_value(sc->vector_set_symbol), vector_set_p_ppp);
-  s7_set_p_ppp_function(sc, global_value(sc->int_vector_set_symbol), int_vector_set_p_ppp);
 
   s7_set_p_pp_function(sc, global_value(sc->list_ref_symbol), list_ref_p_pp);
   s7_set_p_pi_function(sc, global_value(sc->list_ref_symbol), list_ref_p_pi);
@@ -99334,26 +99403,6 @@ s7_scheme *s7_init(void)
   sc->temp_error_hook = s7_eval_c_string(sc, "(make-hook 'type 'data)");
   /* internal; this is holding error-hook functions during an evaluation where error-hook is temporarily nil -- do we actually need a hook for this? */
 
-#if (!READER_COND_C)
-  s7_eval_c_string(sc, "(define-expansion (reader-cond . clauses)                                         \n\
-                          (if (null? clauses)                                                             \n\
-                              (error 'syntax-error \"reader-cond: no clauses?\"))                         \n\
-                          (call-with-exit                                                                 \n\
-                            (lambda (return)                                                              \n\
-                              (for-each                                                                   \n\
-                                (lambda (clause)                                                          \n\
-                                  (if (not (pair? clause))                                                \n\
-                                      (error 'syntax-error \"reader-cond: clause is not a pair, ~S\" clause)) \n\
-	                          (let ((val (eval (car clause))))                                        \n\
-                                    (when val                                                             \n\
-                                      (return                                                             \n\
-                                        (cond ((null? (cdr clause)) val)                                  \n\
-                                              ((eq? (cadr clause) '=>) ((eval (caddr clause)) val))       \n\
-                                              ((null? (cddr clause)) (cadr clause))                       \n\
-                                              (else (apply values (cdr clause))))))))                     \n\
-                                clauses)                                                                  \n\
-                              (values))))"); /* this is not redundant */
-#endif
 #if (!WITH_PURE_S7)
   {
     s7_pointer rs = s7_define_variable(sc, "make-rectangular", global_value(sc->complex_symbol));
@@ -99386,7 +99435,7 @@ s7_scheme *s7_init(void)
    *   Otherwise, the cond-expand has no effect."  The code above returns #<unspecified>, but I read that prose to say that
    *   (begin 23 (cond-expand (surreals 1) (foonly 2))) should evaluate to 23.
    */
-  /* call-with-values, make-hook, multiple-value-bind, cond-expand, and reader-cond can't set the initial_value to the global_value
+  /* call-with-values, make-hook, multiple-value-bind, and cond-expand can't set the initial_value to the global_value
    *   so that #_... can be used because the global_value is not semipermanent, but could it be made so?
    */
 #endif
@@ -99781,47 +99830,47 @@ int main(int argc, char **argv)
  * tlimit    3936   5371   5371   5371   5371    837
  * index            1016    973    967    972    975
  * tmock            1145   1082   1042   1045   1035
- * tvect     3408   2464   1772   1669   1497   1454
+ * tvect     3408   2464   1772   1669   1497   1454                   1464 opt_p_pi_ss_cvref_direct?
  * thook     7651   ----   2590   2030   2046   1754
  * texit     1884   1950   1778   1741   1770   1759
  * tauto                   2562   2048   1729   1766
  * s7test           1831   1818   1829   1830   1852
  * lt        2222   2172   2150   2185   1950   1911
- * dup              3788   2492   2239   2097   1940  1953 [fx_t -> fx_unsafe_s]
- * tread            2421   2419   2408   2405   2245
+ * dup              3788   2492   2239   2097   1940  1953 [fx_t -> fx_unsafe_s] -> 1962
+ * tread            2421   2419   2408   2405   2241
  * tcopy            5546   2539   2375   2386   2346
  * trclo     8031   2574   2454   2445   2449   2359
- * tmat             3042   2524   2578   2590   2523
- * tload                   3046   2404   2566   2538
+ * tmat             3042   2524   2578   2590   2518
+ * tload                   3046   2404   2566   2538                    2552
  * fbench    2933   2583   2460   2430   2478   2571
  * tsort     3683   3104   2856   2804   2858   2858
  * titer     4550   3349   3070   2985   2966   2918
  * tio              3752   3683   3620   3583   3122
  * tobj             3970   3828   3577   3508   3440
  * tmac             3873   3033   3677   3677   3509
- * teq              4045   3536   3486   3544   3563
+ * teq              4045   3536   3486   3544   3554
  * tcase            4793   4439   4430   4439   4377
  * tmap             8774   4489   4541   4586   4384
  * tlet      11.0   6974   5609   5980   5965   4505  4582 do opts fx_num_eq_tg->fx_num_eq_ss etc
- * tfft             7729   4755   4476   4536   4541
+ * tfft             7729   4755   4476   4536   4531
  * tshoot           5447   5183   5055   5034   4850
  * tstar            6705   5834   5278   5177   5047
  * tform            5348   5307   5316   5084   5070
  * tstr      10.0   6342   5488   5162   5180   5231
- * tnum             6013   5433   5396   5409   5430
+ * tnum             6013   5433   5396   5409   5441
  * tlist     9219   7546   6558   6240   6300   5771
  * trec      19.6   6980   6599   6656   6658   6010
  * tari      15.0   12.7   6827   6543   6278   6180
  * tgsl             7802   6373   6282   6208   6218
  * tset                           6260   6364   6263
- * tleft     12.2   9753   7537   7331   7331   6393
+ * tleft     12.2   9753   7537   7331   7331   6393                   6417 opt_case case+value
  * tmisc                          7614   7115   7127
  * tclo             8025   7645   8809   7770   7601
- * tlamb                          8003   7941   7893
+ * tlamb                          8003   7941   7888
  * tgc              11.1   8177   7857   7986   8015
  * thash            11.7   9734   9479   9526   9250
  * cb        12.9   11.0   9658   9564   9609   9649
- * tmap-hash                                    10.3
+ * tmap-hash                                    10.3                   10.355 from pair_equal+clear_small_symbol_set
  * tgen             11.4   12.0   12.1   12.2   12.3 [clean_up_big_symbol_set 91]
  * tall      15.9   15.6   15.6   15.6   15.1   15.1
  * timp             24.4   20.0   19.6   19.7   15.6
@@ -99843,8 +99892,20 @@ int main(int argc, char **argv)
  *      similarly for + etc? (z=s7_complex etc), mpc tests?  (complex -> (c-complex)) in chooser
  *
  * (do ((i 1.0 #\c)) ) etc for opt_do tests
- * make-hook, reader-cond [see g_reader_cond above -- c_macro was not supported here], cond-expand to C (make_c_function_star for hook)
+ * make-hook, cond-expand to C (make_c_function_star for hook)
+ *
+ * reader-cond s7test 97637 1 bug left in C version -- it's ok if reader-cond is not hidden [i.e. it's a macro in this context, so does not call op_expansion]
+ *     splice_in_values[71193]: splice eval_args (#f #f)
+ *     splice_in_values[71478]: splice punts: eval_args
+ *     eval_args (427), code: ((values #f #f) 3)
+ *     eval[94350]: op_apply (values #f #f) (pair) to (3)
+ *     eval[94350]: op_apply #f (boolean) to (#f 3)
+ *
+ * add s7_define_extension to s7.h
  * growable opt_info*, does this require opts array to be opt_info**?
+ * big_symbol_set: do-vars? (tlimit), tlet fx trouble, tgen clean_up, dup? look at where big_symbol_set loses now
+ * map vector -> vector? ambiguous if two args not same type, in (apply vector (map...)) the optimizer can omit the intermediate list, lint? display->wrapper
+ * is macro arity checked?  is reader-cond actually (1, 0, false)?
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
@@ -99859,11 +99920,4 @@ int main(int argc, char **argv)
  *   object->let, *function*, maybe procedure-location, (scheme funcs have (*function* (curlet) 'file|line), but we'd want this via the function name)
  *   or better? build a location function with the data, funcs alphabetized, etc
  *   or better? info field in c_proc exported
- *
- * map vector -> vector? ambiguous if two args not same type, (apply vector (map...)) where the optimizer could omit the intermediate list, tapply
- *   lint? display->wrapper
- *
- * big_symbol_set: do-vars? (tlimit), tlet fx trouble, tgen clean_up, dup?
- *   look at where big_symbol_set loses now (func pars at least and do vars)
- *   begin/end_big_symbol_set + running check if possible, see new-s7.c -- several cases where "e" is missing a var in clean_up_big_symbol and early exit from s7test
  */
