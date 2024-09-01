@@ -1,10 +1,10 @@
 #ifndef S7_H
 #define S7_H
 
-#define S7_VERSION "11.1"
+#define S7_VERSION "11.2"
 #define S7_DATE "2-Sep-2024"
 #define S7_MAJOR_VERSION 11
-#define S7_MINOR_VERSION 1
+#define S7_MINOR_VERSION 2
 
 #include <stdint.h>           /* for int64_t */
 
@@ -561,6 +561,7 @@ void s7_define_function_star(s7_scheme *sc, const char *name, s7_function fnc, c
 void s7_define_safe_function_star(s7_scheme *sc, const char *name, s7_function fnc, const char *arglist, const char *doc);
 void s7_define_typed_function_star(s7_scheme *sc, const char *name, s7_function fnc, const char *arglist, const char *doc, s7_pointer signature);
 s7_pointer s7_define_macro(s7_scheme *sc, const char *name, s7_function fnc, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
+s7_pointer s7_define_expansion(s7_scheme *sc, const char *name, s7_function fnc, s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
 
   /* s7_make_function creates a Scheme function object from the s7_function 'fnc'.
    *   Its name (for s7_describe_object) is 'name', it requires 'required_args' arguments,
@@ -935,6 +936,7 @@ bool s7_is_bignum(s7_pointer obj);
  *
  *        s7 changes
  *
+ * 31-Aug:    s7_define_expansion.
  * 26-Aug:    deprecate s7_immutable and add s7_set_immutable with s7_scheme* argument.
  * 16-Aug:    s7 complex vectors.
  * 2-July:    s7_make_typed_function_with_environment.

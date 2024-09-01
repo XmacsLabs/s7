@@ -9239,8 +9239,11 @@ static /* inline */ void clear_small_symbol_set(s7_scheme *sc)
 #endif
 
 /* -------- big symbol set -------- */
-#if S7_DEBUGGING
-static bool symbol_is_in_big_symbol_set(s7_scheme *sc, s7_pointer sym) {return(big_symbol_tag(sym) == sc->big_symbol_tag);}
+#define symbol_is_in_big_symbol_set(Sc, Sym) (big_symbol_tag(Sym) == Sc->big_symbol_tag)
+#define clear_big_symbol_set(Sc) Sc->big_symbol_tag++
+
+#define begin_big_symbol_set(Sc) Sc->big_symbol_tag++
+#define end_big_symbol_set(Sc)
 
 static s7_pointer add_symbol_to_big_symbol_set(s7_scheme *sc, s7_pointer sym)
 {
@@ -9248,28 +9251,6 @@ static s7_pointer add_symbol_to_big_symbol_set(s7_scheme *sc, s7_pointer sym)
   set_big_symbol_tag(sym, sc->big_symbol_tag);
   return(sym);
 }
-
-static /* inline */ void clear_big_symbol_set(s7_scheme *sc) {sc->big_symbol_tag++;}
-
-#define begin_big_symbol_set(Sc) Sc->big_symbol_tag++;
-#define end_big_symbol_set(Sc) Sc->big_symbol_tag++;
-
-#else
-
-#define symbol_is_in_big_symbol_set(Sc, Sym) (big_symbol_tag(Sym) == Sc->big_symbol_tag)
-#define clear_big_symbol_set(Sc) Sc->big_symbol_tag++
-
-#define begin_big_symbol_set(Sc) Sc->big_symbol_tag++
-#define end_big_symbol_set(Sc)
-
-static /* inline */ s7_pointer add_symbol_to_big_symbol_set(s7_scheme *sc, s7_pointer sym)
-{
-  if (symbol_is_in_big_symbol_set(sc, sym)) symbol_shadows(sym)++; else symbol_set_shadows(sym, 0);
-  set_big_symbol_tag(sym, sc->big_symbol_tag);
-  /* this won't wrap around (it's 64-bits) but we could divide it in two if necessary someday and use the clear_small_symbol_tag code above */
-  return(sym);
-}
-#endif
 
 
 /* -------------------------------- lets/slots -------------------------------- */
@@ -44325,8 +44306,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
       break;
 
     case T_INT_VECTOR:
-    case T_FLOAT_VECTOR:
-      /* TODO: complex vector */
+    case T_FLOAT_VECTOR:  /* not complex-vector here -- sorting makes no sense */
       {
 	s7_int i;
 	s7_pointer vec;
@@ -47243,8 +47223,6 @@ s7_pointer s7_define_macro(s7_scheme *sc, const char *name, s7_function fnc,
   return(sym);
 }
 
-#define READER_COND_C 1
-#if READER_COND_C
 s7_pointer s7_define_expansion(s7_scheme *sc, const char *name, s7_function fnc,
 			       s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc)
 {
@@ -47255,7 +47233,6 @@ s7_pointer s7_define_expansion(s7_scheme *sc, const char *name, s7_function fnc,
   set_full_type(sym, full_type(sym) | T_EXPANSION);
   return(sym);
 }
-#endif
 
 
 /* -------------------------------- macro? -------------------------------- */
@@ -47528,11 +47505,9 @@ static bool is_dwind_thunk(s7_scheme *sc, s7_pointer x)
       return(is_null(closure_args(x)));    /* this case does not match is_aritable -- it could be loosened -- arity=0 below would need fixup */
     case T_C_FUNCTION:
       return(c_function_is_aritable(x, 0));
-    case T_C_FUNCTION_STAR:
-      return(c_function_max_args(x) >= 0);
     case T_C_MACRO:
-      return((c_macro_min_args(x) <= 0) && (c_macro_max_args(x) >= 0));
-    case T_GOTO: case T_CONTINUATION: case T_C_RST_NO_REQ_FUNCTION:
+      return(c_macro_min_args(x) == 0);
+    case T_C_FUNCTION_STAR: case T_GOTO: case T_CONTINUATION: case T_C_RST_NO_REQ_FUNCTION:
       return(true);
     }
   return(x == sc->F); /* (dynamic-wind #f (lambda () 3) #f) */
@@ -48204,7 +48179,7 @@ s7_pointer s7_arity(s7_scheme *sc, s7_pointer x)
     case T_ITERATOR:
       return(cons(sc, int_zero, int_zero));
     case T_SYNTAX:
-      return(cons(sc, small_int(syntax_min_args(x)), (syntax_max_args(x) == -1) ? max_arity : small_int(syntax_max_args(x))));
+      return(cons(sc, small_int(syntax_min_args(x)), (syntax_max_args(x) == MAX_ARITY) ? max_arity : small_int(syntax_max_args(x))));
     }
   return(sc->F);
 }
@@ -48269,8 +48244,7 @@ bool s7_is_aritable(s7_scheme *sc, s7_pointer x, s7_int args)
       return(closure_star_is_aritable(sc, x, closure_args(x), args));
 
     case T_C_MACRO:
-      return((c_macro_min_args(x) <= args) &&
-	     (c_macro_max_args(x) >= args));
+      return((c_macro_min_args(x) <= args) && (c_macro_max_args(x) >= args));
 
     case T_GOTO: case T_CONTINUATION:
       return(true);
@@ -48299,7 +48273,7 @@ bool s7_is_aritable(s7_scheme *sc, s7_pointer x, s7_int args)
       return(args == 0);
 
     case T_SYNTAX:
-      return((args >= syntax_min_args(x)) && ((args <= syntax_max_args(x)) || (syntax_max_args(x) == -1)));
+      return((args >= syntax_min_args(x)) && (args <= syntax_max_args(x)));
     }
   return(false);
 }
@@ -66397,7 +66371,7 @@ static bool p_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, in
 	case T_BYTE_VECTOR:
 	case T_INT_VECTOR:
 	case T_FLOAT_VECTOR:
-	  /* TODO: complex vector */
+	case T_COMPLEX_VECTOR:
 	  if (vector_rank(obj) != 1)
 	    return_false(sc, car_x);
 	  opc->v[3].p_pi_f = vector_ref_p_pi_unchecked;
@@ -74568,8 +74542,7 @@ static void clean_up_big_symbol_set(s7_scheme *sc, s7_pointer orig_e, s7_pointer
 	    {
 	      fprintf(stderr, "%s[%d]: %se missing: %s %" ld64 "%s\n", __func__, __LINE__, bold_text, display(car(x)), big_symbol_tag(car(x)), unbold_text);
 	      abort();
-	    }
-    }
+	    }}
 }
 
 static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, int32_t hop, s7_pointer e, bool export_ok)
@@ -80664,6 +80637,17 @@ static void transfer_macro_info(s7_scheme *sc, s7_pointer mac)
     }
 }
 
+static void check_c_macro_args(s7_scheme *sc, s7_pointer mac, s7_pointer args)
+{
+  s7_int len = proper_list_length(args);
+  if (len < c_macro_min_args(sc->code))
+    error_nr(sc, sc->wrong_number_of_args_symbol,
+	     set_elist_4(sc, wrap_string(sc, "~A: not enough arguments: (~A~{~^ ~S~})", 39), sc->code, sc->code, sc->args));
+  if (c_macro_max_args(sc->code) < len)
+    error_nr(sc, sc->wrong_number_of_args_symbol,
+	     set_elist_4(sc, wrap_string(sc, "~A: too many arguments: (~A~{~^ ~S~})", 37), sc->code, sc->code, sc->args));
+}
+
 static goto_t op_expansion(s7_scheme *sc)
 {
   s7_pointer caller = (is_pair(stack_top_args(sc))) ? car(stack_top_args(sc)) : sc->F; /* this can be garbage */
@@ -80689,19 +80673,18 @@ static goto_t op_expansion(s7_scheme *sc)
       else
 	{
 	  /* call the reader macro */
+	  /* TODO: we ought to at least check min_args <= length(sc->args) here (c_macro is checked below) */
 	  sc->args = cdr(sc->value);
 	  push_stack_no_code(sc, OP_EXPANSION, sc->nil);
-#if READER_COND_C
 	  if (is_c_macro(sc->code))
 	    {
+	      check_c_macro_args(sc, sc->code, sc->args);
 	      sc->value = c_macro_call(sc->code)(sc, sc->args);
-	      return(goto_eval);
+	      return(goto_start);
 	    }
-#endif
 	  set_curlet(sc, make_let(sc, closure_let(sc->code)));
 	  transfer_macro_info(sc, sc->code);
-	  if (!is_macro_star(sc->code))
-	    return(goto_apply_lambda);
+	  if (!is_macro_star(sc->code)) return(goto_apply_lambda);
 	  apply_macro_star_1(sc);
 	  return(goto_begin);
 	  /* bacros don't seem to make sense here -- they are tied to the run-time environment,
@@ -80713,11 +80696,7 @@ static goto_t op_expansion(s7_scheme *sc)
 
 static void macroexpand_c_macro(s7_scheme *sc) /* callgrind shows this when it's actually calling apply_c_function (code is identical) */
 {
-  s7_int len = proper_list_length(sc->args);
-  if (len < c_macro_min_args(sc->code))
-    error_nr(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, not_enough_arguments_string, sc->code, sc->args));
-  if (c_macro_max_args(sc->code) < len)
-    error_nr(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, sc->code, sc->args));
+  check_c_macro_args(sc, sc->code, sc->args);
   sc->value = c_macro_call(sc->code)(sc, sc->args);
 }
 
@@ -81703,7 +81682,10 @@ static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer 
     case T_FLOAT_VECTOR:
       sc->value = g_fv_set_3(sc, with_list_t3(obj, arg, value));
       break;
-      /* TODO: complex vector */
+    case T_COMPLEX_VECTOR:
+      if (S7_DEBUGGING) fprintf(stderr, "complex-vector-set in %s[%d]: %s %s %s\n", __func__, __LINE__, display(obj), display(arg), display(value));
+      sc->value = complex_vector_set_p_ppp(sc, obj, arg, value);
+      break;
     case T_INT_VECTOR:
       sc->value = g_iv_set_3(sc, with_list_t3(obj, arg, value));
       break;
@@ -86010,13 +85992,7 @@ static void apply_c_rst_no_req_function(s7_scheme *sc)      /* -------- C-based 
 
 static void apply_c_macro(s7_scheme *sc)  	            /* -------- C-based macro -------- */
 {
-  s7_int len = proper_list_length(sc->args);
-  if (len < c_macro_min_args(sc->code))
-    error_nr(sc, sc->wrong_number_of_args_symbol,
-	     set_elist_4(sc, wrap_string(sc, "~A: not enough arguments: (~A~{~^ ~S~})", 39), sc->code, sc->code, sc->args));
-  if (c_macro_max_args(sc->code) < len)
-    error_nr(sc, sc->wrong_number_of_args_symbol,
-	     set_elist_4(sc, wrap_string(sc, "~A: too many arguments: (~A~{~^ ~S~})", 37), sc->code, sc->code, sc->args));
+  check_c_macro_args(sc, sc->code, sc->args);
   sc->code = c_macro_call(sc->code)(sc, sc->args);
 }
 
@@ -86033,12 +86009,10 @@ static void apply_syntax(s7_scheme *sc)                    /* -------- syntactic
 		 set_elist_3(sc, wrap_string(sc, "apply ~S: body is circular: ~S", 30), sc->code, sc->args));
     }
   else len = 0;
-
   if (len < syntax_min_args(sc->code))
     error_nr(sc, sc->wrong_number_of_args_symbol,
 	     set_elist_4(sc, wrap_string(sc, "~A: not enough arguments: (~A~{~^ ~S~})", 39), sc->code, sc->code, sc->args));
-  if ((syntax_max_args(sc->code) < len) &&
-      (syntax_max_args(sc->code) != -1))
+  if (syntax_max_args(sc->code) < len)
     error_nr(sc, sc->wrong_number_of_args_symbol,
 		set_elist_4(sc, wrap_string(sc, "~A: too many arguments: (~A~{~^ ~S~})", 37), sc->code, sc->code, sc->args));
   sc->cur_op = syntax_opcode(sc->code);          /* (apply begin '((define x 3) (+ x 2))) */
@@ -95210,10 +95184,8 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 		  {
 		  case goto_begin:        goto BEGIN;
 		  case goto_apply_lambda: goto APPLY_LAMBDA;
-#if READER_COND_C
-		  case goto_start:        continue;
-#endif
-		  default: break;
+		  case goto_start:        
+		  default:                continue;
 		  }
 	      break;
 
@@ -95305,12 +95277,9 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
   return(sc->F); /* this never happens (make the compiler happy) */
 }
 
-#if READER_COND_C
-static s7_pointer g_reader_cond(s7_scheme *sc, s7_pointer args)
+static s7_pointer g_reader_cond(s7_scheme *sc, s7_pointer args) /* (reader-cond clause . clauses) */
 {
   #define H_reader_cond "(reader-cond clauses) is a read-time cond."
-  if (is_null(args))
-    error_nr(sc, sc->syntax_error_symbol, set_elist_1(sc, wrap_string(sc, "reader-cond: no clauses?", 24)));
   for (s7_pointer clauses = args; is_pair(clauses); clauses = cdr(clauses))
     {
       s7_pointer clause = car(clauses), val;
@@ -95329,11 +95298,9 @@ static s7_pointer g_reader_cond(s7_scheme *sc, s7_pointer args)
 	  if (is_null(cddr(clause)))
 	    return(cadr(clause));
 	  return(g_apply_values(sc, list_1(sc, cdr(clause))));
-	  /* TODO: see op_expansion in splice_in_values -- maybe as above with values but push OP_EXPANSION first? or just repeat the splice code */
 	}}
   return(sc->no_value);
 }
-#endif
 
 
 
@@ -97905,7 +97872,7 @@ static s7_pointer syntax(s7_scheme *sc, const char *name, opcode_t op, s7_pointe
   syntax_opcode(syn) = op;
   syntax_set_symbol(syn, x);
   syntax_min_args(syn) = integer(min_args);
-  syntax_max_args(syn) = ((max_args == max_arity) ? -1 : integer(max_args));
+  syntax_max_args(syn) = integer(max_args);
   syntax_documentation(syn) = doc;
   set_global_slot(x, make_semipermanent_slot(sc, x, syn));
   set_initial_value(x, syn);  /* set_local_slot(x, global_slot(x)); */
@@ -98821,9 +98788,7 @@ static void init_rootlet(s7_scheme *sc)
 
   sc->quasiquote_symbol = s7_define_macro(sc, "quasiquote", g_quasiquote, 1, 0, false, H_quasiquote); /* is this considered syntax? r7rs says yes; also unquote */
   sc->quasiquote_function = initial_value(sc->quasiquote_symbol);
-#if READER_COND_C
   sc->reader_cond_symbol = s7_define_expansion(sc, "reader-cond", g_reader_cond, 1, 0, true, H_reader_cond);
-#endif
   sc->profile_in_symbol = unsafe_defun("profile-in", profile_in, 2, 0, false); /* calls dynamic-unwind */
   sc->profile_out = NULL;
 
@@ -99434,6 +99399,7 @@ s7_scheme *s7_init(void)
    *   r7rs says: "If none of the <feature requirement>s evaluate to #t, then if there is an else clause, its <expression>s are included.
    *   Otherwise, the cond-expand has no effect."  The code above returns #<unspecified>, but I read that prose to say that
    *   (begin 23 (cond-expand (surreals 1) (foonly 2))) should evaluate to 23.
+   *   (macroexpand (cond-expand (linux 1) (mac 3))): (cond (#t 1) (#f 3)), (macroexpand (cond-expand (linux) (mac 3))): (cond (#t #f) (#f 3))
    */
   /* call-with-values, make-hook, multiple-value-bind, and cond-expand can't set the initial_value to the global_value
    *   so that #_... can be used because the global_value is not semipermanent, but could it be made so?
@@ -99884,28 +99850,16 @@ int main(int argc, char **argv)
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * safe_do hop bit in other do cases and let
+ * make-hook, cond-expand to C (make_c_function_star for hook, but then hook-functions has to change (assumes closure*)
+ * reader-cond as normal macro has problems (s7test 97637)
+ * growable opt_info*, does this require opts array to be opt_info**?
+ * big_symbol_set: do-vars? (tlimit), tlet fx trouble, tgen clean_up, dup? look at where big_symbol_set loses now
  *
  * complex-vector: cload wrapper?, opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
  *   tcomplex.scm to test complex opts, complex fft, dsp: dolph z-transform cfft! (already used in tfft -- fft-bench)
  *   in tari (complex-vector-set! v i (complex ...)) can skip the complex variable creation
  *      similarly for + etc? (z=s7_complex etc), mpc tests?  (complex -> (c-complex)) in chooser
- *
- * (do ((i 1.0 #\c)) ) etc for opt_do tests
- * make-hook, cond-expand to C (make_c_function_star for hook)
- *
- * reader-cond s7test 97637 1 bug left in C version -- it's ok if reader-cond is not hidden [i.e. it's a macro in this context, so does not call op_expansion]
- *     splice_in_values[71193]: splice eval_args (#f #f)
- *     splice_in_values[71478]: splice punts: eval_args
- *     eval_args (427), code: ((values #f #f) 3)
- *     eval[94350]: op_apply (values #f #f) (pair) to (3)
- *     eval[94350]: op_apply #f (boolean) to (#f 3)
- *
- * add s7_define_extension to s7.h
- * growable opt_info*, does this require opts array to be opt_info**?
- * big_symbol_set: do-vars? (tlimit), tlet fx trouble, tgen clean_up, dup? look at where big_symbol_set loses now
- * map vector -> vector? ambiguous if two args not same type, in (apply vector (map...)) the optimizer can omit the intermediate list, lint? display->wrapper
- * is macro arity checked?  is reader-cond actually (1, 0, false)?
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
