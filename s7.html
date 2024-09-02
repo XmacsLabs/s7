@@ -370,7 +370,7 @@ Other math-related differences between s7 and r5rs:
 <li>floor, ceiling, truncate, and round return (exact) integer results.
 <li>"#" does not stand for an unknown digit.
 <li>the "@" complex number notation is not supported ("@" is an exponent marker in s7).
-<li>"+i" is not considered a number; include the real part.
+<li>"+i" is not considered a number; include the real part.  (If +i is a number, so 1+).
 <li>modulo, remainder, and quotient take integer, ratio, or real arguments.
 <li>lcm and gcd can take integer or ratio arguments.
 <li>log takes an optional second argument, the base.
@@ -9511,6 +9511,8 @@ void s7_define_typed_function_star(s7_scheme *sc, const char *name, s7_function 
 
 s7_pointer s7_define_macro(s7_scheme *sc, const char *name, s7_function fnc,
                            s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
+s7_pointer s7_define_expansion(s7_scheme *sc, const char *name, s7_function fnc, 
+	                       s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc);
 
 /* s7_make* functions return a function */
 s7_pointer s7_make_function(s7_scheme *sc, const char *name, s7_function fnc,
@@ -9585,7 +9587,7 @@ s7_make_function creates (and returns) a Scheme function object from the s7_func
 An s7_function is a C function of the form <code>s7_pointer func(s7_scheme *sc, s7_pointer args)</code>.
 The new function's name is 'name', it requires 'required_args' arguments,
 it can accept 'optional_args' other arguments, and if 'rest_arg' is true, it accepts
-a "rest" argument (a list of all the trailing arguments).
+any number of trailing optional arguments (that is, it isn't a true :rest argument for grubby historical reasons).
 The function's documentation is 'doc'.
 </p>
 <p>Leaving aside the value returned, s7_define_function is the same as s7_make_function, but it also adds 'name' (as a symbol) to the
@@ -9604,6 +9606,7 @@ s7_define_function(sc, "car", g_car, 1, 0, false, "(car obj)");
 </p>
 <p>s7_define_macro defines a Scheme macro; its arguments are not evaluated (unlike a function),
 but its returned value (assumed to be some sort of Scheme expression) is evaluated.  It returns a symbol.
+s7_define_expansion is the same, but returns a read-time macro (an "expansion" if s7 jargon).
 </p>
 <p>The "safe" and "unsafe" versions of these functions refer to the s7 optimizer.
 If it knows a function is safe, it can more thoroughly optimize the expression it is in.

@@ -133,9 +133,7 @@
 			 '(boolean s7_is_boolean s7_boolean s7_make_boolean bool)
 			 '(real s7_is_real s7_number_to_real_with_caller s7_make_real s7_double)
 
-			 ;; '(complex s7_is_complex #f s7_make_complex s7_Complex)
-			 ;; the typedef is around line 6116 in s7.c, but we also need s7_complex which requires the s7_Complex type
-			 ;; xen.h uses (s7_real_part(a) + s7_imag_part(a) * _Complex_I) instead since c++ won't let use define s7_Complex in s7.h
+			 ;; '(complex s7_is_complex s7_to_c_complex?? s7_make_complex s7_complex)
 
 			 '(string s7_is_string s7_string s7_make_string char*)
 			 (list 'character 's7_is_character 's7_character 's7_make_character (symbol "unsigned char"))
@@ -227,8 +225,8 @@
 	  (type-symbols ())
 	  (p #f)
 	  (pp (open-output-string))
-	  (int-funcs ())  ; functions guaranteed to return int
-	  (double-funcs ())  ; functions returning double, all args double
+	  (int-funcs ())        ; functions guaranteed to return int
+	  (double-funcs ())     ; functions returning double, all args double
 	  (double-int-funcs ()) ; functions return double, args are (integer double)
 	  (sig-symbols (list (cons 'integer? 0) (cons 'boolean? 0) (cons 'real?  0) (cons 'float? 0) 
 			     (cons 'char? 0) (cons 'string? 0) (cons 'c-pointer? 0) (cons 't 0)))

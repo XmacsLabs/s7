@@ -44306,7 +44306,8 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
       break;
 
     case T_INT_VECTOR:
-    case T_FLOAT_VECTOR:  /* not complex-vector here -- sorting makes no sense */
+    case T_FLOAT_VECTOR:
+    case T_COMPLEX_VECTOR:
       {
 	s7_int i;
 	s7_pointer vec;
@@ -44315,7 +44316,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	  return(data);
 	if (is_c_function(lessp))
 	  {
-	    if (sc->sort_f == lt_b_7pp)
+	    if (sc->sort_f == lt_b_7pp) /* this makes no sense in the complex case */
 	      {
 		if (is_float_vector(data))
 		  qsort((void *)float_vector_floats(data), len, sizeof(s7_double), dbl_less);
@@ -44344,13 +44345,19 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	check_free_heap_size(sc, len);
 	if (is_float_vector(data))
 	  for (i = 0; i < len; i++) elements[i] = make_real_unchecked(sc, float_vector(data, i));
-	else for (i = 0; i < len; i++) elements[i] = make_integer_unchecked(sc, int_vector(data, i));
+	else 
+	  if (is_int_vector(data))
+	    for (i = 0; i < len; i++) elements[i] = make_integer_unchecked(sc, int_vector(data, i));
+	  else for (i = 0; i < len; i++) elements[i] = c_complex_to_s7(sc, complex_vector(data, i));
 	if (sort_func)
 	  {
 	    local_qsort_r((void *)elements, len, sizeof(s7_pointer), sort_func, (void *)sc);
 	    if (is_float_vector(data))
 	      for (i = 0; i < len; i++)	float_vector(data, i) = real(elements[i]);
-	    else for (i = 0; i < len; i++) int_vector(data, i) = integer(elements[i]);
+	    else 
+	      if (is_int_vector(data))
+		for (i = 0; i < len; i++) int_vector(data, i) = integer(elements[i]);
+	      else for (i = 0; i < len; i++) complex_vector(data, i) = s7_to_c_complex(elements[i]);
 	    unstack_gc_protect(sc);
 	    return(data);
 	  }
@@ -70832,7 +70839,6 @@ static bool op_map_1(s7_scheme *sc)
   s7_pointer args = sc->args, code = sc->code;
   s7_pointer p = counter_list(args);
   s7_pointer x = s7_iterate(sc, p);
-
   if (iterator_is_at_end(p))
     {
       sc->value = proper_list_reverse_in_place(sc, counter_result(args));
@@ -81682,8 +81688,7 @@ static bool set_pair3(s7_scheme *sc, s7_pointer obj, s7_pointer arg, s7_pointer 
     case T_FLOAT_VECTOR:
       sc->value = g_fv_set_3(sc, with_list_t3(obj, arg, value));
       break;
-    case T_COMPLEX_VECTOR:
-      if (S7_DEBUGGING) fprintf(stderr, "complex-vector-set in %s[%d]: %s %s %s\n", __func__, __LINE__, display(obj), display(arg), display(value));
+    case T_COMPLEX_VECTOR: /* cfft in tcomplex hits this */
       sc->value = complex_vector_set_p_ppp(sc, obj, arg, value);
       break;
     case T_INT_VECTOR:
@@ -90623,7 +90628,10 @@ static bool op_x_aa(s7_scheme *sc, s7_pointer f)
     {
       if (!needs_copied_args(f))
 	{
-	  sc->value = c_function_call(f)(sc, with_list_t2(fx_call(sc, cdr(code)), fx_call(sc, cddr(code))));
+	  gc_protect_via_stack(sc, fx_call(sc, cdr(code)));
+	  sc->value = fx_call(sc, cddr(code));
+	  sc->value = c_function_call(f)(sc, with_list_t2(gc_protected1(sc), sc->value));
+	  unstack_gc_protect(sc);
 	  return(true);
 	}
       sc->args = fx_call(sc, cddr(code));
@@ -99850,16 +99858,19 @@ int main(int argc, char **argv)
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * safe_do hop bit in other do cases and let
- * make-hook, cond-expand to C (make_c_function_star for hook, but then hook-functions has to change (assumes closure*)
- * reader-cond as normal macro has problems (s7test 97637)
+ * make-hook, cond-expand to C (s7_make_function_star for hook, but then hook-functions has to change (assumes closure*))
  * growable opt_info*, does this require opts array to be opt_info**?
  * big_symbol_set: do-vars? (tlimit), tlet fx trouble, tgen clean_up, dup? look at where big_symbol_set loses now
+ * test s7_define_expansion s7test/ffitest
+ * (expansion ...) to parallel (macro...)?
+ * add c-define in expr example (t824.scm) and check function let in such cases, and add that example to t824
+ *   op_x_aa was apparently the only such case in with_list_t*
  *
- * complex-vector: cload wrapper?, opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
+ * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
- *   tcomplex.scm to test complex opts, complex fft, dsp: dolph z-transform cfft! (already used in tfft -- fft-bench)
+ *   tcomplex.scm to test complex opts, dsp: z-transform?, find LA+z tests somewhere
  *   in tari (complex-vector-set! v i (complex ...)) can skip the complex variable creation
- *      similarly for + etc? (z=s7_complex etc), mpc tests?  (complex -> (c-complex)) in chooser
+ *      similarly for + etc? (z=s7_complex etc) (complex -> (c-complex)) in chooser
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
@@ -99867,11 +99878,4 @@ int main(int argc, char **argv)
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
- *
- * function location info for C/FFI funcs (cload could do this, but it would be the FFI location):
- *   #define stringify_1(x) #x, #define stringify(x) stringify_1(x), static const char *L_abs = __FILE__ "[" stringify(__LINE__) "]";
- *   then at init time: s7_set_location(abs, L_abs)|s7_location(abs)? maybe include s7_scheme arg
- *   object->let, *function*, maybe procedure-location, (scheme funcs have (*function* (curlet) 'file|line), but we'd want this via the function name)
- *   or better? build a location function with the data, funcs alphabetized, etc
- *   or better? info field in c_proc exported
  */
