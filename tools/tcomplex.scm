@@ -195,6 +195,4 @@
 		  (set! pk mx)))))))))
 
 
-;;; closure sort func
 ;;; reverse!/reverse, append+float etc, iterate, map/for-each, object->string? equal?/equivalent?
-;;; LA w/ complex [(and cfft)]

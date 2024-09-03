@@ -9606,7 +9606,7 @@ s7_define_function(sc, "car", g_car, 1, 0, false, "(car obj)");
 </p>
 <p>s7_define_macro defines a Scheme macro; its arguments are not evaluated (unlike a function),
 but its returned value (assumed to be some sort of Scheme expression) is evaluated.  It returns a symbol.
-s7_define_expansion is the same, but returns a read-time macro (an "expansion" if s7 jargon).
+s7_define_expansion is the same, but returns a read-time macro (an "expansion" in s7 jargon).
 </p>
 <p>The "safe" and "unsafe" versions of these functions refer to the s7 optimizer.
 If it knows a function is safe, it can more thoroughly optimize the expression it is in.
