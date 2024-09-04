@@ -1279,7 +1279,7 @@ struct s7_scheme {
   s7_int big_symbol_tag;
   uint32_t small_symbol_tag;
 #if S7_DEBUGGING
-  int32_t big_symbol_set_line, small_symbol_set_line, big_symbol_set_state, small_symbol_set_state, temp_line;
+  int32_t big_symbol_set_line, small_symbol_set_line, big_symbol_set_state, small_symbol_set_state, y_temp_line, v_temp_line;
   const char *big_symbol_set_func, *small_symbol_set_func;
 #endif
   int32_t bignum_precision;
@@ -3679,7 +3679,17 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define counter_set_slots(p, Val)      (T_Ctr(p))->object.ctr.slots = T_Sln(Val)
 
 #if S7_DEBUGGING
-#define begin_temp(p, Val)              do {if (p != sc->unused) fprintf(stderr, "%s[%d]: begin_temp %d %s\n", __func__, __LINE__, sc->temp_line, display(p)); sc->temp_line = __LINE__; p = T_Ext(Val);} while (0)
+#define begin_temp(P, Val)             do {begin_temp_1(sc, P, Val, __func__, __LINE__); P = Val;} while (0)
+static void begin_temp_1(s7_scheme *sc, s7_pointer p, s7_pointer val, const char *func, int line)
+{
+  /* fprintf(stderr, "%s[%d]: begin_temp %c\n", func, line, (p == sc->y) ? 'y' : 'v'); */
+  if(p != sc->unused)
+    {
+    fprintf(stderr, "%s[%d]: begin_temp %c %d %s\n", func, line, (p == sc->y) ? 'y' : 'v', (p == sc->y) ? sc->y_temp_line : sc->v_temp_line, s7_object_to_c_string(sc, p));
+    if (sc->stop_at_error) abort();
+    }
+  if (p == sc->y) sc->y_temp_line = line; else sc->v_temp_line = line; 
+}
 #else
 #define begin_temp(p, Val)              p = Val
 #endif
@@ -12516,7 +12526,7 @@ static s7_pointer g_call_cc(s7_scheme *sc, s7_pointer args)
   begin_temp(sc->y, s7_make_continuation(sc));
   if ((is_any_closure(p)) && (is_pair(closure_args(p))) && (is_symbol(car(closure_args(p)))))
     continuation_name(sc->y) = car(closure_args(p));
-  push_stack(sc, OP_APPLY, list_1_unchecked(sc, sc->y), p); /* apply function p to continuation sc->w */
+  push_stack(sc, OP_APPLY, list_1_unchecked(sc, sc->y), p); /* apply function p to continuation */
   end_temp(sc->y);
   return(sc->nil);
 }
@@ -32524,8 +32534,11 @@ s7_pointer s7_make_iterator(s7_scheme *sc, s7_pointer e)
 static s7_pointer g_make_iterator(s7_scheme *sc, s7_pointer args)
 {
   #define H_make_iterator "(make-iterator sequence carrier) returns an iterator object that returns the next value \
-in the sequence each time it is called.  When it reaches the end, it returns " ITERATOR_END_NAME ".  If carrier is #t, \
-s7 chooses an appropriate value."
+in the sequence each time it is called.  When it reaches the end, it returns " ITERATOR_END_NAME ".  In some cases, \
+the iterator either returns two values in a cons (if the sequence is a hash-table, the cons has the key and value), \
+in others the iterator normally returns an s7_cell created for the value (for example, a float-vector stores data as \
+doubles, but for each value, the iterator returns an s7 object).  To avoid all this allocation, 'carrier' can be a cons \
+or #t; in the latter case s7 chooses an appropriate value."
   #define Q_make_iterator s7_make_signature(sc, 3, sc->is_iterator_symbol, sc->is_sequence_symbol, s7_make_signature(sc, 2, sc->is_boolean_symbol, sc->is_pair_symbol))
 
   /* we need to call s7_make_iterator before fixing up the optional second arg in case let->method */
@@ -40080,19 +40093,17 @@ static void check_list_validity(s7_scheme *sc, const char *caller, s7_pointer ls
 s7_pointer s7_list(s7_scheme *sc, s7_int num_values, ...)
 {
   va_list ap;
-  s7_pointer p, old_sw = sc->w;
-  if (num_values == 0)
-    return(sc->nil);
-  sc->w = make_list(sc, num_values, sc->unused);
-  p = sc->w;
+  s7_pointer p;
+  if (num_values == 0) return(sc->nil);
+  begin_temp(sc->v, p = make_list(sc, num_values, sc->unused));
   va_start(ap, num_values);
   for (s7_int i = 0; i < num_values; i++, p = cdr(p))
     set_car(p, va_arg(ap, s7_pointer));
   va_end(ap);
   if (sc->safety > NO_SAFETY)
-    check_list_validity(sc, __func__, sc->w);
-  p = sc->w;
-  sc->w = old_sw;
+    check_list_validity(sc, __func__, sc->v);
+  p = sc->v;
+  end_temp(sc->v);
   return(p);
 }
 
@@ -40102,30 +40113,27 @@ s7_pointer s7_list_nl(s7_scheme *sc, s7_int num_values, ...) /* arglist should b
   va_list ap;
   s7_pointer p;
 
-  if (num_values == 0)
-    return(sc->nil);
-
-  sc->w = make_list(sc, num_values, sc->unused);
+  if (num_values == 0) return(sc->nil);
+  begin_temp(sc->v, make_list(sc, num_values, sc->unused));
   va_start(ap, num_values);
-  for (s7_pointer q = sc->w; i < num_values; i++, q = cdr(q))
+  for (s7_pointer q = sc->v; i < num_values; i++, q = cdr(q))
     {
       p = va_arg(ap, s7_pointer);
       if (!p)
 	{
 	  va_end(ap);
-	  wrong_number_of_arguments_error_nr(sc, "not enough arguments for s7_list_nl: ~S", 39, sc->w); /* ideally we'd sublist this and append extra below */
+	  wrong_number_of_arguments_error_nr(sc, "not enough arguments for s7_list_nl: ~S", 39, sc->v); /* ideally we'd sublist this and append extra below */
 	}
       set_car(q, p);
     }
   p = va_arg(ap, s7_pointer);
   va_end(ap);
-  if (p) wrong_number_of_arguments_error_nr(sc, "too many arguments for s7_list_nl: ~S", 37, sc->w);
+  if (p) wrong_number_of_arguments_error_nr(sc, "too many arguments for s7_list_nl: ~S", 37, sc->v);
 
   if (sc->safety > NO_SAFETY)
-    check_list_validity(sc, __func__, sc->w);
-
-  p = sc->w;
-  sc->w = sc->unused;
+    check_list_validity(sc, __func__, sc->v);
+  p = sc->v;
+  end_temp(sc->v);
   return(p);
 }
 
@@ -54895,13 +54903,17 @@ s7_pointer s7_apply_function_star(s7_scheme *sc, s7_pointer fnc, s7_pointer args
   TRACK(sc);
   if (is_c_function_star(fnc))
     {
+#if 0
       sc->w = sc->args;
       sc->z = sc->code;
+#endif
       sc->args = T_Ext(args);
       sc->code = fnc;
       apply_c_function_star(sc);
+#if 0
       sc->args = sc->w;
       sc->code = sc->z;
+#endif
       return(sc->value);
     }
   push_stack_direct(sc, OP_EVAL_DONE);
@@ -69971,15 +69983,11 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
       return(sc->unspecified);
     }
 
-  if (!is_iterator(seq))
-    {
-      if (!is_mappable(seq))
-	wrong_type_error_nr(sc, sc->for_each_symbol, 2, seq, a_sequence_string);
-      sc->z = s7_make_iterator(sc, seq);
-    }
-  else sc->z = seq;
-  push_stack(sc, OP_FOR_EACH_1, inline_make_counter(sc, sc->z), f);
-  sc->z = sc->unused;
+  if (!is_mappable(seq))
+    wrong_type_error_nr(sc, sc->for_each_symbol, 2, seq, a_sequence_string);
+  begin_temp(sc->v, (is_iterator(seq)) ? seq : s7_make_iterator(sc, seq));
+  push_stack(sc, OP_FOR_EACH_1, inline_make_counter(sc, sc->v), f);
+  end_temp(sc->v);
   return(sc->unspecified);
 }
 
@@ -70113,20 +70121,12 @@ static s7_pointer g_for_each_closure_2(s7_scheme *sc, s7_pointer f, s7_pointer s
 	  set_curlet(sc, olde);
 	}}
 
-  if (!is_iterator(seq1))
-    {
-      if (!is_mappable(seq1))
-	wrong_type_error_nr(sc, sc->for_each_symbol, 2, seq1, a_sequence_string);
-      sc->z = s7_make_iterator(sc, seq1);
-    }
-  else sc->z = seq1;
-  if (!is_iterator(seq2))
-    {
-      if (!is_mappable(seq2))
-	wrong_type_error_nr(sc, sc->for_each_symbol, 3, seq2, a_sequence_string);
-      sc->z = list_2(sc, sc->z, s7_make_iterator(sc, seq2));
-    }
-  else sc->z = list_2(sc, sc->z, seq2);
+  if (!is_mappable(seq1)) wrong_type_error_nr(sc, sc->for_each_symbol, 2, seq1, a_sequence_string);
+  if (!is_mappable(seq2)) wrong_type_error_nr(sc, sc->for_each_symbol, 3, seq2, a_sequence_string);
+
+  sc->z = (is_iterator(seq1)) ? seq1 : s7_make_iterator(sc, seq1);
+  sc->z = (is_iterator(seq2)) ? list_2(sc, sc->z, seq2) : list_2(sc, sc->z, s7_make_iterator(sc, seq2));
+
   push_stack(sc, OP_FOR_EACH, cons_unchecked(sc, sc->z, make_list(sc, 2, sc->nil)), f);
   sc->z = sc->unused;
   return(sc->unspecified);
@@ -70527,15 +70527,10 @@ static s7_pointer g_map_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq) /* 
       return(sc->unspecified);
     }
 
-  if (!is_iterator(seq))
-    {
-      if (!is_mappable(seq))
-	wrong_type_error_nr(sc, sc->map_symbol, 2, seq, a_sequence_string);
-      sc->z = s7_make_iterator(sc, seq);
-    }
-  else sc->z = seq;
-  push_stack(sc, OP_MAP_1, inline_make_counter(sc, sc->z), f);
-  sc->z = sc->unused;
+  if (!is_mappable(seq)) wrong_type_error_nr(sc, sc->map_symbol, 2, seq, a_sequence_string);
+  begin_temp(sc->v, (is_iterator(seq)) ? seq : s7_make_iterator(sc, seq));
+  push_stack(sc, OP_MAP_1, inline_make_counter(sc, sc->v), f);
+  end_temp(sc->v);
   return(sc->nil);
 }
 
@@ -70601,20 +70596,11 @@ static s7_pointer g_map_closure_2(s7_scheme *sc, s7_pointer f, s7_pointer seq1, 
 	  set_curlet(sc, old_e);
 	}}
 
-  if (!is_iterator(seq1))
-    {
-      if (!is_mappable(seq1))
-	wrong_type_error_nr(sc, sc->map_symbol, 2, seq1, a_sequence_string);
-      sc->z = s7_make_iterator(sc, seq1);
-    }
-  else sc->z = seq1;
-  if (!is_iterator(seq2))
-    {
-      if (!is_mappable(seq2))
-	wrong_type_error_nr(sc, sc->map_symbol, 3, seq2, a_sequence_string);
-      sc->z = list_2(sc, sc->z, s7_make_iterator(sc, seq2));
-    }
-  else sc->z = list_2(sc, sc->z, seq2);
+  if (!is_mappable(seq1)) wrong_type_error_nr(sc, sc->for_each_symbol, 2, seq1, a_sequence_string);
+  if (!is_mappable(seq2)) wrong_type_error_nr(sc, sc->for_each_symbol, 3, seq2, a_sequence_string);
+
+  sc->z = (is_iterator(seq1)) ? seq1 : s7_make_iterator(sc, seq1);
+  sc->z = (is_iterator(seq2)) ? list_2(sc, sc->z, seq2) : list_2(sc, sc->z, s7_make_iterator(sc, seq2));
 
   push_stack(sc, OP_MAP, inline_make_counter(sc, sc->z), f);
   sc->z = sc->unused;
@@ -70785,9 +70771,9 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 	    if (is_closure_star(f))
 	      return(g_map_closure(sc, f, cadr(args)));
 
-	    sc->z = (!is_iterator(cadr(args))) ? s7_make_iterator(sc, cadr(args)) : cadr(args);
-	    push_stack(sc, OP_MAP_1, inline_make_counter(sc, sc->z), f);
-	    sc->z = sc->unused;
+	    begin_temp(sc->v, (!is_iterator(cadr(args))) ? s7_make_iterator(sc, cadr(args)) : cadr(args));
+	    push_stack(sc, OP_MAP_1, inline_make_counter(sc, sc->v), f);
+	    end_temp(sc->v);
 	    symbol_increment_ctr(car(closure_args(f)));
 	    return(sc->nil);
 	  }
@@ -72331,6 +72317,8 @@ static s7_pointer check_autoload_and_error_hook(s7_scheme *sc, s7_pointer sym)
       sc->args = T_Pos(args); /* can be #<unused> or #<counter>! */
       sc->code = code;
       set_curlet(sc, current_let);
+      if ((S7_DEBUGGING) && (sc->x != x)) fprintf(stderr, "%d: x changed\n", __LINE__);
+      if ((S7_DEBUGGING) && (sc->z != z)) fprintf(stderr, "%d: z changed\n", __LINE__);
       sc->x = x;
       sc->z = z;
       sc->temp7 = sc->unused;
@@ -80677,14 +80665,17 @@ static goto_t op_expansion(s7_scheme *sc)
       (caller != sc->define_expansion_star_symbol)) /* (define-expansion* ...) being reloaded/redefined */
     {
       s7_pointer symbol = car(sc->value), slot;
-      /* we're playing fast and loose with sc->curlet in the reader, so here we need a disaster check */
       if (!is_let(sc->curlet)) set_curlet(sc, sc->rootlet);
 
-      if ((is_global(symbol)) || (sc->curlet == sc->nil))
-	slot = global_slot(symbol);
-      else slot = s7_slot(sc, symbol);
+      if (is_symbol(symbol)) /* maybe (#_cond-expand) etc */
+	{
+	  if ((is_global(symbol)) || (sc->curlet == sc->nil))
+	    slot = global_slot(symbol);
+	  else slot = s7_slot(sc, symbol);
+	  sc->code = (is_slot(slot)) ? slot_value(slot) : sc->undefined;
+	}
+      else sc->code = symbol;
 
-      sc->code = (is_slot(slot)) ? slot_value(slot) : sc->undefined;
       if ((!is_any_macro(sc->code)) || (!is_expansion(sc->code)))
 	clear_expansion(symbol);
       else
@@ -96410,8 +96401,9 @@ static s7_pointer starlet_iterate(s7_scheme *sc, s7_pointer iterator)
     value = sc->F;  /* (format #f "~W" (inlet *s7*)) or (let->list *s7*) etc */
   else
     {
-      s7_pointer osw = sc->w;  /* protect against starlet list making */
+      s7_pointer osw = sc->w;  /* protect against starlet list making [sc->w not in use here?] */
       value = starlet(sc, starlet_symbol_id(symbol));
+      if ((S7_DEBUGGING) && (osw != sc->w)) fprintf(stderr, "%d: %s %s\n", __LINE__, display(osw), display(sc->w));
       sc->w = osw;
     }
   if (iterator_carrier(iterator))
@@ -98854,13 +98846,16 @@ static void init_rootlet(s7_scheme *sc)
 
   sc->quasiquote_symbol = s7_define_macro(sc, "quasiquote", g_quasiquote, 1, 0, false, H_quasiquote); /* is this considered syntax? r7rs says yes; also unquote */
   sc->quasiquote_function = initial_value(sc->quasiquote_symbol);
+
   sc->reader_cond_symbol = s7_define_expansion(sc, "reader-cond", g_reader_cond, 1, 0, true, H_reader_cond);
-  set_initial_value(sc->reader_cond_symbol, sc->undefined); /* until bug is fixed */
+  /* set_initial_value(sc->reader_cond_symbol, sc->undefined); *//* until bug is fixed */
+
   sc->profile_in_symbol = unsafe_defun("profile-in", profile_in, 2, 0, false); /* calls dynamic-unwind */
   sc->profile_out = NULL;
+
 #if (!WITH_PURE_S7)
   sc->cond_expand_symbol = s7_define_expansion(sc, "cond-expand", g_cond_expand, 1, 0, true, H_cond_expand);
-  set_initial_value(sc->cond_expand_symbol, sc->undefined); /* until bug is fixed */
+  /* set_initial_value(sc->cond_expand_symbol, sc->undefined); *//* until bug is fixed */
 #endif
 
   /* -------- *features* -------- */
@@ -99273,6 +99268,8 @@ s7_scheme *s7_init(void)
 #if S7_DEBUGGING
   sc->big_symbol_set_state = SET_IGNORE;
   sc->small_symbol_set_state = SET_IGNORE;
+  sc->y_temp_line = 0;
+  sc->v_temp_line = 0;
 #endif
   sc->symbol_printer = sc->F;
   sc->make_function = sc->F;
@@ -99849,23 +99846,23 @@ int main(int argc, char **argv)
  * tmock            1145   1082   1042   1045   1035
  * tvect     3408   2464   1772   1669   1497   1454                   1464 opt_p_pi_ss_cvref_direct?
  * thook     7651   ----   2590   2030   2046   1754
- * texit     1884   1950   1778   1741   1770   1759
+ * texit     1884   1950   1778   1741   1770   1756
  * tauto                   2562   2048   1729   1766
  * s7test           1831   1818   1829   1830   1852
  * lt        2222   2172   2150   2185   1950   1911
- * dup              3788   2492   2239   2097   1940  1953 [fx_t -> fx_unsafe_s] -> 1962
+ * dup              3788   2492   2239   2097   1960
  * tread            2421   2419   2408   2405   2241
- * tcopy            5546   2539   2375   2386   2346
+ * tcopy            5546   2539   2375   2386   2357
  * trclo     8031   2574   2454   2445   2449   2359
  * tmat             3042   2524   2578   2590   2518
- * tload                   3046   2404   2566   2538                    2552
+ * tload                   3046   2404   2566   2528
  * fbench    2933   2583   2460   2430   2478   2571
  * tsort     3683   3104   2856   2804   2858   2858
  * titer     4550   3349   3070   2985   2966   2918
  * tio              3752   3683   3620   3583   3122
- * tobj             3970   3828   3577   3508   3440
+ * tobj             3970   3828   3577   3508   3436
  * tmac             3873   3033   3677   3677   3509
- * teq              4045   3536   3486   3544   3554
+ * teq              4045   3536   3486   3544   3542
  * tcase            4793   4439   4430   4439   4377
  * tmap             8774   4489   4541   4586   4384
  * tlet      11.0   6974   5609   5980   5965   4505  4582 do opts fx_num_eq_tg->fx_num_eq_ss etc
@@ -99879,21 +99876,21 @@ int main(int argc, char **argv)
  * trec      19.6   6980   6599   6656   6658   6010
  * tari      15.0   12.7   6827   6543   6278   6180
  * tgsl             7802   6373   6282   6208   6218
- * tset                           6260   6364   6263
+ * tset                           6260   6364   6304
  * tleft     12.2   9753   7537   7331   7331   6393                   6417 opt_case case+value
- * tmisc                          7614   7115   7127
+ * tmisc                          7614   7115   7124
  * tclo             8025   7645   8809   7770   7601
  * tlamb                          8003   7941   7888
  * tgc              11.1   8177   7857   7986   8015
  * thash            11.7   9734   9479   9526   9250
  * cb        12.9   11.0   9658   9564   9609   9649
- * tmap-hash                                    10.3                   10.355 from pair_equal+clear_small_symbol_set
+ * tmap-hash                                    10.3
  * tgen             11.4   12.0   12.1   12.2   12.3 [clean_up_big_symbol_set 91]
  * tall      15.9   15.6   15.6   15.6   15.1   15.1
  * timp             24.4   20.0   19.6   19.7   15.6
  * tmv              21.9   21.1   20.7   20.6   17.3
  * calls            37.5   37.0   37.5   37.1   37.2
- * sg                      55.9   55.8   55.4   55.5
+ * sg                      55.9   55.8   55.4   55.4
  * tbig            175.8  156.5  148.1  146.2  146.4
  * ----------------------------------------------------
  *
@@ -99904,20 +99901,16 @@ int main(int argc, char **argv)
  * make-hook to C? (s7_make_function_star for hook, but then hook-functions has to change (assumes closure*))
  * growable opt_info*, does this require opts array to be opt_info**?
  * big_symbol_set: do-vars? (tlimit), tlet fx trouble, tgen clean_up, dup? look at where big_symbol_set loses now
- * test s7_define_expansion s7test/ffitest
  * add c-define in expr example (t824.scm) and check function let in such cases, and add that example to t824, t824 to s7test?
- * begin|end_temp for sc->x|[w]|z etc, use v as temp? 
- *   (x hardly used, v is current subsitute where y already in use, x->w? v->x? v out?) (z used mostly for map iterators)
- *   see op_x_aa -- one time gc protection elsewhere?
+ * begin|end_temp for sc->x|w|z, clean are v, y
  * random timing nits above
- * (#cond-expand) or any expansion I think -> op_expansion[80683]: not a symbol, but a c-macro (type: 46)
- *   and error should say c-expansion? (#_cond-expand (guile #f)) is the same -- has initial-value now??
- * c-expansion can use values/no-values as return, but c-macro returns #<unspecified>?)
  * sort! c-func has d_dd func and is float-vect, vector-set->float-vector-sort?
+ * write up type declarations in s7.html
+ * iter within iter to test sc->z?
  *
  * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
- *   tcomplex.scm to test complex opts, dsp: z-transform?
+ *   tcomplex.scm to test complex opts. s7test append, tcomplex->101, 103, valcall
  *   in tari (complex-vector-set! v i (complex ...)) can skip the complex variable creation
  *      similarly for + etc? (z=s7_complex etc) (complex -> (c-complex)) in chooser
  *

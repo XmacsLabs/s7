@@ -698,6 +698,7 @@ static s7_pointer make_and_free(s7_scheme *sc)
   return(s7_f(sc));
 }
 
+static s7_pointer g_expand(s7_scheme *sc, s7_pointer args) {return(s7_make_integer(sc, s7_integer(s7_car(args)) + 1));}
 
 int main(int argc, char **argv)
 {
@@ -2847,6 +2848,15 @@ int main(int argc, char **argv)
     if (s7_real(res) != 1.0) {fprintf(stderr, "#_abs: %s?\n", s1 = TO_STR(res)); free(s1);}
     res = s7_eval_c_string(sc, "(abs -1.0)");
     if (s7_real(res) != 0.0) {fprintf(stderr, "(our_)abs: %s?\n", s1 = TO_STR(res)); free(s1);}
+  }
+
+  {
+    s7_pointer v;
+    char *s1;
+    s7_define_expansion(sc, "1+", g_expand, 1, 0, false, "adds 1 at read-time");
+    v = s7_eval_c_string(sc, "#((1+ 0) 2 (1+ 2))");
+    if (strcmp(s7_object_to_c_string(sc, v), "#(1 2 3)") != 0) fprintf(stderr, "%d v: %s\n", __LINE__, s1 = s7_object_to_c_string(sc, v));
+    free(s1);
   }
 
   { /* check realloc'd large block handling in s7_free */

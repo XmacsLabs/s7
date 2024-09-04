@@ -144,14 +144,43 @@
 
 ;(c7) ; 807: 300 eval, 56 lookup, 50 op_dox, 46 add_p_pp, 35 fx_s, 34 complex_vector_getter, 34 complex_vector_set_p_ppp etc
 
-#|
-(unless (equivalent? (cfft (vector 0.0 1+i 0.0 0.0)) #(1+1i -1+1i -1-1i 1-1i))
-  (format *stderr* "cfft 1: ~S~%" (cfft (vector 0.0 1+i 0.0 0.0))))
-(let-temporarily (((*s7* 'equivalent-float-epsilon) 1e-14))
-  (unless (equivalent? (cfft (vector 0 0 1+i 0 0 0 1-i 0)) #(2 -2 -2 2 2 -2 -2 2))
-    (format *stderr* "cfft 2: ~S~%" (cfft (vector 0 0 1+i 0 0 0 1-i 0)))))
-|#
 
+(define z-transform
+  (let ((+documentation+ "(z-transform data n z) performs a Z transform on data; if z=e^2*pi*j/n you get a Fourier transform"))
+    (lambda (f n z)
+      (let ((res (make-complex-vector n)))
+	(do ((w 0 (+ 1 w)))
+	    ((= w n))
+	  (do ((sum 0.0)
+	       (t 1.0)
+	       (m (expt z w))
+	       (k 0 (+ k 1)))
+	      ((= k n)
+	       (set! (res w) sum))
+	    (set! sum (+ sum (* (f k) t)))
+	    (set! t (* t m))))
+	res))))
+
+(define (compare-cfft-and-z-transform)
+  (let ((size 128))
+    (let ((cv1 (make-complex-vector size 0.0)))
+      (do ((i 0 (+ i 1))) 
+	  ((= i size))
+	(set! (cv1 i) (complex (random 1.0) (random 1.0)))) ; TODO: use (- 1.0 (random 2.0))
+      (let ((cv2 (copy cv1)))
+	(let ((cf (cfft cv1 size))
+	      (zf (z-transform cv2 size (exp (/ (* 2 pi 0+i) size)))))
+	  (let-temporarily (((*s7* 'equivalent-float-epsilon) 1e-10))
+	    (unless (equivalent? cf zf)
+	      (format *stderr* "~S~%~S~%" cf zf))))))))
+
+(define (cx)
+  (let ((n (/ tries 10)))
+    (do ((i 0 (+ i 1)))
+	((= i n))
+      (compare-cfft-and-z-transform))))
+
+;(cx) ; 1160: 550 eval, 153 multiply_p_pp, 68 add_p_pp etc (42 for complex_vector_getter!)
 
 
 (define (dolph N gamma)
@@ -195,4 +224,24 @@
 		  (set! pk mx)))))))))
 
 
-;;; reverse!/reverse, append+float etc, iterate, map/for-each, object->string? equal?/equivalent?
+(define (c9)
+  (let* ((len (length cv))
+	 (cv1 (make-complex-vector len))
+	 (cv2 #f))
+    (do ((i 0 (+ i 1)))
+	((= i len))
+      (complex-vector-set! cv1 i (complex i (- i))))
+    (set! cv2 (copy cv1))
+    (do ((j 0 (+ j 1)))
+	((= j tries))
+      (set! cv1 (reverse! (reverse! cv1)))
+      (set! cv1 (reverse (reverse cv1)))
+      (unless (equivalent? cv2 cv1)
+	(display cv1))))) 
+
+;(c9) ; 36: 12 g_reverse_in_place, 11 vector_equivalent, 9 reverse_p_p
+
+
+;;; append+float etc, iterate, map/for-each, object->string?
+
+
