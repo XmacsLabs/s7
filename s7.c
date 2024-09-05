@@ -1215,7 +1215,7 @@ struct s7_scheme {
   s7_int read_line_buf_size;
 
   s7_pointer v, w, x, y, z;
-  s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9, temp10;
+  s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9, temp10, read_dims;
   s7_pointer t1_1, t2_1, t2_2, t3_1, t3_2, t3_3, t4_1, u1_1;
   s7_pointer elist_1, elist_2, elist_3, elist_4, elist_5, elist_6, elist_7;
   s7_pointer plist_1, plist_2, plist_2_2, plist_3, plist_4;
@@ -1476,7 +1476,7 @@ static s7_pointer wrap_string(s7_scheme *sc, const char *str, s7_int len);
   #define DISABLE_FILE_OUTPUT 0
 #endif
 
-#if S7_DEBUGGING || DISABLE_FILE_OUTPUT
+#if S7_DEBUGGING || DISABLE_FILE_OUTPUT || POINTER_32
   static s7_scheme *cur_sc = NULL, *original_cur_sc = NULL;
 #endif
 
@@ -1511,30 +1511,31 @@ static FILE *local_fopen(const char *pathname, const char *mode)
 #endif /* DISABLE_FILE_OUTPUT */
 
 #if POINTER_32
-static void *Malloc(s7_scheme *sc, size_t bytes)
+/* passing in sc here gloms up the 64-bit code intolerably -- 32-bit users will just have to live with cur_sc! */
+static void *Malloc(size_t bytes)
 {
   void *p = malloc(bytes);
-  if (!p) error_nr(sc, sc->out_of_memory_symbol, set_elist_1(sc, wrap_string(sc, "malloc failed", 13)));
+  if (!p) error_nr(cur_sc, cur_sc->out_of_memory_symbol, set_elist_1(cur_sc, wrap_string(cur_sc, "malloc failed", 13)));
   return(p);
 }
 
-static void *Calloc(s7_scheme *sc, size_t nmemb, size_t size)
+static void *Calloc(size_t nmemb, size_t size)
 {
   void *p = calloc(nmemb, size);
-  if (!p) error_nr(sc, sc->out_of_memory_symbol, set_elist_1(sc, wrap_string(sc, "calloc failed", 13)));
+  if (!p) error_nr(cur_sc, cur_sc->out_of_memory_symbol, set_elist_1(cur_sc, wrap_string(cur_sc, "calloc failed", 13)));
   return(p);
 }
 
-static void *Realloc(s7_scheme *sc, void *ptr, size_t size)
+static void *Realloc(void *ptr, size_t size)
 {
   void *p = realloc(ptr, size);
-  if (!p) error_nr(sc, sc->out_of_memory_symbol, set_elist_1(sc, wrap_string(sc, "realloc failed", 14)));
+  if (!p) error_nr(cur_sc, cur_sc->out_of_memory_symbol, set_elist_1(cur_sc, wrap_string(cur_sc, "realloc failed", 14)));
   return(p);
 }
 #else
-#define Malloc(Sc, Size)       malloc(Size)
-#define Calloc(Sc, N, Size)    calloc(N, Size)
-#define Realloc(Sc, Ptr, Size) realloc(Ptr, Size)
+#define Malloc(Size)       malloc(Size)
+#define Calloc(N, Size)    calloc(N, Size)
+#define Realloc(Ptr, Size) realloc(Ptr, Size)
 #endif
 
 
@@ -1544,7 +1545,7 @@ static void add_saved_pointer(s7_scheme *sc, void *p)
   if (sc->saved_pointers_loc == sc->saved_pointers_size)
     {
       sc->saved_pointers_size *= 2;
-      sc->saved_pointers = (void **)Realloc(sc, sc->saved_pointers, sc->saved_pointers_size * sizeof(void *));
+      sc->saved_pointers = (void **)Realloc(sc->saved_pointers, sc->saved_pointers_size * sizeof(void *));
     }
   sc->saved_pointers[sc->saved_pointers_loc++] = p;
 }
@@ -1648,7 +1649,7 @@ static inline void liberate_block(s7_scheme *sc, block_t *p)
 static void fill_block_list(s7_scheme *sc)
 {
   #define BLOCK_MALLOC_SIZE 256
-  block_t *b = (block_t *)Malloc(sc, BLOCK_MALLOC_SIZE * sizeof(block_t)); /* batch alloc means blocks in this batch can't be freed, only returned to the list */
+  block_t *b = (block_t *)Malloc(BLOCK_MALLOC_SIZE * sizeof(block_t)); /* batch alloc means blocks in this batch can't be freed, only returned to the list */
 #if S7_DEBUGGING
   sc->blocks_allocated += BLOCK_MALLOC_SIZE;
 #endif
@@ -1683,11 +1684,11 @@ static inline char *permalloc(s7_scheme *sc, size_t len)
     {
       if (len >= ALLOC_MAX_STRING)
 	{
-	  result = (char *)Malloc(sc, len);
+	  result = (char *)Malloc(len);
 	  add_saved_pointer(sc, result);
 	  return(result);
 	}
-      sc->alloc_string_cells = (char *)Malloc(sc, ALLOC_STRING_SIZE); /* get a new block */
+      sc->alloc_string_cells = (char *)Malloc(ALLOC_STRING_SIZE); /* get a new block */
       add_saved_pointer(sc, sc->alloc_string_cells);
       sc->alloc_string_k = 0;
       next_k = len;
@@ -1741,7 +1742,7 @@ static Inline block_t *inline_mallocate(s7_scheme *sc, size_t bytes)
 		  return(p);
 		}}
 	  p = mallocate_block(sc);
-	  block_data(p) = (index < TOP_BLOCK_LIST) ? (void *)permalloc(sc, (size_t)(1 << index)) : Malloc(sc, bytes);
+	  block_data(p) = (index < TOP_BLOCK_LIST) ? (void *)permalloc(sc, (size_t)(1 << index)) : Malloc(bytes);
 	  block_set_index(p, index);
 #if S7_DEBUGGING
 	  sc->blocks_mallocated[index]++;
@@ -3822,7 +3823,7 @@ static void init_int_limits(void)
 
 static s7_pointer make_permanent_integer(s7_int i)
 {
-  s7_pointer p = (s7_pointer)Calloc(sc, 1, sizeof(s7_cell)); /* Calloc to clear name */
+  s7_pointer p = (s7_pointer)Calloc(1, sizeof(s7_cell)); /* Calloc to clear name */
   full_type(p) = T_IMMUTABLE | T_INTEGER | T_UNHEAP;
   set_integer(p, i);
   return(p);
@@ -3849,8 +3850,8 @@ static const char *ones[10] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}
 
 static void init_small_ints(void)
 {
-  s7_cell *cells = (s7_cell *)Malloc(sc, NUM_SMALL_INTS * sizeof(s7_cell)); /* was calloc 14-Apr-22 */
-  small_ints = (s7_pointer *)Malloc(sc, NUM_SMALL_INTS * sizeof(s7_pointer));
+  s7_cell *cells = (s7_cell *)Malloc(NUM_SMALL_INTS * sizeof(s7_cell)); /* was calloc 14-Apr-22 */
+  small_ints = (s7_pointer *)Malloc(NUM_SMALL_INTS * sizeof(s7_pointer));
   for (int32_t i = 0; i < NUM_SMALL_INTS; i++)
     {
       s7_pointer p;
@@ -3864,7 +3865,7 @@ static void init_small_ints(void)
 
   /* setup a few other numbers while we're here */
   #define EXTRA_NUMBERS 11
-  cells = (s7_cell *)Calloc(sc, EXTRA_NUMBERS, sizeof(s7_cell));
+  cells = (s7_cell *)Calloc(EXTRA_NUMBERS, sizeof(s7_cell));
 
   #define init_integer(Ptr, Num, Name, Name_Len) \
     do {set_full_type(Ptr, T_INTEGER | T_IMMUTABLE | T_UNHEAP); set_integer(Ptr, Num); set_number_name(Ptr, Name, Name_Len);} while (0)
@@ -4128,7 +4129,7 @@ static char *copy_string_with_length(const char *str, s7_int len)
   char *newstr;
   if ((S7_DEBUGGING) && ((len <= 0) || (!str))) fprintf(stderr, "%s[%d]: len: %" ld64 ", str: %s\n", __func__, __LINE__, len, str);
   if (len > (1LL << 48)) return(NULL); /* squelch an idiotic warning */
-  newstr = (char *)Malloc(sc, len + 1);
+  newstr = (char *)Malloc(len + 1);
   memcpy((void *)newstr, (const void *)str, len); /* we check len != 0 above -- 24-Jan-22 */
   newstr[len] = '\0';
   return(newstr);
@@ -4998,7 +4999,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj)
 	  ((is_symbol(obj)) && (((uint8_t)(symbol_type(obj) & 0xff) >= NUM_TYPES) || ((symbol_type(obj) & ~0xffff) != 0))) ? " bad-symbol-type" : "",
 	  NULL);
 
-  buf = (char *)Malloc(sc, 1024);
+  buf = (char *)Malloc(1024);
   snprintf(buf, 1024, "type: %s? (%d), opt_op: %d %s, full_type: #x%" PRIx64 "%s",
 	   type_name(sc, obj, NO_ARTICLE), typ,
 	   unchecked_optimize_op(obj), (unchecked_optimize_op(obj) < NUM_OPS) ? op_names[unchecked_optimize_op(obj)] : "", full_typ,
@@ -5161,7 +5162,7 @@ static void set_local_1(s7_scheme *sc, s7_pointer symbol, const char *func, int3
 
 static char *object_raw_type_to_string(s7_pointer p)
 {
-  char *buf = (char *)Malloc(sc, 128);
+  char *buf = (char *)Malloc(128);
   snprintf(buf, 128, "type: %d", unchecked_type(p));
   return(buf);
 }
@@ -5174,7 +5175,7 @@ static void complain(s7_scheme *sc, const char* complaint, s7_pointer p, const c
 
 static char* show_debugger_bits(s7_pointer p)
 {
-  char *bits_str = (char *)Malloc(sc, 512);
+  char *bits_str = (char *)Malloc(512);
   int64_t bits = p->debugger_bits;
   snprintf(bits_str, 512, " %s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
 	   ((bits & OPT1_SET) != 0) ? " opt1_set" : "",
@@ -6077,7 +6078,7 @@ static const char *make_type_name(s7_scheme *sc, const char *name, article_t art
   if (len > sc->typnam_len)
     {
       if (sc->typnam) free(sc->typnam);
-      sc->typnam = (char *)Malloc(sc, len);
+      sc->typnam = (char *)Malloc(len);
       sc->typnam_len = len;
     }
   if (article == INDEFINITE_ARTICLE)
@@ -6619,7 +6620,7 @@ s7_pointer s7_set_immutable(s7_scheme *sc, s7_pointer p)
   return(p);
 }
 
-#if (!DISABLE_DEPRECATED) && (S7_DEBUGGING || DISABLE_FILE_OUTPUT)
+#if (!DISABLE_DEPRECATED) && (S7_DEBUGGING || DISABLE_FILE_OUTPUT || POINTER_32)
   s7_pointer s7_immutable(s7_pointer p) {return(s7_set_immutable(cur_sc, p));}
 #endif
 
@@ -6694,7 +6695,7 @@ static void resize_gc_protect(s7_scheme *sc)
   vector_elements(sc->protected_objects) = (s7_pointer *)block_data(nb);
   vector_length(sc->protected_objects) = new_size;
   sc->protected_objects_size = new_size;
-  sc->protected_objects_free_list = (s7_int *)Realloc(sc, sc->protected_objects_free_list, new_size * sizeof(s7_int));
+  sc->protected_objects_free_list = (s7_int *)Realloc(sc->protected_objects_free_list, new_size * sizeof(s7_int));
   for (s7_int i = size; i < new_size; i++)
     {
       vector_element(sc->protected_objects, i) = sc->unused;
@@ -7055,18 +7056,18 @@ static void add_to_gc_list(s7_scheme *sc, gc_list_t *gp, s7_pointer p)
   if (gp->loc == gp->size)
     {
       gp->size *= 2;
-      gp->list = (s7_pointer *)Realloc(sc, gp->list, gp->size * sizeof(s7_pointer));
+      gp->list = (s7_pointer *)Realloc(gp->list, gp->size * sizeof(s7_pointer));
     }
   gp->list[gp->loc++] = p;
 }
 
 static gc_list_t *make_gc_list(void)
 {
-  gc_list_t *gp = (gc_list_t *)Malloc(sc, sizeof(gc_list_t));
+  gc_list_t *gp = (gc_list_t *)Malloc(sizeof(gc_list_t));
   #define INIT_GC_CACHE_SIZE 4
   gp->size = INIT_GC_CACHE_SIZE;
   gp->loc = 0;
-  gp->list = (s7_pointer *)Malloc(sc, gp->size * sizeof(s7_pointer));
+  gp->list = (s7_pointer *)Malloc(gp->size * sizeof(s7_pointer));
   return(gp);
 }
 
@@ -7127,7 +7128,7 @@ static void init_gc_caches(s7_scheme *sc)
   /* slightly unrelated... */
   sc->setters_size = 4;
   sc->setters_loc = 0;
-  sc->setters = (s7_pointer *)Malloc(sc, sc->setters_size * sizeof(s7_pointer));
+  sc->setters = (s7_pointer *)Malloc(sc->setters_size * sizeof(s7_pointer));
 }
 
 static s7_pointer semipermanent_cons(s7_scheme *sc, s7_pointer a, s7_pointer b, uint64_t type);
@@ -7148,7 +7149,7 @@ static void add_setter(s7_scheme *sc, s7_pointer p, s7_pointer setter)
   if (sc->setters_loc == sc->setters_size)
     {
       sc->setters_size *= 2;
-      sc->setters = (s7_pointer *)Realloc(sc, sc->setters, sc->setters_size * sizeof(s7_pointer));
+      sc->setters = (s7_pointer *)Realloc(sc->setters, sc->setters_size * sizeof(s7_pointer));
     }
   sc->setters[sc->setters_loc++] = semipermanent_cons(sc, p, setter, T_PAIR | T_IMMUTABLE);
 }
@@ -7656,6 +7657,7 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(sc->temp8);
   gc_mark(sc->temp9);
   gc_mark(sc->temp10);
+  just_mark(sc->read_dims);
 
   gc_mark(car(sc->t1_1));
   gc_mark(car(sc->t2_1)); gc_mark(car(sc->t2_2));
@@ -7879,7 +7881,7 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
       sc->heap_size = old_size + 64000;
     }
 #endif
-  cp = (s7_cell **)Realloc(sc, sc->heap, sc->heap_size * sizeof(s7_cell *));
+  cp = (s7_cell **)Realloc(sc->heap, sc->heap_size * sizeof(s7_cell *));
   if (cp)
     sc->heap = cp;
   else /* can this happen? */
@@ -7887,13 +7889,13 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
       s7_warn(sc, 256, "heap reallocation failed! tried to get %" ld64 " bytes (will retry with a smaller amount)\n",
 	      (int64_t)(sc->heap_size * sizeof(s7_cell *)));
       sc->heap_size = old_size + 64000;
-      sc->heap = (s7_cell **)Realloc(sc, sc->heap, sc->heap_size * sizeof(s7_cell *));
+      sc->heap = (s7_cell **)Realloc(sc->heap, sc->heap_size * sizeof(s7_cell *));
     }
-  sc->free_heap = (s7_cell **)Realloc(sc, sc->free_heap, sc->heap_size * sizeof(s7_cell *));
+  sc->free_heap = (s7_cell **)Realloc(sc->free_heap, sc->heap_size * sizeof(s7_cell *));
   sc->free_heap_trigger = (s7_cell **)(sc->free_heap + GC_TRIGGER_SIZE);
   sc->free_heap_top = sc->free_heap + old_free; /* incremented below, added old_free 21-Aug-12?!? */
 
-  cells = (s7_cell *)Calloc(sc, sc->heap_size - old_size, sizeof(s7_cell)); /* Malloc + clear_type below is much slower?! */
+  cells = (s7_cell *)Calloc(sc->heap_size - old_size, sizeof(s7_cell)); /* Malloc + clear_type below is much slower?! */
   add_saved_pointer(sc, (void *)cells);
   {
     s7_pointer p = cells;
@@ -7904,7 +7906,7 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
 	LOOP_8(sc->heap[k++] = p; (*sc->free_heap_top++) = p++);
 	LOOP_8(sc->heap[k++] = p; (*sc->free_heap_top++) = p++);
       }}
-  hp = (heap_block_t *)Malloc(sc, sizeof(heap_block_t));
+  hp = (heap_block_t *)Malloc(sizeof(heap_block_t));
   hp->start = (intptr_t)cells;
   hp->end = (intptr_t)cells + ((sc->heap_size - old_size) * sizeof(s7_cell));
   hp->offset = old_size;
@@ -8033,7 +8035,7 @@ static s7_cell *alloc_pointer(s7_scheme *sc)
   if (sc->alloc_pointer_k == ALLOC_POINTER_SIZE)     /* if either no current block or the block is used up, make a new block */
     {
       sc->semipermanent_cells += ALLOC_POINTER_SIZE;
-      sc->alloc_pointer_cells = (s7_cell *)Calloc(sc, ALLOC_POINTER_SIZE, sizeof(s7_cell)); /* not Malloc here or below (maybe set full type to 0 if Malloc) */
+      sc->alloc_pointer_cells = (s7_cell *)Calloc(ALLOC_POINTER_SIZE, sizeof(s7_cell)); /* not Malloc here or below (maybe set full type to 0 if Malloc) */
       add_saved_pointer(sc, sc->alloc_pointer_cells);
       sc->alloc_pointer_k = 0;
     }
@@ -8047,7 +8049,7 @@ static s7_big_cell *alloc_big_pointer(s7_scheme *sc, int64_t loc)
   if (sc->alloc_big_pointer_k == ALLOC_BIG_POINTER_SIZE)
     {
       sc->semipermanent_cells += ALLOC_BIG_POINTER_SIZE;
-      sc->alloc_big_pointer_cells = (s7_big_cell *)Calloc(sc, ALLOC_BIG_POINTER_SIZE, sizeof(s7_big_cell));
+      sc->alloc_big_pointer_cells = (s7_big_cell *)Calloc(ALLOC_BIG_POINTER_SIZE, sizeof(s7_big_cell));
       add_saved_pointer(sc, sc->alloc_big_pointer_cells);
       sc->alloc_big_pointer_k = 0;
     }
@@ -8061,7 +8063,7 @@ static s7_big_cell *alloc_big_pointer(s7_scheme *sc, int64_t loc)
 
 static void add_semipermanent_object(s7_scheme *sc, s7_pointer obj) /* called by remove_from_heap */
 {
-  gc_obj_t *g = (gc_obj_t *)Malloc(sc, sizeof(gc_obj_t));
+  gc_obj_t *g = (gc_obj_t *)Malloc(sizeof(gc_obj_t));
   g->p = obj;
   g->nxt = sc->semipermanent_objects;
   sc->semipermanent_objects = g;
@@ -8069,7 +8071,7 @@ static void add_semipermanent_object(s7_scheme *sc, s7_pointer obj) /* called by
 
 static void add_semipermanent_let_or_slot(s7_scheme *sc, s7_pointer obj)
 {
-  gc_obj_t *g = (gc_obj_t *)Malloc(sc, sizeof(gc_obj_t));
+  gc_obj_t *g = (gc_obj_t *)Malloc(sizeof(gc_obj_t));
   g->p = obj;
   g->nxt = sc->semipermanent_lets;
   sc->semipermanent_lets = g;
@@ -8192,7 +8194,7 @@ static s7_pointer pop_op_stack(s7_scheme *sc)
 
 static void initialize_op_stack(s7_scheme *sc)
 {
-  sc->op_stack = (s7_pointer *)Malloc(sc, OP_STACK_INITIAL_SIZE * sizeof(s7_pointer));
+  sc->op_stack = (s7_pointer *)Malloc(OP_STACK_INITIAL_SIZE * sizeof(s7_pointer));
   sc->op_stack_size = OP_STACK_INITIAL_SIZE;
   sc->op_stack_now = sc->op_stack;
   sc->op_stack_end = (s7_pointer *)(sc->op_stack + sc->op_stack_size);
@@ -8212,7 +8214,7 @@ static void resize_op_stack(s7_scheme *sc)
 #else
     error_nr(sc, make_symbol(sc, "stack-too-big", 13), set_elist_1(sc, wrap_string(sc, "op stack has grown past (*s7* 'max-stack-size)", 46)));
 #endif
-  sc->op_stack = (s7_pointer *)Realloc(sc, (void *)(sc->op_stack), new_size * sizeof(s7_pointer));
+  sc->op_stack = (s7_pointer *)Realloc((void *)(sc->op_stack), new_size * sizeof(s7_pointer));
   for (uint32_t i = sc->op_stack_size; i < new_size; i++) sc->op_stack[i] = sc->unused;
   sc->op_stack_size = (uint32_t)new_size;
   sc->op_stack_now = (s7_pointer *)(sc->op_stack + loc);
@@ -8647,7 +8649,7 @@ static uint8_t *alloc_symbol(s7_scheme *sc)
   uint8_t *result;
   if (sc->alloc_symbol_k == ALLOC_SYMBOL_SIZE)
     {
-      sc->alloc_symbol_cells = (uint8_t *)Malloc(sc, ALLOC_SYMBOL_SIZE);
+      sc->alloc_symbol_cells = (uint8_t *)Malloc(ALLOC_SYMBOL_SIZE);
       add_saved_pointer(sc, sc->alloc_symbol_cells);
       sc->alloc_symbol_k = 0;
     }
@@ -11551,12 +11553,12 @@ static bool tree_is_cyclic_1(s7_scheme *sc, s7_pointer tree)
 	  if (sc->tree_pointers_size == 0)
 	    {
 	      sc->tree_pointers_size = 8;
-	      sc->tree_pointers = (s7_pointer *)Malloc(sc, sc->tree_pointers_size * sizeof(s7_pointer));
+	      sc->tree_pointers = (s7_pointer *)Malloc(sc->tree_pointers_size * sizeof(s7_pointer));
 	    }
 	  else
 	    {
 	      sc->tree_pointers_size *= 2;
-	      sc->tree_pointers = (s7_pointer *)Realloc(sc, sc->tree_pointers, sc->tree_pointers_size * sizeof(s7_pointer));
+	      sc->tree_pointers = (s7_pointer *)Realloc(sc->tree_pointers, sc->tree_pointers_size * sizeof(s7_pointer));
 	    }}
       sc->tree_pointers[sc->tree_pointers_top++] = p;
       if (is_unquoted_pair(car(p)))
@@ -12917,7 +12919,7 @@ static bigint *alloc_bigint(s7_scheme *sc)
     }
   else
     {
-      p = (bigint *)Malloc(sc, sizeof(bigint));
+      p = (bigint *)Malloc(sizeof(bigint));
       /* not permalloc here: gmp must be playing tricky games with realloc or something.  permalloc can lead
        *   to mpz_set_si overwriting adjacent memory (valgrind does not catch this), clobbering at least the
        *   bigint nxt field.  Someday I need to look at the source.
@@ -12937,7 +12939,7 @@ static bigrat *alloc_bigrat(s7_scheme *sc)
     }
   else
     {
-      p = (bigrat *)Malloc(sc, sizeof(bigrat));
+      p = (bigrat *)Malloc(sizeof(bigrat));
       mpq_init(p->q);
     }
   return(p);
@@ -12954,7 +12956,7 @@ static bigflt *alloc_bigflt(s7_scheme *sc)
     }
   else
     {
-      p = (bigflt *)Malloc(sc, sizeof(bigflt));
+      p = (bigflt *)Malloc(sizeof(bigflt));
       mpfr_init2(p->x, sc->bignum_precision);
     }
   return(p);
@@ -12971,7 +12973,7 @@ static bigcmp *alloc_bigcmp(s7_scheme *sc)
     }
   else
     {
-      p = (bigcmp *)Malloc(sc, sizeof(bigcmp));
+      p = (bigcmp *)Malloc(sizeof(bigcmp));
       mpc_init(p->z);
     }
   return(p);
@@ -14226,10 +14228,10 @@ static double **pepow = NULL; /* [17][MAX_POW * 2]; */
 
 static void init_pows(void)
 {
-  pepow = (double **)Malloc(sc, 17 * sizeof(double *));
+  pepow = (double **)Malloc(17 * sizeof(double *));
   pepow[0] = NULL;
   pepow[1] = NULL;
-  for (int32_t i = 2; i < 17; i++) pepow[i] = (double *)Malloc(sc, (MAX_POW * 2) * sizeof(double));
+  for (int32_t i = 2; i < 17; i++) pepow[i] = (double *)Malloc((MAX_POW * 2) * sizeof(double));
   for (int32_t i = 2; i < 17; i++)        /* radix between 2 and 16 */
     for (int32_t j = -MAX_POW; j < MAX_POW; j++) /* saved exponent between 0 and +/- MAX_POW */
       pepow[i][j + MAX_POW] = pow((double)i, (double)j);
@@ -14751,7 +14753,7 @@ static void insert_spaces(s7_scheme *sc, const char *src, s7_int width, s7_int l
   if (width >= sc->num_to_str_size)
     {
       sc->num_to_str_size = width + 1;
-      sc->num_to_str = (char *)Realloc(sc, sc->num_to_str, sc->num_to_str_size);
+      sc->num_to_str = (char *)Realloc(sc->num_to_str, sc->num_to_str_size);
     }
   sc->num_to_str[width] = '\0';
   memmove((void *)(sc->num_to_str + spaces), (const void *)src, len);
@@ -14770,7 +14772,7 @@ static char *number_to_string_base_10(s7_scheme *sc, s7_pointer obj, s7_int widt
   len = (len > 512) ? (512 + 2 * len) : 1024;
   if (len > sc->num_to_str_size)
     {
-      sc->num_to_str = (sc->num_to_str) ? (char *)Realloc(sc, sc->num_to_str, len) : (char *)Malloc(sc, len);
+      sc->num_to_str = (sc->num_to_str) ? (char *)Realloc(sc->num_to_str, len) : (char *)Malloc(len);
       sc->num_to_str_size = len;
     }
 
@@ -15144,14 +15146,14 @@ static int32_t *digits;
 
 static void init_ctables(void)
 {
-  exponent_table = (bool *)Calloc(sc, CTABLE_SIZE, sizeof(bool));
-  slashify_table = (bool *)Calloc(sc, CTABLE_SIZE, sizeof(bool));
-  symbol_slashify_table = (bool *)Calloc(sc, CTABLE_SIZE, sizeof(bool));
-  char_ok_in_a_name = (bool *)Calloc(sc, CTABLE_SIZE, sizeof(bool));
-  white_space = (bool *)Calloc(sc, CTABLE_SIZE + 1, sizeof(bool));
+  exponent_table = (bool *)Calloc(CTABLE_SIZE, sizeof(bool));
+  slashify_table = (bool *)Calloc(CTABLE_SIZE, sizeof(bool));
+  symbol_slashify_table = (bool *)Calloc(CTABLE_SIZE, sizeof(bool));
+  char_ok_in_a_name = (bool *)Calloc(CTABLE_SIZE, sizeof(bool));
+  white_space = (bool *)Calloc(CTABLE_SIZE + 1, sizeof(bool));
   white_space++;      /* leave white_space[-1] false for white_space[EOF] */
-  number_table = (bool *)Calloc(sc, CTABLE_SIZE, sizeof(bool));
-  digits = (int32_t *)Calloc(sc, CTABLE_SIZE, sizeof(int32_t));
+  number_table = (bool *)Calloc(CTABLE_SIZE, sizeof(bool));
+  digits = (int32_t *)Calloc(CTABLE_SIZE, sizeof(int32_t));
 
   for (int32_t i = 0; i < CTABLE_SIZE; i++)
     {
@@ -15274,7 +15276,7 @@ static s7_pointer g_sharp_readers_set(s7_scheme *sc, s7_pointer args)
 static s7_pointer make_undefined(s7_scheme *sc, const char* name)
 {
   s7_int len = safe_strlen(name);
-  char *newstr = (char *)Malloc(sc, len + 2);
+  char *newstr = (char *)Malloc(len + 2);
   s7_pointer p;
   new_cell(sc, p, T_UNDEFINED | T_IMMUTABLE);
   newstr[0] = '#';
@@ -15319,7 +15321,7 @@ static void resize_strbuf(s7_scheme *sc, s7_int needed_size)
 {
   s7_int old_size = sc->strbuf_size;
   while (sc->strbuf_size <= needed_size) sc->strbuf_size *= 2;
-  sc->strbuf = (char *)Realloc(sc, sc->strbuf, sc->strbuf_size);
+  sc->strbuf = (char *)Realloc(sc->strbuf, sc->strbuf_size);
   for (s7_int i = old_size; i < sc->strbuf_size; i++) sc->strbuf[i] = '\0';
 }
 
@@ -15366,7 +15368,7 @@ static s7_pointer unknown_sharp_constant(s7_scheme *sc, const char *name, s7_poi
 	      while (char_ok_in_a_name[(uint8_t)(*p)]) {p++;}
 	      added_len = (s7_int)(p - pstart);                 /* p is one past '>' presumably */
 	      /* we can't use strbuf here -- it might be the source of the "name" argument! */
-	      buf = (char *)Malloc(sc, len + added_len + 2);
+	      buf = (char *)Malloc(len + added_len + 2);
 	      memcpy((void *)buf, (const void *)name, len);
 	      buf[len] = '"';                                   /* from inchar */
 	      memcpy((void *)(buf + len + 1), (const void *)pstart, added_len);
@@ -16614,7 +16616,7 @@ static s7_double magnitude_d_d(s7_double x) {return((signbit(x)) ? (-x) : x);}
 
 static rat_locals_t *init_rat_locals_t(s7_scheme *sc)
 {
-  rat_locals_t *r = (rat_locals_t *)Malloc(sc, sizeof(rat_locals_t));
+  rat_locals_t *r = (rat_locals_t *)Malloc(sizeof(rat_locals_t));
   sc->ratloc = r;
   mpz_inits(r->i, r->i0, r->i1, r->n, r->p0, r->q0, r->r, r->r1, r->p1, r->q1, r->old_p1, r->old_q1, NULL);
   mpq_init(r->q);
@@ -26439,9 +26441,9 @@ static void init_uppers(void)
 
 static void init_chars(void)
 {
-  s7_cell *cells = (s7_cell *)Calloc(sc, NUM_CHARS + 1, sizeof(s7_cell));
+  s7_cell *cells = (s7_cell *)Calloc(NUM_CHARS + 1, sizeof(s7_cell));
 
-  chars = (s7_pointer *)Malloc(sc, (NUM_CHARS + 1) * sizeof(s7_pointer)); /* chars is declared far above */
+  chars = (s7_pointer *)Malloc((NUM_CHARS + 1) * sizeof(s7_pointer)); /* chars is declared far above */
   chars[0] = &cells[0];
   eof_object = chars[0];
   set_full_type(eof_object, T_EOF | T_IMMUTABLE | T_UNHEAP);
@@ -27205,7 +27207,7 @@ s7_pointer s7_make_semipermanent_string(s7_scheme *sc, const char *str) /* for (
 
 static s7_pointer make_permanent_string(const char *str, s7_int len)     /* for (s7) strings outside all s7 GC's */
 {
-  s7_pointer x = (s7_pointer)Calloc(sc, 1, sizeof(s7_cell));
+  s7_pointer x = (s7_pointer)Calloc(1, sizeof(s7_cell));
   set_full_type(x, T_STRING | T_IMMUTABLE | T_UNHEAP);
   set_optimize_op(x, OP_CONSTANT);
   string_length(x) = len;
@@ -29276,7 +29278,7 @@ static s7_pointer stdin_read_line(s7_scheme *sc, s7_pointer port, bool with_eol)
   if (!sc->read_line_buf)
     {
       sc->read_line_buf_size = 1024;
-      sc->read_line_buf = (char *)Malloc(sc, sc->read_line_buf_size);
+      sc->read_line_buf = (char *)Malloc(sc->read_line_buf_size);
     }
   if (fgets(sc->read_line_buf, sc->read_line_buf_size, stdin))
     return(s7_make_string(sc, sc->read_line_buf)); /* fgets adds the trailing '\0' */
@@ -29294,7 +29296,7 @@ static s7_pointer file_read_line(s7_scheme *sc, s7_pointer port, bool with_eol)
   if (!sc->read_line_buf)
     {
       sc->read_line_buf_size = 1024;
-      sc->read_line_buf = (char *)Malloc(sc, sc->read_line_buf_size);
+      sc->read_line_buf = (char *)Malloc(sc->read_line_buf_size);
     }
   read_size = sc->read_line_buf_size;
   str = fgets(sc->read_line_buf, read_size, port_file(port)); /* reads size-1 at most, EOF and newline also terminate read */
@@ -29318,7 +29320,7 @@ static s7_pointer file_read_line(s7_scheme *sc, s7_pointer port, bool with_eol)
 
       /* need more data */
       sc->read_line_buf_size *= 2;
-      sc->read_line_buf = (char *)Realloc(sc, sc->read_line_buf, sc->read_line_buf_size);
+      sc->read_line_buf = (char *)Realloc(sc->read_line_buf, sc->read_line_buf_size);
       buf = (char *)(sc->read_line_buf + cur_size);
       str = fgets(buf, read_size, port_file(port));
       if (!str) return(eof_object);
@@ -29948,13 +29950,13 @@ static int32_t remember_file_name(s7_scheme *sc, const char *file)
       if (sc->file_names_size == 0)
 	{
 	  sc->file_names_size = INITIAL_FILE_NAMES_SIZE;
-	  sc->file_names = (s7_pointer *)Malloc(sc, sc->file_names_size * sizeof(s7_pointer));
+	  sc->file_names = (s7_pointer *)Malloc(sc->file_names_size * sizeof(s7_pointer));
 	}
       else
 	{
 	  old_size = sc->file_names_size;
 	  sc->file_names_size *= 2;
-	  sc->file_names = (s7_pointer *)Realloc(sc, sc->file_names, sc->file_names_size * sizeof(s7_pointer));
+	  sc->file_names = (s7_pointer *)Realloc(sc->file_names, sc->file_names_size * sizeof(s7_pointer));
 	}
       for (int32_t i = old_size; i < sc->file_names_size; i++)
 	sc->file_names[i] = sc->F;
@@ -30090,7 +30092,7 @@ static void init_standard_ports(s7_scheme *sc)
   /* standard output */
   x = alloc_pointer(sc);
   set_full_type(x, T_OUTPUT_PORT | T_IMMUTABLE | T_UNHEAP);
-  port_port(x) = (port_t *)Calloc(sc, 1, sizeof(port_t));
+  port_port(x) = (port_t *)Calloc(1, sizeof(port_t));
   port_type(x) = FILE_PORT;
   port_data(x) = NULL;
   port_data_block(x) = NULL;
@@ -30107,7 +30109,7 @@ static void init_standard_ports(s7_scheme *sc)
   /* standard error */
   x = alloc_pointer(sc);
   set_full_type(x, T_OUTPUT_PORT | T_IMMUTABLE | T_UNHEAP);
-  port_port(x) = (port_t *)Calloc(sc, 1, sizeof(port_t));
+  port_port(x) = (port_t *)Calloc(1, sizeof(port_t));
   port_type(x) = FILE_PORT;
   port_data(x) = NULL;
   port_data_block(x) = NULL;
@@ -30124,7 +30126,7 @@ static void init_standard_ports(s7_scheme *sc)
   /* standard input */
   x = alloc_pointer(sc);
   set_full_type(x, T_INPUT_PORT | T_IMMUTABLE | T_UNHEAP);
-  port_port(x) = (port_t *)Calloc(sc, 1, sizeof(port_t));
+  port_port(x) = (port_t *)Calloc(1, sizeof(port_t));
   port_type(x) = FILE_PORT;
   port_set_closed(x, false);
   port_set_string_or_function(x, sc->nil);
@@ -30571,7 +30573,7 @@ static /* inline */ void push_input_port(s7_scheme *sc, s7_pointer new_port)
   if (sc->input_port_stack_loc >= sc->input_port_stack_size)
     {
       sc->input_port_stack_size *= 2;
-      sc->input_port_stack = (s7_pointer *)Realloc(sc, sc->input_port_stack, sc->input_port_stack_size * sizeof(s7_pointer));
+      sc->input_port_stack = (s7_pointer *)Realloc(sc->input_port_stack, sc->input_port_stack_size * sizeof(s7_pointer));
     }
   sc->input_port_stack[sc->input_port_stack_loc++] = current_input_port(sc);
   set_current_input_port(sc, new_port);
@@ -31445,9 +31447,9 @@ void s7_autoload_set_names(s7_scheme *sc, const char **names, s7_int size)
 	}
   if (!sc->autoload_names)
     {
-      sc->autoload_names = (const char ***)Calloc(sc, INITIAL_AUTOLOAD_NAMES_SIZE, sizeof(const char **));
-      sc->autoload_names_sizes = (s7_int *)Calloc(sc, INITIAL_AUTOLOAD_NAMES_SIZE, sizeof(s7_int));
-      sc->autoloaded_already = (bool **)Calloc(sc, INITIAL_AUTOLOAD_NAMES_SIZE, sizeof(bool *));
+      sc->autoload_names = (const char ***)Calloc(INITIAL_AUTOLOAD_NAMES_SIZE, sizeof(const char **));
+      sc->autoload_names_sizes = (s7_int *)Calloc(INITIAL_AUTOLOAD_NAMES_SIZE, sizeof(s7_int));
+      sc->autoloaded_already = (bool **)Calloc(INITIAL_AUTOLOAD_NAMES_SIZE, sizeof(bool *));
       sc->autoload_names_top = INITIAL_AUTOLOAD_NAMES_SIZE;
       sc->autoload_names_loc = 0;
     }
@@ -31455,9 +31457,9 @@ void s7_autoload_set_names(s7_scheme *sc, const char **names, s7_int size)
     if (sc->autoload_names_loc >= sc->autoload_names_top)
       {
 	sc->autoload_names_top *= 2;
-	sc->autoload_names = (const char ***)Realloc(sc, sc->autoload_names, sc->autoload_names_top * sizeof(const char **));
-	sc->autoload_names_sizes = (s7_int *)Realloc(sc, sc->autoload_names_sizes, sc->autoload_names_top * sizeof(s7_int));
-	sc->autoloaded_already = (bool **)Realloc(sc, sc->autoloaded_already, sc->autoload_names_top * sizeof(bool *));
+	sc->autoload_names = (const char ***)Realloc(sc->autoload_names, sc->autoload_names_top * sizeof(const char **));
+	sc->autoload_names_sizes = (s7_int *)Realloc(sc->autoload_names_sizes, sc->autoload_names_top * sizeof(s7_int));
+	sc->autoloaded_already = (bool **)Realloc(sc->autoloaded_already, sc->autoload_names_top * sizeof(bool *));
 	for (s7_int i = sc->autoload_names_loc; i < sc->autoload_names_top; i++)
 	  {
 	    sc->autoload_names[i] = NULL;
@@ -31466,7 +31468,7 @@ void s7_autoload_set_names(s7_scheme *sc, const char **names, s7_int size)
 	  }}
   sc->autoload_names[sc->autoload_names_loc] = names;
   sc->autoload_names_sizes[sc->autoload_names_loc] = size;
-  sc->autoloaded_already[sc->autoload_names_loc] = (bool *)Calloc(sc, size, sizeof(bool));
+  sc->autoloaded_already[sc->autoload_names_loc] = (bool *)Calloc(size, sizeof(bool));
   sc->autoload_names_loc++;
 }
 
@@ -32719,9 +32721,9 @@ static void enlarge_shared_info(shared_info_t *ci)
 {
   ci->size *= 2;
   ci->size2 = ci->size - 2;
-  ci->objs = (s7_pointer *)Realloc(sc, ci->objs, ci->size * sizeof(s7_pointer));
-  ci->refs = (int32_t *)Realloc(sc, ci->refs, ci->size * sizeof(int32_t));
-  ci->defined = (bool *)Realloc(sc, ci->defined, ci->size * sizeof(bool));
+  ci->objs = (s7_pointer *)Realloc(ci->objs, ci->size * sizeof(s7_pointer));
+  ci->refs = (int32_t *)Realloc(ci->refs, ci->size * sizeof(int32_t));
+  ci->defined = (bool *)Realloc(ci->defined, ci->size * sizeof(bool));
   /* this clearing is needed, memclr is not faster */
   for (int32_t i = ci->top; i < ci->size; i++)
     {
@@ -32954,12 +32956,12 @@ static bool collect_shared_info(s7_scheme *sc, shared_info_t *ci, s7_pointer top
 
 static shared_info_t *make_shared_info(s7_scheme *sc)
 {
-  shared_info_t *ci = (shared_info_t *)Calloc(sc, 1, sizeof(shared_info_t));
+  shared_info_t *ci = (shared_info_t *)Calloc(1, sizeof(shared_info_t));
   ci->size = INITIAL_SHARED_INFO_SIZE;
   ci->size2 = ci->size - 2;
-  ci->objs = (s7_pointer *)Malloc(sc, ci->size * sizeof(s7_pointer));
-  ci->refs = (int32_t *)Calloc(sc, ci->size, sizeof(int32_t));   /* finder expects 0 = unseen previously */
-  ci->defined = (bool *)Calloc(sc, ci->size, sizeof(bool));
+  ci->objs = (s7_pointer *)Malloc(ci->size * sizeof(s7_pointer));
+  ci->refs = (int32_t *)Calloc(ci->size, sizeof(int32_t));   /* finder expects 0 = unseen previously */
+  ci->defined = (bool *)Calloc(ci->size, sizeof(bool));
   ci->cycle_port = sc->F;
   ci->init_port = sc->F;
   return(ci);
@@ -33962,7 +33964,7 @@ static char *complex_to_string_base_10(s7_scheme *sc, s7_complex obj, s7_int wid
   len = (len > 512) ? (512 + 2 * len) : 1024;
   if (len > sc->num_to_str_size)
     {
-      sc->num_to_str = (sc->num_to_str) ? (char *)Realloc(sc, sc->num_to_str, len) : (char *)Malloc(sc, len);
+      sc->num_to_str = (sc->num_to_str) ? (char *)Realloc(sc->num_to_str, len) : (char *)Malloc(len);
       sc->num_to_str_size = len;
     }
   sc->num_to_str[0] = '\0';
@@ -36197,7 +36199,7 @@ char *s7_object_to_c_string(s7_scheme *sc, s7_pointer obj)
   len = port_position(strport);
   if ((S7_DEBUGGING) && (len == 0)) fprintf(stderr, "%s[%d]: len == 0\n", __func__, __LINE__);
   /* if (len == 0) {close_format_port(sc, strport); return(NULL);} */ /* probably never happens */
-  str = (char *)Malloc(sc, len + 1);
+  str = (char *)Malloc(len + 1);
   memcpy((void *)str, (void *)port_data(strport), len);
   str[len] = '\0';
   close_format_port(sc, strport);
@@ -36837,14 +36839,14 @@ static format_data_t *open_format_data(s7_scheme *sc)
   if (sc->format_depth >= sc->num_fdats)
     {
       int32_t new_num_fdats = sc->format_depth * 2;
-      sc->fdats = (format_data_t **)Realloc(sc, sc->fdats, sizeof(format_data_t *) * new_num_fdats);
+      sc->fdats = (format_data_t **)Realloc(sc->fdats, sizeof(format_data_t *) * new_num_fdats);
       for (int32_t k = sc->num_fdats; k < new_num_fdats; k++) sc->fdats[k] = NULL;
       sc->num_fdats = new_num_fdats;
     }
   fdat = sc->fdats[sc->format_depth];
   if (!fdat)
     {
-      fdat = (format_data_t *)Malloc(sc, sizeof(format_data_t));
+      fdat = (format_data_t *)Malloc(sizeof(format_data_t));
       sc->fdats[sc->format_depth] = fdat;
       fdat->curly_len = 0;
       fdat->curly_str = NULL;
@@ -37034,7 +37036,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 			  {
 			    if (fdat->curly_str) free(fdat->curly_str);
 			    fdat->curly_len = curly_len;
-			    fdat->curly_str = (char *)Malloc(sc, curly_len);
+			    fdat->curly_str = (char *)Malloc(curly_len);
 			  }
 			curly_str = fdat->curly_str;
 			memcpy((void *)curly_str, (const void *)(str + i + 2), curly_len - 1);
@@ -37727,7 +37729,7 @@ system captures the output as a string and returns it."
 	  if (cur_len + buf_len >= full_len)
 	    {
 	      full_len += BUF_SIZE * 2;
-	      str = (str) ? (char *)Realloc(sc, str, full_len) : (char *)Malloc(sc, full_len);
+	      str = (str) ? (char *)Realloc(str, full_len) : (char *)Malloc(full_len);
 	    }
 	  memcpy((void *)(str + cur_len), (void *)buf, buf_len);
 	  cur_len += buf_len;
@@ -42829,7 +42831,7 @@ static s7_pointer g_multivector(s7_scheme *sc, s7_int dims, s7_pointer data)
   if (is_null(data))  /* dims are already 0 (calloc above) */
     return(g_make_vector(sc, set_plist_1(sc, make_list(sc, dims, int_zero))));
 
-  sizes = (s7_int *)Calloc(sc, dims, sizeof(s7_int));
+  sizes = (s7_int *)Calloc(dims, sizeof(s7_int));
   for (s7_int i = 0; i < dims; i++)
     {
       sizes[i] = proper_list_length(x);
@@ -46832,7 +46834,7 @@ static c_proc_t *alloc_semipermanent_function(s7_scheme *sc)
   #define ALLOC_FUNCTION_SIZE 256
   if (sc->alloc_function_k == ALLOC_FUNCTION_SIZE)
     {
-      sc->alloc_function_cells = (c_proc_t *)Malloc(sc, ALLOC_FUNCTION_SIZE * sizeof(c_proc_t));
+      sc->alloc_function_cells = (c_proc_t *)Malloc(ALLOC_FUNCTION_SIZE * sizeof(c_proc_t));
       add_saved_pointer(sc, sc->alloc_function_cells);
       sc->alloc_function_k = 0;
     }
@@ -47821,14 +47823,14 @@ s7_int s7_make_c_type(s7_scheme *sc, const char *name) /* shouldn't this be s7_m
       if (sc->c_object_types_size == 0)
 	{
 	  sc->c_object_types_size = 8;
-	  sc->c_object_types = (c_object_t **)Calloc(sc, sc->c_object_types_size, sizeof(c_object_t *));
+	  sc->c_object_types = (c_object_t **)Calloc(sc->c_object_types_size, sizeof(c_object_t *));
 	}
       else
 	{
 	  sc->c_object_types_size = tag * 2;
-	  sc->c_object_types = (c_object_t **)Realloc(sc, (void *)(sc->c_object_types), sc->c_object_types_size * sizeof(c_object_t *));
+	  sc->c_object_types = (c_object_t **)Realloc((void *)(sc->c_object_types), sc->c_object_types_size * sizeof(c_object_t *));
 	}}
-  c_type = (c_object_t *)Calloc(sc, 1, sizeof(c_object_t)); /* Malloc+field=NULL is slightly faster here */
+  c_type = (c_object_t *)Calloc(1, sizeof(c_object_t)); /* Malloc+field=NULL is slightly faster here */
   sc->c_object_types[tag] = c_type;
   c_type->type = tag;
   c_type->scheme_name = make_permanent_string(name, safe_strlen(name));
@@ -48753,20 +48755,6 @@ static s7_pointer bind_symbol_with_setter(s7_scheme *sc, opcode_t op, s7_pointer
   push_stack_direct(sc, op);
   sc->code = func;
   return(sc->no_value); /* this means the setter in set! needs to goto APPLY to get the new value */
-}
-
-
-/* -------------------------------- hooks -------------------------------- */
-s7_pointer s7_hook_functions(s7_scheme *sc, s7_pointer hook)
-{
-  return(s7_symbol_local_value(sc, sc->body_symbol, closure_let(hook)));
-}
-
-s7_pointer s7_hook_set_functions(s7_scheme *sc, s7_pointer hook, s7_pointer functions)
-{
-  if (is_list(functions))
-    let_set_2(sc, closure_let(hook), sc->body_symbol, functions);
-  return(functions);
 }
 
 
@@ -52675,7 +52663,7 @@ static char *stacktrace_walker(s7_scheme *sc, s7_pointer code, s7_pointer e, cha
 		      const char *spaces = "                                                                                ";
 		      s7_int spaces_len = 80;
 		      new_note_len += (4 + notes_start_col + ((notes) ? strlen(notes) : 0));
-		      str = (char *)Malloc(sc, new_note_len);   /* str[0] = '\0'; */
+		      str = (char *)Malloc(new_note_len);   /* str[0] = '\0'; */
 		      catstrs_direct(str,
 			      (notes) ? notes : "",
 			      "\n",
@@ -52689,7 +52677,7 @@ static char *stacktrace_walker(s7_scheme *sc, s7_pointer code, s7_pointer e, cha
 		  else
 		    {
 		      new_note_len += ((notes) ? strlen(notes) : 0) + 4;
-		      str = (char *)Malloc(sc, new_note_len);   /* str[0] = '\0'; */
+		      str = (char *)Malloc(new_note_len);   /* str[0] = '\0'; */
 		      catstrs_direct(str,
 			      (notes) ? notes : "",
 			      (notes) ? ", " : " ; ",
@@ -53043,15 +53031,15 @@ static s7_pointer g_profile_in(s7_scheme *sc, s7_pointer args) /* only external 
       if (pos >= pd->size)
 	{
 	  s7_int new_size = 2 * pos;
-	  pd->funcs = (s7_pointer *)Realloc(sc, pd->funcs, new_size * sizeof(s7_pointer));
+	  pd->funcs = (s7_pointer *)Realloc(pd->funcs, new_size * sizeof(s7_pointer));
 	  memclr((void *)(pd->funcs + pd->size), (new_size - pd->size) * sizeof(s7_pointer));
-	  pd->timing_data = (s7_int *)Realloc(sc, pd->timing_data, new_size * PD_BLOCK_SIZE * sizeof(s7_int));
+	  pd->timing_data = (s7_int *)Realloc(pd->timing_data, new_size * PD_BLOCK_SIZE * sizeof(s7_int));
           memclr((void *)(pd->timing_data + (pd->size * PD_BLOCK_SIZE)), (new_size - pd->size) * PD_BLOCK_SIZE * sizeof(s7_int));
-	  pd->let_names = (s7_pointer *)Realloc(sc, pd->let_names, new_size * sizeof(s7_pointer));
+	  pd->let_names = (s7_pointer *)Realloc(pd->let_names, new_size * sizeof(s7_pointer));
 	  memclr((void *)(pd->let_names + pd->size), (new_size - pd->size) * sizeof(s7_pointer));
-	  pd->files = (s7_pointer *)Realloc(sc, pd->files, new_size * sizeof(s7_pointer));
+	  pd->files = (s7_pointer *)Realloc(pd->files, new_size * sizeof(s7_pointer));
 	  memclr((void *)(pd->files + pd->size), (new_size - pd->size) * sizeof(s7_pointer));
-	  pd->lines = (s7_int *)Realloc(sc, pd->lines, new_size * sizeof(s7_int));
+	  pd->lines = (s7_int *)Realloc(pd->lines, new_size * sizeof(s7_int));
 	  memclr((void *)(pd->lines + pd->size), (new_size - pd->size) * sizeof(s7_int));
 	  pd->size = new_size;
 	}
@@ -53081,7 +53069,7 @@ static s7_pointer g_profile_in(s7_scheme *sc, s7_pointer args) /* only external 
 	  if (pd->excl_top == pd->excl_size)
 	    {
 	      pd->excl_size *= 2;
-	      pd->excl = (s7_int *)Realloc(sc, pd->excl, pd->excl_size * sizeof(s7_int));
+	      pd->excl = (s7_int *)Realloc(pd->excl, pd->excl_size * sizeof(s7_int));
 	    }
 	  pd->excl[pd->excl_top] = 0;
 	}
@@ -53167,17 +53155,17 @@ static s7_pointer make_profile_info(s7_scheme *sc)
 {
   if (!sc->profile_data)
     {
-      profile_data_t *pd = (profile_data_t *)Malloc(sc, sizeof(profile_data_t));
+      profile_data_t *pd = (profile_data_t *)Malloc(sizeof(profile_data_t));
       pd->size = PD_INITIAL_SIZE;
       pd->excl_size = PD_INITIAL_SIZE;
       pd->top = 0;
       pd->excl_top = 0;
-      pd->funcs = (s7_pointer *)Calloc(sc, pd->size, sizeof(s7_pointer));
-      pd->let_names = (s7_pointer *)Calloc(sc, pd->size, sizeof(s7_pointer));
-      pd->files = (s7_pointer *)Calloc(sc, pd->size, sizeof(s7_pointer));
-      pd->lines = (s7_int *)Calloc(sc, pd->size, sizeof(s7_int));
-      pd->excl = (s7_int *)Calloc(sc, pd->excl_size, sizeof(s7_int));
-      pd->timing_data = (s7_int *)Calloc(sc, pd->size * PD_BLOCK_SIZE, sizeof(s7_int));
+      pd->funcs = (s7_pointer *)Calloc(pd->size, sizeof(s7_pointer));
+      pd->let_names = (s7_pointer *)Calloc(pd->size, sizeof(s7_pointer));
+      pd->files = (s7_pointer *)Calloc(pd->size, sizeof(s7_pointer));
+      pd->lines = (s7_int *)Calloc(pd->size, sizeof(s7_int));
+      pd->excl = (s7_int *)Calloc(pd->excl_size, sizeof(s7_int));
+      pd->timing_data = (s7_int *)Calloc(pd->size * PD_BLOCK_SIZE, sizeof(s7_int));
       sc->profile_data = pd;
     }
   return(sc->F);
@@ -54153,7 +54141,7 @@ static noreturn void read_error_1_nr(s7_scheme *sc, const char *errmsg, bool str
 	  slen = end - start;  /* hopefully this is more or less the current line where the read error happened */
 	  if (slen > 0)
 	    {
-	      recent_input = (char *)Calloc(sc, slen + 9, 1);
+	      recent_input = (char *)Calloc(slen + 9, 1);
 	      for (i = 0; i < (slen + 8); i++) recent_input[i] = '.';
 	      recent_input[3] = ' ';
 	      recent_input[slen + 4] = ' ';
@@ -54323,7 +54311,7 @@ static noreturn void missing_close_paren_error_nr(s7_scheme *sc)
 	  char *form = string_value(strp);
 	  s7_int form_len = string_length(strp);
 	  s7_int msg_len = form_len + 128;
-	  syntax_msg = (char *)Malloc(sc, msg_len);
+	  syntax_msg = (char *)Malloc(msg_len);
 	  snprintf(syntax_msg, msg_len, ";  current form awaiting a close paren starts around line %u: %s", (uint32_t)pair_line_number(p), form);
 	}}
 
@@ -54408,7 +54396,18 @@ static void op_error_hook_quit(s7_scheme *sc)
 }
 
 
-/* -------------------------------- hook-functions -------------------------------- */
+/* -------------------------------- hooks -------------------------------- */
+s7_pointer s7_hook_functions(s7_scheme *sc, s7_pointer hook)
+{
+  return(s7_symbol_local_value(sc, sc->body_symbol, closure_let(hook)));
+}
+
+s7_pointer s7_hook_set_functions(s7_scheme *sc, s7_pointer hook, s7_pointer functions)
+{
+  if (is_list(functions))
+    let_set_2(sc, closure_let(hook), sc->body_symbol, functions);
+  return(functions);
+}
 
 static s7_pointer g_hook_functions(s7_scheme *sc, s7_pointer args)
 {
@@ -60013,7 +60012,7 @@ static opt_funcs_t *alloc_semipermanent_opt_func(s7_scheme *sc)
 {
   if (sc->alloc_opt_func_k == ALLOC_FUNCTION_SIZE)
     {
-      sc->alloc_opt_func_cells = (opt_funcs_t *)Malloc(sc, ALLOC_FUNCTION_SIZE * sizeof(opt_funcs_t));
+      sc->alloc_opt_func_cells = (opt_funcs_t *)Malloc(ALLOC_FUNCTION_SIZE * sizeof(opt_funcs_t));
       add_saved_pointer(sc, sc->alloc_opt_func_cells);
       sc->alloc_opt_func_k = 0;
     }
@@ -69771,13 +69770,8 @@ static s7_pointer make_iterators(s7_scheme *sc, s7_pointer caller, s7_pointer ar
   for (s7_int i = 2; is_pair(p); p = cdr(p), i++)
     {
       s7_pointer iter = car(p);
-      if (!is_iterator(iter))
-	{
-	  if (!is_mappable(iter))
-	    wrong_type_error_nr(sc, caller, i, iter, a_sequence_string);
-	  iter = s7_make_iterator(sc, iter);
-	}
-      sc->z = cons(sc, iter, sc->z);
+      if (!is_mappable(iter)) wrong_type_error_nr(sc, caller, i, iter, a_sequence_string);
+      sc->z = (is_iterator(iter)) ? cons(sc, iter, sc->z) : cons(sc, s7_make_iterator(sc, iter), sc->z);
     }
   sc->temp3 = sc->unused;
   return(proper_list_reverse_in_place(sc, sc->z));
@@ -69933,10 +69927,10 @@ static s7_pointer g_for_each_closure(s7_scheme *sc, s7_pointer f, s7_pointer seq
 		      }
 	  if (res)
 	    return(clear_for_each(sc));
+	  if (!is_mappable(seq)) 
+	    wrong_type_error_nr(sc, sc->for_each_symbol, 2, seq, a_sequence_string);
 	  if (!is_iterator(seq))
 	    {
-	      if (!is_mappable(seq))
-		wrong_type_error_nr(sc, sc->for_each_symbol, 2, seq, a_sequence_string);
 	      seq = s7_make_iterator(sc, seq);
 	      set_stack_protected2(sc, seq, OP_MAP_UNWIND);
 	    }
@@ -70121,14 +70115,14 @@ static s7_pointer g_for_each_closure_2(s7_scheme *sc, s7_pointer f, s7_pointer s
 	  set_curlet(sc, olde);
 	}}
 
-  if (!is_mappable(seq1)) wrong_type_error_nr(sc, sc->for_each_symbol, 2, seq1, a_sequence_string);
+  if (!is_mappable(seq1)) wrong_type_error_nr(sc, sc->for_each_symbol, 2, seq1, a_sequence_string); /* is_mappable includes is_iterator */
   if (!is_mappable(seq2)) wrong_type_error_nr(sc, sc->for_each_symbol, 3, seq2, a_sequence_string);
 
   sc->z = (is_iterator(seq1)) ? seq1 : s7_make_iterator(sc, seq1);
   sc->z = (is_iterator(seq2)) ? list_2(sc, sc->z, seq2) : list_2(sc, sc->z, s7_make_iterator(sc, seq2));
-
   push_stack(sc, OP_FOR_EACH, cons_unchecked(sc, sc->z, make_list(sc, 2, sc->nil)), f);
   sc->z = sc->unused;
+
   return(sc->unspecified);
 }
 
@@ -87961,7 +87955,7 @@ static void op_any_closure_a_sym(s7_scheme *sc) /* for (lambda (a . b) ...) */
 
 static void init_tc_rec(s7_scheme *sc)
 {
-  sc->tc_rec_calls = (int *)Calloc(sc, TC_REC_SIZE, sizeof(int));
+  sc->tc_rec_calls = (int *)Calloc(TC_REC_SIZE, sizeof(int));
   add_saved_pointer(sc, sc->tc_rec_calls);
 }
 
@@ -91661,7 +91655,7 @@ static token_t read_sharp(s7_scheme *sc, s7_pointer pt)
       break;
 
     case '(':                      /* #(...) */
-      sc->w = int_one;             /* for read_expression! */
+      sc->read_dims = int_one;             /* for read_expression! */
       return(TOKEN_VECTOR);
 
     case 'i':                      /* #i(...) */
@@ -91689,7 +91683,7 @@ static token_t read_sharp(s7_scheme *sc, s7_pointer pt)
 	  if (s7_peek_char(sc, pt) == chars[(int32_t)('(')])
 	    {
 	      inchar(pt);
-	      sc->w = int_one;    /* for read_expression! */
+	      sc->read_dims = int_one;    /* for read_expression! */
 	      return(TOKEN_BYTE_VECTOR);
 	    }
 	  backchar(bc, pt);
@@ -91745,7 +91739,7 @@ static token_t read_sharp(s7_scheme *sc, s7_pointer pt)
 	    sc->strbuf[loc++] = (unsigned char)e;
 	    if (e == '(')
 	      {
-		sc->w = make_integer(sc, dims);                /* for read_expression! */
+		sc->read_dims = make_integer(sc, dims);                /* for read_expression! */
 		if (d == 'd') return(TOKEN_VECTOR);
 		if (d == 'r') return(TOKEN_FLOAT_VECTOR);
 		if (d == 'c') return(TOKEN_COMPLEX_VECTOR);
@@ -92092,27 +92086,27 @@ static s7_pointer read_expression(s7_scheme *sc)
 	  return(eof_object);
 
 	case TOKEN_BYTE_VECTOR:
-	  push_stack_no_let_no_code(sc, OP_READ_BYTE_VECTOR, sc->w); /* sc->w here and below = vector dimensions (from read_sharp) -> sc->args */
+	  push_stack_no_let_no_code(sc, OP_READ_BYTE_VECTOR, sc->read_dims); /* sc->read_dims here and below = vector dimensions (from read_sharp) -> sc->args */
 	  sc->tok = TOKEN_LEFT_PAREN;
 	  break;
 
 	case TOKEN_INT_VECTOR:
-	  push_stack_no_let_no_code(sc, OP_READ_INT_VECTOR, sc->w);
+	  push_stack_no_let_no_code(sc, OP_READ_INT_VECTOR, sc->read_dims);
 	  sc->tok = TOKEN_LEFT_PAREN;
 	  break;
 
 	case TOKEN_FLOAT_VECTOR:
-	  push_stack_no_let_no_code(sc, OP_READ_FLOAT_VECTOR, sc->w);
+	  push_stack_no_let_no_code(sc, OP_READ_FLOAT_VECTOR, sc->read_dims);
 	  sc->tok = TOKEN_LEFT_PAREN;
 	  break;
 
 	case TOKEN_COMPLEX_VECTOR:
-	  push_stack_no_let_no_code(sc, OP_READ_COMPLEX_VECTOR, sc->w);
+	  push_stack_no_let_no_code(sc, OP_READ_COMPLEX_VECTOR, sc->read_dims);
 	  sc->tok = TOKEN_LEFT_PAREN;
 	  break;
 
 	case TOKEN_VECTOR:         /* already read #( -- TOKEN_VECTOR is triggered by #( */
-	  push_stack_no_let_no_code(sc, OP_READ_VECTOR, sc->w);  /* sc->w is the dimensions */
+	  push_stack_no_let_no_code(sc, OP_READ_VECTOR, sc->read_dims);  /* sc->read_dims is the dimensions */
 	  /* fall through */
 
 	case TOKEN_LEFT_PAREN:
@@ -92406,7 +92400,7 @@ static bool op_read_unquote(s7_scheme *sc)
  */
 static bool op_read_vector(s7_scheme *sc)
 {
-  sc->value = (sc->args == int_one) ? g_vector(sc, sc->value) : g_multivector(sc, integer(sc->args), sc->value); /* sc->args was sc->w earlier from read_sharp */
+  sc->value = (sc->args == int_one) ? g_vector(sc, sc->value) : g_multivector(sc, integer(sc->args), sc->value); /* sc->args was sc->read_dims earlier from read_sharp */
   /* here and below all of the sc->value list can be freed, but my tests showed no speed up even in large cases */
   if (sc->safety > IMMUTABLE_VECTOR_SAFETY) set_immutable(sc->value);
   return(stack_top_op(sc) != OP_READ_LIST);
@@ -92428,7 +92422,7 @@ static bool op_read_float_vector(s7_scheme *sc)
 
   /* to avoid making the list: sc->floats array (growable and maybe pruned),
    *   token_float_vector in read_expression: sc->value = unused, push op_read_float_vector
-   *   sc->args = dims, (read_sharp sc->w = dims, read_expression push_op moves it to sc->args
+   *   sc->args = dims, (read_sharp sc->read_dims = dims, read_expression push_op moves it to sc->args
    *   <read each entry...>: push op_read_float_vector (no op_read_list), read, eval,
    *   fill sc->floats, when right-paren make new vector [for multidims, get list->frame]
    */
@@ -96869,7 +96863,7 @@ s7_pointer s7_let_field_set(s7_scheme *sc, s7_pointer sym, s7_pointer new_value)
 
 static void init_starlet_immutable_field(void)
 {
-  starlet_immutable_field = (bool *)Calloc(sc, SL_NUM_FIELDS, sizeof(bool));
+  starlet_immutable_field = (bool *)Calloc(SL_NUM_FIELDS, sizeof(bool));
   starlet_immutable_field[SL_CATCHES] = true;
   starlet_immutable_field[SL_CPU_TIME] = true;
   starlet_immutable_field[SL_C_TYPES] = true;
@@ -97052,7 +97046,7 @@ const char *s7_decode_bt(s7_scheme *sc)
 /* -------------------------------- initialization -------------------------------- */
 static void init_fx_function(void)
 {
-  fx_function = (s7_function *)Calloc(sc, NUM_OPS, sizeof(s7_function));
+  fx_function = (s7_function *)Calloc(NUM_OPS, sizeof(s7_function));
 
   fx_function[HOP_SAFE_C_NC] = fx_c_nc;
   fx_function[HOP_SAFE_C_S] = fx_c_s;
@@ -98960,8 +98954,8 @@ s7_scheme *s7_init(void)
 #if (!MS_WINDOWS)
   pthread_mutex_unlock(&init_lock);
 #endif
-  sc = (s7_scheme *)Calloc(sc, 1, sizeof(s7_scheme)); /* not malloc! */
-#if S7_DEBUGGING || (DISABLE_FILE_OUTPUT && (!WITH_GCC))
+  sc = (s7_scheme *)Calloc(1, sizeof(s7_scheme)); /* not malloc! */
+#if S7_DEBUGGING || ((DISABLE_FILE_OUTPUT || POINTER_32) && (!WITH_GCC))
   if (!cur_sc) original_cur_sc = sc;
   cur_sc = sc;
 #endif
@@ -98969,7 +98963,7 @@ s7_scheme *s7_init(void)
   sc->gc_in_progress = false;
   sc->gc_stats = 0;
 
-  sc->saved_pointers = (void **)Malloc(sc, INITIAL_SAVED_POINTERS_SIZE * sizeof(void *));
+  sc->saved_pointers = (void **)Malloc(INITIAL_SAVED_POINTERS_SIZE * sizeof(void *));
   sc->saved_pointers_loc = 0;
   sc->saved_pointers_size = INITIAL_SAVED_POINTERS_SIZE;
 
@@ -98998,7 +98992,7 @@ s7_scheme *s7_init(void)
   sc->max_list_length = 1073741824;
   sc->max_vector_dimensions = 512;
   sc->strbuf_size = INITIAL_STRBUF_SIZE;
-  sc->strbuf = (char *)Calloc(sc, sc->strbuf_size, 1);
+  sc->strbuf = (char *)Calloc(sc->strbuf_size, 1);
   sc->print_width = sc->max_string_length;
   sc->short_print = false;
   sc->in_with_let = false;
@@ -99010,7 +99004,7 @@ s7_scheme *s7_init(void)
   sc->symbol_quote = false;
   sc->initial_string_port_length = 128;
   sc->format_depth = -1;
-  sc->singletons = (s7_pointer *)Calloc(sc, 256, sizeof(s7_pointer));
+  sc->singletons = (s7_pointer *)Calloc(256, sizeof(s7_pointer));
   add_saved_pointer(sc, sc->singletons);
   sc->read_line_buf = NULL;
   sc->read_line_buf_size = 0;
@@ -99048,7 +99042,7 @@ s7_scheme *s7_init(void)
 #endif
 
   sc->input_port_stack_size = INPUT_PORT_STACK_INITIAL_SIZE;
-  sc->input_port_stack = (s7_pointer *)Malloc(sc, sc->input_port_stack_size * sizeof(s7_pointer));
+  sc->input_port_stack = (s7_pointer *)Malloc(sc->input_port_stack_size * sizeof(s7_pointer));
   sc->input_port_stack_loc = 0;
 
   sc->code = sc->nil;
@@ -99092,6 +99086,7 @@ s7_scheme *s7_init(void)
   sc->temp10 = sc->unused;
   sc->rec_p1 = sc->unused;
   sc->rec_p2 = sc->unused;
+  sc->read_dims = int_zero;
 
   sc->begin_hook = NULL;
   sc->autoload_table = sc->nil;
@@ -99109,13 +99104,13 @@ s7_scheme *s7_init(void)
   sc->heap_size = INITIAL_HEAP_SIZE;
   if ((sc->heap_size % 32) != 0)
     sc->heap_size = 32 * (int64_t)ceil((double)(sc->heap_size) / 32.0);
-  sc->heap = (s7_pointer *)Malloc(sc, sc->heap_size * sizeof(s7_pointer));
-  sc->free_heap = (s7_cell **)Malloc(sc, sc->heap_size * sizeof(s7_cell *));
+  sc->heap = (s7_pointer *)Malloc(sc->heap_size * sizeof(s7_pointer));
+  sc->free_heap = (s7_cell **)Malloc(sc->heap_size * sizeof(s7_cell *));
   sc->free_heap_top = (s7_cell **)(sc->free_heap + INITIAL_HEAP_SIZE);
   sc->free_heap_trigger = (s7_cell **)(sc->free_heap + GC_TRIGGER_SIZE);
   sc->previous_free_heap_top = sc->free_heap_top;
   {
-    s7_cell *cells = (s7_cell *)Malloc(sc, INITIAL_HEAP_SIZE * sizeof(s7_cell)); /* was calloc 14-Apr-22 */
+    s7_cell *cells = (s7_cell *)Malloc(INITIAL_HEAP_SIZE * sizeof(s7_cell)); /* was calloc 14-Apr-22 */
     add_saved_pointer(sc, (void *)cells);
     for (i = 0; i < INITIAL_HEAP_SIZE; i++)       /* LOOP_4 here is slower! */
       {
@@ -99135,7 +99130,7 @@ s7_scheme *s7_init(void)
      }
     /* memcpy((void *)(sc->free_heap), (const void *)(sc->heap), sizeof(s7_pointer) * INITIAL_HEAP_SIZE); */
     /*   weird that this memcpy (without the equivalent sets above) is much slower */
-    sc->heap_blocks = (heap_block_t *)Malloc(sc, sizeof(heap_block_t));
+    sc->heap_blocks = (heap_block_t *)Malloc(sizeof(heap_block_t));
     sc->heap_blocks->start = (intptr_t)cells;
     sc->heap_blocks->end = (intptr_t)cells + (sc->heap_size * sizeof(s7_cell));
     sc->heap_blocks->offset = 0;
@@ -99167,7 +99162,7 @@ s7_scheme *s7_init(void)
   sc->protected_setter_symbols = make_vector_1(sc, INITIAL_PROTECTED_OBJECTS_SIZE, FILLED, T_VECTOR);
 
   sc->protected_objects_size = INITIAL_PROTECTED_OBJECTS_SIZE;
-  sc->protected_objects_free_list = (s7_int *)Malloc(sc, INITIAL_PROTECTED_OBJECTS_SIZE * sizeof(s7_int));
+  sc->protected_objects_free_list = (s7_int *)Malloc(INITIAL_PROTECTED_OBJECTS_SIZE * sizeof(s7_int));
   sc->protected_objects_free_list_loc = INITIAL_PROTECTED_OBJECTS_SIZE - 1;
   sc->protected_objects = make_vector_1(sc, INITIAL_PROTECTED_OBJECTS_SIZE, FILLED, T_VECTOR);
   for (i = 0; i < INITIAL_PROTECTED_OBJECTS_SIZE; i++) /* using #<unused> as the not-set indicator here lets that value leak out! */
@@ -99193,16 +99188,16 @@ s7_scheme *s7_init(void)
   initialize_recur_stack(sc);
 
   /* keep the symbol table out of the heap */
-  sc->symbol_table = (s7_pointer)Malloc(sc, sizeof(s7_cell)); /* was calloc 14-Apr-22 */
+  sc->symbol_table = (s7_pointer)Malloc(sizeof(s7_cell)); /* was calloc 14-Apr-22 */
   full_type(sc->symbol_table) = T_VECTOR | T_UNHEAP | T_SYMBOL_TABLE;
   vector_length(sc->symbol_table) = SYMBOL_TABLE_SIZE;
-  vector_elements(sc->symbol_table) = (s7_pointer *)Malloc(sc, SYMBOL_TABLE_SIZE * sizeof(s7_pointer));
+  vector_elements(sc->symbol_table) = (s7_pointer *)Malloc(SYMBOL_TABLE_SIZE * sizeof(s7_pointer));
   vector_getter(sc->symbol_table) = t_vector_getter;
   vector_setter(sc->symbol_table) = t_vector_setter;
   t_vector_fill(sc->symbol_table, sc->nil);
 
   { /* sc->opts */
-    opt_info *os = (opt_info *)Malloc(sc, OPTS_SIZE * sizeof(opt_info)); /* was calloc, 17-Oct-21 */
+    opt_info *os = (opt_info *)Malloc(OPTS_SIZE * sizeof(opt_info)); /* was calloc, 17-Oct-21 */
     add_saved_pointer(sc, os);
     for (i = 0; i < OPTS_SIZE; i++)
       {
@@ -99280,7 +99275,7 @@ s7_scheme *s7_init(void)
   sc->is_mutable_symbol = make_symbol(sc, "mutable?", 8);
   sc->file__symbol = make_symbol(sc, "FILE*", 5);
   sc->circle_info = make_shared_info(sc);
-  sc->fdats = (format_data_t **)Calloc(sc, 8, sizeof(format_data_t *));
+  sc->fdats = (format_data_t **)Calloc(8, sizeof(format_data_t *));
   sc->num_fdats = 8;
   sc->mlist_1 = semipermanent_list(sc, 1);
   sc->mlist_2 = semipermanent_list(sc, 2);
@@ -99304,7 +99299,7 @@ s7_scheme *s7_init(void)
   sc->undefined_identifier_warnings = false;
   sc->undefined_constant_warnings = false;
   sc->wrap_only = make_wrap_only(sc);
-  sc->unentry = (hash_entry_t *)Malloc(sc, sizeof(hash_entry_t));
+  sc->unentry = (hash_entry_t *)Malloc(sizeof(hash_entry_t));
   hash_entry_set_value(sc->unentry, sc->F);
   sc->begin_op = OP_BEGIN_NO_HOOK;
   /* we used to laboriously set various other fields to null, but the calloc takes care of that */
@@ -99387,6 +99382,7 @@ s7_scheme *s7_init(void)
   init_signatures(sc);      /* depends on procedure symbols */
   sc->starlet = make_starlet(sc);
   s7_set_history_enabled(sc, true);
+
   s7_eval_c_string(sc, "(define make-hook                                                                 \n\
                           (let ((+documentation+ \"(make-hook . pars) returns a new hook (a function) that passes the parameters to each function in its function list.\")) \n\
                             (lambda hook-args                                                             \n\
@@ -99396,8 +99392,10 @@ s7_scheme *s7_init(void)
                                       (let ((hook (openlet (sublet (curlet) 'let-ref-fallback (lambda (e sym) #<undefined>))))) \n\
                                         (for-each (lambda (hook-function) (hook-function hook)) body)     \n\
                                         result))))))))");
-  /* (procedure-source (make-hook 'x 'y)): (lambda* (x y) (let ((result #<unspecified>)) ... result)), see stuff.scm for commentary */
-  /* '((when (pair? body) ...) at start might be a good idea -- depends on how often an empty hook is called */
+  /* (procedure-source (make-hook 'x 'y)): (lambda* (x y) (let ((result #<unspecified>)) ... result)), see stuff.scm for commentary
+   * '((when (pair? body) ...) at start might be a good idea -- depends on how often an empty hook is called
+   * moving make-hook to C (see tmphook) was a lot of code and did not save anything at start-up (20/1750 in callgrind, ca 1%)
+   */
 
   /* -------- *unbound-variable-hook* -------- */
   sc->unbound_variable_hook = s7_eval_c_string(sc, "(make-hook 'variable)");
@@ -99671,7 +99669,7 @@ void s7_free(s7_scheme *sc)
 	}
       free(sc->c_object_types);
     }
-#if S7_DEBUGGING || (DISABLE_FILE_OUTPUT && (!WITH_GCC))
+#if S7_DEBUGGING || ((DISABLE_FILE_OUTPUT || POINTER_32) && (!WITH_GCC))
   if (sc == cur_sc) cur_sc = original_cur_sc;
 #endif
   free(sc);
@@ -99898,20 +99896,20 @@ int main(int argc, char **argv)
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * safe_do hop bit in other do cases and let
- * make-hook to C? (s7_make_function_star for hook, but then hook-functions has to change (assumes closure*))
  * growable opt_info*, does this require opts array to be opt_info**?
  * big_symbol_set: do-vars? (tlimit), tlet fx trouble, tgen clean_up, dup? look at where big_symbol_set loses now
  * add c-define in expr example (t824.scm) and check function let in such cases, and add that example to t824, t824 to s7test?
- * begin|end_temp for sc->x|w|z, clean are v, y
+ * begin|end_temp for sc->x|w|z, clean are v, y -- all x's can be w|z?
  * random timing nits above
  * sort! c-func has d_dd func and is float-vect, vector-set->float-vector-sort?
  * write up type declarations in s7.html
  * iter within iter to test sc->z?
+ * s7.html/ffitest.c s7_make_typed_function_with_environment (cload)
  *
  * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
  *   tcomplex.scm to test complex opts. s7test append, tcomplex->101, 103, valcall
- *   in tari (complex-vector-set! v i (complex ...)) can skip the complex variable creation
+ *   in tari (complex-vector-set! v i (complex ...)) can skip the complex variable creation: change complex to wrap_complex
  *      similarly for + etc? (z=s7_complex etc) (complex -> (c-complex)) in chooser
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)

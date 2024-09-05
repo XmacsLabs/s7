@@ -166,7 +166,7 @@
     (let ((cv1 (make-complex-vector size 0.0)))
       (do ((i 0 (+ i 1))) 
 	  ((= i size))
-	(set! (cv1 i) (complex (random 1.0) (random 1.0)))) ; TODO: use (- 1.0 (random 2.0))
+	(set! (cv1 i) (complex (- 1.0 (random 2.0)) (- 1.0 (random 2.0)))))
       (let ((cv2 (copy cv1)))
 	(let ((cf (cfft cv1 size))
 	      (zf (z-transform cv2 size (exp (/ (* 2 pi 0+i) size)))))
