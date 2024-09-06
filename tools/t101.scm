@@ -246,6 +246,9 @@
 (format *stderr* "~NC tnum ~NC~%" 20 #\- 20 #\-)
 (system "./repl tnum.scm")
 
+(format *stderr* "~NC tcomplex ~NC~%" 20 #\- 20 #\-)
+(system "./repl tcomplex.scm")
+
 (format *stderr* "~NC tmock ~NC~%" 20 #\- 20 #\-)
 (system "./repl tmock.scm")
 

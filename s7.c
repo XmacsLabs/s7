@@ -443,12 +443,16 @@
   #define __func__ __FUNCTION__
 #endif
 
+#ifndef POINTER_32 /* for testing */
 #if (((defined(SIZEOF_VOID_P)) && (SIZEOF_VOID_P == 4)) || ((defined(__SIZEOF_POINTER__)) && (__SIZEOF_POINTER__ == 4)) || (!defined(__LP64__)))
   #define NUMBER_NAME_SIZE 2 /* pointless */
   #define POINTER_32 true
 #else
   #define NUMBER_NAME_SIZE 22 /* leave 1 for uint8_t name len (byte 0), 1 for terminating nul */
   #define POINTER_32 false
+#endif
+#else
+  #define NUMBER_NAME_SIZE 2
 #endif
 
 #define WRITE_REAL_PRECISION 16
@@ -1261,7 +1265,7 @@ struct s7_scheme {
   c_proc_t *alloc_function_cells;
   uint32_t alloc_big_pointer_k;
   s7_big_cell *alloc_big_pointer_cells;
-  s7_pointer string_wrappers, integer_wrappers, real_wrappers, c_pointer_wrappers;
+  s7_pointer string_wrappers, integer_wrappers, real_wrappers, complex_wrappers, c_pointer_wrappers;
   uint8_t *alloc_symbol_cells;
   char *num_to_str;
 
@@ -4079,6 +4083,23 @@ static s7_pointer wrap_real(s7_scheme *sc, s7_double x)
   return(p);
 }
 
+static s7_pointer wrap_complex(s7_scheme *sc, s7_double rl, s7_double im)
+{
+  s7_pointer p = car(sc->complex_wrappers);
+#if S7_DEBUGGING
+  if ((full_type(p) & (~T_GC_MARK)) != (T_COMPLEX | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
+#endif
+  set_real_part(p, rl);
+  set_imag_part(p, im);
+  sc->complex_wrappers = cdr(sc->complex_wrappers);
+  return(p);
+}
+
+static s7_pointer wrap_real_or_complex(s7_scheme *sc, s7_double rl, s7_double im)
+{
+  if (im == 0.0) return(wrap_real(sc, rl));
+  return(wrap_complex(sc, rl, im));
+}
 
 /* --------------------------------------------------------------------------------
  * local versions of some standard C library functions
@@ -20028,6 +20049,81 @@ static s7_pointer add_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
     }
 }
 
+#if (!WITH_GMP)
+static inline s7_pointer add_if_overflow_to_real_wrapped(s7_scheme *sc, s7_int x, s7_int y)
+{
+#if HAVE_OVERFLOW_CHECKS
+  s7_int val;
+  if (add_overflow(x, y, &val))
+    {
+      if (WITH_WARNINGS) s7_warn(sc, 128, "integer add overflow: (+ %" ld64 " %" ld64 ")\n", x, y);
+      return(wrap_real(sc, (long_double)x + (long_double)y));
+    }
+  return(wrap_integer(sc, val));
+#else
+  return(wrap_integer(sc, x + y));
+#endif
+}
+
+static s7_pointer add_p_pp_wrapped(s7_scheme *sc, s7_pointer x, s7_pointer y)
+{
+  /* an experiment -- wraps rather than boxes results */
+#if 1
+  if (is_t_integer(x))
+    {
+      if (is_t_integer(y))
+	return(add_if_overflow_to_real_wrapped(sc, integer(x), integer(y)));
+    }
+  else
+    if (is_t_real(x))
+      {
+	if (is_t_real(y))
+	  return(wrap_real(sc, real(x) + real(y)));
+      }
+    else
+      if ((is_t_complex(x)) && (is_t_complex(y)))
+	return(wrap_real_or_complex(sc, real_part(x) + real_part(y), imag_part(x) + imag_part(y)));
+#endif
+  switch (type(x))
+    {
+    case T_INTEGER:
+      switch (type(y))
+	{
+	case T_INTEGER:
+	  return(add_if_overflow_to_real_wrapped(sc, integer(x), integer(y)));
+	case T_REAL:
+	  return(wrap_real(sc, (long_double)integer(x) + real(y)));
+	case T_COMPLEX:
+	  return(wrap_complex(sc, (long_double)integer(x) + (long_double)real_part(y), imag_part(y)));
+	}
+
+    case T_REAL:
+      switch (type(y))
+	{
+	case T_INTEGER:
+	  return(wrap_real(sc, real(x) + (long_double)integer(y)));
+	case T_REAL:
+	  return(make_real(sc, real(x) + real(y)));
+	case T_COMPLEX:
+	  return(wrap_complex(sc, real(x) + real_part(y), imag_part(y)));
+	}
+
+    case T_COMPLEX:
+      switch (type(y))
+	{
+	case T_INTEGER:
+	  return(wrap_complex(sc, real_part(x) + integer(y), imag_part(x)));
+	case T_REAL:
+	  return(wrap_complex(sc, real_part(x) + real(y), imag_part(x)));
+	case T_COMPLEX:
+	  return(wrap_real_or_complex(sc, real_part(x) + real_part(y), imag_part(x) + imag_part(y)));
+	}}
+  return(add_p_pp(sc, x, y));
+}
+#else
+#define add_p_pp_wrapped add_p_pp
+#endif
+
 static s7_pointer add_p_ppp(s7_scheme *sc, s7_pointer p0, s7_pointer p1, s7_pointer p2)
 {
   if ((is_t_integer(p0)) && (is_t_integer(p1)) && (is_t_integer(p2)))
@@ -20055,7 +20151,7 @@ static s7_pointer add_p_ppp(s7_scheme *sc, s7_pointer p0, s7_pointer p1, s7_poin
   if ((is_t_real(p0)) && (is_t_real(p1)) && (is_t_real(p2)))
     return(make_real(sc, real(p0) + real(p1) + real(p2)));
   {
-    s7_pointer p = add_p_pp(sc, p0, p1);
+    s7_pointer p = add_p_pp_wrapped(sc, p0, p1);
     sc->error_argnum = 1;
     p = add_p_pp(sc, p, p2);
     sc->error_argnum = 0;
@@ -20081,8 +20177,9 @@ static s7_pointer g_add(s7_scheme *sc, s7_pointer args)
     }
   if (is_null(cdr(p)))
     return(add_p_pp(sc, x, car(p)));
-  for (sc->error_argnum = 0; is_pair(p); p = cdr(p), sc->error_argnum++)
-    x = add_p_pp(sc, x, car(p));
+  for (sc->error_argnum = 0; is_pair(cdr(p)); p = cdr(p), sc->error_argnum++)
+    x = add_p_pp_wrapped(sc, x, car(p));
+  x = add_p_pp(sc, x, car(p));
   sc->error_argnum = 0;
   return(x);
 }
@@ -20804,6 +20901,82 @@ static s7_pointer subtract_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
     }
 }
 
+#if (!WITH_GMP)
+static s7_pointer negate_p_p_wrapped(s7_scheme *sc, s7_pointer p)     /* can't use "negate" because it confuses C++! */
+{
+  switch (type(p))
+    {
+    case T_INTEGER:
+      if (integer(p) == S7_INT64_MIN)
+	sole_arg_out_of_range_error_nr(sc, sc->subtract_symbol, p, wrap_string(sc, "most-negative-fixnum can't be negated", 37));
+      return(wrap_integer(sc, -integer(p)));
+    case T_REAL:    
+      return(wrap_real(sc, -real(p)));
+    case T_COMPLEX: 
+      return(wrap_complex(sc, -real_part(p), -imag_part(p)));
+    }
+  return(negate_p_p(sc, p));
+}
+
+static s7_pointer subtract_if_overflow_to_real_wrapped(s7_scheme *sc, s7_int x, s7_int y)
+{
+#if HAVE_OVERFLOW_CHECKS
+  s7_int val;
+  if (subtract_overflow(x, y, &val))
+    {
+      if (WITH_WARNINGS) s7_warn(sc, 128, "integer subtract overflow: (- %" ld64 " %" ld64 ")\n", x, y);
+      return(wrap_real(sc, (long_double)x - (long_double)y));
+    }
+  return(wrap_integer(sc, val));
+#else
+  return(wrap_integer(sc, x - y));
+#endif
+}
+
+static s7_pointer subtract_p_pp_wrapped(s7_scheme *sc, s7_pointer x, s7_pointer y)
+{
+  switch (type(x))
+    {
+    case T_INTEGER:
+      if (integer(x) == 0)
+	return(negate_p_p_wrapped(sc, y));
+      switch (type(y))
+	{
+	case T_INTEGER:
+	  return(subtract_if_overflow_to_real_wrapped(sc, integer(x), integer(y)));
+	case T_REAL:
+	  return(wrap_real(sc, (long_double)integer(x) - real(y)));
+	case T_COMPLEX:
+	  return(wrap_complex(sc, (long_double)integer(x) - real_part(y), -imag_part(y)));
+	}
+
+    case T_REAL:
+      switch (type(y))
+	{
+	case T_INTEGER:
+	  return(wrap_real(sc, real(x) - (long_double)integer(y))); /* long_double saves (- 9007199254740996.0 9007199254740995): 1.0 */
+	case T_REAL:
+	  return(wrap_real(sc, real(x) - real(y)));
+	case T_COMPLEX:
+	  return(wrap_complex(sc, real(x) - real_part(y), -imag_part(y)));
+	}
+
+    case T_COMPLEX:
+      switch (type(y))
+	{
+	case T_INTEGER:
+	  return(wrap_complex(sc, real_part(x) - integer(y), imag_part(x)));
+	case T_REAL:
+	  return(wrap_complex(sc, real_part(x) - real(y), imag_part(x)));
+	case T_COMPLEX:
+	  return(wrap_real_or_complex(sc, real_part(x) - real_part(y), imag_part(x) - imag_part(y)));
+	}}
+  return(subtract_p_pp(sc, x, y));
+}
+#else
+#define subtract_p_pp_wrapped subtract_p_pp
+#endif
+
 static s7_pointer g_subtract(s7_scheme *sc, s7_pointer args)
 {
   #define H_subtract "(- x1 ...) subtracts its trailing arguments from the first, or negates the first if only one it is given"
@@ -20812,8 +20985,9 @@ static s7_pointer g_subtract(s7_scheme *sc, s7_pointer args)
   s7_pointer x = car(args), p = cdr(args);
   if (is_null(p))
     return(negate_p_p(sc, x));
-  for (sc->error_argnum = 0; is_pair(p); p = cdr(p), sc->error_argnum++)
-    x = subtract_p_pp(sc, x, car(p));
+  for (sc->error_argnum = 0; is_pair(cdr(p)); p = cdr(p), sc->error_argnum++)
+    x = subtract_p_pp_wrapped(sc, x, car(p));
+  x = subtract_p_pp(sc, x, car(p));
   sc->error_argnum = 0;
   return(x);
 }
@@ -20824,7 +20998,7 @@ static s7_pointer g_subtract_2(s7_scheme *sc, s7_pointer args) {return(subtract_
 static s7_pointer g_subtract_3(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer x = car(args);
-  x = subtract_p_pp(sc, x, cadr(args));
+  x = subtract_p_pp_wrapped(sc, x, cadr(args));
   sc->error_argnum = 1;
   x = subtract_p_pp(sc, x, caddr(args));
   sc->error_argnum = 0;
@@ -21361,11 +21535,71 @@ static s7_pointer multiply_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
     }
 }
 
+#if (!WITH_GMP)
+static inline s7_pointer multiply_if_overflow_to_real_wrapped(s7_scheme *sc, s7_int x, s7_int y)
+{
+#if HAVE_OVERFLOW_CHECKS
+  s7_int val;
+  if (multiply_overflow(x, y, &val))
+    {
+      if (WITH_WARNINGS) s7_warn(sc, 128, "integer multiply overflow: (* %" ld64 " %" ld64 ")\n", x, y);
+      return(wrap_real(sc, (s7_double)x * (s7_double)y));
+    }
+    return(wrap_integer(sc, val));
+#else
+  return(wrap_integer(sc, x * y));
+#endif
+}
+
+static s7_pointer multiply_p_pp_wrapped(s7_scheme *sc, s7_pointer x, s7_pointer y)
+{
+  switch (type(x))
+    {
+    case T_INTEGER:
+      switch (type(y))
+	{
+	case T_INTEGER:
+	  return(multiply_if_overflow_to_real_wrapped(sc, integer(x), integer(y)));
+	case T_REAL:
+	  return(wrap_real(sc, (long_double)integer(x) * real(y)));
+	case T_COMPLEX:
+	  return(wrap_real_or_complex(sc, (long_double)integer(x) * real_part(y), (long_double)integer(x) * imag_part(y)));
+	}
+
+    case T_REAL:
+      switch (type(y))
+	{
+	case T_INTEGER:
+	  return(wrap_real(sc, real(x) * (long_double)integer(y)));
+	case T_REAL:
+	  return(wrap_real(sc, real(x) * real(y)));
+	case T_COMPLEX:
+	  return(wrap_real_or_complex(sc, real(x) * real_part(y), real(x) * imag_part(y)));
+	}
+
+    case T_COMPLEX:
+      switch (type(y))
+	{
+	case T_INTEGER:
+	  return(wrap_real_or_complex(sc, real_part(x) * integer(y), imag_part(x) * integer(y)));
+	case T_REAL:
+	  return(wrap_real_or_complex(sc, real_part(x) * real(y), imag_part(x) * real(y)));
+	case T_COMPLEX:
+	  {
+	    s7_double r1 = real_part(x), r2 = real_part(y), i1 = imag_part(x), i2 = imag_part(y);
+	    return(wrap_real_or_complex(sc, r1 * r2 - i1 * i2, r1 * i2 + r2 * i1));
+	  }}}
+  return(multiply_p_pp(sc, x, y));
+}
+#else
+#define multiply_p_pp_wrapped multiply_p_pp
+#endif
+
 static s7_pointer multiply_p_ppp(s7_scheme *sc, s7_pointer x, s7_pointer y, s7_pointer z)
 {
   /* no hits for reals in tnum */
   /* if ((is_t_real(x)) && (is_t_real(y)) && (is_t_real(z))) return(make_real(sc, real(x) * real(y) * real(z))); */
-  x = multiply_p_pp(sc, x, y);
+  x = multiply_p_pp_wrapped(sc, x, y);
   sc->error_argnum = 1;
   x = multiply_p_pp(sc, x, z);
   sc->error_argnum = 0;
@@ -21398,8 +21632,9 @@ static s7_pointer g_multiply(s7_scheme *sc, s7_pointer args)
 	return(multiply_method_or_bust(sc, x, args, a_number_string, 0));
       return(x);
     }
-  for (sc->error_argnum = 0; is_pair(p); p = cdr(p), sc->error_argnum++)
-    x = multiply_p_pp(sc, x, car(p));
+  for (sc->error_argnum = 0; is_pair(cdr(p)); p = cdr(p), sc->error_argnum++)
+    x = multiply_p_pp_wrapped(sc, x, car(p));
+  x = multiply_p_pp(sc, x, car(p));
   sc->error_argnum = 0;
   return(x);
 }
@@ -22720,7 +22955,7 @@ static s7_pointer remainder_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	    if (is_inf(real(y))) return(real_NaN);
 	    if (is_NaN(real(y))) return(y);
 	    if (s7_int_abs(numerator(x)) > QUOTIENT_INT_LIMIT)
-	      return(subtract_p_pp(sc, x, multiply_p_pp(sc, y, quotient_p_pp(sc, x, y))));
+	      return(subtract_p_pp(sc, x, multiply_p_pp_wrapped(sc, y, quotient_p_pp(sc, x, y))));
 	    frac = (s7_double)fraction(x);
 	    pre_quo = frac / real(y);
 	    if (fabs(pre_quo) > REMAINDER_FLOAT_LIMIT)
@@ -22755,7 +22990,7 @@ static s7_pointer remainder_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 
 	case T_RATIO:
 	  if (s7_int_abs(numerator(y)) > QUOTIENT_INT_LIMIT)
-	    return(subtract_p_pp(sc, x, multiply_p_pp(sc, y, quotient_p_pp(sc, x, y))));
+	    return(subtract_p_pp(sc, x, multiply_p_pp_wrapped(sc, y, quotient_p_pp(sc, x, y))));
 	  {
 	    s7_double frac = (s7_double)fraction(y);
 	    pre_quo = real(x) / frac;
@@ -53101,7 +53336,7 @@ static s7_pointer profile_info_out(s7_scheme *sc)
   profile_data_t *pd = sc->profile_data;
   if ((!pd) || (pd->top == 0)) return(sc->F);
   p = make_list(sc, 7, sc->F);
-  sc->w = p;
+  set_car(sc->elist_7, p); /* protect p */
   set_car(p, vs = make_simple_vector(sc, pd->top));
   set_car(cdr(p), vi = make_simple_int_vector(sc, pd->top * PD_BLOCK_SIZE));
   set_car(cddr(p), make_integer(sc, ticks_per_second()));
@@ -53128,7 +53363,7 @@ static s7_pointer profile_info_out(s7_scheme *sc)
   for (i = 0; i < pd->top; i++) if (pd->funcs[i]) clear_match_symbol(pd->funcs[i]);
   memcpy((void *)int_vector_ints(vl), (void *)pd->lines, pd->top * sizeof(s7_int));
   memcpy((void *)int_vector_ints(vi), (void *)pd->timing_data, pd->top * PD_BLOCK_SIZE * sizeof(s7_int));
-  sc->w = sc->unused;
+  set_car(sc->elist_7, sc->F);
   return(p);
 }
 
@@ -54902,17 +55137,13 @@ s7_pointer s7_apply_function_star(s7_scheme *sc, s7_pointer fnc, s7_pointer args
   TRACK(sc);
   if (is_c_function_star(fnc))
     {
-#if 0
-      sc->w = sc->args;
+      sc->w = sc->args; /* this protection is needed, see snd-test.scm test 8 */
       sc->z = sc->code;
-#endif
       sc->args = T_Ext(args);
       sc->code = fnc;
       apply_c_function_star(sc);
-#if 0
       sc->args = sc->w;
       sc->code = sc->z;
-#endif
       return(sc->value);
     }
   push_stack_direct(sc, OP_EVAL_DONE);
@@ -56851,7 +57082,7 @@ static s7_pointer fx_add_sub_s(s7_scheme *sc, s7_pointer arg)
   s7_pointer p2 = lookup(sc, opt2_sym(largs));
   s7_pointer p3 = lookup(sc, caddr(arg));
   if ((is_t_real(p1)) && (is_t_real(p2)) && (is_t_real(p3))) return(make_real(sc, real(p3) + real(p1) - real(p2)));
-  return(add_p_pp(sc, subtract_p_pp(sc, p1, p2), p3));
+  return(add_p_pp(sc, subtract_p_pp_wrapped(sc, p1, p2), p3));
 }
 
 static s7_pointer fx_add_sub_tu_s(s7_scheme *sc, s7_pointer arg)
@@ -56860,7 +57091,7 @@ static s7_pointer fx_add_sub_tu_s(s7_scheme *sc, s7_pointer arg)
   s7_pointer p2 = u_lookup(sc, cadr(cdadr(arg)), arg);
   s7_pointer p3 = lookup(sc, caddr(arg));
   if ((is_t_real(p1)) && (is_t_real(p2)) && (is_t_real(p3))) return(make_real(sc, real(p3) + real(p1) - real(p2)));
-  return(add_p_pp(sc, subtract_p_pp(sc, p1, p2), p3));
+  return(add_p_pp(sc, subtract_p_pp_wrapped(sc, p1, p2), p3));
 }
 
 static s7_pointer fx_gt_add_s(s7_scheme *sc, s7_pointer arg)
@@ -56870,7 +57101,7 @@ static s7_pointer fx_gt_add_s(s7_scheme *sc, s7_pointer arg)
   s7_pointer x2 = lookup(sc, opt2_sym(largs));
   s7_pointer x3 = lookup(sc, caddr(arg));
   if ((is_t_real(x1)) && (is_t_real(x2)) && (is_t_real(x3))) return(make_boolean(sc, (real(x1) + real(x2)) > real(x3)));
-  return(gt_p_pp(sc, add_p_pp(sc, x1, x2), x3));
+  return(gt_p_pp(sc, add_p_pp_wrapped(sc, x1, x2), x3));
 }
 
 static s7_pointer fx_gt_add_tu_s(s7_scheme *sc, s7_pointer arg)
@@ -56879,7 +57110,7 @@ static s7_pointer fx_gt_add_tu_s(s7_scheme *sc, s7_pointer arg)
   s7_pointer x2 = u_lookup(sc, cadr(cdadr(arg)), arg);
   s7_pointer x3 = lookup(sc, caddr(arg));
   if ((is_t_real(x1)) && (is_t_real(x2)) && (is_t_real(x3))) return(make_boolean(sc, (real(x1) + real(x2)) > real(x3)));
-  return(gt_p_pp(sc, add_p_pp(sc, x1, x2), x3));
+  return(gt_p_pp(sc, add_p_pp_wrapped(sc, x1, x2), x3));
 }
 
 static s7_pointer fx_gt_vref_s(s7_scheme *sc, s7_pointer arg)
@@ -56909,7 +57140,7 @@ static s7_pointer fx_lref_s_vref(s7_scheme *sc, s7_pointer arg) /* tbig */
 
 static s7_pointer fx_vref_s_add(s7_scheme *sc, s7_pointer arg)
 {
-  return(vector_ref_p_pp(sc, lookup(sc, cadr(arg)), add_p_pp(sc, lookup(sc, car(opt3_pair(arg))), lookup(sc, opt2_sym(opt3_pair(arg))))));
+  return(vector_ref_p_pp(sc, lookup(sc, cadr(arg)), add_p_pp_wrapped(sc, lookup(sc, car(opt3_pair(arg))), lookup(sc, opt2_sym(opt3_pair(arg))))));
 }
 
 static inline s7_pointer fx_vref_vref_3(s7_scheme *sc, s7_pointer v1, s7_pointer p1, s7_pointer p2)
@@ -57135,7 +57366,7 @@ static s7_pointer fx_multiply_c_opssq(s7_scheme *sc, s7_pointer arg) /* (* c=flo
   s7_pointer x1 = lookup(sc, opt3_sym(arg));
   s7_pointer x2 = lookup(sc, opt1_sym(cdr(arg)));
   if ((is_t_real(x1)) && (is_t_real(x2))) return(make_real(sc, real(cadr(arg)) * real(x1) * real(x2)));
-  return(multiply_p_pp(sc, cadr(arg), multiply_p_pp(sc, x1, x2)));
+  return(multiply_p_pp(sc, cadr(arg), multiply_p_pp_wrapped(sc, x1, x2)));
 }
 
 #define fx_c_s_opscq_any(Name, Lookup1, Lookup2)		\
@@ -57407,7 +57638,7 @@ static s7_pointer fx_num_eq_car_v_add_tu(s7_scheme *sc, s7_pointer arg)
   s7_pointer p3 = u_lookup(sc, opt1_sym(cdr(arg)), arg);
   if ((is_t_integer(p1)) && (is_t_integer(p2)) && (is_t_integer(p3)))
     return(make_boolean(sc, integer(p1) == (integer(p2) + integer(p3))));
-  return(make_boolean(sc, num_eq_b_7pp(sc, p1, add_p_pp(sc, p2, p3))));
+  return(make_boolean(sc, num_eq_b_7pp(sc, p1, add_p_pp_wrapped(sc, p2, p3))));
 }
 
 static s7_pointer fx_num_eq_car_v_subtract_tu(s7_scheme *sc, s7_pointer arg)
@@ -57417,7 +57648,7 @@ static s7_pointer fx_num_eq_car_v_subtract_tu(s7_scheme *sc, s7_pointer arg)
   s7_pointer p3 = u_lookup(sc, opt1_sym(cdr(arg)), arg);
   if ((is_t_integer(p1)) && (is_t_integer(p2)) && (is_t_integer(p3)))
     return(make_boolean(sc, integer(p1) == (integer(p2) - integer(p3))));
-  return(make_boolean(sc, num_eq_b_7pp(sc, p1, subtract_p_pp(sc, p2, p3))));
+  return(make_boolean(sc, num_eq_b_7pp(sc, p1, subtract_p_pp_wrapped(sc, p2, p3))));
 }
 
 static s7_pointer fx_c_opssq_opsq(s7_scheme *sc, s7_pointer arg)
@@ -57458,8 +57689,8 @@ static s7_pointer fx_sub_mul_mul(s7_scheme *sc, s7_pointer arg) /* (- (* s1 s2) 
   s7_pointer s4 = lookup(sc, cadr(a2));
   if ((is_t_real(s1)) && (is_t_real(s2)) && (is_t_real(s3)) && (is_t_real(s4)))
     return(make_real(sc, (real(s3) * real(s4)) - (real(s1) * real(s2))));
-  sc->temp5 = multiply_p_pp(sc, s1, s2);
-  return(subtract_p_pp(sc, multiply_p_pp(sc, s3, s4), sc->temp5));
+  sc->temp5 = multiply_p_pp_wrapped(sc, s1, s2);
+  return(subtract_p_pp(sc, multiply_p_pp_wrapped(sc, s3, s4), sc->temp5));
 }
 
 static s7_pointer fx_add_mul_mul(s7_scheme *sc, s7_pointer arg) /* (+ (* s1 s2) (* s3 s4)) */
@@ -57472,8 +57703,8 @@ static s7_pointer fx_add_mul_mul(s7_scheme *sc, s7_pointer arg) /* (+ (* s1 s2) 
   s7_pointer s4 = lookup(sc, cadr(a2));
   if ((is_t_real(s1)) && (is_t_real(s2)) && (is_t_real(s3)) && (is_t_real(s4)))
     return(make_real(sc, (real(s3) * real(s4)) + (real(s1) * real(s2))));
-  sc->temp5 = multiply_p_pp(sc, s1, s2);
-  return(add_p_pp(sc, multiply_p_pp(sc, s3, s4), sc->temp5));
+  sc->temp5 = multiply_p_pp_wrapped(sc, s1, s2);
+  return(add_p_pp(sc, multiply_p_pp_wrapped(sc, s3, s4), sc->temp5));
 }
 
 static s7_pointer fx_mul_sub_sub(s7_scheme *sc, s7_pointer arg) /* (* (- s1 s2) (- s3 s4)) */
@@ -57486,16 +57717,16 @@ static s7_pointer fx_mul_sub_sub(s7_scheme *sc, s7_pointer arg) /* (* (- s1 s2) 
   s7_pointer s4 = lookup(sc, cadr(a2));
   if ((is_t_real(s1)) && (is_t_real(s2)) && (is_t_real(s3)) && (is_t_real(s4)))
     return(make_real(sc, (real(s3) - real(s4)) * (real(s1) - real(s2))));
-  sc->temp5 = subtract_p_pp(sc, s1, s2);
-  return(multiply_p_pp(sc, subtract_p_pp(sc, s3, s4), sc->temp5));
+  sc->temp5 = subtract_p_pp_wrapped(sc, s1, s2);
+  return(multiply_p_pp(sc, subtract_p_pp_wrapped(sc, s3, s4), sc->temp5));
 }
 
 static s7_pointer fx_lt_sub2(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer a1 = opt3_pair(arg);      /* cdaddr(arg) */
-  sc->temp5 = subtract_p_pp(sc, lookup(sc, car(a1)), lookup(sc, cadr(a1)));
+  sc->temp5 = subtract_p_pp_wrapped(sc, lookup(sc, car(a1)), lookup(sc, cadr(a1)));
   a1 = opt1_pair(cdr(arg)); /* cdadr(arg) */
-  return(lt_p_pp(sc, subtract_p_pp(sc, lookup(sc, car(a1)), lookup(sc, cadr(a1))), sc->temp5));
+  return(lt_p_pp(sc, subtract_p_pp_wrapped(sc, lookup(sc, car(a1)), lookup(sc, cadr(a1))), sc->temp5));
 }
 
 static s7_pointer fx_sub_vref2(s7_scheme *sc, s7_pointer arg)
@@ -65176,8 +65407,8 @@ static s7_pointer opt_p_pp_ff_add_mul_mul_1(opt_info *o, bool add_case) /* (+|- 
       f4 = o2->v[5].fp(o2->v[4].o1);
     }
   set_gc_protected2(sc, f4);
-  set_gc_protected2(sc, multiply_p_pp(sc, s3, f4));
-  set_gc_protected1(sc, multiply_p_pp(sc, s1, f2));
+  set_gc_protected2(sc, multiply_p_pp_wrapped(sc, s3, f4));
+  set_gc_protected1(sc, multiply_p_pp_wrapped(sc, s1, f2));
   s3 = (add_case) ? add_p_pp(sc, gc_protected1(sc), gc_protected2(sc)) : subtract_p_pp(sc, gc_protected1(sc), gc_protected2(sc));
   unstack_gc_protect(sc);
   return(s3);
@@ -96397,7 +96628,8 @@ static s7_pointer starlet_iterate(s7_scheme *sc, s7_pointer iterator)
     {
       s7_pointer osw = sc->w;  /* protect against starlet list making [sc->w not in use here?] */
       value = starlet(sc, starlet_symbol_id(symbol));
-      if ((S7_DEBUGGING) && (osw != sc->w)) fprintf(stderr, "%d: %s %s\n", __LINE__, display(osw), display(sc->w));
+      if ((S7_DEBUGGING) && (osw != sc->w)) fprintf(stderr, "s7.c[%d]: osw: %s, sc->w: %s, symbol_id: %d %s\n", 
+						    __LINE__, display(osw), display(sc->w), starlet_symbol_id(symbol), display(symbol));
       sc->w = osw;
     }
   if (iterator_carrier(iterator))
@@ -96887,6 +97119,7 @@ static void init_starlet_immutable_field(void)
 
 #define NUM_INTEGER_WRAPPERS 4
 #define NUM_REAL_WRAPPERS 4
+#define NUM_COMPLEX_WRAPPERS 4
 
 /* ---------------- gdbinit annotated stacktrace ---------------- */
 #if (!MS_WINDOWS)
@@ -96925,6 +97158,7 @@ static const char *decoded_name(s7_scheme *sc, const s7_pointer p)
     for (i = 0, wrapper = sc->string_wrappers; i < NUM_STRING_WRAPPERS; i++, wrapper = cdr(wrapper)) if (car(wrapper) == p) return("string-wrapper");
     for (i = 0, wrapper = sc->integer_wrappers; i < NUM_INTEGER_WRAPPERS; i++, wrapper = cdr(wrapper)) if (car(wrapper) == p) return("integer-wrapper");
     for (i = 0, wrapper = sc->real_wrappers; i < NUM_REAL_WRAPPERS; i++, wrapper = cdr(wrapper)) if (car(wrapper) == p) return("real-wrapper");
+    for (i = 0, wrapper = sc->complex_wrappers; i < NUM_COMPLEX_WRAPPERS; i++, wrapper = cdr(wrapper)) if (car(wrapper) == p) return("complex-wrapper");
     for (i = 0, wrapper = sc->c_pointer_wrappers; i < NUM_C_POINTER_WRAPPERS; i++, wrapper = cdr(wrapper)) if (car(wrapper) == p) return("c-pointer-wrapper");
   }
   return((p == sc->stack) ? "stack" : NULL);
@@ -97883,6 +98117,17 @@ static void init_wrappers(s7_scheme *sc)
       set_car(cp, p);
     }
   unchecked_set_cdr(qp, sc->real_wrappers);
+
+  sc->complex_wrappers = semipermanent_list(sc, NUM_COMPLEX_WRAPPERS);
+  for (cp = sc->complex_wrappers, qp = sc->complex_wrappers; is_pair(cp); qp = cp, cp = cdr(cp))
+    {
+      s7_pointer p = alloc_pointer(sc);
+      full_type(p) = T_COMPLEX | T_IMMUTABLE | T_MUTABLE | T_UNHEAP;
+      set_real_part(p, 0.0);
+      set_imag_part(p, 0.0);
+      set_car(cp, p);
+    }
+  unchecked_set_cdr(qp, sc->complex_wrappers);
 
   sc->string_wrappers = semipermanent_list(sc, NUM_STRING_WRAPPERS);
   for (cp = sc->string_wrappers, qp = sc->string_wrappers; is_pair(cp); qp = cp, cp = cdr(cp))
@@ -99846,49 +100091,49 @@ int main(int argc, char **argv)
  * thook     7651   ----   2590   2030   2046   1754
  * texit     1884   1950   1778   1741   1770   1756
  * tauto                   2562   2048   1729   1766
- * s7test           1831   1818   1829   1830   1852
+ * s7test           1831   1818   1829   1830   1852  1847 [add->wrap -2, gc -7]
  * lt        2222   2172   2150   2185   1950   1911
- * dup              3788   2492   2239   2097   1960
+ * dup              3788   2492   2239   2097   1960  1988
  * tread            2421   2419   2408   2405   2241
  * tcopy            5546   2539   2375   2386   2357
  * trclo     8031   2574   2454   2445   2449   2359
- * tmat             3042   2524   2578   2590   2518
+ * tmat             3042   2524   2578   2590   2510
  * tload                   3046   2404   2566   2528
  * fbench    2933   2583   2460   2430   2478   2571
  * tsort     3683   3104   2856   2804   2858   2858
  * titer     4550   3349   3070   2985   2966   2918
  * tio              3752   3683   3620   3583   3122
  * tobj             3970   3828   3577   3508   3436
- * tmac             3873   3033   3677   3677   3509
+ * tmac             3873   3033   3677   3677   3509  3491 [add->wrap -18?]
  * teq              4045   3536   3486   3544   3542
  * tcase            4793   4439   4430   4439   4377
  * tmap             8774   4489   4541   4586   4384
- * tlet      11.0   6974   5609   5980   5965   4505  4582 do opts fx_num_eq_tg->fx_num_eq_ss etc
+ * tlet      11.0   6974   5609   5980   5965   4505  4582 do opts fx_num_eq_tg->fx_num_eq_ss etc, 4542 [add->wrap -40]
  * tfft             7729   4755   4476   4536   4531
- * tshoot           5447   5183   5055   5034   4850
+ * tshoot           5447   5183   5055   5034   4850  4843 [multiply->wrap -5]
  * tstar            6705   5834   5278   5177   5047
  * tform            5348   5307   5316   5084   5070
  * tstr      10.0   6342   5488   5162   5180   5231
- * tnum             6013   5433   5396   5409   5441
+ * tnum             6013   5433   5396   5409   5441  5427 [multiply->wrap -7]
  * tlist     9219   7546   6558   6240   6300   5771
  * trec      19.6   6980   6599   6656   6658   6010
  * tari      15.0   12.7   6827   6543   6278   6180
  * tgsl             7802   6373   6282   6208   6218
  * tset                           6260   6364   6304
  * tleft     12.2   9753   7537   7331   7331   6393                   6417 opt_case case+value
- * tmisc                          7614   7115   7124
- * tclo             8025   7645   8809   7770   7601
+ * tmisc                          7614   7115   7124  7114 [add->wrap -10]
+ * tclo             8025   7645   8809   7770   7601  7625 [add +15?]
  * tlamb                          8003   7941   7888
- * tgc              11.1   8177   7857   7986   8015
- * thash            11.7   9734   9479   9526   9250
+ * tgc              11.1   8177   7857   7986   8010
+ * thash            11.7   9734   9479   9526   9250  9241 [subtract->wrap -12]
  * cb        12.9   11.0   9658   9564   9609   9649
  * tmap-hash                                    10.3
  * tgen             11.4   12.0   12.1   12.2   12.3 [clean_up_big_symbol_set 91]
  * tall      15.9   15.6   15.6   15.6   15.1   15.1
- * timp             24.4   20.0   19.6   19.7   15.6
- * tmv              21.9   21.1   20.7   20.6   17.3
- * calls            37.5   37.0   37.5   37.1   37.2
- * sg                      55.9   55.8   55.4   55.4
+ * timp             24.4   20.0   19.6   19.7   15.5 [* -40]
+ * tmv              21.9   21.1   20.7   20.6   17.3  16.6 [add->wrap -600 gc -170]
+ * calls            37.5   37.0   37.5   37.1   37.2 [* -12]
+ * sg                      55.9   55.8   55.4   55.3 [+ -24, * -33]
  * tbig            175.8  156.5  148.1  146.2  146.4
  * ----------------------------------------------------
  *
@@ -99898,19 +100143,16 @@ int main(int argc, char **argv)
  * safe_do hop bit in other do cases and let
  * growable opt_info*, does this require opts array to be opt_info**?
  * big_symbol_set: do-vars? (tlimit), tlet fx trouble, tgen clean_up, dup? look at where big_symbol_set loses now
- * add c-define in expr example (t824.scm) and check function let in such cases, and add that example to t824, t824 to s7test?
- * begin|end_temp for sc->x|w|z, clean are v, y -- all x's can be w|z?
  * random timing nits above
- * sort! c-func has d_dd func and is float-vect, vector-set->float-vector-sort?
  * write up type declarations in s7.html
- * iter within iter to test sc->z?
  * s7.html/ffitest.c s7_make_typed_function_with_environment (cload)
  *
  * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
- *   tcomplex.scm to test complex opts. s7test append, tcomplex->101, 103, valcall
+ *   tcomplex.scm continued
  *   in tari (complex-vector-set! v i (complex ...)) can skip the complex variable creation: change complex to wrap_complex
  *      similarly for + etc? (z=s7_complex etc) (complex -> (c-complex)) in chooser
+ *   alongside complex_wrappers, cload cases? remainder?
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere

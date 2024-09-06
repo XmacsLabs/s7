@@ -15,6 +15,7 @@
 		     ("tbig.scm" . "v-big")
 		     ("tcase.scm" . "v-case")
 		     ("tclo.scm" . "v-clo")
+		     ("tcomplex.scm" . "v-complex")
 		     ("tcopy.scm" . "v-cop")
 		     ("teq.scm" . "v-eq")
 		     ("test-all.scm" . "v-b")
@@ -87,6 +88,7 @@
 	 (system (format #f "./snd compare-calls.scm -e '(compare-calls \"~A~D\" \"~A~D\")'" outfile (- next 1) outfile next)))))
 
    (list (list "repl" "tpeak.scm")
+	 (list "repl" "tcomplex.scm")
 	 (list "repl" "tref.scm")
 	 (list "repl" "tlimit.scm")
 	 (list "snd -noinit" "make-index.scm")
