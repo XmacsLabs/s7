@@ -20400,22 +20400,22 @@ static s7_pointer add_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_poin
 {
   /* (+ s f) (+ (* s s) s) (+ s s) (+ s (* s s)) */
   if (args != 2) return((args == 3) ? sc->add_3 : f);
-    {
-      s7_pointer arg1 = cadr(expr), arg2 = caddr(expr);
-      if (arg2 == int_one)                          /* (+ ... 1) */
-	return(sc->add_x1);
-      if ((is_t_integer(arg1)) && ((is_pair(arg2)) && (is_optimized(arg2)) && (is_h_safe_c_nc(arg2)) && (fn_proc(arg2) == g_random_i)))
-	{
-	  set_opt3_int(cdr(expr), integer(cadr(arg2)));
-	  set_safe_optimize_op(expr, HOP_SAFE_C_NC); /* op if r op? */
-	  return(sc->add_i_random);
-	}
-      if (arg1 == int_one)
-	return(sc->add_1x);
-      return(chooser_check_arg_types(sc, arg1, arg2, sc->add_2,
-				     sc->add_2_ff, sc->add_2_ii, sc->add_2_if, sc->add_2_fi,
-				     sc->add_2_xi, sc->add_2_ix, sc->add_2_fx, sc->add_2_xf));
-    }
+  {
+    s7_pointer arg1 = cadr(expr), arg2 = caddr(expr);
+    if (arg2 == int_one)                          /* (+ ... 1) */
+      return(sc->add_x1);
+    if ((is_t_integer(arg1)) && ((is_pair(arg2)) && (is_optimized(arg2)) && (is_h_safe_c_nc(arg2)) && (fn_proc(arg2) == g_random_i)))
+      {
+	set_opt3_int(cdr(expr), integer(cadr(arg2)));
+	set_safe_optimize_op(expr, HOP_SAFE_C_NC); /* op if r op? */
+	return(sc->add_i_random);
+      }
+    if (arg1 == int_one)
+      return(sc->add_1x);
+    return(chooser_check_arg_types(sc, arg1, arg2, sc->add_2,
+				   sc->add_2_ff, sc->add_2_ii, sc->add_2_if, sc->add_2_fi,
+				   sc->add_2_xi, sc->add_2_ix, sc->add_2_fx, sc->add_2_xf));
+  }
   return(sc->add_2);
 }
 
@@ -56536,7 +56536,7 @@ static s7_pointer fx_geq_t0(s7_scheme *sc, s7_pointer arg)
   static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
   { \
     s7_pointer x = Lookup1(sc, cadr(arg), arg); \
-    s7_pointer y = Lookup2(sc, opt2_sym(cdr(arg)), arg);				\
+    s7_pointer y = Lookup2(sc, opt2_sym(cdr(arg)), arg); \
     return(make_boolean(sc, ((is_t_integer(x)) && (is_t_integer(y))) ? (integer(x) == integer(y)) : num_eq_b_7pp(sc, x, y))); \
   }
 
@@ -83556,20 +83556,14 @@ static /* inline */ bool do_tree_has_definers(s7_scheme *sc, s7_pointer tree)
 	{
 	  if (is_definer(pp))
 	    {
-	      if (pp == sc->varlet_symbol) /* tlet case (varlet e1 ...) */
+	      if (pp == sc->apply_symbol)
 		{
-		  if ((is_pair(cdr(p))) && (is_symbol(cadr(p))) && (!symbol_is_in_big_symbol_set(sc, cadr(p))))
-		    return(true);
+		  s7_pointer val;
+		  if ((!is_pair(cdr(p))) || (!is_symbol(cadr(p)))) return(true);
+		  val = lookup_unexamined(sc, cadr(p));
+		  if ((!val) || (!is_c_function(val))) return(true);
 		}
-	      else
-		if (pp == sc->apply_symbol)
-		  {
-		    s7_pointer val;
-		    if ((!is_pair(cdr(p))) || (!is_symbol(cadr(p)))) return(true);
-		    val = lookup_unexamined(sc, cadr(p));
-		    if ((!val) || (!is_c_function(val))) return(true);
-		  }
-		else return(true);
+	      else return(true);
 	    }}
       else
 	if (is_pair(pp))
@@ -100091,7 +100085,7 @@ int main(int argc, char **argv)
  * thook     7651   ----   2590   2030   2046   1754
  * texit     1884   1950   1778   1741   1770   1756
  * tauto                   2562   2048   1729   1766
- * s7test           1831   1818   1829   1830   1852  1847 [add->wrap -2, gc -7]
+ * s7test           1831   1818   1829   1830   1847
  * lt        2222   2172   2150   2185   1950   1911
  * dup              3788   2492   2239   2097   1960  1988
  * tread            2421   2419   2408   2405   2241
@@ -100104,36 +100098,36 @@ int main(int argc, char **argv)
  * titer     4550   3349   3070   2985   2966   2918
  * tio              3752   3683   3620   3583   3122
  * tobj             3970   3828   3577   3508   3436
- * tmac             3873   3033   3677   3677   3509  3491 [add->wrap -18?]
+ * tmac             3873   3033   3677   3677   3491
  * teq              4045   3536   3486   3544   3542
  * tcase            4793   4439   4430   4439   4377
  * tmap             8774   4489   4541   4586   4384
- * tlet      11.0   6974   5609   5980   5965   4505  4582 do opts fx_num_eq_tg->fx_num_eq_ss etc, 4542 [add->wrap -40]
+ * tlet      11.0   6974   5609   5980   5965   4470
  * tfft             7729   4755   4476   4536   4531
- * tshoot           5447   5183   5055   5034   4850  4843 [multiply->wrap -5]
+ * tshoot           5447   5183   5055   5034   4843
  * tstar            6705   5834   5278   5177   5047
  * tform            5348   5307   5316   5084   5070
  * tstr      10.0   6342   5488   5162   5180   5231
- * tnum             6013   5433   5396   5409   5441  5427 [multiply->wrap -7]
+ * tnum             6013   5433   5396   5409   5427
  * tlist     9219   7546   6558   6240   6300   5771
  * trec      19.6   6980   6599   6656   6658   6010
  * tari      15.0   12.7   6827   6543   6278   6180
  * tgsl             7802   6373   6282   6208   6218
  * tset                           6260   6364   6304
  * tleft     12.2   9753   7537   7331   7331   6393                   6417 opt_case case+value
- * tmisc                          7614   7115   7124  7114 [add->wrap -10]
- * tclo             8025   7645   8809   7770   7601  7625 [add +15?]
+ * tmisc                          7614   7115   7114
+ * tclo             8025   7645   8809   7770   7625
  * tlamb                          8003   7941   7888
  * tgc              11.1   8177   7857   7986   8010
- * thash            11.7   9734   9479   9526   9250  9241 [subtract->wrap -12]
+ * thash            11.7   9734   9479   9526   9241
  * cb        12.9   11.0   9658   9564   9609   9649
  * tmap-hash                                    10.3
  * tgen             11.4   12.0   12.1   12.2   12.3 [clean_up_big_symbol_set 91]
  * tall      15.9   15.6   15.6   15.6   15.1   15.1
- * timp             24.4   20.0   19.6   19.7   15.5 [* -40]
- * tmv              21.9   21.1   20.7   20.6   17.3  16.6 [add->wrap -600 gc -170]
- * calls            37.5   37.0   37.5   37.1   37.2 [* -12]
- * sg                      55.9   55.8   55.4   55.3 [+ -24, * -33]
+ * timp             24.4   20.0   19.6   19.7   15.5
+ * tmv              21.9   21.1   20.7   20.6   16.6
+ * calls            37.5   37.0   37.5   37.1   37.2
+ * sg                      55.9   55.8   55.4   55.3
  * tbig            175.8  156.5  148.1  146.2  146.4
  * ----------------------------------------------------
  *
@@ -100145,14 +100139,16 @@ int main(int argc, char **argv)
  * big_symbol_set: do-vars? (tlimit), tlet fx trouble, tgen clean_up, dup? look at where big_symbol_set loses now
  * random timing nits above
  * write up type declarations in s7.html
- * s7.html/ffitest.c s7_make_typed_function_with_environment (cload)
+ * s7.html/ffitest.c
+ *   not in ffitest.c: s7_repl s7_make_string_wrapper_with_length s7_make_semipermanent_string
+ *                     s7_make_complex_vector_wrapper s7_make_continuation s7_make_typed_function s7_make_typed_function_with_environment 
+ * fma opt, add_xf et al wrapped?, add_4p|5p?, let/slot/pair_wrapper where reuse before and do, opt add -> wrapped
  *
  * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
  *   tcomplex.scm continued
  *   in tari (complex-vector-set! v i (complex ...)) can skip the complex variable creation: change complex to wrap_complex
  *      similarly for + etc? (z=s7_complex etc) (complex -> (c-complex)) in chooser
- *   alongside complex_wrappers, cload cases? remainder?
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere

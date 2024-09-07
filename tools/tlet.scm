@@ -4,13 +4,14 @@
 
 (define symbols (make-vector size 'a symbol?))
 (define e (inlet))
+(define local-varlet varlet)
 
 (define (make-symbols)
   (do ((e1 e)
        (syms symbols)
        (i 0 (+ i 1)))
       ((= i size))
-    (varlet e1 (vector-set! syms i (symbol "a-" (number->string i))) i)))
+    (local-varlet e1 (vector-set! syms i (symbol "a-" (number->string i))) i)))
 (make-symbols)
 
 (define (add)

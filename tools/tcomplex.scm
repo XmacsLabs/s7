@@ -245,3 +245,18 @@
 ;;; append+float etc, iterate, map/for-each, object->string?
 
 
+(define (test-all)
+  (c1)
+  (c2)
+  (c2a)
+  (c3)
+  (c4)
+  (c5)
+  (c6)
+  (c7)
+  (cx)
+  (c8)
+  (c9)
+  )
+
+(test-all) ; 4306 6-Sep
