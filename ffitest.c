@@ -1002,7 +1002,7 @@ int main(int argc, char **argv)
 
   {
     s7_int* dims;
-    s7_pointer p;
+    s7_pointer p, p1;
     s7_double *els;
     uint8_t *bels;
     s7_complex cval;
@@ -1027,7 +1027,7 @@ int main(int argc, char **argv)
     if (els[1] != 32.0) fprintf(stderr, "float_vector els[1] not 32.0?\n");
 
     p = s7_make_complex_vector(sc, 6, 1, NULL);
-    if (!s7_is_complex_vector(p)) fprintf(stderr, "not a complex_vector?\n");
+    if (!s7_is_complex_vector(p)) fprintf(stderr, "p not a complex_vector?\n");
     s7_complex_vector_set(p, 1, 32.0);
     if (s7_complex_vector_ref(p, 1) != 32.0) fprintf(stderr, "complex_vector[1] not 32.0?\n");
     s7_complex_vector_set(p, 0, 3+2.0i);
@@ -1037,6 +1037,10 @@ int main(int argc, char **argv)
     cval = cels[0];
     if (creal(cval) != 3.0) fprintf(stderr, "complex_vector creal(cels[0]) not 3.0?\n");
     if (cimag(cval) != 2.0) fprintf(stderr, "complex_vector cimag(cels[0]) not 2.0?\n");
+    p1 = s7_make_complex_vector_wrapper(sc, 3, cels, 1, NULL, false);
+    if (!s7_is_complex_vector(p1)) fprintf(stderr, "p1 not a complex_vector?\n");
+    if (s7_vector_length(p1) != 3) fprintf(stderr, "p1 length != 3?\n");
+    if (s7_complex_vector_ref(p1, 1) != 32.0) fprintf(stderr, "p1 wrapper_complex_vector[1] not 32.0?\n");
 
     p = s7_make_byte_vector(sc, 6, 2, dims);
     s7_byte_vector_set(p, 1, 32);
@@ -1180,6 +1184,16 @@ int main(int argc, char **argv)
       {fprintf(stderr, "%d: wrong thing at gc_loc? %s\n", __LINE__, s1 = TO_STR(s7_gc_protected_at(sc, gc_loc))); free(s1);}
     s7_gc_unprotect_via_location(sc, gc_loc);
     p = s7_make_string_wrapper(sc, "hiho");
+    if (!s7_is_string(p))
+      {fprintf(stderr, "%d: %s is not a string?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+    if (s7_string_length(p) != 4)
+      {fprintf(stderr, "%d: (length %s) is 4?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+    p = s7_make_string_wrapper_with_length(sc, "hiho", 4);
+    if (!s7_is_string(p))
+      {fprintf(stderr, "%d: %s is not a string?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+    if (s7_string_length(p) != 4)
+      {fprintf(stderr, "%d: (length %s) is 4?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+    p = s7_make_semipermanent_string(sc, "hiho");
     if (!s7_is_string(p))
       {fprintf(stderr, "%d: %s is not a string?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
     if (s7_string_length(p) != 4)

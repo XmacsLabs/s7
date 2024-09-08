@@ -1265,7 +1265,7 @@ struct s7_scheme {
   c_proc_t *alloc_function_cells;
   uint32_t alloc_big_pointer_k;
   s7_big_cell *alloc_big_pointer_cells;
-  s7_pointer string_wrappers, integer_wrappers, real_wrappers, complex_wrappers, c_pointer_wrappers;
+  s7_pointer string_wrappers, integer_wrappers, real_wrappers, complex_wrappers, c_pointer_wrappers, let_wrappers, slot_wrappers;
   uint8_t *alloc_symbol_cells;
   char *num_to_str;
 
@@ -4005,6 +4005,7 @@ static void try_to_call_gc(s7_scheme *sc);
 
 /* #define gc_if_at_trigger(Sc) if (Sc->free_heap_top <= Sc->free_heap_trigger) try_to_call_gc(Sc) */
 
+
 #if WITH_GCC
 #define make_integer(Sc, N) \
   ({ s7_int _N_; _N_ = (N); (is_small_int(_N_) ? small_int(_N_) : ({ s7_pointer _I_; new_cell(Sc, _I_, T_INTEGER); set_integer(_I_, _N_); _I_;}) ); })
@@ -4044,62 +4045,6 @@ static void try_to_call_gc(s7_scheme *sc);
 #define rational_to_double(Sc, X)        s7_number_to_real(Sc, X)
 #endif
 
-#if S7_DEBUGGING
-  static char *describe_type_bits(s7_scheme *sc, s7_pointer obj);
-#endif
-
-static s7_pointer wrap_mutable_integer(s7_scheme *sc, s7_int x) /* wrap_integer without small_int possibility -- usable as a mutable integer for example */
-{
-  s7_pointer p = car(sc->integer_wrappers);
-#if S7_DEBUGGING
-  if ((full_type(p) & (~T_GC_MARK)) != (T_INTEGER | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
-#endif
-  set_integer(p, x);
-  sc->integer_wrappers = cdr(sc->integer_wrappers);
-  return(p);
-}
-
-static s7_pointer wrap_integer(s7_scheme *sc, s7_int x)
-{
-  s7_pointer p;
-  if (is_small_int(x)) return(small_int(x));
-  p = car(sc->integer_wrappers);
-#if S7_DEBUGGING
-  if ((full_type(p) & (~T_GC_MARK)) != (T_INTEGER | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
-#endif
-  set_integer(p, x);
-  sc->integer_wrappers = cdr(sc->integer_wrappers);
-  return(p);
-}
-
-static s7_pointer wrap_real(s7_scheme *sc, s7_double x)
-{
-  s7_pointer p = car(sc->real_wrappers);
-#if S7_DEBUGGING
-  if ((full_type(p) & (~T_GC_MARK)) != (T_REAL | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
-#endif
-  set_real(p, x);
-  sc->real_wrappers = cdr(sc->real_wrappers);
-  return(p);
-}
-
-static s7_pointer wrap_complex(s7_scheme *sc, s7_double rl, s7_double im)
-{
-  s7_pointer p = car(sc->complex_wrappers);
-#if S7_DEBUGGING
-  if ((full_type(p) & (~T_GC_MARK)) != (T_COMPLEX | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
-#endif
-  set_real_part(p, rl);
-  set_imag_part(p, im);
-  sc->complex_wrappers = cdr(sc->complex_wrappers);
-  return(p);
-}
-
-static s7_pointer wrap_real_or_complex(s7_scheme *sc, s7_double rl, s7_double im)
-{
-  if (im == 0.0) return(wrap_real(sc, rl));
-  return(wrap_complex(sc, rl, im));
-}
 
 /* --------------------------------------------------------------------------------
  * local versions of some standard C library functions
@@ -5944,6 +5889,93 @@ static s7_pointer check_null_sym(s7_scheme *sc, s7_pointer p, s7_pointer sym, in
 /* -------------------------------- end internal debugging apparatus -------------------------------- */
 
 
+/* -------- wrappers -------- */
+#if S7_DEBUGGING
+  static char *describe_type_bits(s7_scheme *sc, s7_pointer obj);
+#endif
+
+static s7_pointer wrap_mutable_integer(s7_scheme *sc, s7_int x) /* wrap_integer without small_int possibility -- usable as a mutable integer for example */
+{
+  s7_pointer p = car(sc->integer_wrappers);
+#if S7_DEBUGGING
+  if ((full_type(p) & (~T_GC_MARK)) != (T_INTEGER | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
+#endif
+  set_integer(p, x);
+  sc->integer_wrappers = cdr(sc->integer_wrappers);
+  return(p);
+}
+
+static s7_pointer wrap_integer(s7_scheme *sc, s7_int x)
+{
+  s7_pointer p;
+  if (is_small_int(x)) return(small_int(x));
+  p = car(sc->integer_wrappers);
+#if S7_DEBUGGING
+  if ((full_type(p) & (~T_GC_MARK)) != (T_INTEGER | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
+#endif
+  set_integer(p, x);
+  sc->integer_wrappers = cdr(sc->integer_wrappers);
+  return(p);
+}
+
+static s7_pointer wrap_real(s7_scheme *sc, s7_double x)
+{
+  s7_pointer p = car(sc->real_wrappers);
+#if S7_DEBUGGING
+  if ((full_type(p) & (~T_GC_MARK)) != (T_REAL | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
+#endif
+  set_real(p, x);
+  sc->real_wrappers = cdr(sc->real_wrappers);
+  return(p);
+}
+
+static s7_pointer wrap_complex(s7_scheme *sc, s7_double rl, s7_double im)
+{
+  s7_pointer p = car(sc->complex_wrappers);
+#if S7_DEBUGGING
+  if ((full_type(p) & (~T_GC_MARK)) != (T_COMPLEX | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
+#endif
+  set_real_part(p, rl);
+  set_imag_part(p, im);
+  sc->complex_wrappers = cdr(sc->complex_wrappers);
+  return(p);
+}
+
+static s7_pointer wrap_real_or_complex(s7_scheme *sc, s7_double rl, s7_double im)
+{
+  if (im == 0.0) return(wrap_real(sc, rl));
+  return(wrap_complex(sc, rl, im));
+}
+
+/* TODO: do let/slot need to clear the type? */
+/* TOOO: slot gensym gc protection? */
+/* TODO: how to be sure current wrapper let is not reallocated in fx etc? let_a_a_new can't involve another let? */
+
+static s7_pointer wrap_let(s7_scheme *sc, s7_pointer old_let)
+{
+  s7_pointer p = car(sc->let_wrappers);
+#if S7_DEBUGGING
+  if ((full_type(p) & (~T_GC_MARK)) != (T_LET | T_SAFE_PROCEDURE | T_UNHEAP)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
+#endif
+  let_set_id(p, ++sc->let_number);
+  let_set_slots(p, slot_end);
+  let_set_outlet(p, old_let);
+  sc->let_wrappers = cdr(sc->let_wrappers);
+  return(p);
+}
+
+static s7_pointer wrap_slot(s7_scheme *sc, s7_pointer symbol, s7_pointer value)
+{
+  s7_pointer p = car(sc->slot_wrappers);
+#if S7_DEBUGGING
+  if ((full_type(p) & (~T_GC_MARK)) != (T_SLOT | T_UNHEAP)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
+#endif
+  slot_set_symbol_and_value(p, symbol, value);
+  sc->slot_wrappers = cdr(sc->slot_wrappers);
+  return(p);
+}
+
+/* -------- prebuilt lists -------- */
 static s7_pointer set_elist_1(s7_scheme *sc, s7_pointer x1)
 {
   set_car(sc->elist_1, x1);
@@ -7242,6 +7274,29 @@ static void mark_let(s7_pointer let)
     }
 }
 
+static void mark_wrappers(s7_scheme *sc)
+{
+  s7_pointer p = sc->let_wrappers;
+  s7_pointer end_p = p;
+  do {
+    for (s7_pointer y = let_slots(car(p)); tis_slot(y); y = next_slot(y))
+      if (!is_marked(y)) mark_slot(y);
+    p = cdr(p);
+  } while (p != end_p);
+
+  /* dox1|2? gensyms? maybe don't wrap gensym-slot */
+}
+
+static void unmark_wrappers(s7_scheme *sc)
+{
+  s7_pointer p = sc->let_wrappers;
+  s7_pointer end_p = p;
+  do {
+    for (s7_pointer y = let_slots(car(p)); tis_slot(y); y = next_slot(y)) clear_mark(y);
+    p = cdr(p);
+  } while (p != end_p);
+}
+
 #if WITH_HISTORY
 static void gc_owlet_mark(s7_pointer tp)
 {
@@ -7752,6 +7807,7 @@ static int64_t gc(s7_scheme *sc)
   }
   mark_op_stack(sc);
   mark_semipermanent_objects(sc);
+  mark_wrappers(sc);
 
   if (sc->profiling_gensyms)
     {
@@ -7816,6 +7872,8 @@ static int64_t gc(s7_scheme *sc)
   }
 
   unmark_semipermanent_objects(sc);
+  unmark_wrappers(sc);
+
   sc->gc_freed = (int64_t)(sc->free_heap_top - old_free_heap_top);
   sc->gc_total_freed += sc->gc_freed;
   sc->gc_end = my_clock();
@@ -9316,6 +9374,16 @@ static Inline s7_pointer inline_make_let_with_slot(s7_scheme *sc, s7_pointer old
   slot_set_next(slot, slot_end);
   let_set_slots(new_let, slot);
   return(new_let);
+}
+
+static s7_pointer wrap_let_with_slot(s7_scheme *sc, s7_pointer old_let, s7_pointer symbol, s7_pointer value)
+{
+  s7_pointer let = wrap_let(sc, old_let);
+  s7_pointer slot = wrap_slot(sc, symbol, value);
+  symbol_set_local_slot(symbol, sc->let_number, slot);
+  slot_set_next(slot, slot_end);
+  let_set_slots(let, slot);
+  return(let);
 }
 
 static s7_pointer make_let_with_slot(s7_scheme *sc, s7_pointer old_let, s7_pointer symbol, s7_pointer value)
@@ -74751,7 +74819,7 @@ static void clean_up_big_symbol_set(s7_scheme *sc, s7_pointer orig_e, s7_pointer
   for (s7_pointer p = cur_e; ((is_pair(p)) && (p != orig_e)); p = cdr(p))
     {
       s7_pointer sym = car(p);
-      if (is_normal_symbol(sym))
+      if (is_symbol(sym))
 	{
 	  if (symbol_shadows(sym) > 0)
 	    symbol_shadows(sym)--;
@@ -78419,7 +78487,6 @@ static bool op_let_1(s7_scheme *sc)
   int64_t id;
   while (true)
     {
-      /* slot list, need current symbol, p=slot(code, value), slot_end=sc->args, sc->args=p, then let add reversing at end */
       sc->args = cons(sc, sc->value, sc->args);
       if (is_pair(sc->code))
 	{
@@ -78659,11 +78726,13 @@ static inline void op_let_a_old(s7_scheme *sc) {return(inline_op_let_a_old(sc));
 
 static void op_let_a_a_new(s7_scheme *sc)
 {
-  s7_pointer binding;
+  s7_pointer binding, let;
   sc->code = cdr(sc->code);
   binding = opt2_pair(sc->code);
-  set_curlet(sc, inline_make_let_with_slot(sc, sc->curlet, car(binding), fx_call(sc, cdr(binding))));
+  let = wrap_let_with_slot(sc, sc->curlet, car(binding), fx_call(sc, cdr(binding)));
+  set_curlet(sc, let);
   sc->value = fx_call(sc, cdr(sc->code));
+  let_set_slots(let, slot_end);
 }
 
 static void op_let_a_a_old(s7_scheme *sc) /* these are not called as fx*, and restoring sc->curlet has noticeable cost (e.g. 8 in thash) */
@@ -86052,7 +86121,7 @@ static bool op_do_init_1(s7_scheme *sc)
   while (true)  /* at start, first value is the loop (for GC protection?), returning sc->value is the next value */
     {
       s7_pointer init;
-      sc->args = cons(sc, sc->value, sc->args);    /* code will be last element (first after reverse), these cons's will be used below for the new let/slots */
+      sc->args = cons(sc, sc->value, sc->args);    /* code will be last element (first after reverse) */
       if (!is_pair(sc->code)) break;
       /* here sc->code is a list like: ((i 0 (+ i 1)) ...) so cadar gets the init value */
       init = cdar(sc->code);
@@ -97114,6 +97183,8 @@ static void init_starlet_immutable_field(void)
 #define NUM_INTEGER_WRAPPERS 4
 #define NUM_REAL_WRAPPERS 4
 #define NUM_COMPLEX_WRAPPERS 4
+#define NUM_LET_WRAPPERS 8
+#define NUM_SLOT_WRAPPERS 32
 
 /* ---------------- gdbinit annotated stacktrace ---------------- */
 #if (!MS_WINDOWS)
@@ -97154,6 +97225,8 @@ static const char *decoded_name(s7_scheme *sc, const s7_pointer p)
     for (i = 0, wrapper = sc->real_wrappers; i < NUM_REAL_WRAPPERS; i++, wrapper = cdr(wrapper)) if (car(wrapper) == p) return("real-wrapper");
     for (i = 0, wrapper = sc->complex_wrappers; i < NUM_COMPLEX_WRAPPERS; i++, wrapper = cdr(wrapper)) if (car(wrapper) == p) return("complex-wrapper");
     for (i = 0, wrapper = sc->c_pointer_wrappers; i < NUM_C_POINTER_WRAPPERS; i++, wrapper = cdr(wrapper)) if (car(wrapper) == p) return("c-pointer-wrapper");
+    for (i = 0, wrapper = sc->let_wrappers; i < NUM_LET_WRAPPERS; i++, wrapper = cdr(wrapper)) if (car(wrapper) == p) return("let-wrapper");
+    for (i = 0, wrapper = sc->slot_wrappers; i < NUM_SLOT_WRAPPERS; i++, wrapper = cdr(wrapper)) if (car(wrapper) == p) return("slot-wrapper");
   }
   return((p == sc->stack) ? "stack" : NULL);
 }
@@ -98149,6 +98222,26 @@ static void init_wrappers(s7_scheme *sc)
       set_car(cp, p);
     }
   unchecked_set_cdr(qp, sc->c_pointer_wrappers);
+
+  sc->let_wrappers = semipermanent_list(sc, NUM_LET_WRAPPERS);
+  for (cp = sc->let_wrappers, qp = sc->let_wrappers; is_pair(cp); qp = cp, cp = cdr(cp))
+    {
+      s7_pointer p = alloc_pointer(sc);
+      full_type(p) = T_LET | T_SAFE_PROCEDURE | T_UNHEAP;
+      let_set_slots(p, slot_end);
+      let_set_outlet(p, sc->rootlet);
+      set_car(cp, p);
+    }
+  unchecked_set_cdr(qp, sc->let_wrappers);
+
+  sc->slot_wrappers = semipermanent_list(sc, NUM_SLOT_WRAPPERS);
+  for (cp = sc->slot_wrappers, qp = sc->slot_wrappers; is_pair(cp); qp = cp, cp = cdr(cp))
+    {
+      s7_pointer p = alloc_pointer(sc);
+      full_type(p) = T_SLOT | T_UNHEAP;
+      set_car(cp, p);
+    }
+  unchecked_set_cdr(qp, sc->slot_wrappers);
 }
 
 static s7_pointer syntax(s7_scheme *sc, const char *name, opcode_t op, s7_pointer min_args, s7_pointer max_args, const char *doc)
@@ -100081,13 +100174,13 @@ int main(int argc, char **argv)
  * tlimit    3936   5371   5371   5371   5371    837
  * index            1016    973    967    972    975
  * tmock            1145   1082   1042   1045   1035
- * tvect     3408   2464   1772   1669   1497   1454                   1464 opt_p_pi_ss_cvref_direct?
+ * tvect     3408   2464   1772   1669   1497   1464
  * thook     7651   ----   2590   2030   2046   1754
  * texit     1884   1950   1778   1741   1770   1756
  * tauto                   2562   2048   1729   1766
  * s7test           1831   1818   1829   1830   1847
  * lt        2222   2172   2150   2185   1950   1911
- * dup              3788   2492   2239   2097   1960  1988
+ * dup              3788   2492   2239   2097   1988
  * tread            2421   2419   2408   2405   2241
  * tcopy            5546   2539   2375   2386   2357
  * trclo     8031   2574   2454   2445   2449   2359
@@ -100114,7 +100207,7 @@ int main(int argc, char **argv)
  * tari      15.0   12.7   6827   6543   6278   6180
  * tgsl             7802   6373   6282   6208   6218
  * tset                           6260   6364   6304
- * tleft     12.2   9753   7537   7331   7331   6393                   6417 opt_case case+value
+ * tleft     12.2   9753   7537   7331   7331   6417
  * tmisc                          7614   7115   7114
  * tclo             8025   7645   8809   7770   7625
  * tlamb                          8003   7941   7888
@@ -100122,7 +100215,7 @@ int main(int argc, char **argv)
  * thash            11.7   9734   9479   9526   9241
  * cb        12.9   11.0   9658   9564   9609   9649
  * tmap-hash                                    10.3
- * tgen             11.4   12.0   12.1   12.2   12.3 [clean_up_big_symbol_set 91]
+ * tgen             11.4   12.0   12.1   12.2   12.3
  * tall      15.9   15.6   15.6   15.6   15.1   15.1
  * timp             24.4   20.0   19.6   19.7   15.5
  * tmv              21.9   21.1   20.7   20.6   16.6
@@ -100137,12 +100230,17 @@ int main(int argc, char **argv)
  * safe_do hop bit in other do cases and let
  * growable opt_info*, does this require opts array to be opt_info**?
  * big_symbol_set: do-vars? (tlimit), tlet fx trouble, tgen clean_up, dup? look at where big_symbol_set loses now
- * random timing nits above
  * write up type declarations in s7.html
- * s7.html/ffitest.c
- *   not in ffitest.c: s7_repl s7_make_string_wrapper_with_length s7_make_semipermanent_string
- *                     s7_make_complex_vector_wrapper s7_make_continuation s7_make_typed_function s7_make_typed_function_with_environment 
- * fma opt, add_xf et al wrapped?, add_4p|5p?, let/slot/pair_wrapper where reuse before and do, opt add -> wrapped
+ * not in ffitest.c: s7_repl s7_make_continuation s7_make_typed_function s7_make_typed_function_with_environment
+ * fma opt=(a*b)+c[fx_add_mul], add_4p|5p?
+ *
+ * let/slot/pair_wrapper where reuse before and do, opt add -> wrapped
+ *   do cons wrapper 86055 do_init_1, let in op_let_1 78422, let/slot in all the let_a cases and let*_na cases
+ *   reuse was also in op_named_let_1, free in read vector -- could also be wrapped but need growable wrapper lists
+ *   need to track start-point and grow as needed, or current var#? -- maybe mark first with a type flag?
+ *   see also free_cell in older s7's -- let/slot/iterator/mutable-int etc, t_counter? t_input|output_port?
+ *   read-line wrapped (make_string) -- see search.scm, eval_c_string and others open/close_port
+ *   need overalloc check before commiting to gitlab
  *
  * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
