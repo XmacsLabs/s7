@@ -142,6 +142,20 @@
 	   ,@body))))
 
 ;;; ----------------
+
+(define (n-values n . args) ; called pick-values in fennel
+  (let ((len (length args)))
+    (if (<= len n)
+	(apply values args)
+	(apply values (copy args (make-list n))))))
+
+;(display (+ 4 (n-values 2 (values 1 2 3)))) (newline)
+;(display (let () (define (f) (values 1 2 3)) (+ 4 (n-values 2 (f))))) (newline)
+;(display (let () (define (f) (values 1 2 3)) (+ 4 (n-values 1 (f))))) (newline)
+;(display (let () (define (f) (values 1 2 3)) (+ 4 (n-values 3 (f))))) (newline)
+;(display (let () (define (f) (values 1 2 3)) (+ 4 (n-values 12 (f))))) (newline)
+
+;;; ----------------
 (define (first obj)  (if (sequence? obj) (obj 0) (error 'wrong-type-arg "first argument, ~S, is not a sequence" obj)))
 (define (second obj) (if (sequence? obj) (obj 1) (error 'wrong-type-arg "second argument, ~S, is not a sequence" obj)))
 (define (third obj)  (if (sequence? obj) (obj 2) (error 'wrong-type-arg "third argument, ~S, is not a sequence" obj)))

@@ -5931,6 +5931,7 @@ static s7_pointer wrap_real(s7_scheme *sc, s7_double x)
   return(p);
 }
 
+#if (!WITH_GMP)
 static s7_pointer wrap_complex(s7_scheme *sc, s7_double rl, s7_double im)
 {
   s7_pointer p = car(sc->complex_wrappers);
@@ -5949,7 +5950,7 @@ static s7_pointer wrap_real_or_complex(s7_scheme *sc, s7_double rl, s7_double im
   if (im == 0.0) return(wrap_real(sc, rl));
   return(wrap_complex(sc, rl, im));
 }
-
+#endif
 /* TODO: do let/slot need to clear the type? */
 /* TOOO: slot gensym gc protection? */
 /* TODO: how to be sure current wrapper let is not reallocated in fx etc? let_a_a_new can't involve another let? */

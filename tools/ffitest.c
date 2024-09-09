@@ -2869,8 +2869,7 @@ int main(int argc, char **argv)
     char *s1;
     s7_define_expansion(sc, "1+", g_expand, 1, 0, false, "adds 1 at read-time");
     v = s7_eval_c_string(sc, "#((1+ 0) 2 (1+ 2))");
-    if (strcmp(s7_object_to_c_string(sc, v), "#(1 2 3)") != 0) fprintf(stderr, "%d v: %s\n", __LINE__, s1 = s7_object_to_c_string(sc, v));
-    free(s1);
+    if (strcmp(s7_object_to_c_string(sc, v), "#(1 2 3)") != 0) {fprintf(stderr, "%d v: %s\n", __LINE__, s1 = s7_object_to_c_string(sc, v)); free(s1);}
   }
 
   { /* check realloc'd large block handling in s7_free */
