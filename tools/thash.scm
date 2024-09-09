@@ -59,7 +59,7 @@
   (define (s7test-reader)
     (let ((port (open-input-file "s7test.scm"))
 	  (counts (make-hash-table)))
-      (do ((expr (read port) (read port)))
+      (do ((expr (read port) (catch #t (lambda () (read port)) (lambda args 'error))))
 	  ((eof-object? expr) 
 	   (close-input-port port)
 	   counts)

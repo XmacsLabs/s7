@@ -588,5 +588,7 @@
   (unless (equivalent? val #r(0.7651976865579666))
     (format *stderr* "jn 3: ~S ~S~%" val (f (float-vector 0.0)))))
 
+(when (provided? 'debugging) (display ((*s7* 'memory-usage) :wrappers)) (newline))
+
 (exit)
 

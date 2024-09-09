@@ -1274,6 +1274,7 @@ struct s7_scheme {
   char *alloc_string_cells;
 #if S7_DEBUGGING
   int64_t blocks_borrowed[NUM_BLOCK_LISTS], blocks_freed[NUM_BLOCK_LISTS], blocks_mallocated[NUM_BLOCK_LISTS];
+  int64_t string_wrapper_allocs, integer_wrapper_allocs, real_wrapper_allocs, complex_wrapper_allocs, c_pointer_wrapper_allocs, let_wrapper_allocs, slot_wrapper_allocs;
 #endif
 
   c_object_t **c_object_types;
@@ -2399,6 +2400,8 @@ static void init_types(void)
 #define set_immutable(p)               set_mid_type_bit(T_Exs(p), T_MID_IMMUTABLE) /* can be a slot, so not T_Ext */
 #define set_immutable_let(p)           set_mid_type_bit(T_Let(p), T_MID_IMMUTABLE)
 #define set_immutable_slot(p)          set_mid_type_bit(T_Slt(p), T_MID_IMMUTABLE)
+#define set_immutable_string(p)        set_mid_type_bit(T_Str(p), T_MID_IMMUTABLE)
+#define set_immutable_pair(p)          set_mid_type_bit(T_Pair(p), T_MID_IMMUTABLE)
 #define is_immutable_port(p)           has_mid_type_bit(T_Prt(p), T_MID_IMMUTABLE)
 #define is_immutable_symbol(p)         has_mid_type_bit(T_Sym(p), T_MID_IMMUTABLE)
 #define is_immutable_slot(p)           has_mid_type_bit(T_Slt(p), T_MID_IMMUTABLE)
@@ -5890,9 +5893,6 @@ static s7_pointer check_null_sym(s7_scheme *sc, s7_pointer p, s7_pointer sym, in
 
 
 /* -------- wrappers -------- */
-#if S7_DEBUGGING
-  static char *describe_type_bits(s7_scheme *sc, s7_pointer obj);
-#endif
 
 static s7_pointer wrap_mutable_integer(s7_scheme *sc, s7_int x) /* wrap_integer without small_int possibility -- usable as a mutable integer for example */
 {
@@ -5912,6 +5912,7 @@ static s7_pointer wrap_integer(s7_scheme *sc, s7_int x)
   p = car(sc->integer_wrappers);
 #if S7_DEBUGGING
   if ((full_type(p) & (~T_GC_MARK)) != (T_INTEGER | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
+  sc->integer_wrapper_allocs++;
 #endif
   set_integer(p, x);
   sc->integer_wrappers = cdr(sc->integer_wrappers);
@@ -5923,6 +5924,7 @@ static s7_pointer wrap_real(s7_scheme *sc, s7_double x)
   s7_pointer p = car(sc->real_wrappers);
 #if S7_DEBUGGING
   if ((full_type(p) & (~T_GC_MARK)) != (T_REAL | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
+  sc->real_wrapper_allocs++;
 #endif
   set_real(p, x);
   sc->real_wrappers = cdr(sc->real_wrappers);
@@ -5934,6 +5936,7 @@ static s7_pointer wrap_complex(s7_scheme *sc, s7_double rl, s7_double im)
   s7_pointer p = car(sc->complex_wrappers);
 #if S7_DEBUGGING
   if ((full_type(p) & (~T_GC_MARK)) != (T_COMPLEX | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
+  sc->complex_wrapper_allocs++;
 #endif
   set_real_part(p, rl);
   set_imag_part(p, im);
@@ -5956,6 +5959,7 @@ static s7_pointer wrap_let(s7_scheme *sc, s7_pointer old_let)
   s7_pointer p = car(sc->let_wrappers);
 #if S7_DEBUGGING
   if ((full_type(p) & (~T_GC_MARK)) != (T_LET | T_SAFE_PROCEDURE | T_UNHEAP)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
+  sc->let_wrapper_allocs++;
 #endif
   let_set_id(p, ++sc->let_number);
   let_set_slots(p, slot_end);
@@ -5969,6 +5973,7 @@ static s7_pointer wrap_slot(s7_scheme *sc, s7_pointer symbol, s7_pointer value)
   s7_pointer p = car(sc->slot_wrappers);
 #if S7_DEBUGGING
   if ((full_type(p) & (~T_GC_MARK)) != (T_SLOT | T_UNHEAP)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
+  sc->slot_wrapper_allocs++;
 #endif
   slot_set_symbol_and_value(p, symbol, value);
   sc->slot_wrappers = cdr(sc->slot_wrappers);
@@ -11437,7 +11442,7 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool named)
 	}
       else s7_make_slot(sc, sc->curlet, mac_name, mac); /* was current but we've checked immutable already */
       if (tree_has_definers(sc, body))
-	set_is_definer(mac_name);                       /* (list-values 'define ...) aux-13 */
+	set_is_definer(mac_name);                       /* (list-values 'define ...) t101-13 */
     }
 
   clear_big_symbol_set(sc);
@@ -11854,8 +11859,8 @@ s7_pointer s7_define_constant_with_environment(s7_scheme *sc, s7_pointer envir, 
   s7_define(sc, envir, sym, value);
   set_immutable(sym);
   set_possibly_constant(sym);
-  set_immutable(global_slot(sym));
-  set_immutable(local_slot(sym));
+  set_immutable(global_slot(sym)); /* might also be #<undefined> */
+  set_immutable_slot(local_slot(sym));
   return(sym);
 }
 
@@ -12007,6 +12012,7 @@ s7_pointer s7_make_c_pointer_wrapper_with_type(s7_scheme *sc, void *ptr, s7_poin
   s7_pointer x = car(sc->c_pointer_wrappers);
 #if S7_DEBUGGING
   if ((full_type(x) & (~T_GC_MARK)) != (T_C_POINTER | T_IMMUTABLE | T_UNHEAP)) fprintf(stderr, "%s\n", describe_type_bits(sc, x));
+  sc->c_pointer_wrapper_allocs++;
 #endif
   sc->c_pointer_wrappers = cdr(sc->c_pointer_wrappers);
   c_pointer(x) = ptr;
@@ -12240,12 +12246,12 @@ static void copy_stack_list_set_immutable(s7_pointer pold, s7_pointer pnew)
 {
   for (s7_pointer p1 = pold, p2 = pnew, slow = pold; is_pair(p2); p1 = cdr(p1), p2 = cdr(p2))
     {
-      if (is_immutable(p1)) set_immutable(p2);
+      if (is_immutable(p1)) set_immutable_pair(p2);
       if (is_pair(cdr(p1)))
 	{
 	  p1 = cdr(p1);
 	  p2 = cdr(p2);
-	  if (is_immutable(p1)) set_immutable(p2);
+	  if (is_immutable(p1)) set_immutable_pair(p2);
 	  if (p1 == slow) break;
 	  slow = cdr(slow);
 	}}
@@ -27445,7 +27451,9 @@ static s7_pointer wrap_string(s7_scheme *sc, const char *str, s7_int len)
 #if S7_DEBUGGING
   if ((full_type(x) & (~T_GC_MARK)) != (T_STRING | T_IMMUTABLE | T_UNHEAP | T_SAFE_PROCEDURE)) fprintf(stderr, "%s\n", describe_type_bits(sc, x));
   /* if (safe_strlen(str) < len) {fprintf(stderr, "wrap_string \"%s\" length should be %" ld64 " not %" ld64 "\n", str, safe_strlen(str), len); gdb_break();} */
+  sc->string_wrapper_allocs++;
 #endif
+  /* fprintf(stderr, "%s %" ld64"\n", str, sc->string_wrapper_allocs); */
   sc->string_wrappers = cdr(sc->string_wrappers);
   string_value(x) = (char *)str;
   string_length(x) = len;
@@ -31844,7 +31852,7 @@ in the file, or by the function."
 
   value = cadr(args);
   if (is_string(value))
-    return(s7_autoload(sc, sym, s7_set_immutable(sc, make_string_with_length(sc, string_value(value), string_length(value)))));
+    return(s7_autoload(sc, sym, s7_set_immutable(sc, make_string_with_length(sc, string_value(value), string_length(value))))); /* s7_set_immutable to pass arg through */
   if (((is_closure(value)) || (is_closure_star(value))) &&
       (s7_is_aritable(sc, value, 1)))
     return(s7_autoload(sc, sym, value));
@@ -78729,7 +78737,7 @@ static void op_let_a_a_new(s7_scheme *sc)
   s7_pointer binding, let;
   sc->code = cdr(sc->code);
   binding = opt2_pair(sc->code);
-  let = wrap_let_with_slot(sc, sc->curlet, car(binding), fx_call(sc, cdr(binding)));
+  let = wrap_let_with_slot(sc, sc->curlet, car(binding), fx_call(sc, cdr(binding))); /* wrap maybe unsafe here (see snd-24.3/s7.c */
   set_curlet(sc, let);
   sc->value = fx_call(sc, cdr(sc->code));
   let_set_slots(let, slot_end);
@@ -78750,7 +78758,7 @@ static void op_let_a_na_new(s7_scheme *sc)
   s7_pointer binding, p;
   sc->code = cdr(sc->code);
   binding = opt2_pair(sc->code);
-  set_curlet(sc, make_let_with_slot(sc, sc->curlet, car(binding), fx_call(sc, cdr(binding))));
+  set_curlet(sc, wrap_let_with_slot(sc, sc->curlet, car(binding), fx_call(sc, cdr(binding))));
   for (p = cdr(sc->code); is_pair(cdr(p)); p = cdr(p)) fx_call(sc, p);
   sc->value = fx_call(sc, p);
 }
@@ -89153,14 +89161,16 @@ static bool op_tc_let_if_a_z_la(s7_scheme *sc, s7_pointer code)
   s7_pointer la_slot = let_slots(outer_let);
   s7_pointer if_test = cdr(body);
   s7_pointer if_true = cddr(body);
+  bool wrappable = has_fx(if_true);
   s7_pointer if_false = cadddr(body);
   s7_pointer la = cdr(if_false);
   s7_pointer let_var = caadr(code);
-  s7_pointer inner_let = make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
+  s7_pointer inner_let = (wrappable) ? wrap_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var))) : 
+                                       make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
   s7_pointer let_slot = let_slots(inner_let);
   tick_tc(sc, OP_TC_LET_IF_A_Z_LA);
   set_curlet(sc, inner_let);
-  gc_protect_via_stack(sc, inner_let);
+  if (!wrappable) gc_protect_via_stack(sc, inner_let);
   let_var = cdr(let_var);
 
   while (fx_call(sc, if_test) == sc->F)
@@ -89170,8 +89180,10 @@ static bool op_tc_let_if_a_z_la(s7_scheme *sc, s7_pointer code)
       slot_set_value(let_slot, fx_call(sc, let_var));
       set_curlet(sc, inner_let);
     }
-  unstack_gc_protect(sc);
-  return(op_tc_z(sc, if_true));
+  if (!wrappable) unstack_gc_protect(sc);
+  if (!op_tc_z(sc, if_true)) return(false);
+  let_set_slots(inner_let, slot_end);
+  return(true);
 }
 
 static s7_pointer fx_tc_let_if_a_z_la(s7_scheme *sc, s7_pointer arg)
@@ -89188,15 +89200,17 @@ static bool op_tc_let_if_a_z_l2a(s7_scheme *sc, s7_pointer code)
   s7_pointer l2a_slot = next_slot(la_slot);
   s7_pointer if_test = cdr(body);
   s7_pointer if_true = cddr(body);
+  bool wrappable = has_fx(if_true);
   s7_pointer if_false = cadddr(body);
   s7_pointer la = cdr(if_false);
   s7_pointer l2a = cddr(if_false);
   s7_pointer let_var = caadr(code);
-  s7_pointer inner_let = make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
+  s7_pointer inner_let = (wrappable) ? wrap_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var))) : 
+                                       make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
   s7_pointer let_slot = let_slots(inner_let);
   tick_tc(sc, OP_TC_LET_IF_A_Z_L2A);
   set_curlet(sc, inner_let);
-  gc_protect_via_stack(sc, inner_let);
+  if (!wrappable) gc_protect_via_stack(sc, inner_let);
   let_var = cdr(let_var);
 #if (!WITH_GMP)
   if (!no_bool_opt(code))
@@ -89232,8 +89246,10 @@ static bool op_tc_let_if_a_z_l2a(s7_scheme *sc, s7_pointer code)
 			      set_integer(val1, i1);
 			      set_integer(val3, o3->v[0].fi(o3));
 			    }
-			  unstack_gc_protect(sc);
-			  return(op_tc_z(sc, if_true));  /* sc->inner_let in effect here since it was the last set above */
+			  if (!wrappable) unstack_gc_protect(sc);
+			  if (!op_tc_z(sc, if_true)) return(false);
+			  let_set_slots(inner_let, slot_end);
+			  return(true);
 			}}}}}
       set_no_bool_opt(code);
     }
@@ -89247,8 +89263,10 @@ static bool op_tc_let_if_a_z_l2a(s7_scheme *sc, s7_pointer code)
       slot_set_value(let_slot, fx_call(sc, let_var));
       set_curlet(sc, inner_let);
     }
-  unstack_gc_protect(sc);
-  return(op_tc_z(sc, if_true));
+  if (!wrappable) unstack_gc_protect(sc);
+  if (!op_tc_z(sc, if_true)) return(false);
+  let_set_slots(inner_let, slot_end);
+  return(true);
 }
 
 static s7_pointer fx_tc_let_if_a_z_l2a(s7_scheme *sc, s7_pointer arg)
@@ -89264,14 +89282,12 @@ static s7_pointer op_tc_let_when_l2a(s7_scheme *sc, s7_pointer code)
   bool when = (car(body) != sc->unless_symbol); /* can also be when or if */
   s7_pointer if_test = cdr(body);
   s7_pointer if_true = cddr(body);
-  s7_pointer inner_let = make_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
+  s7_pointer inner_let = wrap_let_with_slot(sc, sc->curlet, car(let_var), fx_call(sc, cdr(let_var)));
   s7_pointer let_slot = let_slots(inner_let);
   tick_tc(sc, OP_TC_LET_WHEN_L2A);
 
   set_curlet(sc, inner_let);
-  gc_protect_via_stack(sc, inner_let);
   let_var = cdr(let_var);
-
   for (p = if_true; is_pair(cdr(p)); p = cdr(p));
   la = cdar(p);
   l2a = cddar(p);
@@ -89331,7 +89347,6 @@ static s7_pointer op_tc_let_when_l2a(s7_scheme *sc, s7_pointer code)
 	  slot_set_value(let_slot, fx_call(sc, let_var));
 	  set_curlet(sc, inner_let);
 	}}
-  unstack_gc_protect(sc);
   return(sc->unspecified);
 }
 
@@ -89430,7 +89445,6 @@ static bool op_tc_let_cond(s7_scheme *sc, s7_pointer code)
 	    slot_simply_set_pending_value(slot, fx_call(sc, arg));
 	  for (s7_pointer slot = slots; tis_slot(slot); slot = next_slot(slot)) /* using two swapping lets instead is slightly slower */
 	    slot_set_value(slot, slot_pending_value(slot));
-
 	  if (read_case)
 	    slot_set_value(let_slot, chars[string_read_char(sc, let_var)]);
 	  else
@@ -92329,7 +92343,7 @@ static void read_double_quote(s7_scheme *sc)
     string_read_error_nr(sc, "end of input encountered while in a string");
   if (sc->value == sc->T)
     read_error_nr(sc, "unknown backslash usage -- perhaps you meant two backslashes?");
-  if (sc->safety > IMMUTABLE_VECTOR_SAFETY) set_immutable(sc->value);
+  if (sc->safety > IMMUTABLE_VECTOR_SAFETY) set_immutable_string(sc->value);
 }
 
 static /* inline */ bool read_sharp_const(s7_scheme *sc) /* tread but inline makes no difference? (it's currently inlined anyway) */
@@ -92673,7 +92687,7 @@ static bool op_read_quote(s7_scheme *sc) /* '<datum> -> (#_quote <datum) in s7, 
   /* can't check for sc->value = sc->nil here because we want ''() to be different from '() */
   if ((sc->safety > IMMUTABLE_VECTOR_SAFETY) &&
       ((is_pair(sc->value)) || (is_any_vector(sc->value)) || (is_string(sc->value))))
-    set_immutable(sc->value);
+    set_immutable_pair(sc->value);
   sc->value = list_2(sc, (sc->symbol_quote) ? sc->quote_symbol : sc->quote_function, sc->value);
   return(stack_top_op(sc) != OP_READ_LIST);
 }
@@ -96478,6 +96492,15 @@ static s7_pointer memory_usage(s7_scheme *sc)
 							cons(sc, make_symbol(sc, "allocs", 6), allocs),
 							cons(sc, make_symbol(sc, "frees", 5), frees),
 							cons(sc, make_symbol(sc, "borrows", 7), borrows)))));
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "wrappers", 8),
+			       s7_inlet(sc, s7_list(sc, 7, 
+						    cons(sc, make_symbol(sc, "strings", 7), make_integer(sc, sc->string_wrapper_allocs)),
+						    cons(sc, make_symbol(sc, "integers", 8), make_integer(sc, sc->integer_wrapper_allocs)),
+						    cons(sc, make_symbol(sc, "reals", 5), make_integer(sc, sc->real_wrapper_allocs)),
+						    cons(sc, make_symbol(sc, "complexs", 8), make_integer(sc, sc->complex_wrapper_allocs)),
+						    cons(sc, make_symbol(sc, "lets", 4), make_integer(sc, sc->let_wrapper_allocs)),
+						    cons(sc, make_symbol(sc, "slots", 5), make_integer(sc, sc->slot_wrapper_allocs)),
+						    cons(sc, make_symbol(sc, "c_pointers", 10), make_integer(sc, sc->c_pointer_wrapper_allocs)))));
 #else
     add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "free-lists", 10),
 			       s7_inlet(sc, list_2(sc, cons(sc, make_symbol(sc, "bytes", 5), kmg(sc, len)),
@@ -97183,8 +97206,8 @@ static void init_starlet_immutable_field(void)
 #define NUM_INTEGER_WRAPPERS 4
 #define NUM_REAL_WRAPPERS 4
 #define NUM_COMPLEX_WRAPPERS 4
-#define NUM_LET_WRAPPERS 8
-#define NUM_SLOT_WRAPPERS 32
+#define NUM_LET_WRAPPERS 4
+#define NUM_SLOT_WRAPPERS 4
 
 /* ---------------- gdbinit annotated stacktrace ---------------- */
 #if (!MS_WINDOWS)
@@ -98164,7 +98187,15 @@ static void init_features(s7_scheme *sc)
 static void init_wrappers(s7_scheme *sc)
 {
   s7_pointer cp, qp;
-
+#if S7_DEBUGGING
+  sc->string_wrapper_allocs = 0;
+  sc->integer_wrapper_allocs = 0;
+  sc->real_wrapper_allocs = 0;
+  sc->complex_wrapper_allocs = 0;
+  sc->c_pointer_wrapper_allocs = 0;
+  sc->let_wrapper_allocs = 0;
+  sc->slot_wrapper_allocs = 0;
+#endif
   sc->integer_wrappers = semipermanent_list(sc, NUM_INTEGER_WRAPPERS);
   for (cp = sc->integer_wrappers, qp = sc->integer_wrappers; is_pair(cp); qp = cp, cp = cdr(cp))
     {
@@ -100234,13 +100265,8 @@ int main(int argc, char **argv)
  * not in ffitest.c: s7_repl s7_make_continuation s7_make_typed_function s7_make_typed_function_with_environment
  * fma opt=(a*b)+c[fx_add_mul], add_4p|5p?
  *
- * let/slot/pair_wrapper where reuse before and do, opt add -> wrapped
- *   do cons wrapper 86055 do_init_1, let in op_let_1 78422, let/slot in all the let_a cases and let*_na cases
- *   reuse was also in op_named_let_1, free in read vector -- could also be wrapped but need growable wrapper lists
+ * wrappers: let in op_let_1 78422, op_named_let_1
  *   need to track start-point and grow as needed, or current var#? -- maybe mark first with a type flag?
- *   see also free_cell in older s7's -- let/slot/iterator/mutable-int etc, t_counter? t_input|output_port?
- *   read-line wrapped (make_string) -- see search.scm, eval_c_string and others open/close_port
- *   need overalloc check before commiting to gitlab
  *
  * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
