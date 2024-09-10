@@ -100199,7 +100199,7 @@ int main(int argc, char **argv)
 #endif
 
 /* ----------------------------------------------------
- *           19.0   21.0   22.0   23.0   24.0   24.7
+ *           19.0   21.0   22.0   23.0   24.0   24.8
  * ----------------------------------------------------
  * tpeak      148    114    108    105    102    103
  * tref      1081    687    463    459    464    410
@@ -100265,9 +100265,9 @@ int main(int argc, char **argv)
  * write up type declarations in s7.html
  * not in ffitest.c: s7_repl s7_make_continuation s7_make_typed_function s7_make_typed_function_with_environment
  * fma opt=(a*b)+c[fx_add_mul], add_4p|5p?
+ * n-values->s7test
  *
- * wrappers: let in op_let_1 78422, op_named_let_1
- *   need to track start-point and grow as needed, or current var#? -- maybe mark first with a type flag?
+ * wrappers: let in op_let_1 78422, op_named_let_1, maybe do_init_1, need to track start-point and grow as needed
  *
  * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
