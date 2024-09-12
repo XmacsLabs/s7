@@ -154,6 +154,7 @@
 ;(display (let () (define (f) (values 1 2 3)) (+ 4 (n-values 1 (f))))) (newline)
 ;(display (let () (define (f) (values 1 2 3)) (+ 4 (n-values 3 (f))))) (newline)
 ;(display (let () (define (f) (values 1 2 3)) (+ 4 (n-values 12 (f))))) (newline)
+;(display (let () (define (f) 3) (+ 4 (n-values 12 (f))))) (newline)
 
 ;;; ----------------
 (define (first obj)  (if (sequence? obj) (obj 0) (error 'wrong-type-arg "first argument, ~S, is not a sequence" obj)))

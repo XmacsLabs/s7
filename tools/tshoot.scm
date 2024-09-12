@@ -470,4 +470,5 @@
 ;;; --------------------------------------------------------------------------------
 (when (> (*s7* 'profile) 0)
   (show-profile 100))
+;(when (provided? 'debugging) (display ((*s7* 'memory-usage) :wrappers)) (newline))
 (exit)
