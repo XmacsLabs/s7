@@ -5950,6 +5950,7 @@ static s7_pointer wrap_real_or_complex(s7_scheme *sc, s7_double rl, s7_double im
   return(wrap_complex(sc, rl, im));
 }
 #endif
+
 /* TODO: do let/slot need to clear the type? */
 /* TOOO: slot gensym gc protection? */
 /* TODO: how to be sure current wrapper let is not reallocated in fx etc? let_a_a_new can't involve another let? */
@@ -32119,6 +32120,7 @@ static s7_pointer g_eval_string(s7_scheme *sc, s7_pointer args)
   port = open_and_protect_input_string(sc, str);
   push_input_port(sc, port);
   push_stack_op_let(sc, OP_READ_INTERNAL);
+  sc->temp3 = sc->unused;
   return(sc->F);  /* I think this means that sc->value defaults to #f in op_eval_string below, so (eval-string "") mimics (eval) -> #f */
 }
 
@@ -57127,7 +57129,7 @@ static s7_pointer fx_add_mul_opssq_s(s7_scheme *sc, s7_pointer arg)
 #else
     return(make_integer(sc, (integer(a) * integer(b)) + integer(c)));
 #endif
-  return(add_p_pp(sc, multiply_p_pp(sc, a, b), c));
+  return(add_p_pp(sc, multiply_p_pp_wrapped(sc, a, b), c));
 }
 
 static s7_pointer fx_add_vref_s(s7_scheme *sc, s7_pointer arg)
@@ -66409,6 +66411,16 @@ static bool p_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 		  opc->v[0].fp = opt_p_ppp_ssf;
 		  if ((is_let(obj)) && (is_symbol_and_keyword(arg2)) && (opc->v[3].p_ppp_f == let_set_2)) /* (let-set! L3 :x (+ (L3 'x) 1)) */
 		    use_ppf_slot_set(sc, opc, obj, keyword_symbol(arg2));
+#if 0
+		  if ((is_complex_vector(obj)) && (is_pair(arg3)) && (car(arg3) == sc->complex_symbol) && (car(car_x) == sc->complex_vector_set_symbol))
+		    {
+		      /* opc->v[3].p_ppp_f = cvset_complex; */
+		      /*   opc->v[5].fp can be opt_p_ii_ff -> complex_p_ii etc? opt_p_pp_sf -> complex_p_pp, opt_p_dd_cc -> complex_p_dd */
+		      /*   add complex_z_ii|dd|pp o->v[3].p_dd_f from o->v[4].o1? opc->v[4].o1->v[3].p_dd_f is complex_p_dd */
+		      /* gdb_break(); */
+		      /* p_pip case is different! o->v[9].fp(o->v[8].o1 */
+		    }
+#endif
 		  return_true(sc, car_x);
 		}
 	      sc->pc = start;
@@ -71136,22 +71148,23 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 
 static bool op_map(s7_scheme *sc)
 {
-  s7_pointer iterators = counter_list(sc->args);
-  sc->x = sc->nil;                     /* can't use preset args list here (as in for-each): (map list '(a b c)) */
+  s7_pointer counter = sc->args;
+  s7_pointer iterators = counter_list(counter);
+  sc->z = sc->nil;                     /* can't use preset args list here (as in for-each): (map list '(a b c)) */
   for (s7_pointer y = iterators; is_pair(y); y = cdr(y))
     {
       s7_pointer x = s7_iterate(sc, car(y));
       if (iterator_is_at_end(car(y)))
 	{
-	  sc->value = proper_list_reverse_in_place(sc, counter_result(sc->args));
+	  sc->value = proper_list_reverse_in_place(sc, counter_result(counter));
+	  sc->z = sc->unused;
 	  return(true);
 	}
-      sc->x = cons(sc, x, sc->x);
+      sc->z = cons(sc, x, sc->z);
     }
-  sc->x = proper_list_reverse_in_place(sc, sc->x);
   push_stack_direct(sc, OP_MAP_GATHER);
-  sc->args = sc->x;
-  sc->x = sc->unused;
+  sc->args = proper_list_reverse_in_place(sc, sc->z);
+  sc->z = sc->unused;
   if (needs_copied_args(sc->code))
     sc->args = copy_proper_list(sc, sc->args);
   return(false);
@@ -72538,8 +72551,6 @@ static s7_pointer check_autoload_and_error_hook(s7_scheme *sc, s7_pointer sym)
       s7_pointer value = sc->value;
       s7_pointer code = sc->code;
       s7_pointer current_let = sc->curlet;
-      s7_pointer x = sc->x;
-      s7_pointer z = sc->z;
       /* sc->args and sc->code are pushed on the stack by s7_call, then
        *   restored by eval, so they are normally protected, but sc->value and current_code(sc) are
        *   not protected.  We need current_code(sc) so that the possible eventual error
@@ -72550,8 +72561,8 @@ static s7_pointer check_autoload_and_error_hook(s7_scheme *sc, s7_pointer sym)
        */
       s7_pointer args = (sc->args) ? sc->args : sc->nil;
       s7_pointer result = sc->undefined;
-      sc->temp7 = cons_unchecked(sc, current_let, cons_unchecked(sc, code,         /* perhaps elist_7 except we use elist_3 above? */
-                    cons_unchecked(sc, args, list_4(sc, value, cur_code, x, z)))); /* not s7_list (debugger checks) */
+      sc->temp7 = cons_unchecked(sc, current_let, cons_unchecked(sc, code,    /* perhaps elist_7 except we use elist_3 above? */
+                    cons_unchecked(sc, args, list_2(sc, value, cur_code))));  /* not s7_list (debugger checks) */
       if (!is_pair(cur_code))
 	{
 	  /* isolated typo perhaps -- no pair to hold the position info, so make one. current_code(sc) is GC-protected, so this should be safe */
@@ -72645,10 +72656,6 @@ static s7_pointer check_autoload_and_error_hook(s7_scheme *sc, s7_pointer sym)
       sc->args = T_Pos(args); /* can be #<unused> or #<counter>! */
       sc->code = code;
       set_curlet(sc, current_let);
-      if ((S7_DEBUGGING) && (sc->x != x)) fprintf(stderr, "%d: x changed\n", __LINE__);
-      if ((S7_DEBUGGING) && (sc->z != z)) fprintf(stderr, "%d: z changed\n", __LINE__);
-      sc->x = x;
-      sc->z = z;
       sc->temp7 = sc->unused;
       return(result);
     }
@@ -83368,17 +83375,18 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		      (!is_pair(cddr(expr))))
 		    return(false);
 		  cp = var_list;
+		  begin_temp(sc->y, sc->nil);
 		  for (vars = cadr(expr); is_pair(vars); vars = cdr(vars))
 		    {
 		      s7_pointer var;
-		      if (!is_pair(car(vars))) return(false);
+		      if (!is_pair(car(vars))) {end_temp(sc->y); return(false);}
 		      var = caar(vars);
-		      if (direct_memq(var, ((op == OP_LET) || (op == OP_LETREC)) ? cp : var_list)) return(false);
-		      if ((!is_symbol(var)) || (is_keyword(var))) return(false);
+		      if (direct_memq(var, ((op == OP_LET) || (op == OP_LETREC)) ? cp : var_list)) {end_temp(sc->y); return(false);}
+		      if ((!is_symbol(var)) || (is_keyword(var))) {end_temp(sc->y); return(false);}
 		      cp = cons(sc, var, cp);
-		      sc->x = cp;
+		      sc->y = cp;
 		    }
-		  sc->x = sc->unused;
+		  end_temp(sc->y);
 		  if (!do_is_safe(sc, cddr(expr), stepper, cp, step_vars, has_set)) return(false);
 		  break;
 
@@ -83388,23 +83396,24 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		    if ((!is_pair(cdr(expr))) || (!is_pair(cddr(expr))))  /* (do) or (do (...)) */
 		      return(false);
 		    cp = var_list;
+		    begin_temp(sc->x, cp);
 		    sc->w = (is_pair(cadr(expr))) ? pair_append(sc, cadr(expr), step_vars) : step_vars;
 		    combined_vars = sc->w;
 		    for (vars = cadr(expr); is_pair(vars); vars = cdr(vars))
 		      {
 			s7_pointer var;
-			if (!is_pair(car(vars))) return(false);
+			if (!is_pair(car(vars))) {end_temp(sc->x); return(false);}
 			var = caar(vars);
-			if ((direct_memq(var, cp)) || (var == stepper)) return(false);
+			if ((direct_memq(var, cp)) || (var == stepper)) {end_temp(sc->x); return(false);}
 			cp = cons(sc, var, cp);
 			sc->x = cp;
 			if ((is_pair(cdar(vars))) &&
-			    (!do_is_safe(sc, cdar(vars), stepper, cp, combined_vars, has_set)))
+			    (!do_is_safe(sc, cdar(vars), stepper, cp, combined_vars, has_set))) /* can this step on sc->x? */
 			  {
-			    sc->x = sc->unused;
+			    end_temp(sc->x);
 			    return(false);
 			  }}
-		    sc->x = sc->unused;
+		    end_temp(sc->x);
 		    if (!do_is_safe(sc, caddr(expr), stepper, cp, combined_vars, has_set)) return(false);
 		    if ((is_pair(cdddr(expr))) &&
 			(!do_is_safe(sc, cadddr(expr), stepper, cp, combined_vars, has_set)))
@@ -100243,7 +100252,6 @@ int main(int argc, char **argv)
  * s7test           1831   1818   1829   1830   1847
  * lt        2222   2172   2150   2185   1950   1911
  * dup              3788   2492   2239   2097   1988
- * complex                                      1990
  * tread            2421   2419   2408   2405   2241
  * tcopy            5546   2539   2375   2386   2342
  * trclo     8031   2574   2454   2445   2449   2359
@@ -100256,6 +100264,7 @@ int main(int argc, char **argv)
  * tobj             3970   3828   3577   3508   3436
  * tmac             3873   3033   3677   3677   3491
  * teq              4045   3536   3486   3544   3542
+ * complex                                      4306
  * tcase            4793   4439   4430   4439   4377
  * tmap             8774   4489   4541   4586   4384
  * tlet      11.0   6974   5609   5980   5965   4470
@@ -100291,15 +100300,11 @@ int main(int argc, char **argv)
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * safe_do hop bit in other do cases and let
- * growable opt_info*, does this require opts array to be opt_info**?
- * not in ffitest.c: s7_make_typed_function s7_make_typed_function_with_environment
- * fma opt=(a*b)+c[fx_add_mul]
  *
  * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
  *   tcomplex.scm continued
- *   in tari (complex-vector-set! v i (complex ...)) can skip the complex variable creation: change complex to wrap_complex
- *      similarly for + etc? (z=s7_complex etc) (complex -> (c-complex)) in chooser
+ *   cvset val=(complex...), in opt perhaps (knowing we're in a do body), rewrite to cvset_direct skipping (complex...)
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere

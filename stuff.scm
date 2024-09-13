@@ -145,7 +145,7 @@
 
 (define (n-values n . args) ; called pick-values in fennel
   (let ((len (length args)))
-    (if (<= len n)
+    (if (<= len n) ; maybe issue a warning in this case: "not enough values"?
 	(apply values args)
 	(apply values (copy args (make-list n))))))
 

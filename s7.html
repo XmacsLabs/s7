@@ -2133,7 +2133,7 @@ or even <code>(&gt; 1 0+i)</code>.
 (<em class=def id="reverseb">reverse!</em> sequence) and (reverse sequence)
 (<em class=def id="fillb">fill!</em> sequence value (start 0) end)
 (<em class=def id="s7copy">copy</em> obj) and (copy source destination (start 0) end)
-(<em class=def>object-&gt;string</em> obj)
+(<em class=def id="objtostr">object-&gt;string</em> obj)
 (object-&gt;let obj)
 (length obj)
 (append . sequences)
@@ -2333,17 +2333,17 @@ s7_ints, s7_doubles, s7_complexs or unsigned bytes.
 (<em class=def id="vectorrank">vector-rank</em> obj)
 (<em class=def id="vectortyper">vector-typer</em> obj)
 
-(<em class=def>float-vector?</em> obj)
-(<em class=def>float-vector</em> . args)
-(<em class=def>make-float-vector</em> len (init 0.0))
-(<em class=def>float-vector-ref</em> obj . indices)
-(<em class=def>float-vector-set!</em> obj indices[...] value)
+(<em class=def id="floatvectorp">float-vector?</em> obj)
+(<em class=def id="floatvector">float-vector</em> . args)
+(<em class=def id="makefloatvector">make-float-vector</em> len (init 0.0))
+(<em class=def id="floatvectorref">float-vector-ref</em> obj . indices)
+(<em class=def id="floatvectorset">float-vector-set!</em> obj indices[...] value)
 
-(<em class=def>complex-vector?</em> obj)
-(<em class=def>complex-vector</em> . args)
-(<em class=def>make-complex-vector</em> len (init 0.0))
-(<em class=def>complex-vector-ref</em> obj . indices)
-(<em class=def>complex-vector-set!</em> obj indices[...] value)
+(<em class=def id="complexvectorp">complex-vector?</em> obj)
+(<em class=def id="complexvector">complex-vector</em> . args)
+(<em class=def id="makecomplexvector">make-complex-vector</em> len (init 0.0))
+(<em class=def id="complexvectorref">complex-vector-ref</em> obj . indices)
+(<em class=def id="complexvectorset">complex-vector-set!</em> obj indices[...] value)
 
 (<em class=def id="intvectorp">int-vector?</em> obj)
 (<em class=def id="intvector">int-vector</em> . args)
@@ -4971,7 +4971,7 @@ a top-level variable is redefined (via define and friends, not set!).
 <!-- INDEX autoload:autoload -->
 <p>
 If s7 encounters an unbound variable, it first looks to see if it has any autoload information about it.
-This info can be declared via <em class=def>autoload</em>, a function of two arguments, the
+This info can be declared via autoload, a function of two arguments, the
 symbol that triggers the autoload, and either a filename or a function.  If a filename, s7
 loads that file; if a function, it is called with one argument, the current (calling) environment.
 </p>

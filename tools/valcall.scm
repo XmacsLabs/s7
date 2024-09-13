@@ -88,7 +88,6 @@
 	 (system (format #f "./snd compare-calls.scm -e '(compare-calls \"~A~D\" \"~A~D\")'" outfile (- next 1) outfile next)))))
 
    (list (list "repl" "tpeak.scm")
-	 (list "repl" "tcomplex.scm")
 	 (list "repl" "tref.scm")
 	 (list "repl" "tlimit.scm")
 	 (list "snd -noinit" "make-index.scm")
@@ -112,6 +111,7 @@
 	 (list "repl" "tobj.scm")
 	 (list "repl" "tmac.scm")
 	 (list "repl" "teq.scm")
+	 (list "repl" "tcomplex.scm")
 	 (list "repl" "tcase.scm")
 	 (list "repl" "tmap.scm")
 	 (list "repl" "tlet.scm")
