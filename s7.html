@@ -368,9 +368,9 @@ Other math-related differences between s7 and r5rs:
 <ul style="list-style-type:disc;">
 <li>rational? and exact mean integer or ratio (i.e. not floating point), inexact means not exact.
 <li>floor, ceiling, truncate, and round return (exact) integer results.
-<li>"#" does not stand for an unknown digit.
+<li>"#" does not stand for an unknown digit. Is (= (+ #3# #20) ##5#)?
 <li>the "@" complex number notation is not supported ("@" is an exponent marker in s7).
-<li>"+i" is not considered a number; include the real part.  (If +i is a number, so 1+).
+<li>"+i" is not considered a number; include the real part.
 <li>modulo, remainder, and quotient take integer, ratio, or real arguments.
 <li>lcm and gcd can take integer or ratio arguments.
 <li>log takes an optional second argument, the base.
@@ -489,7 +489,7 @@ to use a range of 0, in which case random returns 0.
 <em class=def id="randomstate">random-state</em> creates a new random state from a seed.  If no seed is passed,
 random-state returns the current state.
 If no state is passed to random,
-ir uses some default state initialized from the current time.  <em class=def id="randomstatep">random-state?</em> returns #t if passed a random state object.
+it uses some default state initialized from the current time.  <em class=def id="randomstatep">random-state?</em> returns #t if passed a random state object.
 </p>
 
 <pre class="indented">

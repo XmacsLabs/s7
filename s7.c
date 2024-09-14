@@ -5951,10 +5951,6 @@ static s7_pointer wrap_real_or_complex(s7_scheme *sc, s7_double rl, s7_double im
 }
 #endif
 
-/* TODO: do let/slot need to clear the type? */
-/* TOOO: slot gensym gc protection? */
-/* TODO: how to be sure current wrapper let is not reallocated in fx etc? let_a_a_new can't involve another let? */
-
 static s7_pointer wrap_let(s7_scheme *sc, s7_pointer old_let)
 {
   s7_pointer p = car(sc->let_wrappers);
@@ -9498,8 +9494,7 @@ static s7_pointer add_slot_unchecked_with_id(s7_scheme *sc, s7_pointer let, s7_p
   return(slot);
 }
 
-/* TODO: is Inline actually needed here? Use add_slot_at_end below for the checked version */
-static /* Inline */ inline s7_pointer inline_add_slot_at_end(s7_scheme *sc, uint64_t id, s7_pointer last_slot, s7_pointer symbol, s7_pointer value)
+static inline s7_pointer add_slot_at_end(s7_scheme *sc, uint64_t id, s7_pointer last_slot, s7_pointer symbol, s7_pointer value)
 {
   s7_pointer slot;
   new_cell_no_check(sc, slot, T_SLOT);
@@ -9510,7 +9505,7 @@ static /* Inline */ inline s7_pointer inline_add_slot_at_end(s7_scheme *sc, uint
   return(slot);
 }
 
-static s7_pointer add_slot_at_end(s7_scheme *sc, uint64_t id, s7_pointer last_slot, s7_pointer symbol, s7_pointer value)
+static s7_pointer add_slot_checked_at_end(s7_scheme *sc, uint64_t id, s7_pointer last_slot, s7_pointer symbol, s7_pointer value)
 { /* same as above but new_cell is checked */
   s7_pointer slot;
   new_cell(sc, slot, T_SLOT);
@@ -9536,7 +9531,7 @@ static inline void make_let_with_three_slots(s7_scheme *sc, s7_pointer func, s7_
   s7_pointer last_slot, cargs = closure_args(func);
   set_curlet(sc, inline_make_let_with_two_slots(sc, closure_let(func), car(cargs), val1, cadr(cargs), val2));
   last_slot = next_slot(let_slots(sc->curlet));
-  inline_add_slot_at_end(sc, let_id(sc->curlet), last_slot, caddr(cargs), val3);
+  add_slot_at_end(sc, let_id(sc->curlet), last_slot, caddr(cargs), val3);
 }
 
 static inline void make_let_with_four_slots(s7_scheme *sc, s7_pointer func, s7_pointer val1, s7_pointer val2, s7_pointer val3, s7_pointer val4)
@@ -9545,8 +9540,8 @@ static inline void make_let_with_four_slots(s7_scheme *sc, s7_pointer func, s7_p
   set_curlet(sc, inline_make_let_with_two_slots(sc, closure_let(func), car(cargs), val1, cadr(cargs), val2));
   cargs = cddr(cargs);
   last_slot = next_slot(let_slots(sc->curlet));
-  last_slot = inline_add_slot_at_end(sc, let_id(sc->curlet), last_slot, car(cargs), val3);
-  inline_add_slot_at_end(sc, let_id(sc->curlet), last_slot, cadr(cargs), val4);
+  last_slot = add_slot_at_end(sc, let_id(sc->curlet), last_slot, car(cargs), val3);
+  add_slot_at_end(sc, let_id(sc->curlet), last_slot, cadr(cargs), val4);
 }
 
 static inline void make_let_with_five_slots(s7_scheme *sc, s7_pointer func, s7_pointer val1, s7_pointer val2, s7_pointer val3, s7_pointer val4, s7_pointer val5)
@@ -9555,10 +9550,10 @@ static inline void make_let_with_five_slots(s7_scheme *sc, s7_pointer func, s7_p
   set_curlet(sc, inline_make_let_with_two_slots(sc, closure_let(func), car(cargs), val1, cadr(cargs), val2));
   cargs = cddr(cargs);
   last_slot = next_slot(let_slots(sc->curlet));
-  last_slot = inline_add_slot_at_end(sc, let_id(sc->curlet), last_slot, car(cargs), val3);
+  last_slot = add_slot_at_end(sc, let_id(sc->curlet), last_slot, car(cargs), val3);
   cargs = cdr(cargs);
-  last_slot = inline_add_slot_at_end(sc, let_id(sc->curlet), last_slot, car(cargs), val4);
-  inline_add_slot_at_end(sc, let_id(sc->curlet), last_slot, cadr(cargs), val5);
+  last_slot = add_slot_at_end(sc, let_id(sc->curlet), last_slot, car(cargs), val4);
+  add_slot_at_end(sc, let_id(sc->curlet), last_slot, cadr(cargs), val5);
 }
 
 #define update_slot(Slot, Val, Id) do {s7_pointer sym; slot_set_value(Slot, Val); sym = slot_symbol(Slot); symbol_set_local_slot_unincremented(sym, Id, Slot);} while (0)
@@ -10255,7 +10250,7 @@ static s7_pointer sublet_1(s7_scheme *sc, s7_pointer e, s7_pointer bindings, s7_
 	  else
 	    {
 	      /* if (sc->free_heap_top <= sc->free_heap_trigger) try_to_call_gc(sc);*/ /* or maybe add add_slot_at_end_checked? */
-	      sp = add_slot_at_end(sc, let_id(new_e), sp, sym, val);
+	      sp = add_slot_checked_at_end(sc, let_id(new_e), sp, sym, val);
 	      set_local(sym); /* ? */
 	    }
 	  check_let_fallback(sc, sym, new_e);
@@ -10336,7 +10331,7 @@ static s7_pointer g_simple_inlet(s7_scheme *sc, s7_pointer args)
 	  add_slot_unchecked(sc, new_e, symbol, cadr(x), id);
 	  sp = let_slots(new_e);
 	}
-      else sp = add_slot_at_end(sc, id, sp, symbol, cadr(x));
+      else sp = add_slot_checked_at_end(sc, id, sp, symbol, cadr(x));
     }
   sc->temp3 = sc->unused;
   return(new_e);
@@ -10384,7 +10379,7 @@ static s7_pointer internal_inlet(s7_scheme *sc, s7_int num_args, ...)
 	  add_slot_unchecked(sc, new_e, symbol, value, id);
 	  sp = let_slots(new_e);
 	}
-      else sp = inline_add_slot_at_end(sc, id, sp, symbol, value);
+      else sp = add_slot_at_end(sc, id, sp, symbol, value);
     }
   va_end(ap);
   sc->temp3 = sc->unused;
@@ -13996,6 +13991,16 @@ static bool c_rationalize(s7_double ux, s7_double error, s7_int *numer, s7_int *
 	      (*numer) = p0;
 	      (*denom) = q0;
 	      if ((S7_DEBUGGING) && (q0 == 0)) fprintf(stderr, "%f %" ld64 "/0\n", ux, p0);
+#if 0
+	      if (S7_DEBUGGING)
+		{
+		  s7_pointer rat = make_ratio(cur_sc, p0, q0);
+		  if ((numerator(rat) != p0) ||
+		      (denominator(rat) != q0))
+		    fprintf(stderr, "rationalize: %" ld64 "/%" ld64 ", %" ld64 "/%" ld64 "\n", p0, q0, numerator(rat), denominator(rat));
+		  if (q0 <= 0) fprintf(stderr, "rationalize: den: %" ld64 "\n", q0);
+		}
+#endif
 	    }
 	  return(true);
 	}
@@ -14025,7 +14030,7 @@ s7_pointer s7_rationalize(s7_scheme *sc, s7_double x, s7_double error)
 {
   s7_int numer = 0, denom = 1;
   if (c_rationalize(x, error, &numer, &denom))
-    return(make_ratio(sc, numer, denom));
+    return(make_simple_ratio(sc, numer, denom));
   return(make_real(sc, x));
 }
 
@@ -16993,7 +16998,7 @@ static s7_pointer g_rationalize(s7_scheme *sc, s7_pointer args)
 	if (fabs(rat) < fabs(err))
 	  return(int_zero);
 
-	return((c_rationalize(rat, err, &numer, &denom)) ? make_ratio(sc, numer, denom) : sc->F);
+	return((c_rationalize(rat, err, &numer, &denom)) ? make_simple_ratio(sc, numer, denom) : sc->F);
       }}
   return(sc->F); /* make compiler happy */
 }
@@ -17487,14 +17492,11 @@ static s7_pointer g_log(s7_scheme *sc, s7_pointer args)
 	      s7_int ires = (s7_int)res;
 	      if (res - ires == 0.0)
 		return(make_integer(sc, ires));   /* (log 8 2) -> 3 or (log 1/8 2) -> -3 */
-	      /* since x and y are rational here, it seems reasonable to try to rationalize the result, but not go overboard?
-	       *   what about (expt 16 3/2) -> 64?  also 2 as base is handled above and always returns a float.
-	       */
 	      if (fabs(res) < RATIONALIZE_LIMIT)
 		{
 		  s7_int num, den;
-		  if ((c_rationalize(res, sc->default_rationalize_error, &num, &den)) &&
-		      (s7_int_abs(num) < 100) && (s7_int_abs(den) < 100))
+		  if (c_rationalize(res, sc->default_rationalize_error, &num, &den))
+		      /* && (s7_int_abs(num) < 100) && (s7_int_abs(den) < 100)) *//* why this? */
 		    return(make_simple_ratio(sc, num, den));
 		}
 	      return(make_real(sc, res));
@@ -25803,7 +25805,7 @@ static s7_pointer inexact_to_exact_p_p(s7_scheme *sc, s7_pointer x)
 	  }
 	/* c_rationalize limit is RATIONALIZE_LIMIT=1e12 currently so this is a tighter limit than DOUBLE_TO_INT64_LIMIT */
 	if (c_rationalize(val, sc->default_rationalize_error, &numer, &denom))
-	  return(make_ratio(sc, numer, denom));
+	  return(make_simple_ratio(sc, numer, denom));
       }
 
     default:
@@ -26548,7 +26550,7 @@ static s7_pointer g_random(s7_scheme *sc, s7_pointer args)
 	  }
 	error = ((x < 1e-6) && (x > -1e-6)) ? 1e-18 : 1e-12;
 	c_rationalize(x * next_random(r), error, &numer, &denom);
-	return(make_ratio(sc, numer, denom));
+	return(make_simple_ratio(sc, numer, denom));
       }
     case T_REAL:
       return(make_real(sc, real(num) * next_random(r)));
@@ -34344,7 +34346,7 @@ static void complex_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer po
     {
       char *num = complex_to_string_base_10(sc, els[0], 0, sc->float_format_precision, 'g', &plen, use_write);
       port_write_string(port)(sc, "#c(", 3, port);
-      /* floatify(buf, &plen); */ /* TODO: complexify?? also below */
+      /* floatify(buf, &plen); */ /* complexify?? also below */
       port_write_string(port)(sc, num, clamp_length(plen, CV_BUFSIZE), port);
       for (i = 1; i < len; i++)
 	{
@@ -38664,10 +38666,10 @@ static s7_pointer make_big_list(s7_scheme *sc, s7_int len, s7_pointer init)
 {
   s7_pointer res;                    /* expanding and using free_heap pointers as a block here is 10% faster */
   check_free_heap_size(sc, len + 1); /* using cons_unchecked below, +1 in case we are on the trigger at the end */
-  sc->temp6 = sc->nil;               /* sc->temp6 used only here currently */
+  begin_temp(sc->temp6, sc->nil);    /* sc->temp6 used only here currently */
   for (s7_int i = 0; i < len; i++) sc->temp6 = cons_unchecked(sc, init, sc->temp6);
   res = sc->temp6;
-  sc->temp6 = sc->unused;
+  end_temp(sc->temp6);
   return(res);
 }
 
@@ -48609,7 +48611,7 @@ bool s7_is_aritable(s7_scheme *sc, s7_pointer x, s7_int args)
 	if ((has_active_methods(sc, x)) &&
 	    ((func = find_method_with_let(sc, x, sc->is_aritable_symbol)) != sc->undefined))
 	  return(s7_apply_function(sc, func, set_plist_2(sc, x, make_integer(sc, args))) != sc->F);
-	return((is_safe_procedure(x)) && (args == 1)); /* TODO: can we get arity from x in that case? */
+	return((is_safe_procedure(x)) && (args == 1)); /* can we get the arity from x? */
       }
 
     case T_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR: case T_COMPLEX_VECTOR:
@@ -51329,19 +51331,29 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 	  }}
       break;
 
-      /* TODO: complex vector */
+    case T_COMPLEX_VECTOR:
+      if ((is_t_vector(dest)) && (!is_typed_vector(dest)))
+	{
+	  s7_complex *src = complex_vector_complexs(source);
+	  s7_pointer *dst = vector_elements(dest);
+	  check_free_heap_size(sc, end - start);
+	  for (i = start, j = 0; i < end; i++, j++)
+	    dst[j] = c_complex_to_s7(sc, src[i]);
+	  return(dest);
+	}
+      break;
+
     case T_FLOAT_VECTOR:
-      {
-	s7_double *src = float_vector_floats(source);
-	/* int-vector destination can't normally work, fractional parts get rounded away */
-	if ((is_t_vector(dest)) && (!is_typed_vector(dest)))
-	  {
-	    s7_pointer *dst = vector_elements(dest);
-	    check_free_heap_size(sc, end - start);
-	    for (i = start, j = 0; i < end; i++, j++)
-	      dst[j] = make_real_unchecked(sc, src[i]);
-	    return(dest);
-	  }}
+      /* int-vector destination can't normally work, fractional parts get rounded away */
+      if ((is_t_vector(dest)) && (!is_typed_vector(dest)))
+	{
+	  s7_double *src = float_vector_floats(source);
+	  s7_pointer *dst = vector_elements(dest);
+	  check_free_heap_size(sc, end - start);
+	  for (i = start, j = 0; i < end; i++, j++)
+	    dst[j] = make_real_unchecked(sc, src[i]);
+	  return(dest);
+	}
       break;
 
     case T_INT_VECTOR:
@@ -64928,6 +64940,7 @@ static s7_pointer opt_p_d_c(opt_info *o)     {return(make_real(o->sc, o->v[2].d_
 static s7_pointer opt_p_7d_c(opt_info *o)    {return(make_real(o->sc, o->v[2].d_7d_f(o->sc, o->v[1].x)));}
 static s7_pointer opt_p_p_s(opt_info *o)     {return(o->v[2].p_p_f(o->sc, slot_value(o->v[1].p)));}
 static s7_pointer opt_p_p_s_abs(opt_info *o) {return(abs_p_p(o->sc, slot_value(o->v[1].p)));}
+static s7_pointer opt_p_p_s_random(opt_info *o) {return(random_p_p(o->sc, slot_value(o->v[1].p)));}
 static s7_pointer opt_p_p_s_cdr(opt_info *o) {s7_pointer p = slot_value(o->v[1].p); return((is_pair(p)) ? cdr(p) : cdr_p_p(o->sc, p));}
 static s7_pointer opt_p_p_f(opt_info *o)     {return(o->v[2].p_p_f(o->sc, o->v[4].fp(o->v[3].o1)));}
 static s7_pointer opt_p_p_f1(opt_info *o)    {return(o->v[2].p_p_f(o->sc, o->v[3].p_p_f(o->sc, slot_value(o->v[1].p))));}
@@ -65028,7 +65041,8 @@ static bool p_p_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer c
 	  if (!opc->v[1].p)
 	    return_false(sc, car_x);
 	  opc->v[0].fp = (ppf == abs_p_p) ? opt_p_p_s_abs : ((ppf == cdr_p_p) ? opt_p_p_s_cdr :
-			   ((ppf == iterate_p_p) ? ((is_iterator(slot_value(opc->v[1].p))) ? opt_p_p_s_iterate_unchecked : opt_p_p_s_iterate) : opt_p_p_s));
+			   ((ppf == iterate_p_p) ? ((is_iterator(slot_value(opc->v[1].p))) ? opt_p_p_s_iterate_unchecked : opt_p_p_s_iterate) : 
+			    ((ppf == random_p_p) ? opt_p_p_s_random : opt_p_p_s)));
 	  return_true(sc, car_x);
 	}
       if (!is_pair(arg1))
@@ -65399,7 +65413,7 @@ static bool p_pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
       opc->v[2].p = slot1;
       if ((obj) &&
 	  (has_loop_end(slot1)))
-	check_unchecked(sc, obj, slot1, opc, car_x); /* TODO: this is a no-op?? car_x should be NULL as below. */
+	check_unchecked(sc, obj, slot1, opc, car_x);
       fixup_p_pi_ss(opc);
       return_true(sc, car_x);
     }
@@ -70554,7 +70568,9 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
 		    {
 		      set_real(rl, float_vector(v, i));
 		      fp(sc, rl);
-		    }}
+		    }
+		  sc->temp7 = sc->unused;
+		}
 	      else
 		if (is_int_vector(v))
 		  {
@@ -70564,7 +70580,9 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
 		      {
 			set_integer(iv, int_vector(v, i));
 			fp(sc, iv);
-		      }}
+		      }
+		    sc->temp7 = sc->unused;
+		  }
 		else
 		  for (s7_int i = 0; i < vlen; i++)
 		    fp(sc, vector_getter(v)(sc, v, i)); /* LOOP_4 here gains almost nothing */
@@ -78407,6 +78425,7 @@ static s7_pointer check_let(s7_scheme *sc) /* called only from op_let */
 
   if (named_let)
     return(check_named_let(sc, vars));
+  /* set_opt2_int(code, vars); */ /* maybe set on vars? */
 
   if (vars == 0)        /* !in_heap does not happen much here */
     pair_set_syntax_op(form, OP_LET_NO_VARS);
@@ -78568,7 +78587,7 @@ static bool op_let_1(s7_scheme *sc)
       s7_pointer args = cdr(y), last_slot, x = car(sc->code);
       last_slot = add_slot_unchecked_with_id(sc, sc->curlet, caar(x), unchecked_car(y));
       for (x = cdr(x), y = args; is_not_null(y); x = cdr(x), y = cdr(y))
-	last_slot = add_slot_at_end(sc, id, last_slot, caar(x), unchecked_car(y)); /* not unchecked -- tlimit.scm */
+	last_slot = add_slot_checked_at_end(sc, id, last_slot, caar(x), unchecked_car(y)); /* not unchecked -- tlimit.scm */
     }
   sc->code = T_Pair(cdr(sc->code));
   sc->temp8 = sc->unused;
@@ -78858,7 +78877,7 @@ static Inline void inline_op_let_na_new(s7_scheme *sc) /* called once in eval, c
 	  add_slot(sc, let, caar(p), sc->value);
 	  sp = let_slots(let);
 	}
-      else sp = inline_add_slot_at_end(sc, let_id(let), sp, caar(p), sc->value);
+      else sp = add_slot_at_end(sc, let_id(let), sp, caar(p), sc->value);
     }
   sc->let_number++;
   set_curlet(sc, let);
@@ -79124,7 +79143,7 @@ static /* inline */ bool op_let_star1(s7_scheme *sc)
 	      add_slot_checked(sc, sc->curlet, caar(sc->code), sc->value);
 	      sp = let_slots(sc->curlet);
 	    }
-	  else sp = add_slot_at_end(sc, let_id(sc->curlet), sp, caar(sc->code), sc->value); /* was unchecked */
+	  else sp = add_slot_checked_at_end(sc, let_id(sc->curlet), sp, caar(sc->code), sc->value); /* was unchecked */
 	}
       else
 	{
@@ -79187,7 +79206,7 @@ static void op_let_star_na(s7_scheme *sc)
 	      add_slot_checked(sc, sc->curlet, caar(p), val);
 	      sp = let_slots(sc->curlet);
 	    }
-	  else sp = inline_add_slot_at_end(sc, let_id(sc->curlet), sp, caar(p), val);
+	  else sp = add_slot_at_end(sc, let_id(sc->curlet), sp, caar(p), val);
 	}
       else
 	{
@@ -79213,7 +79232,7 @@ static void op_let_star_na_a(s7_scheme *sc)
 	      add_slot_checked(sc, sc->curlet, caar(p), val);
 	      sp = let_slots(sc->curlet);
 	    }
-	  else sp = inline_add_slot_at_end(sc, let_id(sc->curlet), sp, caar(p), val);
+	  else sp = add_slot_at_end(sc, let_id(sc->curlet), sp, caar(p), val);
 	}
       else
 	{
@@ -80699,12 +80718,12 @@ static s7_pointer make_funclet(s7_scheme *sc, s7_pointer new_func, s7_pointer fu
 	      let_set_slots(new_let, last_slot);
 	      symbol_set_local_slot(car(arg), let_id(new_let), last_slot);
 	      for (arg = cdr(arg); is_pair(arg); arg = cdr(arg))
-		last_slot = inline_add_slot_at_end(sc, let_id(new_let), last_slot, car(arg), sc->nil);
+		last_slot = add_slot_at_end(sc, let_id(new_let), last_slot, car(arg), sc->nil);
 	    }
 	  if (is_symbol(arg))
 	    {
 	      if (last_slot)
-		last_slot = add_slot_at_end(sc, let_id(new_let), last_slot, arg, sc->nil);
+		last_slot = add_slot_checked_at_end(sc, let_id(new_let), last_slot, arg, sc->nil);
 	      else
 		{
 		  last_slot = make_slot(sc, arg, sc->nil);
@@ -87181,8 +87200,8 @@ static void op_closure_star_a(s7_scheme *sc, s7_pointer code)
 	{
 	  s7_pointer par = car(p);
 	  if (is_pair(par))
-	    last_slot = add_slot_at_end(sc, id, last_slot, car(par), (is_pair(cadr(par))) ? cadadr(par) : cadr(par)); /* possible quoted list as default value */
-	  else last_slot = add_slot_at_end(sc, id, last_slot, par, sc->F);
+	    last_slot = add_slot_checked_at_end(sc, id, last_slot, car(par), (is_pair(cadr(par))) ? cadadr(par) : cadr(par)); /* possible quoted list as default value */
+	  else last_slot = add_slot_checked_at_end(sc, id, last_slot, par, sc->F);
 	}}
   sc->code = T_Pair(closure_body(func));
 }
@@ -88092,7 +88111,7 @@ static /* inline */ void op_closure_ns(s7_scheme *sc) /* called once in eval, lg
   add_slot_unchecked(sc, e, car(p), lookup(sc, car(args)), id);
   last_slot = let_slots(e);
   for (p = cdr(p), args = cdr(args); is_pair(p); p = cdr(p), args = cdr(args))
-    last_slot = inline_add_slot_at_end(sc, id, last_slot, car(p), lookup(sc, car(args))); /* main such call in lt (fx_s is 1/2, this is 1/5 of all calls) */
+    last_slot = add_slot_at_end(sc, id, last_slot, car(p), lookup(sc, car(args))); /* main such call in lt (fx_s is 1/2, this is 1/5 of all calls) */
   set_curlet(sc, e);
   end_temp(sc->y);
   sc->code = T_Pair(closure_body(f));
@@ -89411,7 +89430,7 @@ static bool op_tc_if_a_z_let_if_a_z_l2a(s7_scheme *sc, s7_pointer code)
   let_set_slots(inner_let, slot);
   symbol_set_local_slot_unincremented(caar(let_vars), let_id(inner_let), slot);
   for (var = cdr(let_vars); is_pair(var); var = cdr(var))
-    slot = inline_add_slot_at_end(sc, let_id(inner_let), slot, caar(var), sc->F);
+    slot = add_slot_at_end(sc, let_id(inner_let), slot, caar(var), sc->F);
 
   while (true)
     {
@@ -91434,7 +91453,7 @@ static void op_any_closure_np_end(s7_scheme *sc)
       let_set_slots(e, last_slot);
       symbol_set_local_slot(car(p), id, last_slot);
       for (p = cdr(p), z = cdr(sc->args); is_pair(p); p = cdr(p), z = cdr(z))
-	last_slot = inline_add_slot_at_end(sc, id, last_slot, car(p), car(z)); /* sets last_slot, don't free sc->args -- used below */
+	last_slot = add_slot_at_end(sc, id, last_slot, car(p), car(z)); /* sets last_slot, don't free sc->args -- used below */
       set_curlet(sc, e);
       end_temp(sc->y);
       if (is_pair(p))
@@ -99419,7 +99438,7 @@ s7_scheme *s7_init(void)
   sc->F =           make_unique(sc, "#f",             T_BOOLEAN);
   sc->undefined =   make_unique(sc, "#<undefined>",   T_UNDEFINED);
   sc->unspecified = make_unique(sc, "#<unspecified>", T_UNSPECIFIED);
-  sc->no_value =    make_unique(sc, (SHOW_EVAL_OPS) ? "#<no-value>" : "#<unspecified>", T_UNSPECIFIED);
+  sc->no_value =    make_unique(sc, (SHOW_EVAL_OPS || S7_DEBUGGING) ? "#<no-value>" : "#<unspecified>", T_UNSPECIFIED);
 
   unique_car(sc->nil) = sc->unspecified; /* see op_if1 */
   unique_cdr(sc->nil) = sc->unspecified;
@@ -100276,7 +100295,7 @@ int main(int argc, char **argv)
  * tnum             6013   5433   5396   5409   5427
  * tlist     9219   7546   6558   6240   6300   5771
  * trec      19.6   6980   6599   6656   6658   6010
- * tari      15.0   12.7   6827   6543   6278   6180
+ * tari      15.0   12.7   6827   6543   6278   6180  6139
  * tgsl             7802   6373   6282   6208   6218
  * tset                           6260   6364   6266
  * tleft     12.2   9753   7537   7331   7331   6417
@@ -100293,13 +100312,17 @@ int main(int argc, char **argv)
  * tmv              21.9   21.1   20.7   20.6   16.6
  * calls            37.5   37.0   37.5   37.1   37.2
  * sg                      55.9   55.8   55.4   55.3
- * tbig            175.8  156.5  148.1  146.2  146.4
+ * tbig            175.8  156.5  148.1  146.2  146.4  146.3
  * ----------------------------------------------------
  *
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * safe_do hop bit in other do cases and let
+ * nvars to op_let etc [let direct?]
+ * do let/slot need to clear the type? slot gensym gc protection?
+ *   how to be sure current wrapper let is not reallocated in fx etc: use begin|end_temp? let_a_a_new can't involve another let?
+ * there are a lot more temps to clean up (sc->temp* except 6, rec* etc)
  *
  * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
