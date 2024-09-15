@@ -10352,12 +10352,12 @@ static s7_pointer inlet_p_pp(s7_scheme *sc, s7_pointer symbol, s7_pointer value)
     wrong_type_error_nr(sc, sc->inlet_symbol, 1, symbol, wrap_string(sc, "a non-syntactic symbol", 22));
 
   new_cell(sc, x, T_LET | T_SAFE_PROCEDURE);
-  sc->temp3 = x;
+  begin_temp(sc->temp6, x);
   let_set_id(x, ++sc->let_number);
   let_set_outlet(x, sc->rootlet);
   let_set_slots(x, slot_end);
   add_slot_unchecked(sc, x, symbol, value, let_id(x));
-  sc->temp3 = sc->unused;
+  end_temp(sc->temp6);
   return(x);
 }
 
@@ -10368,7 +10368,7 @@ static s7_pointer internal_inlet(s7_scheme *sc, s7_int num_args, ...)
   int64_t id = let_id(new_e);
   s7_pointer sp = NULL;
 
-  sc->temp3 = new_e;
+  begin_temp(sc->temp6, new_e);
   va_start(ap, num_args);
   for (s7_int i = 0; i < num_args; i += 2)
     {
@@ -10382,7 +10382,7 @@ static s7_pointer internal_inlet(s7_scheme *sc, s7_int num_args, ...)
       else sp = add_slot_at_end(sc, id, sp, symbol, value);
     }
   va_end(ap);
-  sc->temp3 = sc->unused;
+  end_temp(sc->temp6);
   return(new_e);
 }
 
@@ -10863,7 +10863,7 @@ static s7_pointer let_copy(s7_scheme *sc, s7_pointer let)
    */
   new_e = make_let(sc, let_outlet(let));
   set_all_methods(new_e, let);
-  sc->temp3 = new_e;
+  begin_temp(sc->temp6, new_e);
   if (tis_slot(let_slots(let)))
     {
       s7_int id = let_id(new_e);
@@ -10890,7 +10890,7 @@ static s7_pointer let_copy(s7_scheme *sc, s7_pointer let)
    *    match the unshadowed slot, not the last in the list:
    *    (let ((e1 (inlet 'a 1 'a 2))) (let ((e2 (copy e1))) (list (equal? e1 e2) (equal? (e1 'a) (e2 'a)))))
    */
-  sc->temp3 = sc->unused;
+  end_temp(sc->temp6);
   return(new_e);
 }
 
@@ -12399,7 +12399,7 @@ s7_pointer s7_make_continuation(s7_scheme *sc)
   stack = make_simple_vector(sc, loc);
   set_full_type(stack, T_STACK);
   temp_stack_top(stack) = loc;
-  sc->temp7 = stack;
+  begin_temp(sc->temp6, stack);
   copy_stack(sc, stack, sc->stack, loc);
 
   new_cell(sc, x, T_CONTINUATION);
@@ -12417,7 +12417,7 @@ s7_pointer s7_make_continuation(s7_scheme *sc)
   continuation_op_size(x) = sc->op_stack_size;
   continuation_key(x) = find_any_baffle(sc);
   continuation_name(x) = sc->F;
-  sc->temp7 = sc->unused;
+  end_temp(sc->temp6);
 
   add_continuation(sc, x);
   return(x);
@@ -13909,8 +13909,8 @@ static s7_int c_gcd(s7_int u, s7_int v)
     }
   a = s7_int_abs(u);
   b = s7_int_abs(v);
-  /* there are faster gcd algorithms but does it ever matter? */
-  while (b != 0)
+  /* there are faster gcd algorithms but does it ever matter? it's 56 in tari.scm */
+  while (b)
     {
       s7_int temp = a % b;
       a = b;
@@ -13991,7 +13991,7 @@ static bool c_rationalize(s7_double ux, s7_double error, s7_int *numer, s7_int *
 	      (*numer) = p0;
 	      (*denom) = q0;
 	      if ((S7_DEBUGGING) && (q0 == 0)) fprintf(stderr, "%f %" ld64 "/0\n", ux, p0);
-#if 0
+#if S7_DEBUGGING
 	      if (S7_DEBUGGING)
 		{
 		  s7_pointer rat = make_ratio(cur_sc, p0, q0);
@@ -38614,7 +38614,7 @@ static /* inline */ s7_pointer copy_proper_list(s7_scheme *sc, s7_pointer lst)
 {
   s7_pointer tp;
   if (!is_pair(lst)) return(sc->nil);
-  sc->temp5 = lst;
+  begin_temp(sc->temp6, lst);
   tp = list_1(sc, car(lst));
   sc->temp8 = tp;
   for (s7_pointer p = cdr(lst), np = tp; is_pair(p); p = cdr(p), np = cdr(np))
@@ -38626,7 +38626,7 @@ static /* inline */ s7_pointer copy_proper_list(s7_scheme *sc, s7_pointer lst)
       if (is_pair(p)) {np = cdr(np); set_cdr(np, list_1(sc, car(p)));} else break;
     }
   sc->temp8 = sc->unused;
-  sc->temp5 = sc->unused;
+  end_temp(sc->temp6);
   return(tp);
 }
 
@@ -38666,7 +38666,7 @@ static s7_pointer make_big_list(s7_scheme *sc, s7_int len, s7_pointer init)
 {
   s7_pointer res;                    /* expanding and using free_heap pointers as a block here is 10% faster */
   check_free_heap_size(sc, len + 1); /* using cons_unchecked below, +1 in case we are on the trigger at the end */
-  begin_temp(sc->temp6, sc->nil);    /* sc->temp6 used only here currently */
+  begin_temp(sc->temp6, sc->nil);
   for (s7_int i = 0; i < len; i++) sc->temp6 = cons_unchecked(sc, init, sc->temp6);
   res = sc->temp6;
   end_temp(sc->temp6);
@@ -38687,10 +38687,9 @@ static inline s7_pointer make_list(s7_scheme *sc, s7_int len, s7_pointer init)
                     cons_unchecked(sc, init, cons_unchecked(sc, init, cons(sc, init, sc->nil))))))));
     case 7: return(T_Pair(cons_unchecked(sc, init, cons_unchecked(sc, init, cons_unchecked(sc, init,
 		    cons_unchecked(sc, init, cons_unchecked(sc, init, cons_unchecked(sc, init, cons(sc, init, sc->nil)))))))));
-    default:
-      return(make_big_list(sc, len, init));
+    default: break;
     }
-  return(sc->nil); /* never happens, I hope */
+  return(make_big_list(sc, len, init));
 }
 
 s7_pointer s7_make_list(s7_scheme *sc, s7_int len, s7_pointer init) {return(make_list(sc, len, init));}
@@ -53696,7 +53695,7 @@ static s7_pointer init_owlet(s7_scheme *sc)
 {
   s7_pointer p; /* watch out for order below */
   s7_pointer e = make_let(sc, sc->rootlet);
-  sc->temp3 = e;
+  begin_temp(sc->temp6, e);
   sc->error_type = add_slot_checked_with_id(sc, e, make_symbol(sc, "error-type", 10), sc->F);    /* the error type or tag ('division-by-zero) */
   sc->error_data = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-data", 10), sc->F);  /* the message or information passed by the error function */
   sc->error_code = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-code", 10), sc->F);  /* the code that s7 thinks triggered the error */
@@ -53708,7 +53707,7 @@ static s7_pointer init_owlet(s7_scheme *sc)
 #if WITH_HISTORY
   sc->error_history = add_slot_unchecked_with_id(sc, e, make_symbol(sc, "error-history", 13), sc->F); /* buffer of previous evaluations */
 #endif
-  sc->temp3 = sc->unused;
+  end_temp(sc->temp6);
   return(e);
 }
 
@@ -70563,25 +70562,25 @@ Each object can be a list, string, vector, hash-table, or any other sequence."
 	      if (is_float_vector(v))
 		{
 		  s7_pointer rl = wrap_real(sc, 0.0); /* maybe make_mutable_real(sc, 0.0) -- not sure this is safe */
-		  sc->temp7 = rl;
+		  begin_temp(sc->temp6, rl);
 		  for (s7_int i = 0; i < vlen; i++)
 		    {
 		      set_real(rl, float_vector(v, i));
 		      fp(sc, rl);
 		    }
-		  sc->temp7 = sc->unused;
+		  end_temp(sc->temp6);
 		}
 	      else
 		if (is_int_vector(v))
 		  {
 		    s7_pointer iv = wrap_mutable_integer(sc, 0); /* make_mutable_integer? */
-		    sc->temp7 = iv;
+		    begin_temp(sc->temp6, iv);
 		    for (s7_int i = 0; i < vlen; i++)
 		      {
 			set_integer(iv, int_vector(v, i));
 			fp(sc, iv);
 		      }
-		    sc->temp7 = sc->unused;
+		    end_temp(sc->temp6);
 		  }
 		else
 		  for (s7_int i = 0; i < vlen; i++)
@@ -71471,9 +71470,9 @@ static s7_pointer op_safe_c_ssp_mv(s7_scheme *sc, s7_pointer args) /*sc->code: (
 static s7_pointer op_safe_c_3p_mv(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer res;
-  sc->temp8 = copy_proper_list(sc, args);
-  res = cons(sc, sc->unused, sc->temp8);
-  sc->temp8 = sc->unused;
+  begin_temp(sc->temp6, copy_proper_list(sc, args));
+  res = cons(sc, sc->unused, sc->temp6);
+  end_temp(sc->temp6);
   return(res);
 }
 
@@ -71864,14 +71863,14 @@ static s7_pointer splice_out_values(s7_scheme *sc, s7_pointer args)
   while (car(args) == sc->no_value) {args = cdr(args); if (is_null(args)) return(sc->nil);}
   tp = list_1(sc, car(args));
   if (is_null(cdr(args))) return(tp);
-  sc->temp8 = tp;
+  begin_temp(sc->temp6, tp);
   for (s7_pointer p = cdr(args), np = tp; is_pair(p); p = cdr(p))
     if (car(p) != sc->no_value)
       {
 	set_cdr(np, list_1(sc, car(p)));
 	np = cdr(np);
       }
-  sc->temp8 = sc->unused;
+  end_temp(sc->temp6);
   return(tp);
 }
 
@@ -78578,7 +78577,8 @@ static bool op_let_1(s7_scheme *sc)
   set_curlet(sc, make_let(sc, T_Let(sc->curlet)));
   if (is_symbol(car(sc->code)))
     {
-      op_named_let_1(sc, y); /* inner let here, y = var list?? */
+      op_named_let_1(sc, y); /* inner let here, y = vals list */
+      sc->temp8 = sc->unused;
       return(true);
     }
   id = let_id(sc->curlet);
@@ -84249,7 +84249,6 @@ static bool op_dox_init(s7_scheme *sc)
   s7_pointer test, code = cdr(sc->code);
   s7_pointer let = inline_make_let(sc, sc->curlet);
   sc->temp1 = let;
-
   for (s7_pointer vars = car(code); is_pair(vars); vars = cdr(vars))
     {
       add_slot(sc, let, caar(vars), fx_call(sc, cdar(vars)));
@@ -100319,10 +100318,7 @@ int main(int argc, char **argv)
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * safe_do hop bit in other do cases and let
- * nvars to op_let etc [let direct?]
  * do let/slot need to clear the type? slot gensym gc protection?
- *   how to be sure current wrapper let is not reallocated in fx etc: use begin|end_temp? let_a_a_new can't involve another let?
- * there are a lot more temps to clean up (sc->temp* except 6, rec* etc)
  *
  * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]

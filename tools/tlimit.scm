@@ -1,6 +1,10 @@
 ;; timing test for multi-parameter funcs and so on
 
 (define size 10000) ; tried also 100k and 1M -- most the time is in format_to_port
+;;; 10k:  0.109u 0.056s
+;;; 100k: 1.762u 0.259s
+;;; 1M:  54.048u 3.094s
+
 (define tmp-output-file "too-many-lets.scm")
 (define time-column 32)
 
