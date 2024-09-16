@@ -4087,7 +4087,7 @@ static void local_memset(void *s, uint8_t val, size_t n)
 static inline s7_int safe_strlen(const char *str) /* this is safer than strlen, and slightly faster */
 {
   const char *tmp = str;
-  if ((!tmp) || (!(*tmp))) return(0);
+  if ((!tmp) || (!*tmp)) return(0);
   for (; *tmp; ++tmp);
   return(tmp - str);
 }
@@ -12559,7 +12559,7 @@ static void call_with_current_continuation(s7_scheme *sc)
 
   /* check for (baffle ...) blocking the current attempt to continue */
   if ((continuation_key(c) != NOT_BAFFLED) &&
-      (!(find_baffle(sc, continuation_key(c)))))
+      (!find_baffle(sc, continuation_key(c))))
     error_nr(sc, sc->baffled_symbol,
 	     (is_symbol(continuation_name(sc->code))) ?
 	     set_elist_2(sc, wrap_string(sc, "continuation ~S can't jump into with-baffle", 43), continuation_name(sc->code)) :
@@ -13909,8 +13909,7 @@ static s7_int c_gcd(s7_int u, s7_int v)
     }
   a = s7_int_abs(u);
   b = s7_int_abs(v);
-  /* there are faster gcd algorithms but does it ever matter? it's 56 in tari.scm */
-  while (b)
+  while (b != 0)
     {
       s7_int temp = a % b;
       a = b;
@@ -13991,16 +13990,6 @@ static bool c_rationalize(s7_double ux, s7_double error, s7_int *numer, s7_int *
 	      (*numer) = p0;
 	      (*denom) = q0;
 	      if ((S7_DEBUGGING) && (q0 == 0)) fprintf(stderr, "%f %" ld64 "/0\n", ux, p0);
-#if S7_DEBUGGING
-	      if (S7_DEBUGGING)
-		{
-		  s7_pointer rat = make_ratio(cur_sc, p0, q0);
-		  if ((numerator(rat) != p0) ||
-		      (denominator(rat) != q0))
-		    fprintf(stderr, "rationalize: %" ld64 "/%" ld64 ", %" ld64 "/%" ld64 "\n", p0, q0, numerator(rat), denominator(rat));
-		  if (q0 <= 0) fprintf(stderr, "rationalize: den: %" ld64 "\n", q0);
-		}
-#endif
 	    }
 	  return(true);
 	}
@@ -14166,7 +14155,7 @@ static s7_pointer make_ratio(s7_scheme *sc, s7_int a, s7_int b)
   return(x);
 }
 
-/* using "make-ratio" here is a desperate kludge trying to maintain backwards compatibility; internally we use make_ratio_with_div_check below */
+/* using make_ratio here is a desperate kludge trying to maintain backwards compatibility; internally we use make_ratio_with_div_check below */
 s7_pointer s7_make_ratio(s7_scheme *sc, s7_int a, s7_int b)
 {
   if (b == 0)
@@ -14821,6 +14810,8 @@ static const char *integer_to_string_no_length(s7_scheme *sc, s7_int num) /* do 
     }
   return(++p);
 }
+
+/* local_strchr is faster in a few cases, but much slower in tshoot.scm */
 
 static char *floatify(char *str, s7_int *nlen)
 {
@@ -15686,7 +15677,7 @@ static s7_int string_to_integer(const char *str, int32_t radix, bool *overflow)
       }
 
 #if WITH_GMP
- if (!(*overflow))
+ if (!*overflow)
    (*overflow) = ((lval > S7_INT32_MAX) ||
 		  ((tmp - tmp1) > s7_int_digits_by_radix[radix]));
   /* this tells the string->number readers to create a bignum.  We need to be very conservative here to catch contexts such as (/ 1/524288 19073486328125) */
@@ -16513,7 +16504,7 @@ static s7_pointer string_to_number_p_p(s7_scheme *sc, s7_pointer str1)
   if (!is_string(str1))
     wrong_type_error_nr(sc, sc->string_to_number_symbol, 1, str1, sc->type_names[T_STRING]);
   str = (char *)string_value(str1);
-  return(((!str) || (!(*str))) ? sc->F : string_to_number(sc, str, 10));
+  return(((!str) || (!*str)) ? sc->F : string_to_number(sc, str, 10));
 }
 
 static s7_pointer string_to_number_p_pp(s7_scheme *sc, s7_pointer str1, s7_pointer radix1)
@@ -16530,7 +16521,7 @@ static s7_pointer string_to_number_p_pp(s7_scheme *sc, s7_pointer str1, s7_point
     out_of_range_error_nr(sc, sc->string_to_number_symbol, int_two, radix1, a_valid_radix_string);
 
   str = (char *)string_value(str1);
-  if ((!str) || (!(*str)))
+  if ((!str) || (!*str))
     return(sc->F);
   return(string_to_number(sc, str, radix));
 }
@@ -16553,7 +16544,7 @@ static s7_pointer g_string_to_number_1(s7_scheme *sc, s7_pointer args, s7_pointe
     }
   else radix = 10;
   str = (char *)string_value(car(args));
-  if ((!str) || (!(*str)))
+  if ((!str) || (!*str))
     return(sc->F);
   return(string_to_number(sc, str, radix));
 }
@@ -17430,7 +17421,7 @@ static s7_pointer g_log(s7_scheme *sc, s7_pointer args)
   if (is_pair(cdr(args)))
     {
       s7_pointer y = cadr(args);
-      if (!(is_number(y)))
+      if (!is_number(y))
 	return(method_or_bust(sc, y, sc->log_symbol, args, a_number_string, 2));
 
 #if WITH_GMP
@@ -26761,6 +26752,8 @@ static void init_uppers(void)
     }
 }
 
+static int digitp(int c) {return(((c >= '0') && (c <= '9')) ? 1 : 0);}
+
 static void init_chars(void)
 {
   s7_cell *cells = (s7_cell *)Calloc(NUM_CHARS + 1, sizeof(s7_cell));
@@ -26784,7 +26777,7 @@ static void init_chars(void)
       character(cp) = c;
       upper_character(cp) = (uint8_t)toupper(i);
       is_char_alphabetic(cp) = (bool)isalpha(i);
-      is_char_numeric(cp) = (bool)isdigit(i);
+      is_char_numeric(cp) = (bool)digitp(i);
       is_char_whitespace(cp) = white_space[i];
       is_char_uppercase(cp) = (((bool)isupper(i)) || ((i >= 192) && (i < 208)));
       is_char_lowercase(cp) = (bool)islower(i);
@@ -29006,7 +28999,7 @@ in the port's data where the next read will take place."
   #define Q_port_position s7_make_signature(sc, 2, sc->is_integer_symbol, sc->is_input_port_symbol)
 
   s7_pointer port = car(args);
-  if (!(is_input_port(port)))
+  if (!is_input_port(port))
     sole_arg_wrong_type_error_nr(sc, sc->port_position_symbol, port, sc->type_names[T_INPUT_PORT]);
   if (port_is_closed(port))
     sole_arg_wrong_type_error_nr(sc, sc->port_position_symbol, port, an_open_input_port_string);
@@ -29024,7 +29017,7 @@ static s7_pointer g_set_port_position(s7_scheme *sc, s7_pointer args)
   s7_pointer port = car(args), pos;
   s7_int position;
 
-  if (!(is_input_port(port)))
+  if (!is_input_port(port))
     wrong_type_error_nr(sc, wrap_string(sc, "set! port-position", 18), 1, port, an_input_port_string);
   if (port_is_closed(port))
     wrong_type_error_nr(sc, wrap_string(sc, "set! port-position", 18), 1, port, an_open_input_port_string);
@@ -29072,7 +29065,7 @@ static s7_pointer g_port_file(s7_scheme *sc, s7_pointer args)
 /* -------------------------------- port-line-number -------------------------------- */
 static s7_pointer port_line_number_p_p(s7_scheme *sc, s7_pointer x)
 {
-  if ((!(is_input_port(x))) ||
+  if ((!is_input_port(x)) ||
       (port_is_closed(x)))
     return(method_or_bust_p(sc, x, sc->port_line_number_symbol, an_input_port_string));
   return(make_integer(sc, port_line_number(x)));
@@ -29087,7 +29080,7 @@ static s7_pointer g_port_line_number(s7_scheme *sc, s7_pointer args)
 
 s7_int s7_port_line_number(s7_scheme *sc, s7_pointer p)
 {
-  if (!(is_input_port(p)))
+  if (!is_input_port(p))
     sole_arg_wrong_type_error_nr(sc, sc->port_line_number_symbol, p, sc->type_names[T_INPUT_PORT]);
   return(port_line_number(p));
 }
@@ -29101,7 +29094,7 @@ static s7_pointer g_set_port_line_number(s7_scheme *sc, s7_pointer args)
   else
     {
       p = car(args);
-      if (!(is_input_port(p)))
+      if (!is_input_port(p))
 	wrong_type_error_nr(sc, wrap_string(sc, "set! port-line-number", 21), 1, p, an_input_port_string);
     }
   line = (is_null(cdr(args)) ? car(args) : cadr(args));
@@ -31687,7 +31680,7 @@ defaults to the rootlet.  To load into the current environment instead, pass (cu
   else set_curlet(sc, sc->rootlet);
 
   fname = string_value(name);
-  if ((!fname) || (!(*fname)))   /* fopen("", "r") returns a file pointer?? */
+  if ((!fname) || (!*fname))   /* fopen("", "r") returns a file pointer?? */
     error_nr(sc, sc->out_of_range_symbol,
 	     set_elist_2(sc, wrap_string(sc, "load's first argument, ~S, should be a filename", 47), name));
 
@@ -36027,7 +36020,7 @@ static void number_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_w
       char *str = number_to_string_base_10(sc, obj, 0, sc->float_format_precision, 'g', &nlen, use_write); /* was 14 */
       if ((nlen < NUMBER_NAME_SIZE) &&
 	  (str[0] != 'n') && (str[0] != 'i') &&
-	  ((!(is_t_complex(obj))) ||
+	  ((!is_t_complex(obj)) ||
 	   ((!is_NaN(imag_part(obj))) && (!is_inf(imag_part(obj))))))
 	set_number_name(obj, str, nlen);
       port_write_string(port)(sc, str, nlen, port);
@@ -37269,7 +37262,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 
 	    case '\n':                          /* -------- trim white-space --------  so (format #f "hiho~\n") -> "hiho"! */
 	      for (i = i + 2; i <str_len - 1; i++)
-		if (!(white_space[(uint8_t)(str[i])]))
+		if (!white_space[(uint8_t)(str[i])])
 		  {
 		    i--;
 		    break;
@@ -37494,7 +37487,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		char pad = ' ';
 		i++;                                      /* str[i] == '~' */
 
-		if (isdigit((int32_t)(str[i])))
+		if (digitp((int32_t)(str[i])))
 		  width = format_numeric_arg(sc, str, str_len, fdat, &i);
 		else
 		  if ((str[i] == 'N') || (str[i] == 'n'))
@@ -37505,7 +37498,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		if (str[i] == ',')
 		  {
 		    i++;                                  /* is (format #f "~12,12D" 1) an error?  The precision (or is it the width?) has no use here */
-		    if (isdigit((int32_t)(str[i])))
+		    if (digitp((int32_t)(str[i])))
 		      precision = format_numeric_arg(sc, str, str_len, fdat, &i);
 		    else
 		      if ((str[i] == 'N') || (str[i] == 'n'))
@@ -37578,7 +37571,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		  case 'F': case 'f':
 		    if (is_null(fdat->args))
 		      format_error_nr(sc, "~~F: missing argument", 21, str, args, fdat);
-		    if (!(is_number(car(fdat->args))))
+		    if (!is_number(car(fdat->args)))
 		      {
 			if (!format_method(sc, (const char *)(str + i), fdat, port))
 			  format_error_nr(sc, "~~F: numeric argument required", 30, str, args, fdat);
@@ -37589,7 +37582,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		  case 'G': case 'g':
 		    if (is_null(fdat->args))
 		      format_error_nr(sc, "~~G: missing argument", 21, str, args, fdat);
-		    if (!(is_number(car(fdat->args))))
+		    if (!is_number(car(fdat->args)))
 		      {
 			if (!format_method(sc, (const char *)(str + i), fdat, port))
 			  format_error_nr(sc, "~~G: numeric argument required", 30, str, args, fdat);
@@ -37600,7 +37593,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		  case 'E': case 'e':
 		    if (is_null(fdat->args))
 		      format_error_nr(sc, "~~E: missing argument", 21, str, args, fdat);
-		    if (!(is_number(car(fdat->args))))
+		    if (!is_number(car(fdat->args)))
 		      {
 			if (!format_method(sc, (const char *)(str + i), fdat, port))
 			  format_error_nr(sc, "~~E: numeric argument required", 30, str, args, fdat);
@@ -37616,7 +37609,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		  case 'D': case 'd':
 		    if (is_null(fdat->args))
 		      format_error_nr(sc, "~~D: missing argument", 21, str, args, fdat);
-		    if (!(is_number(car(fdat->args))))
+		    if (!is_number(car(fdat->args)))
 		      {
 			/* (let () (require mockery.scm) (format #f "~D" ((*mock-number* 'mock-number) 123)))
 			 *    port here is a string-port, str has the width/precision data if the caller wants it,
@@ -37634,7 +37627,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		  case 'O': case 'o':
 		    if (is_null(fdat->args))
 		      format_error_nr(sc, "~~O: missing argument", 21, str, args, fdat);
-		    if (!(is_number(car(fdat->args))))
+		    if (!is_number(car(fdat->args)))
 		      {
 			if (!format_method(sc, (const char *)(str + i), fdat, port))
 			  format_error_nr(sc, "~~O: numeric argument required", 30, str, args, fdat);
@@ -37645,7 +37638,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		  case 'X': case 'x':
 		    if (is_null(fdat->args))
 		      format_error_nr(sc, "~~X: missing argument", 21, str, args, fdat);
-		    if (!(is_number(car(fdat->args))))
+		    if (!is_number(car(fdat->args)))
 		      {
 			if (!format_method(sc, (const char *)(str + i), fdat, port))
 			  format_error_nr(sc, "~~X: numeric argument required", 30, str, args, fdat);
@@ -37656,7 +37649,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		  case 'B': case 'b':
 		    if (is_null(fdat->args))
 		      format_error_nr(sc, "~~B: missing argument", 21, str, args, fdat);
-		    if (!(is_number(car(fdat->args))))
+		    if (!is_number(car(fdat->args)))
 		      {
 			if (!format_method(sc, (const char *)(str + i), fdat, port))
 			  format_error_nr(sc, "~~B: numeric argument required", 30, str, args, fdat);
@@ -42540,7 +42533,7 @@ static s7_pointer g_make_vector_1(s7_scheme *sc, s7_pointer args, s7_pointer cal
     }
   else
     {
-      if (!(is_pair(x)))
+      if (!is_pair(x))
 	return(method_or_bust(sc, x, caller, args, wrap_string(sc, "an integer or a list of integers", 32), 1));
       if (!s7_is_integer(car(x)))
 	wrong_type_error_nr(sc, caller, 1, car(x), sc->type_names[T_INTEGER]);
@@ -46282,22 +46275,20 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 		  s7_pointer checker = car(proc), mapper = cdr(proc);
 
 		  hash_set_chosen(ht);
-		  if (!((is_any_c_function(checker)) ||
-			(is_any_closure(checker))))
+		  if (!((is_any_c_function(checker)) ||	(is_any_closure(checker))))
 		    error_nr(sc, sc->wrong_type_arg_symbol,
 			     set_elist_4(sc, wrap_string(sc, "~A: first entry of type info, ~A, is ~A, but should be a function", 65),
 					 caller, checker, type_name_string(sc, checker)));
-		  if (!((is_any_c_function(mapper)) ||
-			(is_any_closure(mapper))))
+		  if (!((is_any_c_function(mapper)) ||(is_any_closure(mapper))))
 		    error_nr(sc, sc->wrong_type_arg_symbol,
 			     set_elist_4(sc, wrap_string(sc, "~A: second entry of type info, ~A, is ~A, but should be a function", 66),
 					 caller, mapper, type_name_string(sc, mapper)));
 
-		  if (!(s7_is_aritable(sc, checker, 2)))
+		  if (!s7_is_aritable(sc, checker, 2))
 		    error_nr(sc, sc->wrong_type_arg_symbol,
 			     set_elist_3(sc, wrap_string(sc, "~A's equality function, ~A, (car of the second argument) should be a function of two arguments", 94),
 					 caller, checker));
-		  if (!(s7_is_aritable(sc, mapper, 1)))
+		  if (!s7_is_aritable(sc, mapper, 1))
 		    error_nr(sc, sc->wrong_type_arg_symbol,
 			     set_elist_3(sc, wrap_string(sc, "~A's mapping function, ~A, (cdr of the second argument) should be a function of one argument", 92),
 					 caller, mapper));
@@ -49335,7 +49326,7 @@ static bool c_objects_are_equal(s7_scheme *sc, s7_pointer a, s7_pointer b, share
   else nci = clear_shared_info(sc->circle_info);
 
   for (pa = to_list(sc, set_plist_1(sc, a)), pb = to_list(sc, set_plist_1(sc, b)); is_pair(pa) && (is_pair(pb)); pa = cdr(pa), pb = cdr(pb))
-    if (!(is_equal_1(sc, car(pa), car(pb), nci)))
+    if (!is_equal_1(sc, car(pa), car(pb), nci))
       return(false);
   return(pa == pb); /* presumably both are nil if successful */
 }
@@ -49733,7 +49724,7 @@ static bool vector_equal(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_
       else nci = clear_shared_info(sc->circle_info);
     }
   for (s7_int i = 0; i < len; i++)
-    if (!(is_equal_1(sc, vector_element(x, i), vector_element(y, i), nci)))
+    if (!is_equal_1(sc, vector_element(x, i), vector_element(y, i), nci))
       return(false);
   return(true);
 }
@@ -49831,7 +49822,7 @@ static bool vector_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_
       else nci = clear_shared_info(sc->circle_info);
     }
   for (s7_int i = 0; i < len; i++)
-    if (!(is_equivalent_1(sc, vector_element(x, i), vector_element(y, i), nci)))
+    if (!is_equivalent_1(sc, vector_element(x, i), vector_element(y, i), nci))
       return(false);
   return(true);
 }
@@ -68531,11 +68522,11 @@ static s7_pointer opt_do_no_vars(opt_info *o)
   gc_protect_via_stack(sc, old_e);
   set_curlet(sc, do_curlet(o));
   if (len == 0)       /* titer */
-    while (!(fb(ostart)));
+    while (!fb(ostart));
   else
     {
       opt_info *body = do_no_vars_body(o);
-      while (!(fb(ostart)))   /* tshoot, tfft */
+      while (!fb(ostart))   /* tshoot, tfft */
 	for (int32_t i = 0; i < len; i++)
 	  {
 	    opt_info *o1 = body->v[i].o1;
@@ -68887,7 +68878,7 @@ static bool do_passes_safety_check(s7_scheme *sc, s7_pointer body, s7_pointer st
   if (!is_safety_checked(body))
     {
       set_safety_checked(body);
-      if (!(do_is_safe(sc, body, stepper, sc->nil, step_vars, has_set)))
+      if (!do_is_safe(sc, body, stepper, sc->nil, step_vars, has_set))
 	set_unsafe_do(body);
     }
   return(!is_unsafe_do(body));
@@ -70987,7 +70978,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
   switch (type(f))
     {
     case T_C_FUNCTION:
-      if (!(c_function_is_aritable(f, len)))
+      if (!c_function_is_aritable(f, len))
 	error_nr(sc, sc->wrong_number_of_args_symbol,
 		 set_elist_4(sc, wrap_string(sc, "map ~A: ~D argument~P?", 22), f, wrap_integer(sc, len), wrap_integer(sc, len)));
     case T_C_RST_NO_REQ_FUNCTION:
@@ -78380,7 +78371,7 @@ static s7_pointer check_let(s7_scheme *sc) /* called only from op_let */
 		 set_elist_3(sc, wrap_string(sc, "let variable declaration, but no value?: ~A in ~A", 49),
 			     x, object_to_string_truncated(sc, form)));
 
-      if (!(is_pair(cdr(carx))))                     /* (let ((x . 1))...) */
+      if (!is_pair(cdr(carx)))                       /* (let ((x . 1))...) */
 	error_nr(sc, sc->syntax_error_symbol,
 		 set_elist_3(sc, wrap_string(sc, "let variable declaration, ~A, is not a proper list in ~A", 56),
 			     x, object_to_string_truncated(sc, form)));
@@ -78390,7 +78381,7 @@ static s7_pointer check_let(s7_scheme *sc) /* called only from op_let */
 		 set_elist_3(sc, wrap_string(sc, "let variable declaration, ~A, has more than one value in ~A", 59),
 			     x, object_to_string_truncated(sc, form)));
       y = car(carx);
-      if (!(is_symbol(y)))
+      if (!is_symbol(y))
 	{
 	  if (is_c_function(y))                      /* (let ((#_abs 3)) ...) */
 	    {
@@ -78984,7 +78975,7 @@ static bool check_let_star(s7_scheme *sc)
 		 set_elist_3(sc, wrap_string(sc, "let* variable list, ~A, is messed up in ~A", 42),
 			     var_and_val, object_to_string_truncated(sc, form)));
 
-      if (!(is_pair(cdr(var_and_val))))             /* (let* ((x . 1))...) */
+      if (!is_pair(cdr(var_and_val)))               /* (let* ((x . 1))...) */
 	{
 	  if (is_null(cdr(var_and_val)))
 	    error_nr(sc, sc->syntax_error_symbol,
@@ -79000,7 +78991,7 @@ static bool check_let_star(s7_scheme *sc)
 			     var_and_val, object_to_string_truncated(sc, form)));
 
       var = car(var_and_val);
-      if (!(is_symbol(var)))                        /* (let* ((3 1)) 1) */
+      if (!is_symbol(var))                          /* (let* ((3 1)) 1) */
 	error_nr(sc, sc->syntax_error_symbol,
 		 set_elist_4(sc, wrap_string(sc, "bad variable name ~W in let* (it is ~A, not a symbol) in ~A", 59),
 			     var, object_type_name(sc, var),
@@ -79285,7 +79276,7 @@ static void check_letrec(s7_scheme *sc, bool letrec)
 	syntax_error_with_caller_nr(sc, "~A: bad variable ~S (should be a pair (name value))", 51, caller, carx);
 
       y = car(carx);
-      if (!(is_symbol(y)))
+      if (!is_symbol(y))
 	error_nr(sc, sc->syntax_error_symbol,
 		 set_elist_5(sc, wrap_string(sc, "bad variable name ~W in ~A (it is ~A, not a symbol) in ~A", 57),
 			     y, caller, object_type_name(sc, y),
@@ -83739,7 +83730,7 @@ static void check_do_for_obvious_errors(s7_scheme *sc, s7_pointer form)
       for (x = car(code); is_pair(x); x = cdr(x))
 	{
 	  s7_pointer y = car(x);
-	  if (!(is_pair(y)))                          /* (do (4) (= 3)) */
+	  if (!is_pair(y))                            /* (do (4) (= 3)) */
 	    syntax_error_nr(sc, "do: variable name missing? ~A", 29, form);
 
 	  if (!is_symbol(car(y)))                     /* (do ((3 2)) ()) */
@@ -83860,7 +83851,7 @@ static s7_pointer check_do(s7_scheme *sc)
 	{
 	  if ((is_pair(car(end))) && /* this code is repeated below */
 	      (has_fx(end)) &&
-	      (!(is_syntax(caar(end)))) &&
+	      (!is_syntax(caar(end))) &&
 	      (!((is_symbol(caar(end))) && (is_definer_or_binder(caar(end))))))
 	    {
 	      s7_pointer v1 = NULL, v2 = NULL, v3 = NULL;
@@ -84140,7 +84131,7 @@ static s7_pointer check_do(s7_scheme *sc)
 
 	if ((is_pair(car(end))) &&
 	    (has_fx(end)) &&
-	    (!(is_syntax(caar(end)))) &&
+	    (!is_syntax(caar(end))) &&
 	    (!((is_symbol(caar(end))) && (is_definer_or_binder(caar(end))))))
 	  {
 	    if (!fx_tree_in(sc, end, stepper0, stepper1, stepper2, stepper3)) /* just the end-test, not the results */
@@ -87316,8 +87307,8 @@ static void op_define_with_setter(s7_scheme *sc)
     immutable_object_error_nr(sc, set_elist_2(sc, wrap_string(sc, "can't define ~S: curlet is immutable", 36), code));
 
   if ((is_any_closure(sc->value)) &&
-      ((!(is_let(closure_let(sc->value)))) ||
-       (!(is_funclet(closure_let(sc->value))))))  /* otherwise it's (define f2 f1) or something similar */
+      ((!is_let(closure_let(sc->value))) ||
+       (!is_funclet(closure_let(sc->value)))))  /* otherwise it's (define f2 f1) or something similar */
     {
       s7_pointer new_func = sc->value, new_let;
       if (is_safe_closure_body(closure_body(new_func)))
@@ -92996,7 +92987,7 @@ static bool op_unknown_s(s7_scheme *sc)
   switch (type(f))
     {
     case T_C_FUNCTION:
-      if (!(c_function_is_aritable(f, 1))) break;
+      if (!c_function_is_aritable(f, 1)) break;
     case T_C_RST_NO_REQ_FUNCTION:
       set_c_function(code, f);
       if ((is_safe_procedure(f)) || (c_function_call(f) == s7_values))
@@ -93079,7 +93070,7 @@ static bool op_unknown_a(s7_scheme *sc)
   switch (type(f))
     {
     case T_C_FUNCTION:
-      if (!(c_function_is_aritable(f, 1))) break;
+      if (!c_function_is_aritable(f, 1)) break;
     case T_C_RST_NO_REQ_FUNCTION:
       clear_has_fx(code);
       set_c_function(code, f);
@@ -93169,7 +93160,7 @@ static bool op_unknown_gg(s7_scheme *sc)
   switch (type(f))
     {
     case T_C_FUNCTION:
-      if (!(c_function_is_aritable(f, 2))) break;
+      if (!c_function_is_aritable(f, 2)) break;
     case T_C_RST_NO_REQ_FUNCTION:
       if (is_safe_procedure(f))
 	{
@@ -93300,7 +93291,7 @@ static bool op_unknown_ns(s7_scheme *sc)
   switch (type(f))
     {
     case T_C_FUNCTION:
-      if (!(c_function_is_aritable(f, num_args))) break;
+      if (!c_function_is_aritable(f, num_args)) break;
     case T_C_RST_NO_REQ_FUNCTION:
       if (is_safe_procedure(f))
 	{
@@ -93368,7 +93359,7 @@ static bool op_unknown_aa(s7_scheme *sc)
   switch (type(f))
     {
     case T_C_FUNCTION:
-      if (!(c_function_is_aritable(f, 2))) break;
+      if (!c_function_is_aritable(f, 2)) break;
     case T_C_RST_NO_REQ_FUNCTION:
       if (is_safe_procedure(f)) /* why is this different from unknown_a and unknown_na? */
 	{
@@ -93457,7 +93448,7 @@ static bool op_unknown_na(s7_scheme *sc)
   switch (type(f))
     {
     case T_C_FUNCTION:
-      if (!(c_function_is_aritable(f, num_args))) break;
+      if (!c_function_is_aritable(f, num_args)) break;
     case T_C_RST_NO_REQ_FUNCTION:
       if (is_safe_procedure(f))
 	{
@@ -93575,7 +93566,7 @@ static bool op_unknown_np(s7_scheme *sc)
   switch (type(f))
     {
     case T_C_FUNCTION:
-      if (!(c_function_is_aritable(f, num_args))) break;
+      if (!c_function_is_aritable(f, num_args)) break;
     case T_C_RST_NO_REQ_FUNCTION:
       if (num_args == 1)
 	set_any_c_np(sc, f, code, sc->curlet, num_args, (is_safe_procedure(f)) ? OP_SAFE_C_P : OP_C_P);
@@ -94428,7 +94419,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_ANY_CLOSURE_NP: if (!closure_np_is_ok(sc, sc->code)) {if (op_unknown_np(sc)) goto EVAL; continue;}
 	case HOP_ANY_CLOSURE_NP: op_any_closure_np(sc); goto EVAL;
 	case OP_ANY_CLOSURE_NP_1:
-	  if (!(inline_collect_np_args(sc, OP_ANY_CLOSURE_NP_1, cons(sc, sc->value, sc->args))))
+	  if (!inline_collect_np_args(sc, OP_ANY_CLOSURE_NP_1, cons(sc, sc->value, sc->args)))
 	    op_any_closure_np_end(sc);
 	  goto EVAL;
 	case OP_ANY_CLOSURE_NP_2:
@@ -100260,21 +100251,21 @@ int main(int argc, char **argv)
  * ----------------------------------------------------
  * tpeak      148    114    108    105    102    103
  * tref      1081    687    463    459    464    410
- * tlimit    3936   5371   5371   5371   5371    837
+ * tlimit    3936   5371   5371   5371   5371    833
  * index            1016    973    967    972    975
  * tmock            1145   1082   1042   1045   1035
  * tvect     3408   2464   1772   1669   1497   1464
  * thook     7651   ----   2590   2030   2046   1754
  * texit     1884   1950   1778   1741   1770   1756
  * tauto                   2562   2048   1729   1766
- * s7test           1831   1818   1829   1830   1847
+ * s7test           1831   1818   1829   1830   1843
  * lt        2222   2172   2150   2185   1950   1911
- * dup              3788   2492   2239   2097   1988
+ * dup              3788   2492   2239   2097   2001
  * tread            2421   2419   2408   2405   2241
  * tcopy            5546   2539   2375   2386   2342
  * trclo     8031   2574   2454   2445   2449   2359
  * tmat             3042   2524   2578   2590   2510
- * tload                   3046   2404   2566   2528
+ * tload                   3046   2404   2566   2537
  * fbench    2933   2583   2460   2430   2478   2571
  * tsort     3683   3104   2856   2804   2858   2858
  * titer     4550   3349   3070   2985   2966   2918
@@ -100290,11 +100281,11 @@ int main(int argc, char **argv)
  * tshoot           5447   5183   5055   5034   4843
  * tstar            6705   5834   5278   5177   5047
  * tform            5348   5307   5316   5084   5070
- * tstr      10.0   6342   5488   5162   5180   5231
+ * tstr      10.0   6342   5488   5162   5180   5252
  * tnum             6013   5433   5396   5409   5427
  * tlist     9219   7546   6558   6240   6300   5771
  * trec      19.6   6980   6599   6656   6658   6010
- * tari      15.0   12.7   6827   6543   6278   6180  6139
+ * tari      15.0   12.7   6827   6543   6278   6138
  * tgsl             7802   6373   6282   6208   6218
  * tset                           6260   6364   6266
  * tleft     12.2   9753   7537   7331   7331   6417
@@ -100310,7 +100301,7 @@ int main(int argc, char **argv)
  * timp             24.4   20.0   19.6   19.7   15.5
  * tmv              21.9   21.1   20.7   20.6   16.6
  * calls            37.5   37.0   37.5   37.1   37.2
- * sg                      55.9   55.8   55.4   55.3
+ * sg                      55.9   55.8   55.4   55.2
  * tbig            175.8  156.5  148.1  146.2  146.4  146.3
  * ----------------------------------------------------
  *
@@ -100318,7 +100309,6 @@ int main(int argc, char **argv)
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * safe_do hop bit in other do cases and let
- * do let/slot need to clear the type? slot gensym gc protection?
  *
  * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
