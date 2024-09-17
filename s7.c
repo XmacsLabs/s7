@@ -1284,7 +1284,7 @@ struct s7_scheme {
   s7_int big_symbol_tag;
   uint32_t small_symbol_tag;
 #if S7_DEBUGGING
-  int32_t big_symbol_set_line, small_symbol_set_line, big_symbol_set_state, small_symbol_set_state, y_temp_line, v_temp_line;
+  int32_t big_symbol_set_line, small_symbol_set_line, big_symbol_set_state, small_symbol_set_state, y_temp_line, v_temp_line, temp6_line;
   const char *big_symbol_set_func, *small_symbol_set_func;
 #endif
   int32_t bignum_precision;
@@ -1402,8 +1402,9 @@ struct s7_scheme {
   s7_pointer pcl_bc, pcl_bs, pcl_bt, pcl_c, pcl_e, pcl_f, pcl_i, pcl_n, pcl_r, pcl_s, pcl_v, pl_bc, pl_bn, pl_bt, pl_p, pl_sf, pl_tl, pl_nn;
 
   /* optimizer s7_functions */
-  s7_pointer add_1x, add_2, add_3, add_4, add_i_random, add_x1, append_2, bv_ref_2, bv_ref_3, bv_set_3, cdr_let_ref, cdr_let_set, char_equal_2, char_greater_2,
-             char_less_2, char_position_csi, curlet_ref, cv_ref_2, display_2, display_f, dynamic_wind_body, dynamic_wind_init, dynamic_wind_unchecked,
+  s7_pointer add_1x, add_2, add_3, add_4, add_i_random, add_x1, append_2, bv_ref_2, bv_ref_3, bv_set_3,
+             cdr_let_ref, cdr_let_set, char_equal_2, char_greater_2, char_less_2, char_position_csi, complex_wrapped, curlet_ref, cv_ref_2, cv_set_3, 
+             display_2, display_f, dynamic_wind_body, dynamic_wind_init, dynamic_wind_unchecked,
              format_as_objstr, format_f, format_just_control_string, format_no_column, fv_ref_2, fv_ref_3, fv_set_3, fv_set_unchecked, geq_2,
              get_output_string_uncopied, hash_table_2, hash_table_ref_2, int_log2, is_defined_in_rootlet, is_defined_in_unlet, iv_ref_2, iv_ref_3, iv_set_3,
              list_0, list_1, list_2, list_3, list_4, list_ref_at_0, list_ref_at_1, list_ref_at_2, list_set_i, memq_2, memq_3, memq_4, memq_any,
@@ -2566,8 +2567,6 @@ static void init_types(void)
 #define clear_has_methods(p)           clear_mid_type_bit(T_Met(p), T_MID_HAS_METHODS)
 /* this marks an environment or closure that is "open" for generic functions etc, don't reuse this bit */
 
-/* T_HAS_METHODS: pair (and other types like symbol) are available here */
-
 #define mid_type(p)                    (p)->tf.bits.mid_bits
 #define T_HAS_LET_SET_FALLBACK         T_SAFE_STEPPER
 #define T_MID_HAS_LET_SET_FALLBACK     T_MID_SAFE_STEPPER
@@ -2786,6 +2785,11 @@ static void init_types(void)
 #define set_true_is_done(p)            set_high_type_bit(T_Pair(p), T_TRUE_IS_DONE)
 #define set_a_is_cadr(p)               set_true_is_done(p)
 #define a_is_cadr(p)                   true_is_done(p)
+
+#define T_FULL_HAS_NO_RETURN           T_FULL_TRUE_IS_DONE /* this won't collide with true_is_done, I think */
+#define T_HAS_NO_RETURN                T_TRUE_IS_DONE
+#define has_no_return(p)               has_high_type_bit(T_Pair(p), T_HAS_NO_RETURN)
+#define set_has_no_return(p)           set_high_type_bit(T_Pair(p), T_HAS_NO_RETURN)
 
 #define T_FULL_UNKNOPT                 (1LL << (48 + 11))
 #define T_UNKNOPT                      (1 << 11)
@@ -3692,10 +3696,13 @@ static void begin_temp_1(s7_scheme *sc, s7_pointer p, s7_pointer val, const char
 {
   if(p != sc->unused)
     {
-      fprintf(stderr, "%s[%d]: begin_temp %c %d %s\n", func, line, (p == sc->y) ? 'y' : 'v', (p == sc->y) ? sc->y_temp_line : sc->v_temp_line, s7_object_to_c_string(sc, p));
+      fprintf(stderr, "%s[%d]: begin_temp %s %d %s\n", func, line, 
+	      (p == sc->y) ? "y" : ((p == sc->v) ? "v" : "temp6"),
+	      (p == sc->y) ? sc->y_temp_line : ((p == sc->v) ? sc->v_temp_line : sc->temp6_line),
+	      s7_object_to_c_string(sc, p));
       if (sc->stop_at_error) abort();
     }
-  if (p == sc->y) sc->y_temp_line = line; else sc->v_temp_line = line;
+  if (p == sc->y) sc->y_temp_line = line; else if (p == sc->v) sc->v_temp_line = line; else sc->temp6_line = line;
 }
 #else
 #define begin_temp(p, Val)              p = Val
@@ -4880,7 +4887,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj)
 						       ((is_slot(obj)) ? " has-pending-value" :
 							((is_any_closure(obj)) ? " unknopt" :
 							 " ?21?")))))))) : "",
-	  /* bit 30 [pair and symbol free here] */
+	  /* bit 30 */
 	  ((full_typ & T_HAS_METHODS) != 0) ?    (((is_let(obj)) || (is_c_object(obj)) || (is_any_closure(obj)) ||
 						   (is_any_macro(obj)) || (is_c_pointer(obj))) ? " has-methods" :
 						  " ?22?") : "",
@@ -4950,7 +4957,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj)
 						  ((is_pair(obj)) ? " opt1-func-listed" :
 						   " ?33?")) : "",
 	  /* bit 34+24 */
-	  ((full_typ & T_FULL_TRUE_IS_DONE) != 0) ? ((is_pair(obj)) ? " #t-is-done" :
+	  ((full_typ & T_FULL_TRUE_IS_DONE) != 0) ? ((is_pair(obj)) ? " #t-is-done/no-return" :
 						     " ?34?") : "",
 	  /* bit 35+24 */
 	  ((full_typ & T_FULL_UNKNOPT) != 0) ?   ((is_pair(obj)) ? " unknopt" : " ?35?") : "",
@@ -17149,12 +17156,32 @@ static s7_pointer complex_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
     }
 }
 
+static s7_pointer complex_p_pp_wrapped(s7_scheme *sc, s7_pointer x, s7_pointer y)
+{
+  if (is_t_real(x))
+    {
+      if (is_t_real(y)) return(wrap_complex(sc, real(x), real(y)));
+      if (is_t_integer(y)) return(wrap_complex(sc, real(x), (s7_double)integer(y)));
+    }
+  else
+    if (is_t_integer(x))
+      {
+	if (is_t_integer(y)) return(wrap_complex(sc, (s7_double)integer(x), (s7_double)integer(y)));
+	if (is_t_real(y)) return(wrap_complex(sc, (s7_double)integer(x), real(y)));
+      }
+  return(complex_p_pp(sc, x, y));
+}
+
 static s7_pointer g_complex(s7_scheme *sc, s7_pointer args)
 {
   #define H_complex "(complex x1 x2) returns a complex number with real-part x1 and imaginary-part x2"
   #define Q_complex s7_make_signature(sc, 3, sc->is_number_symbol, sc->is_real_symbol, sc->is_real_symbol)
   return(complex_p_pp(sc, car(args), cadr(args)));
 }
+
+static s7_pointer g_complex_wrapped(s7_scheme *sc, s7_pointer args) {return(complex_p_pp_wrapped(sc, car(args), cadr(args)));}
+static s7_pointer complex_p_ii_wrapped(s7_scheme *sc, s7_int x, s7_int y) {return(wrap_complex(sc, (s7_double)x, (s7_double)y));}
+static s7_pointer complex_p_dd_wrapped(s7_scheme *sc, s7_double x, s7_double y) {return(wrap_complex(sc, x, y));}
 
 static s7_pointer complex_p_ii(s7_scheme *sc, s7_int x, s7_int y)
 {
@@ -43518,6 +43545,19 @@ static s7_pointer complex_vector_set_p_ppp(s7_scheme *sc, s7_pointer vec, s7_poi
   return(val);
 }
 
+static s7_pointer g_cv_set_3(s7_scheme *sc, s7_pointer args) {return(complex_vector_set_p_ppp(sc, car(args), cadr(args), caddr(args)));}
+/* static s7_pointer g_cv_set_3_nr(s7_scheme *sc, s7_pointer args) {return(complex_vector_set_p_ppp_nr(sc, car(args), cadr(args), caddr(args)));} */
+
+static s7_pointer complex_vector_set_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr)
+{
+  if (has_no_return(expr))
+    {
+      if ((is_pair(cadddr(expr))) && (car(cadddr(expr)) == sc->complex_symbol))
+	set_c_function(cadddr(expr), sc->complex_wrapped);
+      /* TODO: if third arg is complex-vector-ref and p_pi_wrapped, use complex_wrapped in between? */
+    }
+  return((args == 3) ? sc->cv_set_3 : f);
+}
 
 
 /* -------------------------------- float-vector-ref -------------------------------- */
@@ -66415,16 +66455,21 @@ static bool p_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 		  opc->v[0].fp = opt_p_ppp_ssf;
 		  if ((is_let(obj)) && (is_symbol_and_keyword(arg2)) && (opc->v[3].p_ppp_f == let_set_2)) /* (let-set! L3 :x (+ (L3 'x) 1)) */
 		    use_ppf_slot_set(sc, opc, obj, keyword_symbol(arg2));
-#if 0
-		  if ((is_complex_vector(obj)) && (is_pair(arg3)) && (car(arg3) == sc->complex_symbol) && (car(car_x) == sc->complex_vector_set_symbol))
+
+		  if ((has_no_return(car_x)) && (is_complex_vector(obj)) && (is_pair(arg3)) &&
+		      (car(arg3) == sc->complex_symbol) && (car(car_x) == sc->complex_vector_set_symbol))
 		    {
-		      /* opc->v[3].p_ppp_f = cvset_complex; */
-		      /*   opc->v[5].fp can be opt_p_ii_ff -> complex_p_ii etc? opt_p_pp_sf -> complex_p_pp, opt_p_dd_cc -> complex_p_dd */
-		      /*   add complex_z_ii|dd|pp o->v[3].p_dd_f from o->v[4].o1? opc->v[4].o1->v[3].p_dd_f is complex_p_dd */
-		      /* gdb_break(); */
+		      if (opc->v[4].o1->v[3].p_pp_f == complex_p_pp)
+			opc->v[4].o1->v[3].p_pp_f = complex_p_pp_wrapped;
+		      else
+			if (opc->v[4].o1->v[3].p_dd_f == complex_p_dd)
+			  opc->v[4].o1->v[3].p_dd_f = complex_p_dd_wrapped;
+			else
+			  if (opc->v[4].o1->v[3].p_ii_f == complex_p_ii)
+			    opc->v[4].o1->v[3].p_ii_f = complex_p_ii_wrapped;
+		      /* opc->v[3].p_ppp_f = complex_vector_set_p_ppp and  fn_proc(arg3) == g_complex_wrapped */ 
 		      /* p_pip case is different! o->v[9].fp(o->v[8].o1 */
 		    }
-#endif
 		  return_true(sc, car_x);
 		}
 	      sc->pc = start;
@@ -72361,6 +72406,11 @@ static void init_choosers(s7_scheme *sc)
   f = set_function_chooser(sc->complex_vector_ref_symbol, complex_vector_ref_chooser);
   sc->cv_ref_2 = make_function_with_class(sc, f, "complex-vector-ref", g_cv_ref_2, 2, 0, false);
 
+  /* complex-vector-set */
+  f = set_function_chooser(sc->complex_vector_set_symbol, complex_vector_set_chooser);
+  sc->cv_set_3 = make_function_with_class(sc, f, "complex-vector-set!", g_cv_set_3, 3, 0, false);
+  sc->complex_wrapped = make_function_with_class(sc, f, "complex", g_complex_wrapped, 2, 0, false);
+
   /* float-vector-ref */
   f = set_function_chooser(sc->float_vector_ref_symbol, float_vector_ref_chooser);
   sc->fv_ref_2 = make_function_with_class(sc, f, "float-vector-ref", g_fv_ref_2, 2, 0, false);
@@ -74996,6 +75046,9 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 	if (!is_pair(vars))
 	  return(OPT_OOPS);
       body = cddr(expr);
+      for (s7_pointer p = body; is_pair(p); p = cdr(p)) 
+	if (is_pair(car(p)))
+	  set_has_no_return(car(p));
 
       for (s7_pointer p = vars; is_pair(p); p = cdr(p))
 	{
@@ -83406,7 +83459,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		    if ((!is_pair(cdr(expr))) || (!is_pair(cddr(expr))))  /* (do) or (do (...)) */
 		      return(false);
 		    cp = var_list;
-		    begin_temp(sc->x, cp);
+		    sc->x = cp; /* this can be stepped on by recursive call below */
 		    sc->w = (is_pair(cadr(expr))) ? pair_append(sc, cadr(expr), step_vars) : step_vars;
 		    combined_vars = sc->w;
 		    for (vars = cadr(expr); is_pair(vars); vars = cdr(vars))
@@ -83420,10 +83473,10 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 			if ((is_pair(cdar(vars))) &&
 			    (!do_is_safe(sc, cdar(vars), stepper, cp, combined_vars, has_set))) /* can this step on sc->x? */
 			  {
-			    end_temp(sc->x);
+			    sc->x = sc->unused;
 			    return(false);
 			  }}
-		    end_temp(sc->x);
+		    sc->x = sc->unused;
 		    if (!do_is_safe(sc, caddr(expr), stepper, cp, combined_vars, has_set)) return(false);
 		    if ((is_pair(cdddr(expr))) &&
 			(!do_is_safe(sc, cadddr(expr), stepper, cp, combined_vars, has_set)))
@@ -97690,6 +97743,8 @@ static void init_opt_functions(s7_scheme *sc)
 
   s7_set_p_ii_function(sc, global_value(sc->complex_symbol), complex_p_ii);
   s7_set_p_dd_function(sc, global_value(sc->complex_symbol), complex_p_dd);
+  s7_set_p_pp_function(sc, global_value(sc->complex_symbol), complex_p_pp);
+
   s7_set_p_i_function(sc, global_value(sc->number_to_string_symbol), number_to_string_p_i);
   s7_set_p_p_function(sc, global_value(sc->number_to_string_symbol), number_to_string_p_p);
   s7_set_p_pp_function(sc, global_value(sc->number_to_string_symbol), number_to_string_p_pp);
@@ -98095,7 +98150,6 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_pp_function(sc, global_value(sc->char_eq_symbol), char_eq_p_pp);
   s7_set_p_pp_function(sc, global_value(sc->make_float_vector_symbol), make_float_vector_p_pp);
   s7_set_p_pp_function(sc, global_value(sc->setter_symbol), setter_p_pp);
-  s7_set_p_pp_function(sc, global_value(sc->complex_symbol), complex_p_pp);
   s7_set_p_pp_function(sc, global_value(sc->string_eq_symbol), string_eq_p_pp);
   s7_set_p_pp_function(sc, global_value(sc->string_lt_symbol), string_lt_p_pp);
   s7_set_p_pp_function(sc, global_value(sc->string_gt_symbol), string_gt_p_pp);
@@ -100273,7 +100327,7 @@ int main(int argc, char **argv)
  * tobj             3970   3828   3577   3508   3436
  * tmac             3873   3033   3677   3677   3491
  * teq              4045   3536   3486   3544   3542
- * complex                                      4306
+ * complex                                      4306  4221
  * tcase            4793   4439   4430   4439   4377
  * tmap             8774   4489   4541   4586   4384
  * tlet      11.0   6974   5609   5980   5965   4470
@@ -100296,24 +100350,25 @@ int main(int argc, char **argv)
  * thash            11.7   9734   9479   9526   9241
  * cb        12.9   11.0   9658   9564   9609   9649
  * tmap-hash                                    10.3
- * tgen             11.4   12.0   12.1   12.2   12.3
+ * tgen             11.4   12.0   12.1   12.2   12.4
  * tall      15.9   15.6   15.6   15.6   15.1   15.1
  * timp             24.4   20.0   19.6   19.7   15.5
  * tmv              21.9   21.1   20.7   20.6   16.6
  * calls            37.5   37.0   37.5   37.1   37.2
  * sg                      55.9   55.8   55.4   55.2
- * tbig            175.8  156.5  148.1  146.2  146.4  146.3
+ * tbig            175.8  156.5  148.1  146.2  146.3
  * ----------------------------------------------------
  *
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * safe_do hop bit in other do cases and let
+ * tnr.scm to check all no-return stuff and no-ops (do body, normal body, (format #t|#f...) but no string), see lint check-return
  *
  * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
  *   tcomplex.scm continued
- *   cvset val=(complex...), in opt perhaps (knowing we're in a do body), rewrite to cvset_direct skipping (complex...)
+ *   need implicit (set! (cv i) (complex...))
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere

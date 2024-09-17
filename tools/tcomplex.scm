@@ -32,7 +32,7 @@
 	(complex-vector-set! cv1 i val)))))
 
 ;(c2) ; 100 univect_set(70) opt_p_call_sss g_complex_vector_set opt_do_step_i
-     ; 36 complex_vector_set_p_pip_direct(15) opt_p_pip_sss opt_do_step_i
+      ; 36 complex_vector_set_p_pip_direct(15) opt_p_pip_sss opt_do_step_i
 
 
 (define (c3)
@@ -60,7 +60,8 @@
 	  ((= i len))
 	(complex-vector-set! cv1 i (complex i (- i)))))))
 
-;;; (c4) ; 129 complex_vector_set_p_ppp complex_p_ii etc
+;(c4) ; 129 complex_vector_set_p_ppp complex_p_ii etc
+      ; 109 same but complex_p_ii_wrapped and less gc
 
 
 (define (c5)
@@ -80,7 +81,8 @@
 	    (display 'oops))))))
 
 ;(c5) ; 1481: 508 magnitude_p_p, 125 qsort, 117 gc, 116 opt_b_7pp_ffo, 80 opt_bool_sort_0, 76 complex_vector_ref_p_pi, 66 gt_b_7pp etc
-     ;   maybe specialized sort_func for each data type (to avoid make_real etc)
+      ; 1460 complex_p_ii_wrapped
+      ;   maybe specialized sort_func for each data type (to avoid make_real etc)
       
 
 (define (c6)
@@ -98,6 +100,7 @@
 	  (format *stderr* "(cv3 ~D): ~S~%" i (cv3 i)))))))
 
 ;(c6) ; 579: 99 complex-vector-set_p_ppp, 76 complex_vector_ref_p_pi, 57 opt_p_ppp_ssf, 52 complex_p_ii etc
+      ; 535: complex_p_ii_wrapped
 
 
 (define* (cfft data n (dir 1)) ; complex data
@@ -239,7 +242,8 @@
       (unless (equivalent? cv2 cv1)
 	(display cv1))))) 
 
-;(c9) ; 36: 12 g_reverse_in_place, 11 vector_equivalent, 9 reverse_p_p
+(c9) ; 36: 12 g_reverse_in_place, 11 vector_equivalent, 9 reverse_p_p
+      ; 36: complex_p_ii (too insignificant)
 
 
 ;;; append+float etc, iterate, map/for-each, object->string?

@@ -18375,7 +18375,7 @@
 			 (if (not (equal? result exprs))
 			     (set! result :unequal)))
 
-		     (if (and (len>1? exprs)           ; this gets no hits -- it paralells a similar bug in cond: (test expr => expr)
+		     (if (and (len>1? exprs)           ; this gets no hits -- it parallels a similar bug in cond: (test expr => expr)
 			      (memq '=> (cdr exprs)))
 			 (lint-format "'=> has no effect here: ~A~%" caller (truncated-list->string clause)))
 
