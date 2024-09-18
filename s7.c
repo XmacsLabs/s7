@@ -9,7 +9,7 @@
  * Rick Taube, Andrew Burnson, Donny Ward, Greg Santucci, and Christos Vagias provided the MS Visual C++ support
  * Kjetil Matheussen provided the mingw support
  *
- * Documentation is in s7.h and s7.html.
+ * Documentation is in s7.h, s7.html, s7-ffi.html, and s7-scm.html.
  * s7test.scm is a regression test.
  * repl.scm is a vt100-based listener.
  * nrepl.scm is a notcurses-based listener.
@@ -1403,7 +1403,7 @@ struct s7_scheme {
 
   /* optimizer s7_functions */
   s7_pointer add_1x, add_2, add_3, add_4, add_i_random, add_x1, append_2, bv_ref_2, bv_ref_3, bv_set_3,
-             cdr_let_ref, cdr_let_set, char_equal_2, char_greater_2, char_less_2, char_position_csi, complex_wrapped, curlet_ref, cv_ref_2, cv_set_3, 
+             cdr_let_ref, cdr_let_set, char_equal_2, char_greater_2, char_less_2, char_position_csi, complex_wrapped, curlet_ref, cv_ref_2, cv_set_3,
              display_2, display_f, dynamic_wind_body, dynamic_wind_init, dynamic_wind_unchecked,
              format_as_objstr, format_f, format_just_control_string, format_no_column, fv_ref_2, fv_ref_3, fv_set_3, fv_set_unchecked, geq_2,
              get_output_string_uncopied, hash_table_2, hash_table_ref_2, int_log2, is_defined_in_rootlet, is_defined_in_unlet, iv_ref_2, iv_ref_3, iv_set_3,
@@ -3696,7 +3696,7 @@ static void begin_temp_1(s7_scheme *sc, s7_pointer p, s7_pointer val, const char
 {
   if(p != sc->unused)
     {
-      fprintf(stderr, "%s[%d]: begin_temp %s %d %s\n", func, line, 
+      fprintf(stderr, "%s[%d]: begin_temp %s %d %s\n", func, line,
 	      (p == sc->y) ? "y" : ((p == sc->v) ? "v" : "temp6"),
 	      (p == sc->y) ? sc->y_temp_line : ((p == sc->v) ? sc->v_temp_line : sc->temp6_line),
 	      s7_object_to_c_string(sc, p));
@@ -16657,13 +16657,13 @@ static s7_int abs_i_i(s7_int x) {return((x < 0) ? (-x) : x);}
 /* -------------------------------- magnitude -------------------------------- */
 static double my_hypot(double x, double y)
 {
-  /* according to callgrind, this is much faster than libc's hypot */
   if (x == 0.0) return(fabs(y));
   if (y == 0.0) return(fabs(x));
-  if (x == y) return(1.414213562373095 * fabs(x));
   if (is_NaN(x)) return(x);
   if (is_NaN(y)) return(y);
-  return(sqrt(x * x + y * y));
+  if ((fabs(x) < 1.0e6) && (fabs(y) < 1.0e6)) /* max error is ca. e-14 */
+    return(sqrt(x * x + y * y));              /* timing diffs: 72 for this form, 107 if just libm's hypot */
+  return(hypot(x, y));                        /* libm's hypot protects against over/underflow */
 }
 
 static s7_pointer magnitude_p_p(s7_scheme *sc, s7_pointer x)
@@ -20282,7 +20282,7 @@ static s7_pointer g_add(s7_scheme *sc, s7_pointer args)
 static s7_pointer g_add_2(s7_scheme *sc, s7_pointer args) {return(add_p_pp(sc, car(args), cadr(args)));}
 static s7_pointer g_add_3(s7_scheme *sc, s7_pointer args) {return(add_p_ppp(sc, car(args), cadr(args), caddr(args)));}
 
-static s7_pointer g_add_4(s7_scheme *sc, s7_pointer args) 
+static s7_pointer g_add_4(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer a1 = add_p_pp_wrapped(sc, car(args), cadr(args));
   s7_pointer p = cddr(args);
@@ -20504,7 +20504,7 @@ static s7_pointer g_random_i(s7_scheme *sc, s7_pointer args);
 static s7_pointer add_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr)
 {
   /* (+ s f) (+ (* s s) s) (+ s s) (+ s (* s s)) */
-  if (args == 2) 
+  if (args == 2)
     {
       s7_pointer arg1 = cadr(expr), arg2 = caddr(expr);
       if (arg2 == int_one)                          /* (+ ... 1) */
@@ -43523,6 +43523,17 @@ static s7_pointer complex_vector_set_p_pip(s7_scheme *sc, s7_pointer v, s7_int i
   return(p);
 }
 
+#if 0
+/* TODO: not ready yet -- see opt_cell_set 67434 (also need tcomplex timing test here) */
+static s7_pointer complex_vector_set_p_pip_unchecked(s7_scheme *sc, s7_pointer v, s7_int i, s7_pointer p)
+{
+  if ((i >= 0) && (i < vector_length(v)))
+    complex_vector(v, i) = s7_to_c_complex(p);
+  else out_of_range_error_nr(sc, sc->complex_vector_set_symbol, int_two, wrap_integer(sc, i), (i < 0) ? it_is_negative_string : it_is_too_large_string);
+  return(p);
+}
+#endif
+
 static s7_pointer complex_vector_set_p_pip_direct(s7_scheme *sc, s7_pointer v, s7_int i, s7_pointer p)
 {
   complex_vector(v, i) = s7_to_c_complex(p);
@@ -65071,7 +65082,7 @@ static bool p_p_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer c
 	  if (!opc->v[1].p)
 	    return_false(sc, car_x);
 	  opc->v[0].fp = (ppf == abs_p_p) ? opt_p_p_s_abs : ((ppf == cdr_p_p) ? opt_p_p_s_cdr :
-			   ((ppf == iterate_p_p) ? ((is_iterator(slot_value(opc->v[1].p))) ? opt_p_p_s_iterate_unchecked : opt_p_p_s_iterate) : 
+			   ((ppf == iterate_p_p) ? ((is_iterator(slot_value(opc->v[1].p))) ? opt_p_p_s_iterate_unchecked : opt_p_p_s_iterate) :
 			    ((ppf == random_p_p) ? opt_p_p_s_random : opt_p_p_s)));
 	  return_true(sc, car_x);
 	}
@@ -66467,7 +66478,7 @@ static bool p_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 			else
 			  if (opc->v[4].o1->v[3].p_ii_f == complex_p_ii)
 			    opc->v[4].o1->v[3].p_ii_f = complex_p_ii_wrapped;
-		      /* opc->v[3].p_ppp_f = complex_vector_set_p_ppp and  fn_proc(arg3) == g_complex_wrapped */ 
+		      /* opc->v[3].p_ppp_f = complex_vector_set_p_ppp and  fn_proc(arg3) == g_complex_wrapped */
 		      /* p_pip case is different! o->v[9].fp(o->v[8].o1 */
 		    }
 		  return_true(sc, car_x);
@@ -67413,7 +67424,19 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
 	      return_true(sc, car_x);
 	    }
 	  return_false(sc, car_x);
-	  /* TODO: complex vector? */
+
+#if 0
+	case T_COMPLEX_VECTOR:
+	  if (index_type != sc->is_integer_symbol) return_false(sc, car_x);
+	  if (is_null(cddr(target)))
+	    {
+	      if (vector_rank(obj) != 1) return_false(sc, car_x);
+	      opc->v[3].p_pip_f = complex_vector_set_p_pip_unchecked;
+	    }
+	  else return_false(sc, car_x);
+	  break;
+	  /* TODO: code below needs complex-vector cases */
+#endif
 
 	case T_BYTE_VECTOR:
 	case T_INT_VECTOR:
@@ -75046,7 +75069,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 	if (!is_pair(vars))
 	  return(OPT_OOPS);
       body = cddr(expr);
-      for (s7_pointer p = body; is_pair(p); p = cdr(p)) 
+      for (s7_pointer p = body; is_pair(p); p = cdr(p))
 	if (is_pair(car(p)))
 	  set_has_no_return(car(p));
 
@@ -78550,7 +78573,7 @@ static s7_pointer check_let(s7_scheme *sc) /* called only from op_let */
 }
 
 static void op_named_let_1(s7_scheme *sc, s7_pointer args) /* sc->code = (name vars . body), args = vals in decl order */
-{ 
+{
   s7_pointer body = cddr(sc->code), x;
   s7_int n = opt2_int(sc->code); /* num pars, see check_named_let called in check_let, normally 1, sometimes 2..4 */
   if (n == 1)
@@ -100363,12 +100386,12 @@ int main(int argc, char **argv)
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * safe_do hop bit in other do cases and let
- * tnr.scm to check all no-return stuff and no-ops (do body, normal body, (format #t|#f...) but no string), see lint check-return
+ * tnr.scm to check all no-return stuff and no-ops (do body, normal body)
  *
  * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
  *   tcomplex.scm continued
- *   need implicit (set! (cv i) (complex...))
+ *   need opt for implicit (set! (cv i) (complex...))
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere

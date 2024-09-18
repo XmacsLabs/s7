@@ -950,7 +950,7 @@
 			  ;'random
 			  ;;; 'quote
 			  '*error-hook* ;'*autoload-hook*
-			  'cond-expand ; (cond-expand (reader-cond...)) too many times
+			  ;'cond-expand ; (cond-expand (reader-cond...)) too many times
 			  ;'random-state->list
                           ;'pair-line-number 'pair-filename ; -- too many uninteresting diffs
 			  'let-set!
@@ -1175,6 +1175,7 @@
 		    "(let ((x 1)) (dynamic-wind (lambda () (set! x 2)) (lambda () (+ x 1)) (lambda () (set! x 1))))"
 
 		    "(let-temporarily ((x 1)) x)" "(let-temporarily ((x #(1)) (i 0)) i)"
+		    ;"(s7-init-and-free))"
 
 		    "1+1e10i" "1e15-1e15i" ;"0+1e18i" "-1e18"
 		    ;"(random 1.0)" ; number->string so lengths differ
@@ -1474,24 +1475,22 @@
 ;                    (lambda (s) (string-append "(do ((j 0 (+ j 1))) ((= j 1)) (do ((i 0 (+ i 1))) ((= i 1)) (with-immutable (i j) (apply values " s " ()))))")))
 	      (list (let ((last-s "#f")) (lambda (s) (let ((res (string-append "(if (car (list " last-s ")) (begin " s "))"))) (set! last-s s) res)))
                     (let ((last-s "#f")) (lambda (s) (let ((res (string-append "(if (not (car (list " last-s "))) #<unspecified> (begin " s "))"))) (set! last-s s) res))))
-
 	      (list (lambda (s) (string-append "(let ((s1 (begin " s ")) (s2 (copy s1))) (member s1 (list s2)))"))
                     (lambda (s) (string-append "(let ((s1 (begin " s ")) (s2 (copy s1))) (member s1 (list s2) fequal?))")))
 	      (list (lambda (s) (string-append "(iterate (make-iterator (vector " s ")))"))
 		    (lambda (s) (string-append "(car (list " s "))")))
 	      (list (lambda (s) (string-append "(call-with-exit (lambda (return) (return " s ")))"))
 		    (lambda (s) (string-append "((lambda () (values " s ")))")))
-
 	      (list (lambda (s) (string-append "(let ((x #f)) (for-each (lambda (y) (set! x y)) (list " s ")) x)"))
 		    (lambda (s) (string-append "((lambda (x) (for-each (lambda y (set! x (car y))) (list " s ")) x) #f)")))
-
 	      (list (lambda (s) (string-append "(list (let () (let-temporarily (((*s7* 'openlets) #f)) " s ")))"))
                     (lambda (s) (string-append "(list (let ((old #f)) (dynamic-wind (lambda () (set! old (*s7* 'openlets)) (set! (*s7* 'openlets) #f)) (lambda () " s ") (lambda () (set! (*s7* 'openlets) old)))))")))
 	      (list (lambda (s) (string-append "(list (let () (let-temporarily (((*s7* 'safety) 1)) " s ")))"))
                     (lambda (s) (string-append "(list (let ((old #f)) (dynamic-wind (lambda () (set! old (*s7* 'safety))) (lambda () " s ") (lambda () (set! (*s7* 'safety) old)))))")))
-
 	      (list (lambda (s) (string-append "(map Hk (list " s "))"))
 		    (lambda (s) (string-append "(map _dilambda_ (list " s "))")))
+	      (list (lambda (s) (string-append "(let ((cc (call/cc (lambda (c) c)))) (if (continuation? cc) (cc (list " s ")) cc))"))
+		    (lambda (s) (string-append "(let ((cc (call-with-exit (lambda (c) c)))) (if (goto? cc) (list " s ")))")))
 
 	      ;; perhaps function port (see _rd3_ for open-input-string), gmp?
 	      ))
