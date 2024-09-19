@@ -16657,12 +16657,11 @@ static s7_int abs_i_i(s7_int x) {return((x < 0) ? (-x) : x);}
 /* -------------------------------- magnitude -------------------------------- */
 static double my_hypot(double x, double y)
 {
-  if (x == 0.0) return(fabs(y));
-  if (y == 0.0) return(fabs(x));
-  if (is_NaN(x)) return(x);
-  if (is_NaN(y)) return(y);
+#if 0
+  if (x == 0.0) return(fabs(y)); if (y == 0.0) return(fabs(x)); if (is_NaN(x)) return(x); if (is_NaN(y)) return(y);
+#endif
   if ((fabs(x) < 1.0e6) && (fabs(y) < 1.0e6)) /* max error is ca. e-14 */
-    return(sqrt(x * x + y * y));              /* timing diffs: 72 for this form, 107 if just libm's hypot */
+    return(sqrt(x * x + y * y));              /* timing diffs: 62 for this form, 107 if just libm's hypot */
   return(hypot(x, y));                        /* libm's hypot protects against over/underflow */
 }
 
@@ -43523,8 +43522,6 @@ static s7_pointer complex_vector_set_p_pip(s7_scheme *sc, s7_pointer v, s7_int i
   return(p);
 }
 
-#if 0
-/* TODO: not ready yet -- see opt_cell_set 67434 (also need tcomplex timing test here) */
 static s7_pointer complex_vector_set_p_pip_unchecked(s7_scheme *sc, s7_pointer v, s7_int i, s7_pointer p)
 {
   if ((i >= 0) && (i < vector_length(v)))
@@ -43532,7 +43529,6 @@ static s7_pointer complex_vector_set_p_pip_unchecked(s7_scheme *sc, s7_pointer v
   else out_of_range_error_nr(sc, sc->complex_vector_set_symbol, int_two, wrap_integer(sc, i), (i < 0) ? it_is_negative_string : it_is_too_large_string);
   return(p);
 }
-#endif
 
 static s7_pointer complex_vector_set_p_pip_direct(s7_scheme *sc, s7_pointer v, s7_int i, s7_pointer p)
 {
@@ -67425,7 +67421,6 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
 	    }
 	  return_false(sc, car_x);
 
-#if 0
 	case T_COMPLEX_VECTOR:
 	  if (index_type != sc->is_integer_symbol) return_false(sc, car_x);
 	  if (is_null(cddr(target)))
@@ -67435,8 +67430,6 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
 	    }
 	  else return_false(sc, car_x);
 	  break;
-	  /* TODO: code below needs complex-vector cases */
-#endif
 
 	case T_BYTE_VECTOR:
 	case T_INT_VECTOR:
@@ -67542,15 +67535,21 @@ static bool opt_cell_set(s7_scheme *sc, s7_pointer car_x) /* len == 3 here (p_sy
 			  opc->v[3].p_pip_f = byte_vector_set_p_pip_direct;
 		      }
 		    else
-		      if (is_any_vector(obj)) /* true for all 3 vectors */
+		      if ((is_complex_vector(obj)) &&
+			  (loop_end(opc->v[2].p) <= vector_length(obj)))
 			{
-			  if ((is_any_vector(obj)) &&
-			      (loop_end(opc->v[2].p) <= vector_length(obj)))
-			    {
-			      if (is_typed_t_vector(obj))
-				opc->v[3].p_pip_f = typed_t_vector_set_p_pip_direct;
-			      else opc->v[3].p_pip_f = t_vector_set_p_pip_direct;
-			    }}}
+			  opc->v[3].p_pip_f = complex_vector_set_p_pip_direct;
+			}
+		      else
+			if (is_any_vector(obj)) /* true for all 3 vectors */
+			  {
+			    if ((is_any_vector(obj)) &&
+				(loop_end(opc->v[2].p) <= vector_length(obj)))
+			      {
+				if (is_typed_t_vector(obj))
+				  opc->v[3].p_pip_f = typed_t_vector_set_p_pip_direct;
+				else opc->v[3].p_pip_f = t_vector_set_p_pip_direct;
+			      }}}
 	      if (is_symbol(value))
 		{
 		  s7_pointer val_slot = opt_simple_symbol(sc, value);
@@ -72162,9 +72161,11 @@ static s7_pointer g_qq_append(s7_scheme *sc, s7_pointer args)
 {
   #define H_qq_append "<list*>: CL list* (I think) for quasiquote's internal use"
   #define Q_qq_append s7_make_signature(sc, 3, sc->is_list_symbol, sc->is_list_symbol, sc->T)
-  s7_pointer a = T_Lst(car(args)), b = cadr(args);
+  s7_pointer a = car(args), b = cadr(args);
   s7_pointer p, tp, np;
   if (is_null(a)) return(b);
+  if (!is_pair(a)) /* (apply ``(x . 1) '(0 1 2)) so a=1, b=2 */
+    wrong_type_error_nr(sc, sc->quasiquote_symbol, 1, a, a_list_string);
   p = cdr(a);
   if (is_null(p)) return(cons(sc, car(a), b));
   tp = list_1(sc, car(a));
@@ -81107,7 +81108,6 @@ static goto_t op_expansion(s7_scheme *sc)
       else
 	{
 	  /* call the reader macro */
-	  /* TODO: we ought to at least check min_args <= length(sc->args) here (c_macro is checked below) */
 	  sc->args = cdr(sc->value);
 	  push_stack_no_code(sc, OP_EXPANSION, sc->nil);
 	  if (is_c_macro(sc->code))
@@ -81119,7 +81119,7 @@ static goto_t op_expansion(s7_scheme *sc)
 	  set_curlet(sc, make_let(sc, closure_let(sc->code)));
 	  transfer_macro_info(sc, sc->code);
 	  if (!is_macro_star(sc->code)) return(goto_apply_lambda);
-	  apply_macro_star_1(sc);
+	  apply_macro_star_1(sc); /* apply_lambda probably handles arg number checks */
 	  return(goto_begin);
 	  /* bacros don't seem to make sense here -- they are tied to the run-time environment,
 	   *   procedures would need to evaluate their arguments in rootlet
@@ -100350,7 +100350,7 @@ int main(int argc, char **argv)
  * tobj             3970   3828   3577   3508   3436
  * tmac             3873   3033   3677   3677   3491
  * teq              4045   3536   3486   3544   3542
- * complex                                      4306  4221
+ * complex                                      4306  4171
  * tcase            4793   4439   4430   4439   4377
  * tmap             8774   4489   4541   4586   4384
  * tlet      11.0   6974   5609   5980   5965   4470
@@ -100386,12 +100386,13 @@ int main(int argc, char **argv)
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * safe_do hop bit in other do cases and let
- * tnr.scm to check all no-return stuff and no-ops (do body, normal body)
  *
  * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
- *   tcomplex.scm continued
- *   need opt for implicit (set! (cv i) (complex...))
+ *   tcomplex|tnr.scm continued, (tnr: format + no-return)
+ *   sort! on magnitude/angle are reals and only >< make sense, so use b_dd and direct call (tcomplex case gt_b_7pp+magnitude_p_p(2x)+opt_b_7pp_ffo)
+ *      also use magnitude_d_d, maybe gt_b_dd
+ *   same: inline_op_implicit_vextor_ref_a -> complex_vector_getter: (data j)=cfft notice type at run-time
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere

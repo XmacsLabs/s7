@@ -242,7 +242,7 @@
       (unless (equivalent? cv2 cv1)
 	(display cv1))))) 
 
-(c9) ; 36: 12 g_reverse_in_place, 11 vector_equivalent, 9 reverse_p_p
+;(c9) ; 36: 12 g_reverse_in_place, 11 vector_equivalent, 9 reverse_p_p
       ; 36: complex_p_ii (too insignificant)
 
 
