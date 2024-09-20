@@ -82629,7 +82629,7 @@ static void op_decrement_by_1(s7_scheme *sc)  /* ([set!] ctr (- ctr 1)) */
 
 
 /* ---------------- implicit ref/set ---------------- */
-static Inline bool inline_op_implicit_vector_ref_a(s7_scheme *sc) /* called once in eval */
+static Inline bool inline_op_implicit_vector_ref_a(s7_scheme *sc) /* called once in eval, Inline because tnum/tmat get ridiculous call overhead (70!) */
 {
   s7_pointer x, v = lookup_checked(sc, car(sc->code));
   if (!is_any_vector(v)) {sc->last_function = v; return(false);}
@@ -100341,7 +100341,7 @@ int main(int argc, char **argv)
  * tread            2421   2419   2408   2405   2241
  * tcopy            5546   2539   2375   2386   2342
  * trclo     8031   2574   2454   2445   2449   2359
- * tmat             3042   2524   2578   2590   2510
+ * tmat             3042   2524   2578   2590   2515
  * tload                   3046   2404   2566   2537
  * fbench    2933   2583   2460   2430   2478   2571
  * tsort     3683   3104   2856   2804   2858   2858
@@ -100390,9 +100390,7 @@ int main(int argc, char **argv)
  * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
  *   tcomplex|tnr.scm continued, (tnr: format + no-return)
- *   sort! on magnitude/angle are reals and only >< make sense, so use b_dd and direct call (tcomplex case gt_b_7pp+magnitude_p_p(2x)+opt_b_7pp_ffo)
- *      also use magnitude_d_d, maybe gt_b_dd
- *   same: inline_op_implicit_vextor_ref_a -> complex_vector_getter: (data j)=cfft notice type at run-time
+ *   same: inline_op_implicit_vextor_ref_a -> complex_vector_getter: (data j)=cfft notice type at run-time, or set_ref_aa?
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere

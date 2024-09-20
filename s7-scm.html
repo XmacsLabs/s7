@@ -8,7 +8,7 @@
 
 <title>s7-scm</title>
 
-<style type="text/css">
+<style>
 	EM.red {color:red; font-style:normal}
 	EM.normal {font-style:normal}
 	EM.redb {color:red; font-weight: bold; font-style: normal}
@@ -29,7 +29,6 @@
 	A.def {font-weight: bold;
 	       font-style: normal;
 	       text-decoration:none;
-	       text-color:black;
 	       }
 
         PRE.indented {padding-left: 1.0cm;}
@@ -498,7 +497,7 @@ Each target, or element of a list or vector can be a pattern.  Patterns
 are of the form #&lt;whatever&gt; (undefined constants from s7's pointer of view).
 A pattern can be:
 </p>
-<pre>
+<samp>
 <ul>
 <li>#&lt;&gt;               any expr matches
 <li>#&lt;func&gt;           expr matches if (func expr)
@@ -514,7 +513,7 @@ A pattern can be:
 <li>#&lt;"regexp"&gt;       pattern is a regular expression to be matched against a string
 <li>#&lt;label:"regexp"&gt; a labelled regular expression
 </ul>
-</pre>
+</samp>
 
 <p>If a label occurs in the result body, the expression it labelled is substituted for it.
 </p>

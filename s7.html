@@ -8,7 +8,7 @@
 
 <title>s7</title>
 
-<style type="text/css">
+<style>
 	EM.red {color:red; font-style:normal}
 	EM.normal {font-style:normal}
 	EM.redb {color:red; font-weight: bold; font-style: normal}
@@ -29,7 +29,6 @@
 	A.def {font-weight: bold;
 	       font-style: normal;
 	       text-decoration:none;
-	       text-color:black;
 	       }
 
         PRE.indented {padding-left: 1.0cm;}
@@ -127,16 +126,16 @@ It exists as just two files, s7.c and
 s7.h, that want only to disappear into someone else's source tree.  There are no libraries,
 no run-time init files, and no configuration scripts.
 It can be built as a stand-alone
-interpreter (see <a href="#repl">below</a>).  s7test.scm is a regression test for s7.
+interpreter (see <a href="s7-ffi.html#repl">repl</a>).  s7test.scm is a regression test for s7.
 A tarball is available: <a href="https://ccrma.stanford.edu/software/s7/s7.tar.gz">s7 tarball</a>.
-There is an svn repository at sourceforge (the Snd project): <a href="https://sourceforge.net/p/snd/svn1/">Snd</a>,
+There is an svn repository at sourceforge (the Snd project): <a href="https://sourceforge.net/p/snd/svn1/HEAD/tree/">Snd</a>,
 and a git repository (just s7): git@cm-gitlab.stanford.edu:bil/s7.git <a href="https://cm-gitlab.stanford.edu/bil/s7.git">s7.git</a>.
 Please ignore all other "s7" github sites.  Christos Vagias created a web-assembly site with
 a repl: https://github.com/actonDev/s7-playground/.
 </p>
 
 <p>
-s7 is an extension language of Snd and sndlib (<a href="http://ccrma.stanford.edu/software/snd/index.html">snd</a>),
+s7 is an extension language of Snd and sndlib (<a href="https://ccrma.stanford.edu/software/snd/index.html">snd</a>),
 Rick Taube's Common Music (commonmusic at sourceforge), Kjetil Matheussen's Radium music editor, and Iain Duncan's Scheme for Max (or Pd).
 There are X, Motif, and openGL bindings
 in libxm in the Snd tarball, or at ftp://ccrma-ftp.stanford.edu/pub/Lisp/libxm.tar.gz.
@@ -4497,7 +4496,7 @@ the upper limit on how many elements of a sequence are printed by object-&gt;str
 
 <p>
 When running s7 behind a GUI, you often want input to come from and output to go to
-arbitrary widgets. The function ports provide a way to redirect IO in C.  See <a href="#functionportexample">below</a>
+arbitrary widgets. The function ports provide a way to redirect IO in C.  See <a href="s7-ffi.html#functionportexample">redirect display</a>
 for an example.
 The function ports call a function rather than reading or writing the data to a string or file.
 See nrepl.scm and s7test.scm for examples.  The function-port function is accessible as
@@ -4867,7 +4866,7 @@ Along the same lines:
 
 </blockquote>
 
-<p>When an error is encountered, and when s7 is interrupted via <a href="#beginhook">begin_hook</a>,
+<p>When an error is encountered, and when s7 is interrupted via <a href="s7-ffi.html#beginhook">begin_hook</a>,
 (<em class=def id="owlet">owlet</em>) returns an environment that contains
 additional info about that error:
 </p>
@@ -5100,7 +5099,7 @@ of this information to speed up function calls.
 variable trace (informative function upon set or keeping a history of past values), typed variables (restricting a
 variable's values or doing automatic conversions upon set), and notification upon set (either in Scheme
 or in C; I wanted this many years ago in Snd).  The notification function is especially useful if
-you have a Scheme variable and want to reflect any change in its value immediately in C (see <a href="#notify">below</a>).
+you have a Scheme variable and want to reflect any change in its value immediately in C (see <a href="s7-ffi.html#notify">notification in C</a>).
 In s7, setter sets this function.
 </p>
 
@@ -6100,6 +6099,73 @@ int main(int argc, char **argv)
  * mac: clang -o threads threads.c s7.o -pthread -lm -I. -ldl
  */
 </pre>
+
+<div class="separator"></div>
+
+<small>
+<p>Here's an example using gdbm to handle a variable global to the threads:
+</p>
+<pre>
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;pthread.h&gt;
+#include &lt;gdbm.h&gt;
+#include "s7.h"
+
+#define GDBM_DB "test.gdbm"
+GDBM_FILE gdb;
+
+#define NUM_THREADS 1024
+static pthread_t threads[NUM_THREADS];
+
+static void *run_thread(void *obj)
+{
+  s7_scheme *sc = (s7_scheme *)obj;
+  datum key, rtn;
+  key.dptr = "global_int";
+  key.dsize = 10;
+  rtn = gdbm_fetch(gdb, key);
+  if (rtn.dptr)
+    {
+      s7_define_variable(sc, "global-int", s7_make_integer(sc, strtol((const char *)rtn.dptr, NULL, 10)));
+      s7_display(sc, s7_name_to_value(sc, "global-int"), s7_current_error_port(sc));
+      free(rtn.dptr);
+    }
+  else fprintf(stderr, "oops ");
+  s7_free(sc);
+}
+
+int main(int argc, char **argv)
+{
+  int32_t i, k, rtn, last_i = 0;
+  datum key, val;
+  key.dptr = "global_int";
+  key.dsize = 10;
+  val.dptr = "123";
+  val.dsize = 4;
+  gdb = gdbm_open(GDBM_DB, 1024, GDBM_NEWDB, 0664, NULL);
+  gdbm_store(gdb, key, val, GDBM_REPLACE);
+  for (i = 0; i &lt; NUM_THREADS; i++)
+    {
+      rtn = pthread_create(&threads[i], NULL, run_thread, (void *)s7_init());
+      if (rtn)
+	{
+	  fprintf(stderr, "failed to create thread %d\n", i);
+	  exit(0);
+	}
+      if ((i - last_i) &gt; 16)
+	{
+	  for (k = last_i; k &lt; i; k++)
+	    pthread_join(threads[k], NULL);
+	  last_i = i;
+	}}
+  gdbm_close(gdb);
+}
+
+/* linux: gcc -o gthreads gthreads.c s7.o -O -g -Wl,-export-dynamic -pthread -lgdbm -lm -I. -ldl
+ */
+</pre>
+</small>
 </div>
 </blockquote>
 
@@ -6699,7 +6765,7 @@ making it possible to use odd names more widely:
       (list (cons #\s
 		  (lambda (str)
 		    (let ((len (length str)))
-		      (and (string=? (substring str 0 7) "symbol<")
+		      (and (string=? (substring str 0 7) "symbol&lt;")
 			   (if (char=? (str (- len 1)) #\&gt;) ; pointless use of #symbol!
 			       (symbol (substring str 7 (- len 1)))
 			       (do ((sym (substring str 7))

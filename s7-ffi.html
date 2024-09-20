@@ -8,7 +8,7 @@
 
 <title>s7-ffi</title>
 
-<style type="text/css">
+<style>
 	EM.red {color:red; font-style:normal}
 	EM.normal {font-style:normal}
 	EM.redb {color:red; font-weight: bold; font-style: normal}
@@ -29,7 +29,6 @@
 	A.def {font-weight: bold;
 	       font-style: normal;
 	       text-decoration:none;
-	       text-color:black;
 	       }
 
         PRE.indented {padding-left: 1.0cm;}
@@ -2758,7 +2757,7 @@ void s7_c_type_set_setter       (s7_scheme *sc, s7_int type, s7_pointer setter);
 void s7_mark(s7_pointer p);
 </pre>
 
-<p>These functions create a new Scheme object type.  See <a href="s7.html#pwstype">dax</a> above for a simple example,
+<p>These functions create a new Scheme object type.  See <a href="#pwstype">dax</a> above for a simple example,
 and s7test.scm for several progressively more complicated examples.
 C-objects in Scheme usually correspond to an instance of a struct in C which you want to access from Scheme.
 The normal sequence is: define a new c-type via s7_make_c_type, call s7_c_type_set* to specialize its behavior,
@@ -2769,7 +2768,7 @@ mentioned in many of the other functions.
 <p>s7_c_type_set_free sets the function that is called by the GC when a Scheme c-object is garbage-collected.
 You normally use this to free the associated C value (the instance of the struct).  To get that value,
 call s7_c_object_value.  It returns the void* pointer that you originally passed to s7_make_c_object.
-See free_dax in the <a href="s7.html#pwstype">dax</a> example.
+See free_dax in the <a href="#pwstype">dax</a> example.
 </p>
 <p>s7_c_type_set_mark sets the function that is called by the GC during its marking phase.  Any s7_pointer
 value local to your C struct should be marked explicitly at this time, or the GC will free it.  Use s7_mark
