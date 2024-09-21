@@ -6103,7 +6103,7 @@ int main(int argc, char **argv)
 <div class="separator"></div>
 
 <small>
-<p>Here's an example using gdbm to handle a variable global to the threads:
+<p id="gthreads">Here's an example using gdbm to handle a variable global to the threads:
 </p>
 <pre>
 #include &lt;stdio.h&gt;
@@ -6127,8 +6127,21 @@ static void *run_thread(void *obj)
   rtn = gdbm_fetch(gdb, key);
   if (rtn.dptr)
     {
-      s7_define_variable(sc, "global-int", s7_make_integer(sc, strtol((const char *)rtn.dptr, NULL, 10)));
-      s7_display(sc, s7_name_to_value(sc, "global-int"), s7_current_error_port(sc));
+      /* this makes a local copy of the global variable and displays its value */
+      /* s7_define_variable(sc, "global-int", s7_make_integer(sc, strtol((const char *)rtn.dptr, NULL, 10))); */
+      /* s7_display(sc, s7_name_to_value(sc, "global-int"), s7_current_error_port(sc)); */
+
+      /* this increments the global variable and displays it */
+      datum val;
+      char buf[128];
+      int bytes;
+      long int ctr = strtol((const char *)rtn.dptr, NULL, 10);
+      bytes = snprintf(buf, 128, "%ld", ++ctr);
+      val.dptr = buf;
+      val.dsize = bytes + 1;
+      gdbm_store(gdb, key, val, GDBM_REPLACE);
+      fprintf(stderr, "%s ", buf);
+
       free(rtn.dptr);
     }
   else fprintf(stderr, "oops ");
@@ -6141,13 +6154,13 @@ int main(int argc, char **argv)
   datum key, val;
   key.dptr = "global_int";
   key.dsize = 10;
-  val.dptr = "123";
-  val.dsize = 4;
+  val.dptr = "0";
+  val.dsize = 2;
   gdb = gdbm_open(GDBM_DB, 1024, GDBM_NEWDB, 0664, NULL);
   gdbm_store(gdb, key, val, GDBM_REPLACE);
   for (i = 0; i &lt; NUM_THREADS; i++)
     {
-      rtn = pthread_create(&threads[i], NULL, run_thread, (void *)s7_init());
+      rtn = pthread_create(&amp;threads[i], NULL, run_thread, (void *)s7_init());
       if (rtn)
 	{
 	  fprintf(stderr, "failed to create thread %d\n", i);
@@ -6165,6 +6178,7 @@ int main(int argc, char **argv)
 /* linux: gcc -o gthreads gthreads.c s7.o -O -g -Wl,-export-dynamic -pthread -lgdbm -lm -I. -ldl
  */
 </pre>
+<p>See <a href="s7-scm.html#libgdbm">libgdbm</a> for a Scheme side example.</p>
 </small>
 </div>
 </blockquote>
@@ -6464,7 +6478,7 @@ Other possibilities are <code>signature</code>, <code>documentation</code>,
 
 <div class="indented">
 
-<p>Schemes vary in their treatment of ().  s7 considers it a constant that evaluates to itself,
+<p>Schemes differ in their treatment of ().  s7 considers it a constant that evaluates to itself,
 so you don't need to quote it.  <code>(eq? () '())</code> is #t.
 This is consistent with, for example,
 <code>(eq? #f '#f)</code> which is also #t.

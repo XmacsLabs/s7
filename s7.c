@@ -5956,6 +5956,9 @@ static s7_pointer wrap_real_or_complex(s7_scheme *sc, s7_double rl, s7_double im
   if (im == 0.0) return(wrap_real(sc, rl));
   return(wrap_complex(sc, rl, im));
 }
+#else
+#define wrap_complex(Sc, A, B) make_complex(Sc, A, B)
+#define wrap_real_or_complex(Sc, A, B) make_complex(Sc, A, B)
 #endif
 
 static s7_pointer wrap_let(s7_scheme *sc, s7_pointer old_let)
@@ -43536,19 +43539,23 @@ static s7_pointer complex_vector_set_p_pip_direct(s7_scheme *sc, s7_pointer v, s
   return(p);
 }
 
-static s7_pointer complex_vector_set_p_ppp(s7_scheme *sc, s7_pointer vec, s7_pointer ind, s7_pointer val)
+static s7_pointer complex_vector_set_p_ppp(s7_scheme *sc, s7_pointer v, s7_pointer index, s7_pointer val)
 {
-  s7_int index;
-  if ((!is_complex_vector(vec)) || (vector_rank(vec) > 1))
-    return(g_vector_set(sc, set_plist_3(sc, vec, ind, val)));
-  if (is_immutable_vector(vec))
-    immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->complex_vector_set_symbol, vec));
-  if (!s7_is_integer(ind))
-    return(g_vector_set(sc, set_plist_3(sc, vec, ind, val)));
-  index = s7_integer_clamped_if_gmp(sc, ind);
-  if ((index < 0) || (index >= vector_length(vec)))
-    out_of_range_error_nr(sc, sc->complex_vector_set_symbol, int_two, wrap_integer(sc, index), (index < 0) ? it_is_negative_string : it_is_too_large_string);
-  complex_vector(vec, index) = s7_to_c_complex(val);
+  s7_int i;
+  if (!is_complex_vector(v))
+    return(method_or_bust_ppp(sc, v, sc->complex_vector_set_symbol, v, index, val, sc->type_names[T_COMPLEX_VECTOR], 1));
+  if (vector_rank(v) != 1)
+    return(univect_set(sc, set_plist_3(sc, v, index, val), sc->complex_vector_set_symbol, T_COMPLEX_VECTOR));
+  if (is_immutable_vector(v))
+    immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->complex_vector_set_symbol, v));
+  if (!s7_is_integer(index))
+    return(method_or_bust_ppp(sc, index, sc->complex_vector_set_symbol, v, index, val, sc->type_names[T_INTEGER], 2));
+  if (!s7_is_number(val))
+    return(method_or_bust_ppp(sc, val, sc->complex_vector_set_symbol, v, index, val, sc->type_names[T_COMPLEX], 3));
+  i = integer(index);
+  if ((i < 0) || (i >= vector_length(v)))
+    out_of_range_error_nr(sc, sc->complex_vector_set_symbol, int_two, index, (i < 0) ? it_is_negative_string : it_is_too_large_string);
+  complex_vector(v, i) = s7_to_c_complex(val);
   return(val);
 }
 
