@@ -5345,13 +5345,13 @@ rest.  Say we'd like #t&lt;number&gt; to interpret the number in base 12:
 <em class="gray">13.25</em>
 </pre>
 
-<p>Or have #c(real imag) be read as a complex number:
+<p>Or have #C(real imag) be read as a complex number:
 </p>
 
 <pre class="indented">
-(set! *#readers* (cons (cons #\c (lambda (str) (apply complex (read)))) *#readers*))
+(set! *#readers* (cons (cons #\C (lambda (str) (apply complex (read)))) *#readers*))
 
-&gt; #c(1 2)
+&gt; #C(1 2)
 <em class="gray">1+2i</em>
 </pre>
 

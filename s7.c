@@ -100397,7 +100397,7 @@ int main(int argc, char **argv)
  * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
  *   tcomplex|tnr.scm continued, (tnr: format + no-return)
- *   same: inline_op_implicit_vextor_ref_a -> complex_vector_getter: (data j)=cfft notice type at run-time, or set_ref_aa?
+ *   same: inline_op_implicit_vector_ref_a -> complex_vector_getter: (data j)=cfft notice type at run-time, or set_ref_aa?
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
