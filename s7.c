@@ -32365,11 +32365,16 @@ static s7_pointer call_file_out(s7_scheme *sc, s7_pointer unused_args)
 
 static s7_pointer c_function_name_to_symbol(s7_scheme *sc, s7_pointer f)
 {
-  if (!is_c_function(f))  /* c_function* uses c_sym slot for arg_names */
-    return(make_symbol(sc, c_function_name(f), c_function_name_length(f)));
-  if (!c_function_symbol(f))
-    c_function_symbol(f) = make_symbol(sc, c_function_name(f), c_function_name_length(f));
-  return(c_function_symbol(f));
+  if (is_c_function(f))  /* c_function* uses c_sym slot for arg_names */
+    {
+      if (!c_function_symbol(f))
+	c_function_symbol(f) = make_symbol(sc, c_function_name(f), c_function_name_length(f));
+      return(c_function_symbol(f));
+    }
+  if (is_c_macro(f))
+    return(make_symbol(sc, c_macro_name(f), c_macro_name_length(f)));
+  if ((S7_DEBUGGING) && (!is_c_function_star(f))) fprintf(stderr, "%s is not a c-function-star\n", display(f));
+  return(make_symbol(sc, c_function_name(f), c_function_name_length(f))); /* c_function* */
 }
 
 #define op_with_io_1(Sc) (((s7_function)(opt1(Sc->code, OPT1_ANY)))(Sc, Sc->nil))
@@ -73137,9 +73142,11 @@ static bool is_ok_lambda(s7_scheme *sc, s7_pointer arg2)
 	 (s7_is_proper_list(sc, cdddr(arg2))));
 }
 
-static bool hop_if_constant(s7_scheme *sc, s7_pointer sym)
+static bool hop_if_constant(s7_scheme *sc, s7_pointer sym /* , s7_pointer e */)
 {
-  return(((!sc->in_with_let) && (is_global(sym))) ? 1 : 0); /* for with-let, see s7test atanh (77261) */
+  return(((!sc->in_with_let) && 
+	  /* (!direct_memq(sym, e)) && */
+	  (is_global(sym))) ? 1 : 0); /* for with-let, see s7test atanh (77261) */
 }
 
 static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer func,
@@ -73147,7 +73154,7 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
 {
   s7_pointer arg1 = cadr(expr);
   bool func_is_safe = is_safe_procedure(func);
-  if (hop == 0) hop = hop_if_constant(sc, car(expr));
+  if (hop == 0) hop = hop_if_constant(sc, car(expr) /* , e */);
   if (SHOW_EVAL_OPS) fprintf(stderr, "  %s[%d]: %s %d %d\n", __func__, __LINE__, display_truncated(expr), func_is_safe, pairs);
   if (pairs == 0)
     {
@@ -73694,8 +73701,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
     {
       /* this is a mess */
       bool func_is_safe = is_safe_procedure(func);
-      if (hop == 0) hop = hop_if_constant(sc, car(expr));
-
+      if (hop == 0) hop = hop_if_constant(sc, car(expr) /* , e */);
       if (pairs == 0)
 	{
 	  if ((func_is_safe) ||
@@ -74510,7 +74516,7 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
 
   if (is_c_function(func) && (c_function_is_aritable(func, 3)))
     {
-      if (hop == 0) hop = hop_if_constant(sc, car(expr));
+      if (hop == 0) hop = hop_if_constant(sc, car(expr) /* , e */);
       if ((is_safe_procedure(func)) ||
 	  ((is_maybe_safe(func)) && (unsafe_is_safe(sc, arg3, e))))
 	{
@@ -74775,7 +74781,7 @@ static opt_t optimize_func_many_args(s7_scheme *sc, s7_pointer expr, s7_pointer 
     }
   if ((is_c_function(func)) && (c_function_is_aritable(func, args)))
     {
-      if (hop == 0) hop = hop_if_constant(sc, car(expr));
+      if (hop == 0) hop = hop_if_constant(sc, car(expr) /* , e */);
       if (is_safe_procedure(func))
 	{
 	  if (pairs == 0)
@@ -74978,8 +74984,8 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
   opcode_t op = syntax_opcode(func);
   s7_pointer body = cdr(expr), vars, init_e = e;
   bool body_export_ok = true;
-  if (SHOW_EVAL_OPS) fprintf(stderr, "  %s[%d]: expr: %s, func: %s, e: %s, op: %s\n", __func__, __LINE__,
-			     display_truncated(expr), display(func), display(e), op_names[op]);
+  if (SHOW_EVAL_OPS) fprintf(stderr, "  %s[%d]: expr: %s, func: %s, e: %s, op: %s, hop: %d\n", __func__, __LINE__,
+			     display_truncated(expr), display(func), display(e), op_names[op], hop);
   sc->w = e;
   switch (op)
     {
@@ -75502,7 +75508,7 @@ static opt_t optimize_funcs(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
 {
   int32_t pairs = 0, symbols = 0, args = 0, bad_pairs = 0, quotes = 0;
   s7_pointer p;
-  if (SHOW_EVAL_OPS) fprintf(stderr, "  %s[%d]: %s, func: %s\n", __func__, __LINE__, display_truncated(expr), display(func));
+  if (SHOW_EVAL_OPS) fprintf(stderr, "  %s[%d]: %s, func: %s, hop: %d\n", __func__, __LINE__, display_truncated(expr), display(func), hop);
   for (p = cdr(expr); is_pair(p); p = cdr(p), args++) /* check the args (the calling expression) */
     {
       s7_pointer car_p = car(p);
@@ -75553,6 +75559,7 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 {
   s7_pointer car_expr = car(expr);
   int32_t orig_hop = hop;
+  if (SHOW_EVAL_OPS) fprintf(stderr, "  %s[%d]: %s, e: %s, hop: %d\n", __func__, __LINE__, display_truncated(expr), display(e), hop);
   set_checked(expr);
 
   if (is_symbol(car_expr))
@@ -75580,12 +75587,13 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 	       (is_safe_procedure(func))))               /* built-in applicable objects like vectors */
 	    {
 	      if ((hop != 0) &&
-		  ((is_any_closure(func)) ||             /* see use-redef in s7test -- I'm not sure about this */
-		   ((!is_global(car_expr)) &&
-		    ((!is_slot(global_slot(car_expr))) ||
-		     (global_value(car_expr) != func)))) &&
-		  (!is_immutable(car_expr)) && /* list|apply-values -- can't depend on opt1 here because it might not be global, or might be redefined locally */
-		  (!is_immutable_slot(slot)))       /* (define-constant...) */
+		  ((direct_memq(car_expr, e)) ||
+		   (((is_any_closure(func)) ||             /* see use-redef in s7test -- I'm not sure about this */
+		     ((!is_global(car_expr)) &&
+		      ((!is_slot(global_slot(car_expr))) ||
+		       (global_value(car_expr) != func)))) &&
+		    (!is_immutable(car_expr)) && /* list|apply-values -- can't depend on opt1 here because it might not be global, or might be redefined locally */
+		    (!is_immutable_slot(slot)))))      /* (define-constant...) */
 		{
 		  /* (let () (define (f2 a) (+ a 1)) (define (f1 a) (f2 a)) (define (f2 a) (- a)) (f1 12))
 		   * (let () (define (f2 a) (+ a 1)) (define (f1 a) (f2 a)) (define (f2 a) (- a 1)) (f1 12))
@@ -75728,7 +75736,7 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 	return(optimize_syntax(sc, expr, sc->quote_function, hop, e, export_ok));
 
       if (is_c_function(car_expr)) /* (#_abs x) etc */
-	return(optimize_funcs(sc, expr, car_expr, 1, orig_hop, e));
+	return(optimize_funcs(sc, expr, car_expr, /* (direct_memq(c_function_symbol(car_expr), e)) ? 0 : */ 1, orig_hop, e));
 
       if (is_syntax(car_expr)) /* (#_cond...) etc */
 	{
@@ -75757,6 +75765,7 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 static opt_t optimize(s7_scheme *sc, s7_pointer code, int32_t hop, s7_pointer e)
 {
   s7_pointer x;
+  if (SHOW_EVAL_OPS) fprintf(stderr, "  %s[%d]: %s, e: %s, hop: %d\n", __func__, __LINE__, display_truncated(code), display(e), hop);
   for (x = code; (is_pair(x)) && (!is_checked(x)); x = cdr(x))
     {
       s7_pointer obj = car(x);
@@ -100393,6 +100402,7 @@ int main(int argc, char **argv)
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * safe_do hop bit in other do cases and let
+ * should hop changes be added, or find test cases first?
  *
  * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
