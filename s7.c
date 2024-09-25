@@ -2208,7 +2208,7 @@ static void init_types(void)
 #define lambda_set_simple_defaults(p)  set_low_type_bit(T_Pair(p), T_SIMPLE_ARG_DEFAULTS)
 /* are all lambda* default values simple? This is set on closure_body, so it doesn't mess up closure_is_ok_1 */
 
-#define T_SAFE_LIST_IN_USE             T_SIMPLE_ARG_DEFAULTS
+#define T_SAFE_LIST_IN_USE             T_SIMPLE_ARG_DEFAULTS  /* only on sc->safe_lists */
 #define safe_list_is_in_use(p)         has_low_type_bit(T_Pair(p), T_SAFE_LIST_IN_USE)
 #define set_safe_list_in_use(p)        set_low_type_bit(T_Pair(p), T_SAFE_LIST_IN_USE)
 #define clear_safe_list_in_use(p)      do {clear_low_type_bit(T_Pair(p), T_SAFE_LIST_IN_USE); sc->current_safe_list = 0;} while (0)
@@ -2785,11 +2785,6 @@ static void init_types(void)
 #define set_true_is_done(p)            set_high_type_bit(T_Pair(p), T_TRUE_IS_DONE)
 #define set_a_is_cadr(p)               set_true_is_done(p)
 #define a_is_cadr(p)                   true_is_done(p)
-
-#define T_FULL_HAS_NO_RETURN           T_FULL_TRUE_IS_DONE /* this won't collide with true_is_done, I think */
-#define T_HAS_NO_RETURN                T_TRUE_IS_DONE
-#define has_no_return(p)               has_high_type_bit(T_Pair(p), T_HAS_NO_RETURN)
-#define set_has_no_return(p)           set_high_type_bit(T_Pair(p), T_HAS_NO_RETURN)
 
 #define T_FULL_UNKNOPT                 (1LL << (48 + 11))
 #define T_UNKNOPT                      (1 << 11)
@@ -4957,7 +4952,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj)
 						  ((is_pair(obj)) ? " opt1-func-listed" :
 						   " ?33?")) : "",
 	  /* bit 34+24 */
-	  ((full_typ & T_FULL_TRUE_IS_DONE) != 0) ? ((is_pair(obj)) ? " #t-is-done/no-return" :
+	  ((full_typ & T_FULL_TRUE_IS_DONE) != 0) ? ((is_pair(obj)) ? " #t-is-done" :
 						     " ?34?") : "",
 	  /* bit 35+24 */
 	  ((full_typ & T_FULL_UNKNOPT) != 0) ?   ((is_pair(obj)) ? " unknopt" : " ?35?") : "",
@@ -17182,8 +17177,10 @@ static s7_pointer g_complex(s7_scheme *sc, s7_pointer args)
 }
 
 static s7_pointer g_complex_wrapped(s7_scheme *sc, s7_pointer args) {return(complex_p_pp_wrapped(sc, car(args), cadr(args)));}
+#if 0
 static s7_pointer complex_p_ii_wrapped(s7_scheme *sc, s7_int x, s7_int y) {return(wrap_complex(sc, (s7_double)x, (s7_double)y));}
 static s7_pointer complex_p_dd_wrapped(s7_scheme *sc, s7_double x, s7_double y) {return(wrap_complex(sc, x, y));}
+#endif
 
 static s7_pointer complex_p_ii(s7_scheme *sc, s7_int x, s7_int y)
 {
@@ -37947,8 +37944,7 @@ static s7_pointer format_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_p
 	  if (!is_columnizing(string_value(str_arg)))
 	    return(sc->format_no_column);
 	}
-      if (port == sc->F)
-	return(sc->format_f);
+      if (port == sc->F) return(sc->format_f);
     }
   return(f);
 }
@@ -43569,12 +43565,6 @@ static s7_pointer g_cv_set_3(s7_scheme *sc, s7_pointer args) {return(complex_vec
 
 static s7_pointer complex_vector_set_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr)
 {
-  if (has_no_return(expr))
-    {
-      if ((is_pair(cadddr(expr))) && (car(cadddr(expr)) == sc->complex_symbol))
-	set_c_function(cadddr(expr), sc->complex_wrapped);
-      /* TODO: if third arg is complex-vector-ref and p_pi_wrapped, use complex_wrapped in between? */
-    }
   return((args == 3) ? sc->cv_set_3 : f);
 }
 
@@ -66474,21 +66464,6 @@ static bool p_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 		  opc->v[0].fp = opt_p_ppp_ssf;
 		  if ((is_let(obj)) && (is_symbol_and_keyword(arg2)) && (opc->v[3].p_ppp_f == let_set_2)) /* (let-set! L3 :x (+ (L3 'x) 1)) */
 		    use_ppf_slot_set(sc, opc, obj, keyword_symbol(arg2));
-
-		  if ((has_no_return(car_x)) && (is_complex_vector(obj)) && (is_pair(arg3)) &&
-		      (car(arg3) == sc->complex_symbol) && (car(car_x) == sc->complex_vector_set_symbol))
-		    {
-		      if (opc->v[4].o1->v[3].p_pp_f == complex_p_pp)
-			opc->v[4].o1->v[3].p_pp_f = complex_p_pp_wrapped;
-		      else
-			if (opc->v[4].o1->v[3].p_dd_f == complex_p_dd)
-			  opc->v[4].o1->v[3].p_dd_f = complex_p_dd_wrapped;
-			else
-			  if (opc->v[4].o1->v[3].p_ii_f == complex_p_ii)
-			    opc->v[4].o1->v[3].p_ii_f = complex_p_ii_wrapped;
-		      /* opc->v[3].p_ppp_f = complex_vector_set_p_ppp and  fn_proc(arg3) == g_complex_wrapped */
-		      /* p_pip case is different! o->v[9].fp(o->v[8].o1 */
-		    }
 		  return_true(sc, car_x);
 		}
 	      sc->pc = start;
@@ -73142,10 +73117,9 @@ static bool is_ok_lambda(s7_scheme *sc, s7_pointer arg2)
 	 (s7_is_proper_list(sc, cdddr(arg2))));
 }
 
-static bool hop_if_constant(s7_scheme *sc, s7_pointer sym /* , s7_pointer e */)
+static bool hop_if_constant(s7_scheme *sc, s7_pointer sym)
 {
   return(((!sc->in_with_let) && 
-	  /* (!direct_memq(sym, e)) && */
 	  (is_global(sym))) ? 1 : 0); /* for with-let, see s7test atanh (77261) */
 }
 
@@ -73154,7 +73128,7 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
 {
   s7_pointer arg1 = cadr(expr);
   bool func_is_safe = is_safe_procedure(func);
-  if (hop == 0) hop = hop_if_constant(sc, car(expr) /* , e */);
+  if (hop == 0) hop = hop_if_constant(sc, car(expr));
   if (SHOW_EVAL_OPS) fprintf(stderr, "  %s[%d]: %s %d %d\n", __func__, __LINE__, display_truncated(expr), func_is_safe, pairs);
   if (pairs == 0)
     {
@@ -73701,7 +73675,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
     {
       /* this is a mess */
       bool func_is_safe = is_safe_procedure(func);
-      if (hop == 0) hop = hop_if_constant(sc, car(expr) /* , e */);
+      if (hop == 0) hop = hop_if_constant(sc, car(expr));
       if (pairs == 0)
 	{
 	  if ((func_is_safe) ||
@@ -74516,7 +74490,7 @@ static opt_t optimize_func_three_args(s7_scheme *sc, s7_pointer expr, s7_pointer
 
   if (is_c_function(func) && (c_function_is_aritable(func, 3)))
     {
-      if (hop == 0) hop = hop_if_constant(sc, car(expr) /* , e */);
+      if (hop == 0) hop = hop_if_constant(sc, car(expr));
       if ((is_safe_procedure(func)) ||
 	  ((is_maybe_safe(func)) && (unsafe_is_safe(sc, arg3, e))))
 	{
@@ -74781,7 +74755,7 @@ static opt_t optimize_func_many_args(s7_scheme *sc, s7_pointer expr, s7_pointer 
     }
   if ((is_c_function(func)) && (c_function_is_aritable(func, args)))
     {
-      if (hop == 0) hop = hop_if_constant(sc, car(expr) /* , e */);
+      if (hop == 0) hop = hop_if_constant(sc, car(expr));
       if (is_safe_procedure(func))
 	{
 	  if (pairs == 0)
@@ -75083,9 +75057,6 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 	if (!is_pair(vars))
 	  return(OPT_OOPS);
       body = cddr(expr);
-      for (s7_pointer p = body; is_pair(p); p = cdr(p))
-	if (is_pair(car(p)))
-	  set_has_no_return(car(p));
 
       for (s7_pointer p = vars; is_pair(p); p = cdr(p))
 	{
@@ -75587,7 +75558,7 @@ static opt_t optimize_expression(s7_scheme *sc, s7_pointer expr, int32_t hop, s7
 	       (is_safe_procedure(func))))               /* built-in applicable objects like vectors */
 	    {
 	      if ((hop != 0) &&
-		  ((direct_memq(car_expr, e)) ||
+		  (/* (direct_memq(car_expr, e)) || */ /* TODO: this slow down tlimit and others too much */
 		   (((is_any_closure(func)) ||             /* see use-redef in s7test -- I'm not sure about this */
 		     ((!is_global(car_expr)) &&
 		      ((!is_slot(global_slot(car_expr))) ||
@@ -81022,7 +80993,7 @@ static void op_macro(s7_scheme *sc) /* (macro (x) `(+ ,x 1)) */
   if ((!is_pair(sc->code)) || (!mac_is_ok(sc->code))) /* (macro)? or (macro . #\a)? */
     {
       check_macro(sc, sc->cur_op, form);
-      set_mac_is_ok(sc->code);
+      set_mac_is_ok(sc->code);                        /* the !is_pair case raised an error in check_macro */
     }
   sc->value = make_macro(sc, sc->cur_op, false);
 }
@@ -97779,7 +97750,6 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_pip_unchecked_function(sc, global_value(sc->string_set_symbol), string_set_p_pip_unchecked);
   s7_set_p_pp_function(sc, global_value(sc->hash_table_ref_symbol), hash_table_ref_p_pp);
   s7_set_p_ppp_function(sc, global_value(sc->hash_table_set_symbol), hash_table_set_p_ppp);
-
   s7_set_p_ii_function(sc, global_value(sc->complex_symbol), complex_p_ii);
   s7_set_p_dd_function(sc, global_value(sc->complex_symbol), complex_p_dd);
   s7_set_p_pp_function(sc, global_value(sc->complex_symbol), complex_p_pp);
@@ -99891,7 +99861,7 @@ s7_scheme *s7_init(void)
   s7_eval_c_string(sc, "(define make-hook                                                                 \n\
                           (let ((+documentation+ \"(make-hook . pars) returns a new hook (a function) that passes the parameters to each function in its function list.\")) \n\
                             (lambda hook-args                                                             \n\
-                              (let ((body ()))                                                            \n\
+                              (let ((body ()))   ; list of hook functions                                 \n\
                                 (apply lambda* hook-args                                                  \n\
                                   '((let ((result #<unspecified>))                                        \n\
                                       (let ((hook (openlet (sublet (curlet) 'let-ref-fallback (lambda (e sym) #<undefined>))))) \n\
@@ -99953,7 +99923,7 @@ s7_scheme *s7_init(void)
                           (list (cons 'lambda (cons vars body)) expression))");
 
   /* call-with-values, make-hook and multiple-value-bind can't set the initial_value to the global_value
-   *   so that #_... can be used because the global_value is not semipermanent, but could it be made so?
+   *   so that #_... can be used because the global_value is not semipermanent, but could it be made so? (via remove_from_heap?)
    */
 #endif
 
@@ -100344,7 +100314,7 @@ int main(int argc, char **argv)
  * ----------------------------------------------------
  * tpeak      148    114    108    105    102    103
  * tref      1081    687    463    459    464    410
- * tlimit    3936   5371   5371   5371   5371    833
+ * tlimit    3936   5371   5371   5371   5371    833  3834 [direct_memq in hop=0 check 75595]
  * index            1016    973    967    972    975
  * tmock            1145   1082   1042   1045   1035
  * tvect     3408   2464   1772   1669   1497   1464
@@ -100366,13 +100336,13 @@ int main(int argc, char **argv)
  * tobj             3970   3828   3577   3508   3436
  * tmac             3873   3033   3677   3677   3491
  * teq              4045   3536   3486   3544   3542
- * complex                                      4306  4171
+ * complex                                      4306  4171 4208
  * tcase            4793   4439   4430   4439   4377
  * tmap             8774   4489   4541   4586   4384
  * tlet      11.0   6974   5609   5980   5965   4470
  * tfft             7729   4755   4476   4536   4531
  * tshoot           5447   5183   5055   5034   4843
- * tstar            6705   5834   5278   5177   5047
+ * tstar            6705   5834   5278   5177   5047  5055 [magnitude_p_p]
  * tform            5348   5307   5316   5084   5070
  * tstr      10.0   6342   5488   5162   5180   5252
  * tnum             6013   5433   5396   5409   5427
@@ -100389,11 +100359,11 @@ int main(int argc, char **argv)
  * thash            11.7   9734   9479   9526   9241
  * cb        12.9   11.0   9658   9564   9609   9649
  * tmap-hash                                    10.3
- * tgen             11.4   12.0   12.1   12.2   12.4
+ * tgen             11.4   12.0   12.1   12.2   12.4  12.7 [direct_memq as above]
  * tall      15.9   15.6   15.6   15.6   15.1   15.1
  * timp             24.4   20.0   19.6   19.7   15.5
  * tmv              21.9   21.1   20.7   20.6   16.6
- * calls            37.5   37.0   37.5   37.1   37.2
+ * calls            37.5   37.0   37.5   37.1   37.2  37.0?
  * sg                      55.9   55.8   55.4   55.2
  * tbig            175.8  156.5  148.1  146.2  146.3
  * ----------------------------------------------------
@@ -100402,12 +100372,13 @@ int main(int argc, char **argv)
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * safe_do hop bit in other do cases and let
- * should hop changes be added, or find test cases first?
  *
  * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
- *   tcomplex|tnr.scm continued, (tnr: format + no-return)
+ *   tcomplex.scm continued
  *   same: inline_op_implicit_vector_ref_a -> complex_vector_getter: (data j)=cfft notice type at run-time, or set_ref_aa?
+ *   the complex_p*_wrapped funcs are no longer accessible -- maybe a sc->in_do_body flag?? (see tmp) 17sep was start
+ *   restore hop_if_constant direct_memq's?
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
