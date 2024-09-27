@@ -1,5 +1,13 @@
 ;;; complex timings
 
+(unless (defined? 'complex-vector)
+  (define complex-vector vector)
+  (define* (make-complex-vector len (init 0.0)) (make-vector len init complex?))
+  (define complex-vector-ref vector-ref)
+  (define complex-vector-set! vector-set!)
+  (define complex-vector? vector?)
+  (set! *#readers* (cons (cons #\c (lambda (s) (apply vector (read)))) *#readers*)))
+
 (define size 1000)
 (define tries 1000)
 

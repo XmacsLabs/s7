@@ -88,7 +88,7 @@
 	(write vj p)
 	(get-output-string p #t)
 	(object->string vj)
-	(format #f "~A~%" vj)
+	(set! str (format #f "~A~%" vj)) ; set! to cancel the optimization to format_nr
 	(cyclic-sequences vj)))
     (close-output-port p)))
 
