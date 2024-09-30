@@ -3594,8 +3594,6 @@ In s7, multiple values are spliced directly into the caller's argument list.
             (function (apply values args) (apply values more-args))))))
 </pre>
 
-
-
 <blockquote>
 
 <div class="indented">
@@ -7180,6 +7178,26 @@ The define propagates backwards, but:
 <p id="r7rs">The r7rs compatibility code is in r7rs.scm. I used to include it here, but
 as r7rs grew, this section got too large.  In general, all the conversion routines in
 r7rs are handled in s7 via generic functions, records are classes, and so on.
+</p>
+
+<p>r7rs.scm has the command-line function that makes it easier (on Linux anyway) to
+run s7 as a scripting engine.  Say we have a s7's repl.c compiled and loaded to the file "repl",
+and a file named "runit" with these contents:
+</p>
+<pre class="indented">
+#!repl
+!#
+(load "r7rs.scm")
+(display (command-line))
+(newline)
+(exit)
+</pre>
+<p>Now make runit executable via chmod, and run it with some arguments:
+</p>
+<pre class="indented">
+runit 123 abc
+</pre>
+<p>and it prints: ("repl" "runit" "123" "abc")
 </p>
 </div>
 

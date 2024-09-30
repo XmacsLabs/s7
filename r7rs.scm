@@ -498,10 +498,6 @@
 	      (set! s (string-append s (string c)))))))))
 
 
-;; other minor differences: 
-;;  in s7, single-quote can occur in a name
-
-
 ;; records
 (define-macro (define-record-type type make ? . fields)
   (let ((obj (gensym))
