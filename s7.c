@@ -4197,10 +4197,10 @@ static char *pos_int_to_str_direct_1(s7_scheme *sc, s7_int num)
 #if WITH_GCC
   #if S7_DEBUGGING
     static s7_pointer lookup_1(s7_scheme *sc, const s7_pointer symbol);
-    #define lookup(Sc, Sym) check_null_sym(Sc, lookup_1(Sc, Sym), Sym, __LINE__, __func__)
+    #define lookup(Sc, Sym) check_null_sym(Sc, lookup_1(Sc, T_Sym(Sym)), Sym, __LINE__, __func__)
     static s7_pointer check_null_sym(s7_scheme *sc, s7_pointer p, s7_pointer sym, int32_t line, const char *func);
-    #define lookup_unexamined(Sc, Sym) lookup_1(Sc, Sym)
-    #define lookup_checked(Sc, Sym) ({s7_pointer _x_; _x_ = lookup_1(Sc, Sym); ((_x_) ? _x_ : unbound_variable(Sc, Sym));})
+    #define lookup_unexamined(Sc, Sym) lookup_1(Sc, T_Sym(Sym))
+    #define lookup_checked(Sc, Sym) ({s7_pointer _x_; _x_ = lookup_1(Sc, T_Sym(Sym)); ((_x_) ? _x_ : unbound_variable(Sc, T_Sym(Sym)));})
   #else
     static inline s7_pointer lookup(s7_scheme *sc, const s7_pointer symbol);
     #define lookup_unexamined(Sc, Sym) lookup(Sc, Sym)
@@ -10553,7 +10553,8 @@ static s7_pointer call_let_set_fallback(s7_scheme *sc, s7_pointer let, s7_pointe
   return(p);
 }
 
-static s7_pointer g_unlet_disabled(s7_scheme *sc, s7_pointer args) {return(sc->unlet_disabled);} /* we need a self-id here for let_ref */
+static s7_pointer g_unlet_disabled(s7_scheme *sc, s7_pointer args) {return(sc->unlet_disabled);}
+/* we need a self-id here for let_ref, but it needs to be a real s7_cell, not g_unlet_disabled itself, hence sc->unlet_disabled */
 
 static /* inline */ s7_pointer let_ref(s7_scheme *sc, s7_pointer let, s7_pointer symbol)
 {
@@ -20263,6 +20264,37 @@ static s7_pointer add_p_ppp(s7_scheme *sc, s7_pointer p0, s7_pointer p1, s7_poin
   }
 }
 
+#if (!WITH_GMP)
+static s7_pointer add_p_ppp_wrapped(s7_scheme *sc, s7_pointer p0, s7_pointer p1, s7_pointer p2)
+{
+  if ((is_t_integer(p0)) && (is_t_integer(p1)) && (is_t_integer(p2)))
+    {
+#if HAVE_OVERFLOW_CHECKS
+      s7_int val;
+      if ((!add_overflow(integer(p0), integer(p1), &val)) &&
+	  (!add_overflow(val, integer(p2), &val)))
+	return(wrap_integer(sc, val));
+      if (WITH_WARNINGS) s7_warn(sc, 128, "integer add overflow: (+ %" ld64 " %" ld64 " %" ld64 ")\n", integer(p0), integer(p1), integer(p2));
+      return(wrap_real(sc, (long_double)integer(p0) + (long_double)integer(p1) + (long_double)integer(p2)));
+#else
+      return(wrap_integer(sc, integer(p0) + integer(p1) + integer(p2)));
+#endif
+    }
+  if ((is_t_real(p0)) && (is_t_real(p1)) && (is_t_real(p2)))
+    return(wrap_real(sc, real(p0) + real(p1) + real(p2)));
+  {
+    s7_pointer p = add_p_pp_wrapped(sc, p0, p1);
+    sc->error_argnum = 1;
+    p = add_p_pp_wrapped(sc, p, p2);
+    sc->error_argnum = 0;
+    return(p);
+  }
+}
+#else
+#define add_p_ppp_wrapped add_p_ppp
+#endif
+
+
 static s7_pointer g_add(s7_scheme *sc, s7_pointer args)
 {
   #define H_add "(+ ...) adds its arguments"
@@ -20291,6 +20323,7 @@ static s7_pointer g_add(s7_scheme *sc, s7_pointer args)
 static s7_pointer g_add_2(s7_scheme *sc, s7_pointer args) {return(add_p_pp(sc, car(args), cadr(args)));}
 static s7_pointer g_add_2_wrapped(s7_scheme *sc, s7_pointer args) {return(add_p_pp_wrapped(sc, car(args), cadr(args)));}
 static s7_pointer g_add_3(s7_scheme *sc, s7_pointer args) {return(add_p_ppp(sc, car(args), cadr(args), caddr(args)));}
+static s7_pointer g_add_3_wrapped(s7_scheme *sc, s7_pointer args) {return(add_p_ppp_wrapped(sc, car(args), cadr(args), caddr(args)));}
 
 static s7_pointer g_add_4(s7_scheme *sc, s7_pointer args)
 {
@@ -20388,8 +20421,8 @@ static s7_pointer g_add_xf(s7_scheme *sc, s7_pointer x, s7_double y, int32_t loc
 
 static s7_pointer add_p_pi(s7_scheme *sc, s7_pointer p1, s7_int i1) {return(g_add_xi(sc, p1, i1, 1));}
 
-static s7_pointer add_p_dd(s7_scheme *sc, s7_double x1, s7_double x2) {return(make_real(sc, x1 + x2));}
-static s7_pointer add_p_ii(s7_scheme *sc, s7_int x1, s7_int x2) {return(make_integer(sc, x1 + x2));}
+static s7_pointer add_p_dd(s7_scheme *sc, s7_double x1, s7_double x2) {return(make_real(sc, x1 + x2));} /* very few calls */
+static s7_pointer add_p_ii(s7_scheme *sc, s7_int x1, s7_int x2) {return(make_integer(sc, x1 + x2));}    /* no calls */
 
 static s7_double add_d_d(s7_double x) {return(x);}
 static s7_double add_d_dd(s7_double x1, s7_double x2) {return(x1 + x2);}
@@ -20437,7 +20470,7 @@ static s7_pointer add_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_poin
       s7_pointer arg1 = cadr(expr), arg2 = caddr(expr);
       if ((is_pair(arg1)) && (has_fn(arg1)) && (fn_proc(arg1) == g_multiply_2)) set_fn_direct(arg1, g_multiply_2_wrapped);
       if ((is_pair(arg2)) && (has_fn(arg2)) && (fn_proc(arg2) == g_multiply_2)) set_fn_direct(arg2, g_multiply_2_wrapped);
-      if (arg2 == int_one)                          /* (+ ... 1) */
+      if (arg2 == int_one)    /* (+ ... 1) */
 	return(sc->add_x1);
       if ((is_t_integer(arg1)) && ((is_pair(arg2)) && (is_optimized(arg2)) && (is_h_safe_c_nc(arg2)) && (fn_proc(arg2) == g_random_i)))
 	{
@@ -21642,6 +21675,17 @@ static s7_pointer multiply_p_ppp(s7_scheme *sc, s7_pointer x, s7_pointer y, s7_p
   return(x);
 }
 
+static s7_pointer multiply_p_ppp_wrapped(s7_scheme *sc, s7_pointer x, s7_pointer y, s7_pointer z)
+{
+  /* no hits for reals in tnum */
+  /* if ((is_t_real(x)) && (is_t_real(y)) && (is_t_real(z))) return(make_real(sc, real(x) * real(y) * real(z))); */
+  x = multiply_p_pp_wrapped(sc, x, y);
+  sc->error_argnum = 1;
+  x = multiply_p_pp_wrapped(sc, x, z);
+  sc->error_argnum = 0;
+  return(x);
+}
+
 static s7_pointer multiply_method_or_bust(s7_scheme *sc, s7_pointer obj, s7_pointer args, s7_pointer typ, int32_t num)
 {
   if (has_active_methods(sc, obj))
@@ -21678,6 +21722,7 @@ static s7_pointer g_multiply(s7_scheme *sc, s7_pointer args)
 static s7_pointer g_multiply_2(s7_scheme *sc, s7_pointer args) {return(multiply_p_pp(sc, car(args), cadr(args)));}
 static s7_pointer g_multiply_2_wrapped(s7_scheme *sc, s7_pointer args) {return(multiply_p_pp_wrapped(sc, car(args), cadr(args)));}
 static s7_pointer g_multiply_3(s7_scheme *sc, s7_pointer args) {return(multiply_p_ppp(sc, car(args), cadr(args), caddr(args)));}
+static s7_pointer g_multiply_3_wrapped(s7_scheme *sc, s7_pointer args) {return(multiply_p_ppp_wrapped(sc, car(args), cadr(args), caddr(args)));}
 
 static s7_pointer g_mul_xi(s7_scheme *sc, s7_pointer x, s7_int n, int32_t loc)
 {
@@ -21791,15 +21836,17 @@ static s7_pointer multiply_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7
   if ((is_pair(arg1)) && (has_fn(arg1)))
     {
       if (fn_proc(arg1) == g_add_2) set_fn_direct(arg1, g_add_2_wrapped);
+      if (fn_proc(arg1) == g_add_3) set_fn_direct(arg1, g_add_3_wrapped);
       if (fn_proc(arg1) == g_subtract_2) set_fn_direct(arg1, g_subtract_2_wrapped);
-      if (fn_proc(arg1) == g_subtract_1) set_fn_direct(arg1, g_subtract_1);
+      if (fn_proc(arg1) == g_subtract_1) set_fn_direct(arg1, g_subtract_1_wrapped);
     }
   arg2 = caddr(expr);
   if ((is_pair(arg2)) && (has_fn(arg2)))
     {
       if (fn_proc(arg2) == g_add_2) set_fn_direct(arg2, g_add_2_wrapped);
+      if (fn_proc(arg2) == g_add_3) set_fn_direct(arg2, g_add_3_wrapped);
       if (fn_proc(arg2) == g_subtract_2) set_fn_direct(arg2, g_subtract_2_wrapped);
-      if (fn_proc(arg2) == g_subtract_1) set_fn_direct(arg2, g_subtract_1);
+      if (fn_proc(arg2) == g_subtract_1) set_fn_direct(arg2, g_subtract_1_wrapped);
     }
   if (args == 2) return(sc->multiply_2);
   if (args == 3) return(sc->multiply_3);
@@ -22574,7 +22621,11 @@ static s7_pointer divide_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_p
     {
       s7_pointer arg1 = cadr(expr);
       if ((is_t_real(arg1)) && (real(arg1) == 1.0)) return(sc->invert_x);
-      if ((is_pair(arg1)) && (has_fn(arg1)) && (fn_proc(arg1) == g_multiply_2)) set_fn_direct(arg1, g_multiply_2_wrapped);
+      if ((is_pair(arg1)) && (has_fn(arg1)))
+	{
+	  if (fn_proc(arg1) == g_multiply_2) set_fn_direct(arg1, g_multiply_2_wrapped);
+	  else if (fn_proc(arg1) == g_multiply_3) set_fn_direct(arg1, g_multiply_3_wrapped);
+	}
       return(((is_t_integer(caddr(expr))) && (integer(caddr(expr)) == 2)) ? sc->divide_by_2 : sc->divide_2);
     }
   return(f);
@@ -24019,10 +24070,13 @@ static s7_pointer g_num_eq_ix(s7_scheme *sc, s7_pointer args) {return(num_eq_xx(
 
 static s7_pointer num_eq_chooser(s7_scheme *sc, s7_pointer ur_f, int32_t args, s7_pointer expr)
 {
+  s7_pointer arg1, arg2;
   if (args != 2) return(ur_f);
-  if (is_t_integer(caddr(expr)))
-    return(sc->num_eq_xi);
-  return((is_t_integer(cadr(expr))) ? sc->num_eq_ix : sc->num_eq_2);
+  arg1 = cadr(expr);
+  arg2 = caddr(expr);
+  if ((is_pair(arg1)) && (has_fn(arg1)) && (fn_proc(arg1) == g_add_3)) set_fn_direct(arg1, g_add_3_wrapped);
+  if (is_t_integer(arg2)) return(sc->num_eq_xi);
+  return((is_t_integer(arg1)) ? sc->num_eq_ix : sc->num_eq_2);
 }
 
 
@@ -72695,7 +72749,6 @@ static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
   if (SHOW_EVAL_OPS) fprintf(stderr, "  %s[%d]: expr: %s, func: %s, hop: %d, e: %s\n",
 			     __func__, __LINE__, display_truncated(expr), display(func), hop, display_truncated(e));
   if ((hop != 1) && (is_constant_symbol(sc, car(expr)))) hop = 1;
-
   if ((is_closure(func)) || (is_closure_star(func)))
     {
       bool safe_case = is_safe_closure(func);
@@ -72747,7 +72800,7 @@ static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
     {
       if (c_function_min_args(func) != 0)
 	return(OPT_F);
-      if ((hop == 0) && (is_global(car(expr)))) hop = 1;
+      /* if ((hop == 0) && (is_global(car(expr)))) hop = 1; */ /* not good: (define + *) clears hop earlier */
       if ((is_safe_procedure(func)) || (c_function_call(func) == s7_values))
 	{
 	  set_safe_optimize_op(expr, hop + OP_SAFE_C_NC);
@@ -73053,7 +73106,7 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
   s7_pointer arg1 = cadr(expr);
   bool func_is_safe = is_safe_procedure(func);
   if (hop == 0) hop = hop_if_constant(sc, car(expr));
-  if (SHOW_EVAL_OPS) fprintf(stderr, "  %s[%d]: %s %d %d\n", __func__, __LINE__, display_truncated(expr), func_is_safe, pairs);
+  if (SHOW_EVAL_OPS) fprintf(stderr, "  %s[%d]: %s, func_is_safe: %d, pairs: %d, hop: %d\n", __func__, __LINE__, display_truncated(expr), func_is_safe, pairs, hop);
   if (pairs == 0)
     {
       if ((func_is_safe) || (c_function_call(func) == s7_values))                /* safe c function */
@@ -73085,7 +73138,8 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
       if (func_is_safe)
 	{
 	  int32_t op = combine_ops(sc, expr, E_C_P, arg1, NULL);
-	  /* if ((hop == 1) && (!op_has_hop(arg1))) hop = 0; *//* probably not the right way to fix this (s7test tc_or_a_and_a_a_la) */
+	  if ((hop == 1) && (!op_has_hop(arg1)) && (is_maybe_shadowed(car(arg1)))) hop = 0; 
+	    /* probably not the right way to fix this (s7test tc_or_a_and_a_a_la), but (define + *) needs this */
 	  set_safe_optimize_op(expr, hop + op);
 
 	  if ((op == OP_SAFE_C_P) &&
@@ -83918,23 +83972,24 @@ static s7_pointer check_do(s7_scheme *sc)
 		  if (((caddr(step_expr) == int_one) || (cadr(step_expr) == int_one)) &&
 		      (do_is_safe(sc, body, car(v), sc->nil, vars, &has_set)))
 		    {
+		      opcode_t op = optimize_op(car(body));
 		      pair_set_syntax_op(form, OP_SAFE_DO);             /* safe_do: body is safe, step by 1 */
 		      /* no semipermanent let here because apparently do_is_safe accepts recursive calls? */
+
+		      /* this code sets the hop bit in any outer safe function call.  I tried a procedure (heaf_hopper in tmp) that
+		       *   walked the body setting all the hop bits; this worked in all tests, but cost as much as it saved.
+		       *   this was in the inner block below originally.
+		       */
+		      if ((is_optimized(car(body))) &&
+			  ((is_safe_c_op(op)) || (is_safe_closure_op(op)) || (is_safe_closure_star_op(op))) &&
+			  (!op_has_hop(car(body))))
+			set_optimize_op(car(body), op + 1); /* set hop bit if it's a safe_closure call in a safe do loop */
+
 		      if ((!has_set) &&
 			  (c_function_class(opt1_cfunc(end)) == sc->num_eq_class))
 			{
 			  /* vars is of the form ((i 0 (+ i 1))) -- 1 var etc */
-			  opcode_t op = optimize_op(car(body));
 			  pair_set_syntax_op(form, OP_SAFE_DOTIMES);   /* safe_dotimes: end is = */
-
-			  /* this code sets the hop bit in any outer safe function call.  I tried a procedure (heaf_hopper in tmp) that
-			   *   walked the body setting all the hop bits; this worked in all tests, but cost as much as it saved.
-			   */
-			  if ((is_optimized(car(body))) &&
-			      ((is_safe_c_op(op)) || (is_safe_closure_op(op)) || (is_safe_closure_star_op(op))) &&
-			      (!op_has_hop(car(body))))
-			    set_optimize_op(car(body), op + 1); /* set hop bit if it's a safe_closure call in a safe do loop */
-
 			  if (is_fxable(sc, car(body)))
 			    fx_annotate_arg(sc, body, set_plist_1(sc, caar(vars))); /* if _args, fxification ignored? (need safe_closure_s_na etc) */
 			  /* is this redundant? safe_closure_s_a must already have fx, and otherwise it is ignored */
@@ -93653,6 +93708,7 @@ static bool unknown_any(s7_scheme *sc, s7_pointer f, s7_pointer code)
 
 
 /* ---------------- eval type checkers ---------------- */
+
 #if WITH_GCC
 #define h_c_function_is_ok(Sc, P) ({s7_pointer _P_; _P_ = P; ((op_has_hop(_P_)) || (c_function_is_ok(Sc, _P_)));})
 #else
@@ -100307,10 +100363,12 @@ int main(int argc, char **argv)
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
- * safe_do hop bit in other do cases and let: t826
+ * op_safe_do hop bit [83984] in let: t826
  * tlimit: maybe_shadowed bit is set and hop=0 but it's being ignored??
  *   restore hop_if_constant using maybe_shadowed? optimize*funcs optimize|_expression|syntax vars_opt_ok optimize_funcs
  *   maybe_shadowed is causing endless pother in t725, t718 last case -- bit is set, hop=0 but ignored?
+ *     was a bug in optimize_c_function_one_arg 73088 -- added is_maybe_shadowed -- there are more of these...
+ *     t718 define +* bug is hit a lot in t101 (3 4 5...)
  * sqrt t826 notice dd args in sqr (x/y) and carry through (or in tc?)
  *   better: safe_closure_aa_a fx_c+fx_c -> fx_safe_closure_dd|ii_a? etc
  * tnr?
@@ -100328,7 +100386,6 @@ int main(int argc, char **argv)
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
  * closure_is_ok improvement? case op1: ...; if (0) case op2: ...; case op3: the unchecked call;
- * t718 define +* bug is hit a lot in t101 (3 4 5...)
  * can add_multiply et al check has_fx case for parallel wrappers?
  *   need to set opt3 direct I think and then call it where we currently call e.g. add_p_pp
  *   but does this happen in the add_chooser or fx_* chooser?  treat fx_add* like other fx_direct cases

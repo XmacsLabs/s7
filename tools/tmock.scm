@@ -1,6 +1,6 @@
 ;;; mock data (method call) timing test
 
-(set! (*s7* 'heap-size) (* 2 1024000))
+(set! (*s7* 'heap-size) 1536000)
 
 (define (ok? otst ola oexp)
   (let ((result (catch #t ola
