@@ -3542,7 +3542,8 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define c_function_set_base(f, Val)    c_function_data(f)->generic_ff = T_CFn(Val)
 #define c_function_marker(f)           c_function_data(f)->cam.marker              /* the mark function for the vector (mark_vector_1 etc) */
 #define c_function_set_marker(f, Val)  c_function_data(f)->cam.marker = Val
-#define c_function_symbol(f)           c_function_data(f)->sam.c_sym               /* symbol or NULL */
+#define c_function_symbol(f)           c_function_data(f)->sam.c_sym               /* symbol or NULL, not c_function*! */
+#define c_function_set_symbol(f, Sym)  c_function_symbol(f) = T_Sym(Sym)
 #define c_function_let(f)              T_Let(c_function_data(f)->let)
 #define c_function_set_let(f, Val)     c_function_data(f)->let = T_Let(Val)
 
@@ -32319,7 +32320,7 @@ static s7_pointer c_function_name_to_symbol(s7_scheme *sc, s7_pointer f)
   if (is_c_function(f))  /* c_function* uses c_sym slot for arg_names */
     {
       if (!c_function_symbol(f))
-	c_function_symbol(f) = make_symbol(sc, c_function_name(f), c_function_name_length(f));
+	c_function_set_symbol(f, make_symbol(sc, c_function_name(f), c_function_name_length(f)));
       return(c_function_symbol(f));
     }
   if (is_c_macro(f))
@@ -42496,7 +42497,7 @@ static void check_vector_typer_c_function(s7_scheme *sc, s7_pointer caller, s7_p
   if (!c_function_marker(typf))
     c_function_set_marker(typf, mark_vector_1);
   if (!c_function_symbol(typf))
-    c_function_symbol(typf) = make_symbol(sc, c_function_name(typf), c_function_name_length(typf));
+    c_function_set_symbol(typf, make_symbol(sc, c_function_name(typf), c_function_name_length(typf)));
 }
 
 static inline s7_pointer make_multivector(s7_scheme *sc, s7_pointer vec, s7_pointer x)
@@ -45071,7 +45072,7 @@ static void check_hash_table_typer(s7_scheme *sc, s7_pointer caller, s7_pointer 
   if (is_c_function(typer))
     {
       if (!c_function_symbol(typer))
-	c_function_symbol(typer) = make_symbol(sc, c_function_name(typer), c_function_name_length(typer));
+	c_function_set_symbol(typer, make_symbol(sc, c_function_name(typer), c_function_name_length(typer)));
       if (c_function_has_simple_elements(typer))
 	{
 	  if (caller == sc->hash_table_value_typer_symbol)
@@ -46151,7 +46152,7 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 			  if (c_function_has_simple_elements(keyp))
 			    set_has_simple_keys(ht);
 			  if (!c_function_symbol(keyp))
-			    c_function_symbol(keyp) = make_symbol(sc, c_function_name(keyp), c_function_name_length(keyp));
+			    c_function_set_symbol(keyp, make_symbol(sc, c_function_name(keyp), c_function_name_length(keyp)));
 			  if (symbol_type(c_function_symbol(keyp)) != T_FREE)
 			    set_has_hash_key_type(ht);
 			  /* c_function_marker is not currently used in this context */
@@ -46189,7 +46190,7 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
 			  if (c_function_has_simple_elements(valp))
 			    set_has_simple_values(ht);
 			  if (!c_function_symbol(valp))
-			    c_function_symbol(valp) = make_symbol(sc, c_function_name(valp), c_function_name_length(valp));
+			    c_function_set_symbol(valp, make_symbol(sc, c_function_name(valp), c_function_name_length(valp)));
 			  if (symbol_type(c_function_symbol(valp)) != T_FREE)
 			    set_has_hash_value_type(ht);
 			}
@@ -47128,8 +47129,8 @@ static void s7_function_set_class(s7_scheme *sc, s7_pointer f, s7_pointer base_f
   c_function_set_base(f, base_f);
 }
 
-static s7_pointer make_function(s7_scheme *sc, const char *name, s7_function f, s7_int req, s7_int opt, bool rst, const char *doc, s7_pointer x, c_proc_t *ptr)
-{
+static s7_pointer make_c_function(s7_scheme *sc, const char *name, s7_function f, s7_int req, s7_int opt, bool rst, const char *doc, s7_pointer x, c_proc_t *ptr)
+{ /* called only in s7_make_function */
   set_full_type(x, ((req == 0) && (rst)) ? T_C_RST_NO_REQ_FUNCTION : T_C_FUNCTION);
 
   c_function_data(x) = ptr;
@@ -47149,7 +47150,7 @@ static s7_pointer make_function(s7_scheme *sc, const char *name, s7_function f, 
   c_function_chooser(x) = fallback_chooser;
   c_function_opt_data(x) = NULL;
   c_function_marker(x) = NULL;
-  c_function_symbol(x) = NULL;
+  if (name) c_function_symbol(x) = make_symbol_with_strlen(sc, name); /* T_C_FUNCTION_STAR may set later to args */
   c_function_set_let(x, sc->rootlet);
   return(x);
 }
@@ -47170,7 +47171,7 @@ s7_pointer s7_make_function(s7_scheme *sc, const char *name, s7_function f,
 			    s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc)
 {
   s7_pointer x = alloc_pointer(sc);
-  x = make_function(sc, name, f, required_args, optional_args, rest_arg, doc, x, alloc_semipermanent_function(sc));
+  x = make_c_function(sc, name, f, required_args, optional_args, rest_arg, doc, x, alloc_semipermanent_function(sc));
   unheap(sc, x);
   return(x);
 }
@@ -47380,7 +47381,7 @@ s7_pointer s7_define_function(s7_scheme *sc, const char *name, s7_function fnc,
 			      s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc)
 {
   s7_pointer func = s7_make_function(sc, name, fnc, required_args, optional_args, rest_arg, doc);
-  s7_pointer sym = make_symbol_with_strlen(sc, name);
+  s7_pointer sym = T_Sym(c_function_symbol(func));
   s7_define(sc, sc->rootlet, sym, func);
   return(sym);
 }
@@ -47390,7 +47391,7 @@ s7_pointer s7_define_safe_function(s7_scheme *sc, const char *name, s7_function 
 {
   /* returns (string->symbol name), not the c_proc_t func */
   s7_pointer func = s7_make_safe_function(sc, name, fnc, required_args, optional_args, rest_arg, doc);
-  s7_pointer sym = make_symbol_with_strlen(sc, name);
+  s7_pointer sym = T_Sym(c_function_symbol(func));
   s7_define(sc, sc->rootlet, sym, func);
   return(sym);
 }
@@ -47401,7 +47402,7 @@ s7_pointer s7_define_typed_function(s7_scheme *sc, const char *name, s7_function
 {
   /* returns (string->symbol name), not the c_proc_t func */
   s7_pointer func = s7_make_typed_function(sc, name, fnc, required_args, optional_args, rest_arg, doc, signature); /* includes "safe" bit */
-  s7_pointer sym = make_symbol_with_strlen(sc, name);
+  s7_pointer sym = T_Sym(c_function_symbol(func));
   s7_define(sc, sc->rootlet, sym, func);
   c_function_set_marker(func, NULL);
   return(sym);
@@ -47414,11 +47415,9 @@ static s7_pointer define_bool_function(s7_scheme *sc, const char *name, s7_funct
 {
   s7_pointer bfunc;
   s7_pointer func = s7_make_typed_function(sc, name, fnc, 1, optional_args, false, doc, signature); /* includes "safe" bit */
-  s7_pointer sym = make_symbol_with_strlen(sc, name);
+  s7_pointer sym = T_Sym(c_function_symbol(func));
   s7_define(sc, sc->rootlet, sym, func);
-  if (sym_to_type != T_FREE)
-    symbol_set_type(sym, sym_to_type);
-  c_function_symbol(func) = sym;
+  if (sym_to_type != T_FREE) symbol_set_type(sym, sym_to_type);
   c_function_set_marker(func, marker);
   if (simple) c_function_set_has_simple_elements(func);
   c_function_set_bool_setter(func, bfunc = s7_make_safe_function(sc, name, bool_setter, 2, 0, false, NULL));
@@ -47434,7 +47433,7 @@ s7_pointer s7_define_unsafe_typed_function(s7_scheme *sc, const char *name, s7_f
 {
   /* returns (string->symbol name), not the c_proc_t func */
   s7_pointer func = s7_make_function(sc, name, fnc, required_args, optional_args, rest_arg, doc);
-  s7_pointer sym = make_symbol_with_strlen(sc, name);
+  s7_pointer sym = T_Sym(c_function_symbol(func));
   if (signature) c_function_set_signature(func, signature);
   s7_define(sc, sc->rootlet, sym, func);
   return(sym);
@@ -47445,7 +47444,7 @@ s7_pointer s7_define_semisafe_typed_function(s7_scheme *sc, const char *name, s7
 					     const char *doc, s7_pointer signature)
 {
   s7_pointer func = s7_make_function(sc, name, fnc, required_args, optional_args, rest_arg, doc);
-  s7_pointer sym = make_symbol_with_strlen(sc, name);
+  s7_pointer sym = T_Sym(c_function_symbol(func));
   if (signature) c_function_set_signature(func, signature);
   set_is_semisafe(func);
   s7_define(sc, sc->rootlet, sym, func);
@@ -47544,7 +47543,7 @@ static void define_function_star_1(s7_scheme *sc, const char *name, s7_function 
   if (safe)
     func = s7_make_safe_function_star(sc, name, fnc, arglist, doc);
   else func = s7_make_function_star(sc, name, fnc, arglist, doc);
-  s7_define(sc, sc->rootlet, make_symbol_with_strlen(sc, name), func);
+  s7_define(sc, sc->rootlet, make_symbol_with_strlen(sc, name), func); /* can't use c_function_symbol here (clobbered by c_function* args) */
   if (signature) c_function_set_signature(func, signature);
 }
 
@@ -47568,7 +47567,7 @@ s7_pointer s7_define_macro(s7_scheme *sc, const char *name, s7_function fnc,
 			   s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc)
 {
   s7_pointer func = s7_make_function(sc, name, fnc, required_args, optional_args, rest_arg, doc);
-  s7_pointer sym = make_symbol_with_strlen(sc, name);
+  s7_pointer sym = T_Sym(c_function_symbol(func));
   set_full_type(func, T_C_MACRO | T_DONT_EVAL_ARGS | T_UNHEAP); /* s7_make_function includes T_UNHEAP */
   s7_define(sc, sc->rootlet, sym, func);
   return(sym);
@@ -47578,7 +47577,7 @@ s7_pointer s7_define_expansion(s7_scheme *sc, const char *name, s7_function fnc,
 			       s7_int required_args, s7_int optional_args, bool rest_arg, const char *doc)
 {
   s7_pointer func = s7_make_function(sc, name, fnc, required_args, optional_args, rest_arg, doc);
-  s7_pointer sym = make_symbol_with_strlen(sc, name);
+  s7_pointer sym = T_Sym(c_function_symbol(func));
   set_full_type(func, T_C_MACRO | T_EXPANSION | T_DONT_EVAL_ARGS | T_UNHEAP); /* s7_make_function includes T_UNHEAP */
   s7_define(sc, sc->rootlet, sym, func);
   set_full_type(sym, full_type(sym) | T_EXPANSION);
@@ -73138,8 +73137,14 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
       if (func_is_safe)
 	{
 	  int32_t op = combine_ops(sc, expr, E_C_P, arg1, NULL);
-	  if ((hop == 1) && (!op_has_hop(arg1)) && (is_maybe_shadowed(car(arg1)))) hop = 0; 
-	    /* probably not the right way to fix this (s7test tc_or_a_and_a_a_la), but (define + *) needs this */
+	  if ((hop == 1) && (!op_has_hop(arg1)) && (is_maybe_shadowed(car(arg1)))) 
+	    {
+	      hop = 0;
+	      if ((!is_symbol(car(expr))) &&      /* calling op was optimized to #_ previously, but now we notice its argument is problematic?! */
+		  (c_function_symbol(car(expr)))) /* can be NULL!? */
+		set_car(expr, c_function_symbol(car(expr)));
+	      /* probably not the right way to fix this (s7test tc_or_a_and_a_a_la), but (define + *) needs this */
+	    }
 	  set_safe_optimize_op(expr, hop + op);
 
 	  if ((op == OP_SAFE_C_P) &&
@@ -74938,8 +74943,8 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
   opcode_t op = syntax_opcode(func);
   s7_pointer body = cdr(expr), vars, init_e = e;
   bool body_export_ok = true;
-  if (SHOW_EVAL_OPS) fprintf(stderr, "  %s[%d]: expr: %s, func: %s, e: %s, op: %s, hop: %d\n", __func__, __LINE__,
-			     display_truncated(expr), display(func), display(e), op_names[op], hop);
+  if (SHOW_EVAL_OPS) fprintf(stderr, "  %s[%d]: expr: %s, func: %s, e: %s, op: %s, hop: %d, export_ok: %d\n", __func__, __LINE__,
+			     display_truncated(expr), display(func), display(e), op_names[op], hop, export_ok);
   sc->w = e;
   switch (op)
     {
@@ -75086,6 +75091,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
        *   that can be distinguished from members of "e".  So in that (rare) case, we use the associated keyword.
        *   Then find_uncomplicated_symbol can use has_keyword to tell if the keyword search is needed.
        * export_ok is trying to protect against optimizing (list x (define x 0)) as op_safe_c_sp and all related cases
+       * define et al here can be #_define, not the symbol 'define
        */
       vars = cadr(expr);
       body = cddr(expr);
@@ -75102,35 +75108,34 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 	  e = collect_parameters(sc, cdr(vars), e);
 	  body_export_ok = export_ok;
 	}
-      else
+      else /* vars must be a symbol */
 	{
-	  if ((export_ok) &&
-	      (is_symbol(vars)))
+	  if (!is_symbol(vars)) return(OPT_OOPS); /* (define 1 2) */
+
+	  /* actually if this is defining a function, the name should probably be included in the local let
+	   *   but that's next-to-impossible to guarantee unless it's (define x (lambda...)) of course.
+	   */
+	  if (initial_value(vars) != sc->undefined)
+	    set_is_maybe_shadowed(vars);
+
+	  sc->temp9 = e;
+	  for (s7_pointer p = body; is_pair(p); p = cdr(p))
+	    if ((is_pair(car(p))) &&
+		(!is_checked(car(p))) && /* ((full_type(p) & (TYPE_MASK | T_CHECKED)) == T_PAIR) is not faster */
+		(optimize_expression(sc, car(p), hop, e, false) == OPT_OOPS)) /* "body" here is not body in terms of export_ok */
+	      {
+		sc->temp9 = sc->unused;
+		return(OPT_OOPS);
+	      }
+	  sc->temp9 = sc->unused;
+
+	  if (export_ok)
 	    {
-	      /* actually if this is defining a function, the name should probably be included in the local let
-	       *   but that's next-to-impossible to guarantee unless it's (define x (lambda...)) of course.
-	       */
-	      if ((is_global(vars)) && (initial_value(vars) != sc->undefined))
-		{
-		  /* fprintf(stderr, "%d: set_is_maybe_shadowed: %s\n", __LINE__, display(vars)); */
-		  set_is_maybe_shadowed(vars);
-		}
-	      sc->temp9 = e;
-	      for (s7_pointer p = body; is_pair(p); p = cdr(p))
-		if ((is_pair(car(p))) &&
-		    (!is_checked(car(p))) && /* ((full_type(p) & (TYPE_MASK | T_CHECKED)) == T_PAIR) is not faster */
-		    (optimize_expression(sc, car(p), hop, e, false) == OPT_OOPS)) /* "body" here is not body in terms of export_ok */
-		  {
-		    sc->temp9 = sc->unused;
-		    return(OPT_OOPS);
-		  }
-	      sc->temp9 = sc->unused;
 	      if ((is_pair(e)) && (car(e) != sc->if_keyword))
 		set_cdr(e, cons(sc, vars, cdr(e)));     /* export it */
 	      cleanup_big_symbol_set(sc, init_e, e);
-	      return(OPT_F);
 	    }
-	  body_export_ok = false;
+	  return(OPT_F);
 	}
       break;
 
@@ -100310,7 +100315,7 @@ int main(int argc, char **argv)
  * index            1016    973    967    972    978
  * tmock            1145   1082   1042   1045   1032
  * tvect     3408   2464   1772   1669   1497   1464
- * thook     7651   ----   2590   2030   2046   1729
+ * thook     7651   ----   2590   2030   2046   1729 1768 [c_function_is_ok]
  * texit     1884   1950   1778   1741   1770   1758
  * tauto                   2562   2048   1729   1765
  * s7test           1831   1818   1829   1830   1843
@@ -100320,7 +100325,7 @@ int main(int argc, char **argv)
  * tcopy            5546   2539   2375   2386   2342
  * trclo     8248   2782   2615   2634   2622   2486
  * tmat             3042   2524   2578   2590   2526
- * tload                   3046   2404   2566   2530
+ * tload                   3046   2404   2566   2530  2563 [s7_make_function 9, s7_make_symbol 13, local_strncmp 6]
  * fbench    2933   2583   2460   2430   2478   2568
  * tsort     3683   3104   2856   2804   2858   2858
  * titer     4550   3349   3070   2985   2966   2918
@@ -100328,7 +100333,7 @@ int main(int argc, char **argv)
  * tobj             3970   3828   3577   3508   3439
  * tmac             3873   3033   3677   3677   3490
  * teq              4045   3536   3486   3544   3539
- * complex          3650   3583   3625   3679   4168
+ * complex          3650   3583   3625   3679   4168  4189 [complex_p_ii loses wrapping, gc+6]
  * tcase            4793   4439   4430   4439   4376
  * tmap             8774   4489   4541   4586   4389
  * tlet      11.0   6974   5609   5980   5965   4470
@@ -100348,9 +100353,9 @@ int main(int argc, char **argv)
  * tclo             8025   7645   8809   7770   7625
  * tlamb                          8003   7941   7898
  * tgc              11.1   8177   7857   7986   8010
- * thash            11.7   9734   9479   9526   9247
+ * thash            11.7   9734   9479   9526   9247  [maybe subtract_p_pp_wrapped loses]
  * cb        12.9   11.0   9658   9564   9609   9652
- * tmap-hash                                    10.3
+ * tmap-hash                                    10.3  [hash_map_hash_table + 50?]
  * tgen             11.4   12.0   12.1   12.2   12.3
  * tall      15.9   15.6   15.6   15.6   15.1   15.1
  * timp             24.4   20.0   19.6   19.7   15.5
@@ -100364,14 +100369,10 @@ int main(int argc, char **argv)
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  * op_safe_do hop bit [83984] in let: t826
- * tlimit: maybe_shadowed bit is set and hop=0 but it's being ignored??
- *   restore hop_if_constant using maybe_shadowed? optimize*funcs optimize|_expression|syntax vars_opt_ok optimize_funcs
- *   maybe_shadowed is causing endless pother in t725, t718 last case -- bit is set, hop=0 but ignored?
- *     was a bug in optimize_c_function_one_arg 73088 -- added is_maybe_shadowed -- there are more of these...
- *     t718 define +* bug is hit a lot in t101 (3 4 5...)
  * sqrt t826 notice dd args in sqr (x/y) and carry through (or in tc?)
  *   better: safe_closure_aa_a fx_c+fx_c -> fx_safe_closure_dd|ii_a? etc
- * tnr?
+ * tnr? minimize defaults in lint (keep current if in s7test), t725 rec/tc outers
+ * see timings above: symbol case perhaps a no-search version of make_saymbol
  *
  * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
