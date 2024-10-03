@@ -44,7 +44,7 @@ nrepl s7test.scm
 echo ' '
 echo '-------- with-gmp --------'
 echo ' '
-gcc s7.c -c -I. -g3 -DWITH_GMP -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -g3 -DWITH_GMP=1 -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lgmp -lmpfr -lmpc -lm -ldl -Wl,-export-dynamic
 rm *.so
 repl s7test.scm
@@ -54,21 +54,21 @@ echo ' '
 echo ' '
 echo '-------- with-gmp + g++ --------'
 echo ' '
-g++ s7.c -c -I. -g3 -DWITH_GMP -ldl -lm -Wl,-export-dynamic
+g++ s7.c -c -I. -g3 -DWITH_GMP=1 -ldl -lm -Wl,-export-dynamic
 g++ -o repl repl.c -g3 -Wall s7.o -I. -lgmp -lmpfr -lmpc -lm -ldl -Wl,-export-dynamic
 repl s7test.scm
 
 echo ' '
 echo '-------- with-gmp precision --------'
 echo ' '
-gcc s7.c -c -I. -g3 -DWITH_GMP -DDEFAULT_BIGNUM_PRECISION=512 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -g3 -DWITH_GMP=1 -DDEFAULT_BIGNUM_PRECISION=512 -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lgmp -lmpfr -lmpc -lm -ldl -Wl,-export-dynamic
 repl s7test.scm
 
 echo ' '
 echo '-------- libarb/flint --------'
 echo ' '
-gcc s7.c -c -I. -g3 -DWITH_GMP -DDEFAULT_BIGNUM_PRECISION=512 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -g3 -DWITH_GMP=1 -DDEFAULT_BIGNUM_PRECISION=512 -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lgmp -lmpfr -lmpc -lm -ldl -Wl,-export-dynamic
 gcc -fPIC -c libarb_s7.c
 gcc libarb_s7.o -shared -o libarb_s7.so -L/usr/local/lib -lflint
