@@ -15,10 +15,10 @@
 (define *report-short-branch* 12)                         ; controls when a lop-sided if triggers a reordering suggestion
 (define *report-one-armed-if* 90)                         ; if -> when/unless, can be #f/#t; if an integer, sets tree length which triggers revision (80 is too small)
 (define *report-loaded-files* #f)                         ; if load is encountered, include that file in the lint process
-(define *report-any-!-as-setter* #t)                      ; unknown funcs/macros ending in ! are treated as setters
+(define *report-any-!-as-setter* (defined? 'full-s7test)) ; unknown funcs/macros ending in ! are treated as setters
 (define *report-doc-strings* #f)                          ; old-style (CL) doc strings (definstrument ignores this switch -- see ws.scm)
 (define *report-func-as-arg-arity-mismatch* #f)           ; as it says...
-(define *report-combinable-lets* #t)                      ; report lets that can be combined
+(define *report-combinable-lets* (defined? 'full-s7test)) ; report lets that can be combined
 (define *report-splittable-lets* #f)                      ; report let*'s that can be split into a few nested lets
 
 (define *report-ridiculous-variable-names* 50)            ; max length of var name
@@ -34,11 +34,11 @@
 (define *report-sloppy-assoc* #f)                         ; i.e. (cdr (assoc x y)) and the like
 (define *report-bloated-arg* 24)                          ; min arg expr tree size that can trigger a rewrite-as-let suggestion (32 is too high I think)
 (define *report-clobbered-function-return-value* #f)      ; function returns constant sequence, which is then stomped on -- very rare!
-(define *report-boolean-functions-misbehaving* #t)        ; function name ends in #\? but function returns a non-boolean value -- dubious.
-(define *report-quasiquote-rewrites* #t)                  ; simple quasiquote stuff rewritten as a normal list expression
+(define *report-boolean-functions-misbehaving* (defined? 'full-s7test)) ; function name ends in #\? but function returns a non-boolean value -- dubious.
+(define *report-quasiquote-rewrites* (defined? 'full-s7test)) ; simple quasiquote stuff rewritten as a normal list expression
 (define *report-||-rewrites* #t)                          ; | has no special meaning in s7, |...| does not represent the symbol ...
-(define *report-constant-expressions-in-do* #t)           ; a first stab at this
-(define *report-recursion->iteration* #t)                 ; named-let -> do and the like
+(define *report-constant-expressions-in-do* (defined? 'full-s7test)) ; a first stab at this
+(define *report-recursion->iteration* (defined? 'full-s7test)) ; named-let -> do and the like
 
 ;;; these turn out to be less useful than I expected
 (define *report-repeated-code-fragments* #f)              ; #t, #f, or an int = min reported fragment size * uses * uses, #t=130.
