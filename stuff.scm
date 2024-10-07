@@ -156,6 +156,15 @@
 ;(display (let () (define (f) (values 1 2 3)) (+ 4 (n-values 12 (f))))) (newline)
 ;(display (let () (define (f) 3) (+ 4 (n-values 12 (f))))) (newline)
 
+(define-macro (prog1 first . body)
+  (let ((result (gensym)))
+    `(let ((,result (list ,first)))
+       ,@body
+       (if (null? (cdr ,result))
+	   (car ,result)
+	   (apply values ,result)))))
+
+
 ;;; ----------------
 (define (first obj)  (if (sequence? obj) (obj 0) (error 'wrong-type-arg "first argument, ~S, is not a sequence" obj)))
 (define (second obj) (if (sequence? obj) (obj 1) (error 'wrong-type-arg "second argument, ~S, is not a sequence" obj)))

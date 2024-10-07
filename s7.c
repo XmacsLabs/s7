@@ -14332,7 +14332,7 @@ static bool is_one(s7_pointer x)
 
 /* -------- optimize exponents -------- */
 
-#define MAX_POW 64
+#define MAX_POW 64 /* faster startup if 32, but much slower in tbig */
 static double **pepow = NULL; /* [17][MAX_POW * 2]; */
 
 static void init_pows(void)
@@ -14348,7 +14348,7 @@ static void init_pows(void)
 
 static inline double dpow(int32_t x, int32_t y)
 {
-  if ((y >= MAX_POW) || (y < -MAX_POW)) /* this can happen (once in a blue moon) */
+  if ((y >= MAX_POW) || (y < -MAX_POW)) /* this can happen */
     return(pow((double)x, (double)y));
   return(pepow[x][y + MAX_POW]);
 }
@@ -47142,22 +47142,27 @@ static s7_pointer make_c_function(s7_scheme *sc, const char *name, s7_function f
   c_function_call(x) = f;               /* f is T_App but needs cast */
   c_function_set_base(x, x);
   c_function_set_setter(x, sc->F);
-  c_function_name(x) = name;            /* (procedure-name proc) => (format #f "~A" proc) */
-  c_function_name_length(x) = safe_strlen(name);
+  if (name)
+    {
+      c_function_name(x) = name;            /* (procedure-name proc) => (format #f "~A" proc) */
+      c_function_name_length(x) = safe_strlen(name);
+      c_function_set_symbol(x, make_symbol(sc, name, c_function_name_length(x))); /* T_C_FUNCTION_STAR may set later to args */
+    }
+  else
+    {
+      c_function_name(x) = NULL;
+      c_function_name_length(x) = 0;
+      c_function_set_symbol(x, sc->anon_symbol);
+    }
   c_function_documentation(x) = (doc) ? make_semipermanent_c_string(sc, doc) : NULL;
   c_function_set_signature(x, sc->F);
-
   c_function_min_args(x) = req;
   c_function_optional_args(x) = opt;    /* T_C_FUNCTION_STAR type may be set later, so T_Fst not usable here */
   c_function_max_args(x) = (rst) ? MAX_ARITY : req + opt;
-
   c_function_class(x) = ++sc->f_class;
   c_function_chooser(x) = fallback_chooser;
   c_function_opt_data(x) = NULL;
   c_function_marker(x) = NULL;
-  if (name) 
-    c_function_set_symbol(x, make_symbol_with_strlen(sc, name)); /* T_C_FUNCTION_STAR may set later to args */
-  else c_function_set_symbol(x, sc->anon_symbol);
   c_function_set_let(x, sc->rootlet);
   return(x);
 }
@@ -73108,7 +73113,8 @@ static bool is_ok_lambda(s7_scheme *sc, s7_pointer arg2)
 static bool hop_if_constant(s7_scheme *sc, s7_pointer sym)
 {
   return(((!sc->in_with_let) &&
-	  (is_global(sym))) ? 1 : 0); /* for with-let, see s7test atanh (77261) */
+	  (!is_maybe_shadowed(sym)) &&
+	  (is_global(sym))) ? 1 : 0);   /* for with-let, see s7test atanh (77261) */
 }
 
 static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer func,
@@ -73153,7 +73159,8 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
 	    {
 	      hop = 0;
 	      if (!is_symbol(car(expr)))      /* calling op was optimized to #_ previously, but now we notice its argument is problematic?! */
-		set_car(expr, c_function_symbol(car(expr)));
+		set_car(expr, c_function_symbol(car(expr))); /* maybe symbol_initial_value(...) */
+	        /* maybe return(OPT_F); or dependent on is_maybe_shadowed? */
 	      /* probably not the right way to fix this (s7test tc_or_a_and_a_a_la), but (define + *) needs this */
 	    }
 	  set_safe_optimize_op(expr, hop + op);
@@ -73165,6 +73172,16 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
 	      fx_annotate_arg(sc, cdr(expr), e);
 	    }
 	  choose_c_function(sc, expr, func, 1);
+#if 0
+	  /* works, not much impact? TODO: see check_c_aa, optimize_func_one|two|three_args for safe_c_functions */
+	  /*   also, need wrapped field c_proc_t so this doesn't need to check each case by hand */
+	  if (has_fn(arg1))
+	    {
+	      if (fn_proc(arg1) == g_multiply_2) set_fn_direct(arg1, g_multiply_2_wrapped);
+	      if (fn_proc(arg1) == g_subtract_2) set_fn_direct(arg1, g_subtract_2_wrapped);
+	      if (fn_proc(arg1) == g_add_2) set_fn_direct(arg1, g_add_2_wrapped);
+	    }
+#endif
 	  return(OPT_T);
 	}
       if (is_fxable(sc, arg1))
@@ -75127,8 +75144,10 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 	   *   but that's next-to-impossible to guarantee unless it's (define x (lambda...)) of course.
 	   */
 	  if (initial_value(vars) != sc->undefined)
-	    set_is_maybe_shadowed(vars);
-
+	    {
+	      if (SHOW_EVAL_OPS) fprintf(stderr, "  %s is maybe shadowed\n", display(vars));
+	      set_is_maybe_shadowed(vars);
+	    }
 	  sc->temp9 = e;
 	  for (s7_pointer p = body; is_pair(p); p = cdr(p))
 	    if ((is_pair(car(p))) &&
@@ -93877,6 +93896,13 @@ static noreturn void eval_apply_error_nr(s7_scheme *sc)
 		       cons(sc, sc->code, sc->args)));
 }
 
+#if S7_DEBUGGING
+static void check_make_block(s7_scheme *sc)
+{
+  s7_pointer mblk = make_symbol(sc, "make-block", 10);
+  if ((is_slot(global_slot(mblk))) && (is_c_function(global_value(mblk))) && (c_function_data(global_value(mblk)) == (c_proc_t *)2)) abort();
+}
+#endif
 
 /* ---------------- eval ---------------- */
 static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
@@ -93904,6 +93930,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
     TOP_NO_POP:
       if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "  %s (%d), code: %s\n", op_names[sc->cur_op], (int)(sc->cur_op), display_truncated(sc->code)));
+      /* if (S7_DEBUGGING) check_make_block(sc); */
 
       /* it is only slightly faster to use labels as values (computed gotos) here. In my timing tests (June-2018), the best case speedup was in titer.scm
        *    callgrind numbers 4808 to 4669; another good case was tread.scm: 2410 to 2386.  Most timings were a draw.  computed-gotos-s7.c has the code,
@@ -93959,22 +93986,22 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_SAFE_C_A: if (!c_function_is_ok(sc, sc->code)) {if (op_unknown_a(sc)) goto EVAL; continue;}
 	case HOP_SAFE_C_A: sc->value = fx_c_a(sc, sc->code); continue;
 
-	case OP_SAFE_C_opAq: if (!c_function_is_ok(sc, sc->code)) break;
+	case OP_SAFE_C_opAq: if (!c_function_is_ok_cadr(sc, sc->code)) break;
 	case HOP_SAFE_C_opAq: sc->value = fx_c_opaq(sc, sc->code); continue;
 
-	case OP_SAFE_C_opAAq: if (!c_function_is_ok(sc, sc->code)) break;
+	case OP_SAFE_C_opAAq: if (!c_function_is_ok_cadr(sc, sc->code)) break;
 	case HOP_SAFE_C_opAAq: sc->value = fx_c_opaaq(sc, sc->code); continue;
 
-	case OP_SAFE_C_opAAAq: if (!c_function_is_ok(sc, sc->code)) break;
+	case OP_SAFE_C_opAAAq: if (!c_function_is_ok_cadr(sc, sc->code)) break;
 	case HOP_SAFE_C_opAAAq: sc->value = fx_c_opaaaq(sc, sc->code); continue;
 
-	case OP_SAFE_C_S_opAq: if (!c_function_is_ok(sc, sc->code)) break;
+	case OP_SAFE_C_S_opAq: if (!c_function_is_ok_caddr(sc, sc->code)) break;
 	case HOP_SAFE_C_S_opAq: sc->value = fx_c_s_opaq(sc, sc->code); continue;
 
-	case OP_SAFE_C_opAq_S: if (!c_function_is_ok(sc, sc->code)) break;
+	case OP_SAFE_C_opAq_S: if (!c_function_is_ok_cadr(sc, sc->code)) break;
 	case HOP_SAFE_C_opAq_S: sc->value = fx_c_opaq_s(sc, sc->code); continue;
 
-	case OP_SAFE_C_S_opAAq: if (!c_function_is_ok(sc, sc->code)) break;
+	case OP_SAFE_C_S_opAAq: if (!c_function_is_ok_caddr(sc, sc->code)) break;
 	case HOP_SAFE_C_S_opAAq: sc->value = fx_c_s_opaaq(sc, sc->code); continue;
 
 	case OP_SAFE_C_AA: if (!c_function_is_ok(sc, sc->code)) {if (op_unknown_aa(sc)) goto EVAL; continue;}
@@ -99963,6 +99990,7 @@ s7_scheme *s7_init(void)
   if (NUM_OPS != 913) fprintf(stderr, "size: cell: %d, block: %d, max op: %d, opt: %d\n", (int)sizeof(s7_cell), (int)sizeof(block_t), NUM_OPS, (int)sizeof(opt_info));
   /* cell size: 48, 120 if debugging, block size: 40, opt: 128 or 248 */
   if (!s7_type_names[0]) {fprintf(stderr, "no type_names\n"); gdb_break();} /* squelch very stupid warnings! */
+  if ((POINTER_32) || (NUMBER_NAME_SIZE == 2)) fprintf(stderr, "pointer 32!?\n");
 #endif
   return(sc);
 }
@@ -100349,32 +100377,32 @@ int main(int argc, char **argv)
  * tvect     3408   2464   1772   1669   1497   1464
  * thook     7651   ----   2590   2030   2046   1729
  * texit     1884   1950   1778   1741   1770   1758
- * tauto                   2562   2048   1729   1765
+ * tauto                   2562   2048   1729   1761
  * s7test           1831   1818   1829   1830   1843
- * lt        2222   2172   2150   2185   1950   1911
+ * lt        2222   2172   2150   2185   1950   1892
  * dup              3788   2492   2239   2097   1987
  * tread            2421   2419   2408   2405   2241
- * tcopy            5546   2539   2375   2386   2342
+ * tcopy            5546   2539   2375   2386   2356
  * trclo     8248   2782   2615   2634   2622   2486
- * tmat             3042   2524   2578   2590   2526
- * tload                   3046   2404   2566   2530
- * fbench    2933   2583   2460   2430   2478   2568
+ * tmat             3042   2524   2578   2590   2522
+ * tload                   3046   2404   2566   2549
+ * fbench    2933   2583   2460   2430   2478   2562
  * tsort     3683   3104   2856   2804   2858   2858
  * titer     4550   3349   3070   2985   2966   2918
  * tio              3752   3683   3620   3583   3127
- * tobj             3970   3828   3577   3508   3439
+ * tobj             3970   3828   3577   3508   3437
  * tmac             3873   3033   3677   3677   3490
- * teq              4045   3536   3486   3544   3539
- * complex          3650   3583   3625   3679   4168
+ * teq              4045   3536   3486   3544   3555
+ * complex          3650   3583   3625   3679   4158
  * tcase            4793   4439   4430   4439   4376
  * tmap             8774   4489   4541   4586   4389
- * tlet      11.0   6974   5609   5980   5965   4470
+ * tlet      11.0   6974   5609   5980   5965   4462
  * tfft             7729   4755   4476   4536   4531
  * tshoot           5447   5183   5055   5034   4840
  * tstar            6705   5834   5278   5177   5055
  * tform            5348   5307   5316   5084   5061
  * tstr      10.0   6342   5488   5162   5180   5252
- * tnum             6013   5433   5396   5409   5430
+ * tnum             6013   5433   5396   5409   5425
  * tlist     9219   7546   6558   6240   6300   5769
  * trec      19.6   6980   6599   6656   6658   6010
  * tari      15.0   12.7   6827   6543   6278   6137
@@ -100382,19 +100410,19 @@ int main(int argc, char **argv)
  * tset                           6260   6364   6266
  * tleft     12.2   9753   7537   7331   7331   6417
  * tmisc                          7614   7115   7134
- * tclo             8025   7645   8809   7770   7625
+ * tclo             8025   7645   8809   7770   7644
  * tlamb                          8003   7941   7898
  * tgc              11.1   8177   7857   7986   8010
- * thash            11.7   9734   9479   9526   9247
- * cb        12.9   11.0   9658   9564   9609   9652
- * tmap-hash                                    10.3  [hash_map_hash_table + 50?]
+ * thash            11.7   9734   9479   9526   9243
+ * cb        12.9   11.0   9658   9564   9609   9648
+ * tmap-hash                                    10.3
  * tgen             11.4   12.0   12.1   12.2   12.3
  * tall      15.9   15.6   15.6   15.6   15.1   15.1
  * timp             24.4   20.0   19.6   19.7   15.5
  * tmv              21.9   21.1   20.7   20.6   16.5
- * calls            37.5   37.0   37.5   37.1   37.2
+ * calls            37.5   37.0   37.5   37.1   37.1
  * sg                      55.9   55.8   55.4   55.1
- * tbig            175.8  156.5  148.1  146.2  146.3
+ * tbig            175.8  156.5  148.1  146.2  146.2
  * ----------------------------------------------------
  *
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
@@ -100404,8 +100432,7 @@ int main(int argc, char **argv)
  *
  * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
- *   tcomplex.scm continued
- *   same: inline_op_implicit_vector_ref_a -> complex_vector_getter: (data j)=cfft notice type at run-time, or set_ref_aa?
+ *   inline_op_implicit_vector_ref_a -> complex_vector_getter: (data j)=cfft notice type at run-time, or set_ref_aa?
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
@@ -100415,6 +100442,9 @@ int main(int argc, char **argv)
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
  * closure_is_ok improvement? case op1: ...; if (0) case op2: ...; case op3: the unchecked call;
- * fx wrappers -- need automated search for these!
- * (2 0) (+) and (#_block? | #_make_block) strangeness
+ * fx wrappers -- need automated search for these!  Or c_proc_t field for wrapper/NULL etc 73169, s7_[c_function_?]set_wrapper,
+ *   maybe export wrap_real et al
+ * (2 0) (+) and (#_block? | #_make_block) strangeness [(set! block 2) reset to symbol, miss hop=0 via cadr?]
+ * tlimit:? equal?/copy large structs etc
+ * do_body_p affects only returned value (might be set! etc)
  */
