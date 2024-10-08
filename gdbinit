@@ -30,11 +30,11 @@ end
 
 
 define s7value
-# print s7_object_to_c_string(cur_sc, s7_name_to_value(cur_sc, $arg0))
-print s7_object_to_c_string(cur_sc, s7_eval_c_string(cur_sc, $arg0))
+print s7_object_to_c_string(cur_sc, s7_name_to_value(cur_sc, $arg0))
+# print s7_object_to_c_string(cur_sc, s7_eval_c_string(cur_sc, $arg0))
 end
 document s7value
-print the value of the expression passed as a string: s7v "*features*"
+print the value of the symbol passed as a string: s7val "*features*"
 end
 
 

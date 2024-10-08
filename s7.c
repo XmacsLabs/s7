@@ -3542,7 +3542,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define c_function_set_base(f, Val)    c_function_data(f)->generic_ff = T_CFn(Val)
 #define c_function_marker(f)           c_function_data(f)->cam.marker              /* the mark function for the vector (mark_vector_1 etc) */
 #define c_function_set_marker(f, Val)  c_function_data(f)->cam.marker = Val
-#define c_function_symbol(f)           T_Sym(c_function_data(f)->sam.c_sym)        /* f is not c_function*! */
+#define c_function_symbol(f)           T_Sym(c_function_data(f)->sam.c_sym)        /* f is c_function or c_macro, but not c_function* -- doesn't fit current checks */
 #define c_function_set_symbol(f, Sym)  c_function_data(f)->sam.c_sym = T_Sym(Sym)
 #define c_function_let(f)              T_Let(c_function_data(f)->let)
 #define c_function_set_let(f, Val)     c_function_data(f)->let = T_Let(Val)
@@ -73155,7 +73155,7 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
       if (func_is_safe)
 	{
 	  int32_t op = combine_ops(sc, expr, E_C_P, arg1, NULL);
-	  if ((hop == 1) && (!op_has_hop(arg1)) && (is_maybe_shadowed(car(arg1))))
+	  if ((hop == 1) && (!op_has_hop(arg1)) && (is_symbol(car(arg1))) && (is_maybe_shadowed(car(arg1)))) /* else maybe c_function with even_args bit! */
 	    {
 	      hop = 0;
 	      if (!is_symbol(car(expr)))      /* calling op was optimized to #_ previously, but now we notice its argument is problematic?! */
@@ -73833,6 +73833,18 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 		  orig_op = (is_normal_symbol(arg1)) ? E_C_SP : E_C_CP;
 		  op = combine_ops(sc, expr, orig_op, arg1, arg2);
 		}
+
+	      if ((hop == 1) &&
+		  (((is_pair(arg2)) && (!op_has_hop(arg2)) && (is_symbol(car(arg2))) && (is_maybe_shadowed(car(arg2)))) ||
+		   ((is_pair(arg1)) && (!op_has_hop(arg1)) && (is_symbol(car(arg1))) && (is_maybe_shadowed(car(arg1))))))
+		{
+		  hop = 0;
+		  if (!is_symbol(car(expr)))
+		    set_car(expr, c_function_symbol(car(expr))); /* maybe symbol_initial_value(...) */
+		}
+	      /* arg2 case: (let () (define (func) (let ((i 0)) (define + *) (quotient  10001 (+ i 1)))) (func)) -> division by zero error */
+	      /* arg1 case: (let () (define (func) (let ((i 0)) (define + *) (remainder (+ i 1) 101))) (func)) ; 0 */
+
 	      if ((((op == OP_SAFE_C_SP) || (op == OP_SAFE_C_CP)) &&
 		   (is_fxable(sc, arg2))) ||
 		  (((op == OP_SAFE_C_PS) || (op == OP_SAFE_C_PC)) &&
@@ -75145,7 +75157,7 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 	   */
 	  if (initial_value(vars) != sc->undefined)
 	    {
-	      if (SHOW_EVAL_OPS) fprintf(stderr, "  %s is maybe shadowed\n", display(vars));
+	      if ((SHOW_EVAL_OPS) && (!is_maybe_shadowed(vars))) fprintf(stderr, "  %s set maybe shadowed\n", display(vars));
 	      set_is_maybe_shadowed(vars);
 	    }
 	  sc->temp9 = e;
@@ -93896,14 +93908,6 @@ static noreturn void eval_apply_error_nr(s7_scheme *sc)
 		       cons(sc, sc->code, sc->args)));
 }
 
-#if S7_DEBUGGING
-static void check_make_block(s7_scheme *sc)
-{
-  s7_pointer mblk = make_symbol(sc, "make-block", 10);
-  if ((is_slot(global_slot(mblk))) && (is_c_function(global_value(mblk))) && (c_function_data(global_value(mblk)) == (c_proc_t *)2)) abort();
-}
-#endif
-
 /* ---------------- eval ---------------- */
 static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 {
@@ -93930,7 +93934,6 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
     TOP_NO_POP:
       if (SHOW_EVAL_OPS) safe_print(fprintf(stderr, "  %s (%d), code: %s\n", op_names[sc->cur_op], (int)(sc->cur_op), display_truncated(sc->code)));
-      /* if (S7_DEBUGGING) check_make_block(sc); */
 
       /* it is only slightly faster to use labels as values (computed gotos) here. In my timing tests (June-2018), the best case speedup was in titer.scm
        *    callgrind numbers 4808 to 4669; another good case was tread.scm: 2410 to 2386.  Most timings were a draw.  computed-gotos-s7.c has the code,
@@ -100428,7 +100431,6 @@ int main(int argc, char **argv)
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
- * tnr?
  *
  * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
@@ -100441,10 +100443,8 @@ int main(int argc, char **argv)
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
- * closure_is_ok improvement? case op1: ...; if (0) case op2: ...; case op3: the unchecked call;
  * fx wrappers -- need automated search for these!  Or c_proc_t field for wrapper/NULL etc 73169, s7_[c_function_?]set_wrapper,
  *   maybe export wrap_real et al
  * (2 0) (+) and (#_block? | #_make_block) strangeness [(set! block 2) reset to symbol, miss hop=0 via cadr?]
- * tlimit:? equal?/copy large structs etc
  * do_body_p affects only returned value (might be set! etc)
  */
