@@ -14332,7 +14332,7 @@ static bool is_one(s7_pointer x)
 
 /* -------- optimize exponents -------- */
 
-#define MAX_POW 64 /* faster startup if 32, but much slower in tbig */
+#define MAX_POW 64 /* faster startup if 32, but much slower in tbig; also waiting until use to init_pows is faster at startup, but slower in tbig */
 static double **pepow = NULL; /* [17][MAX_POW * 2]; */
 
 static void init_pows(void)
@@ -32352,7 +32352,7 @@ static void op_with_io_1_method(s7_scheme *sc)
     {
       s7_pointer method = car(sc->code);
       if (is_c_function(method))            /* #_call-with-input-string et al */
-	method = c_function_name_to_symbol(sc, method);
+	method = c_function_symbol(method);
       push_stack(sc, OP_GC_PROTECT, lt, sc->code);
       sc->code = caddr(sc->code);
       sc->value = op_lambda(sc, sc->code);  /* don't unstack */
@@ -36091,7 +36091,7 @@ static void macro_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_wr
 }
 
 static void c_function_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *unused_ci)
-{
+{ /* includes c_function_star, so c_function_symbol can't be used */
   s7_pointer sym = c_function_name_to_symbol(sc, obj);
   s7_pointer local_val = lookup_unexamined(sc, sym); /* lookup here really needs the env where sym is defined */
   s7_int len = c_function_name_length(obj);
@@ -73159,8 +73159,9 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
 	    {
 	      hop = 0;
 	      if (!is_symbol(car(expr)))      /* calling op was optimized to #_ previously, but now we notice its argument is problematic?! */
-		set_car(expr, c_function_symbol(car(expr))); /* maybe symbol_initial_value(...) */
-	        /* maybe return(OPT_F); or dependent on is_maybe_shadowed? */
+		set_car(expr, c_function_symbol(car(expr))); 
+	      /* maybe symbol_initial_value(...) -- but both can differ from global_value, (set! abs 32) (#_abs -1) */
+	      /* maybe return(OPT_F); or dependent on is_maybe_shadowed? */
 	      /* probably not the right way to fix this (s7test tc_or_a_and_a_a_la), but (define + *) needs this */
 	    }
 	  set_safe_optimize_op(expr, hop + op);
@@ -78473,7 +78474,7 @@ static s7_pointer check_let(s7_scheme *sc) /* called only from op_let */
 	{
 	  if (is_c_function(y))                      /* (let ((#_abs 3)) ...) */
 	    {
-	      s7_pointer sym = c_function_name_to_symbol(sc, y);
+	      s7_pointer sym = c_function_symbol(y);
 	      if (initial_value(sym) != sc->undefined)
 		error_nr(sc, sc->syntax_error_symbol,
 			 set_elist_2(sc, wrap_string(sc, "variable name #_~S in let is a function, not a symbol", 53), y));
@@ -84547,8 +84548,15 @@ static goto_t op_dox(s7_scheme *sc)
       if ((!bodyf) &&
 	  (is_fxable(sc, body)) &&     /* happens very rarely, #_* as car etc */
 	  (is_c_function(car(body))))
-	bodyf = s7_optimize_nv(sc, set_dlist_1(sc, set_ulist_1(sc, c_function_name_to_symbol(sc, car(body)), cdr(body))));
-
+	{
+	  if ((S7_DEBUGGING) && (lookup(sc, c_function_symbol(car(body))) != car(body)))
+	    fprintf(stderr, "%s[%d]: replacing %s with %s -> %s in %s\n", __func__, __LINE__,
+		    display(car(body)),
+		    display(c_function_symbol(car(body))),
+		    display(lookup(sc, c_function_symbol(car(body)))),
+		    display(body));
+	bodyf = s7_optimize_nv(sc, set_dlist_1(sc, set_ulist_1(sc, c_function_symbol(car(body)), cdr(body)))); /* trouble! #_xyzzy need not match xyzzy */
+	}
       if (bodyf)
 	{
 	  if (steppers == 1)                                /* one expr body, 1 stepper */
@@ -100445,6 +100453,6 @@ int main(int argc, char **argv)
  *
  * fx wrappers -- need automated search for these!  Or c_proc_t field for wrapper/NULL etc 73169, s7_[c_function_?]set_wrapper,
  *   maybe export wrap_real et al
- * (2 0) (+) and (#_block? | #_make_block) strangeness [(set! block 2) reset to symbol, miss hop=0 via cadr?]
  * do_body_p affects only returned value (might be set! etc)
+ * swap generic? and make rotatef et al once-only
  */

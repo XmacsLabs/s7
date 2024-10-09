@@ -3720,6 +3720,11 @@ that the if statement
 was valid, or which branch would be taken!  So, in those cases where a syntactic form evaluates
 an argument, s7 follows CL, and uses only the first of the values (this affects if, when, unless, cond, and case).
 </p>
+<p>s7's signatures can indicate that a function returns multiple values: call-with-exit's signature is '(values procedure?),
+but call/cc's is '(#t procedure?) which seems inconsistent.
+Perhaps we could indicate the number and the expected types of those values via '((values integer? integer?)...);
+is this the function's "rarity"?
+</p>
 
 </blockquote>
 
