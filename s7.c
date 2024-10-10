@@ -13589,7 +13589,7 @@ static s7_pointer string_to_either_ratio(s7_scheme *sc, const char *nstr, const 
   if (!overflow)
     {
       s7_int n;
-      if (d == 0) return(make_nan_with_payload(sc, __LINE__));
+      if (d == 0) return(make_nan_with_payload(sc, __LINE__)); /* this NaN can end up as a hash-table key -- maybe the payload is confusing? */
       n = string_to_integer(nstr, radix, &overflow);
       if (!overflow)
 	return(make_ratio(sc, n, d));
@@ -58090,13 +58090,13 @@ static s7_pointer fx_c_as_direct(s7_scheme *sc, s7_pointer arg)
   return(((s7_p_pp_t)opt3_direct(cdr(arg)))(sc, fx_call(sc, cdr(arg)), lookup(sc, opt3_sym(arg))));
 }
 
-static s7_pointer fx_add_as(s7_scheme *sc, s7_pointer arg)	\
-  {							\
-    s7_pointer x1 = fx_call(sc, cdr(arg));		\
-    s7_pointer x2 = lookup(sc, opt3_sym(arg));				\
-    if ((is_t_real(x1)) && (is_t_real(x2))) return(make_real(sc, real(x1) + real(x2))); \
-    return(add_p_pp(sc, x1, x2)); \
-  }
+static s7_pointer fx_add_as(s7_scheme *sc, s7_pointer arg)
+{
+  s7_pointer x1 = fx_call(sc, cdr(arg));
+  s7_pointer x2 = lookup(sc, opt3_sym(arg));
+  if ((is_t_real(x1)) && (is_t_real(x2))) return(make_real(sc, real(x1) + real(x2)));
+  return(add_p_pp(sc, x1, x2));
+}
 
 static s7_pointer fx_multiply_sa(s7_scheme *sc, s7_pointer arg)
 {
@@ -100382,9 +100382,9 @@ int main(int argc, char **argv)
  * ----------------------------------------------------
  * tpeak      148    114    108    105    102    103
  * tref      1081    687    463    459    464    412
- * tlimit    3936   5371   5371   5371   5371    833
+ * tlimit    3936   5371   5371   5371   5371    832
  * index            1016    973    967    972    978
- * tmock            1145   1082   1042   1045   1032
+ * tmock            1145   1082   1042   1045   1030
  * tvect     3408   2464   1772   1669   1497   1464
  * thook     7651   ----   2590   2030   2046   1729
  * texit     1884   1950   1778   1741   1770   1758
@@ -100396,12 +100396,12 @@ int main(int argc, char **argv)
  * tcopy            5546   2539   2375   2386   2356
  * trclo     8248   2782   2615   2634   2622   2486
  * tmat             3042   2524   2578   2590   2522
- * tload                   3046   2404   2566   2549
+ * tload                   3046   2404   2566   2549  2506 [s7_make_function]
  * fbench    2933   2583   2460   2430   2478   2562
  * tsort     3683   3104   2856   2804   2858   2858
  * titer     4550   3349   3070   2985   2966   2918
  * tio              3752   3683   3620   3583   3127
- * tobj             3970   3828   3577   3508   3437
+ * tobj             3970   3828   3577   3508   3432
  * tmac             3873   3033   3677   3677   3490
  * teq              4045   3536   3486   3544   3555
  * complex          3650   3583   3625   3679   4158
@@ -100413,7 +100413,7 @@ int main(int argc, char **argv)
  * tstar            6705   5834   5278   5177   5055
  * tform            5348   5307   5316   5084   5061
  * tstr      10.0   6342   5488   5162   5180   5252
- * tnum             6013   5433   5396   5409   5425
+ * tnum             6013   5433   5396   5409   5419
  * tlist     9219   7546   6558   6240   6300   5769
  * trec      19.6   6980   6599   6656   6658   6010
  * tari      15.0   12.7   6827   6543   6278   6137
@@ -100421,10 +100421,10 @@ int main(int argc, char **argv)
  * tset                           6260   6364   6266
  * tleft     12.2   9753   7537   7331   7331   6417
  * tmisc                          7614   7115   7134
- * tclo             8025   7645   8809   7770   7644
- * tlamb                          8003   7941   7898
+ * tclo             8025   7645   8809   7770   7634
+ * tlamb                          8003   7941   7892
  * tgc              11.1   8177   7857   7986   8010
- * thash            11.7   9734   9479   9526   9243
+ * thash            11.7   9734   9479   9526   9241
  * cb        12.9   11.0   9658   9564   9609   9648
  * tmap-hash                                    10.3
  * tgen             11.4   12.0   12.1   12.2   12.3
@@ -100454,5 +100454,4 @@ int main(int argc, char **argv)
  * fx wrappers -- need automated search for these!  Or c_proc_t field for wrapper/NULL etc 73169, s7_[c_function_?]set_wrapper,
  *   maybe export wrap_real et al
  * do_body_p affects only returned value (might be set! etc)
- * swap generic? and make rotatef et al once-only
  */

@@ -349,6 +349,48 @@
       lst))
 |#
 
+(define swap! (letrec ((no-pairs? (lambda (lst)
+				   (or (null? lst)
+				       (and (not (pair? (car lst)))
+					    (no-pairs? (cdr lst)))))))
+	        (macro (a b)
+		  (cond ((not (or (symbol? a) (pair? a)))
+			 (error 'wrong-type-arg "can't (swap! ~A ~A): ~A is not a symbol or a pair" a b a))
+			
+			((not (or (symbol? b) (pair? b)))
+			 (error 'wrong-type-arg "can't (swap! ~A ~A): ~A is not a symbol or a pair" a b b))
+			
+			((and (or (symbol? a) (hash-table? a) (let? a) (no-pairs? (cdr a)))
+			      (or (symbol? b) (hash-table? b) (let? b) (no-pairs? (cdr b))))
+			 ;; we assume above hash-tables and lets don't use expressions for the key/variable names
+			 (let ((tmp (gensym)))
+			   `(let ((,tmp ,a))
+			      (set! ,a ,b)
+			      (set! ,b ,tmp))))
+			
+			(else     ; here either a or b or both are pairs with exprs as "indices"
+			 (let ((a-object (if (pair? a) (car a) a))
+			       (b-object (if (pair? b) (car b) b))
+			       (a-indices (and (pair? a) (cdr a)))
+			       (b-indices (and (pair? b) (cdr b)))
+			       (tmp-a-indices (gensym))
+			       (tmp-b-indices (gensym))
+			       (tmp (gensym)))
+			   `(let ((,tmp-a-indices (and (pair? ',a) (map eval ',a-indices)))
+				  (,tmp-b-indices (and (pair? ',b) (map eval ',b-indices))))
+			      (let ((,tmp (if (pair? ',a) 
+					      (apply ,a-object ,tmp-a-indices)
+					      ,a)))
+				(if (pair? ',a)
+				    (if (not (pair? ',b))
+					(set! (,a-object (apply values ,tmp-a-indices)) ,b)
+					(set! (,a-object (apply values ,tmp-a-indices)) (apply ,b-object ,tmp-b-indices)))
+				    (set! ,a (apply ,b-object ,tmp-b-indices)))
+				(if (not (pair? ',b))
+				    (if (pair? ',a)
+					(set! ,b ,tmp))
+				    (set! (,b-object (apply values ,tmp-b-indices)) ,tmp))))))))))
+
 (define-macro (progv vars vals . body)
   `(apply (apply lambda ,vars ',body) ,vals))
 
