@@ -349,7 +349,7 @@
       lst))
 |#
 
-(define swap! (letrec ((no-pairs? (lambda (lst)
+(define swap! (letrec ((no-pairs? (lambda (lst) ; see s7test.scm for swap! examples
 				   (or (null? lst)
 				       (and (not (pair? (car lst)))
 					    (no-pairs? (cdr lst)))))))
@@ -376,7 +376,7 @@
 			       (tmp-a-indices (gensym))
 			       (tmp-b-indices (gensym))
 			       (tmp (gensym)))
-			   `(let ((,tmp-a-indices (and (pair? ',a) (map eval ',a-indices)))
+			   `(let ((,tmp-a-indices (and (pair? ',a) (map eval ',a-indices))) ; eval once-only in run-time env
 				  (,tmp-b-indices (and (pair? ',b) (map eval ',b-indices))))
 			      (let ((,tmp (if (pair? ',a) 
 					      (apply ,a-object ,tmp-a-indices)

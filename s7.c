@@ -12620,7 +12620,7 @@ static void call_with_current_continuation(s7_scheme *sc)
 static s7_pointer g_call_cc(s7_scheme *sc, s7_pointer args)
 {
   #define H_call_cc "(call-with-current-continuation (lambda (continuer)...)) is always a mistake!"
-  #define Q_call_cc s7_make_signature(sc, 2, sc->T, sc->is_procedure_symbol)
+  #define Q_call_cc s7_make_signature(sc, 2, sc->values_symbol, sc->is_procedure_symbol)
 
   s7_pointer p = car(args);                  /* this is the procedure passed to call/cc */
   if (!is_t_procedure(p))                    /* this includes continuations */
@@ -26373,6 +26373,22 @@ Pass this as the second argument to 'random' to get a repeatable random number s
 #endif
 }
 
+#if 0
+    PERHAPS:  a 64-bit MWC from https://prng.di.unimi.it/#shootout
+    #define MWC_A1 0xffebb71d94fcdaf9
+      /* The state must be initialized so that 0 < c < MWC_A1 - 1.
+	 For simplicity, we suggest to set c = 1 and x to a 64-bit seed. */
+      uint64_t x, c;
+
+      uint64_t inline next() {
+	const uint64_t result = x; // Or, result = x ^ (x << 32) (see above)
+	const __uint128_t t = MWC_A1 * (__uint128_t)x + c;
+	x = t;
+	c = t >> 64;
+	return result;
+      }
+#endif
+
 #define g_random_state s7_random_state
 
 static s7_pointer random_state_getter(s7_scheme *sc, s7_pointer r, s7_int loc)
@@ -26545,6 +26561,8 @@ static s7_pointer g_random(s7_scheme *sc, s7_pointer args)
       }
     case T_REAL:
       return(make_real(sc, real(num) * next_random(r)));
+      /* TODO: (x >> 11) * 0x1.0p-53, (1LL << 50) * 0x1.0p-53) -> .125, here "x" is 64 bits */
+
     case T_COMPLEX:
       return(make_complex(sc, real_part(num) * next_random(r), imag_part(num) * next_random(r)));
 #else
@@ -59051,6 +59069,9 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 	      {
 		set_opt2_direct(cdr(arg), (s7_pointer)(s7_p_pp_function(global_value(car(arg)))));
 		set_opt3_direct(cdr(arg), (s7_pointer)(s7_p_pp_function(global_value(car(s2)))));
+		if (opt3_direct(cdr(arg)) == (s7_pointer)add_p_pp) set_opt3_direct(cdr(arg), (s7_pointer)add_p_pp_wrapped);
+		if (opt3_direct(cdr(arg)) == (s7_pointer)subtract_p_pp) set_opt3_direct(cdr(arg), (s7_pointer)subtract_p_pp_wrapped);
+		if (opt3_direct(cdr(arg)) == (s7_pointer)multiply_p_pp) set_opt3_direct(cdr(arg), (s7_pointer)multiply_p_pp_wrapped);
 		set_opt3_pair(arg, cdr(s2));
 		if (car(s2) == sc->vector_ref_symbol)
 		  {
@@ -59076,6 +59097,9 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 	      /* op_c_opgsq_t */
 	      set_opt2_direct(cdr(arg), (s7_pointer)(s7_p_pp_function(global_value(car(arg)))));
 	      set_opt3_direct(cdr(arg), (s7_pointer)(s7_p_pp_function(global_value(caadr(arg)))));
+	      if (opt3_direct(cdr(arg)) == (s7_pointer)add_p_pp) set_opt3_direct(cdr(arg), (s7_pointer)add_p_pp_wrapped);
+	      if (opt3_direct(cdr(arg)) == (s7_pointer)subtract_p_pp) set_opt3_direct(cdr(arg), (s7_pointer)subtract_p_pp_wrapped);
+	      if (opt3_direct(cdr(arg)) == (s7_pointer)multiply_p_pp) set_opt3_direct(cdr(arg), (s7_pointer)multiply_p_pp_wrapped);
 	      set_opt3_pair(arg, cdadr(arg));
 	      if (caadr(arg) == sc->vector_ref_symbol)
 		{
@@ -59388,6 +59412,9 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 	    {
 	      set_opt2_direct(cdr(arg), (s7_pointer)(s7_p_pp_function(global_value(car(arg)))));
 	      set_opt3_direct(cdr(arg), (s7_pointer)(s7_p_pp_function(global_value(caaddr(arg)))));
+	      if (opt3_direct(cdr(arg)) == (s7_pointer)add_p_pp) set_opt3_direct(cdr(arg), (s7_pointer)add_p_pp_wrapped);
+	      if (opt3_direct(cdr(arg)) == (s7_pointer)subtract_p_pp) set_opt3_direct(cdr(arg), (s7_pointer)subtract_p_pp_wrapped);
+	      if (opt3_direct(cdr(arg)) == (s7_pointer)multiply_p_pp) set_opt3_direct(cdr(arg), (s7_pointer)multiply_p_pp_wrapped);
 	      set_opt3_sym(arg, cadaddr(arg));
 	      set_opt1_sym(cdr(arg), caddaddr(arg));
 	      if ((is_t_real(cadr(arg))) && (car(arg) == caaddr(arg)) && (car(arg) == sc->multiply_symbol)) return(fx_multiply_c_opssq);
@@ -100378,7 +100405,7 @@ int main(int argc, char **argv)
 #endif
 
 /* ----------------------------------------------------
- *           19.0   21.0   22.0   23.0   24.0   24.8
+ *           19.0   21.0   22.0   23.0   24.0   24.9
  * ----------------------------------------------------
  * tpeak      148    114    108    105    102    103
  * tref      1081    687    463    459    464    412
@@ -100395,21 +100422,21 @@ int main(int argc, char **argv)
  * tread            2421   2419   2408   2405   2241
  * tcopy            5546   2539   2375   2386   2356
  * trclo     8248   2782   2615   2634   2622   2486
+ * tload                   3046   2404   2566   2506
  * tmat             3042   2524   2578   2590   2522
- * tload                   3046   2404   2566   2549  2506 [s7_make_function]
- * fbench    2933   2583   2460   2430   2478   2562
+ * fbench    2933   2583   2460   2430   2478   2562  2547
  * tsort     3683   3104   2856   2804   2858   2858
  * titer     4550   3349   3070   2985   2966   2918
  * tio              3752   3683   3620   3583   3127
  * tobj             3970   3828   3577   3508   3432
- * tmac             3873   3033   3677   3677   3490
  * teq              4045   3536   3486   3544   3555
+ * tmac             4373   ----   4193   4188   4022
  * complex          3650   3583   3625   3679   4158
  * tcase            4793   4439   4430   4439   4376
  * tmap             8774   4489   4541   4586   4389
  * tlet      11.0   6974   5609   5980   5965   4462
  * tfft             7729   4755   4476   4536   4531
- * tshoot           5447   5183   5055   5034   4840
+ * tshoot           5447   5183   5055   5034   4840  4828
  * tstar            6705   5834   5278   5177   5055
  * tform            5348   5307   5316   5084   5061
  * tstr      10.0   6342   5488   5162   5180   5252

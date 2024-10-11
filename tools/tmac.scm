@@ -165,6 +165,22 @@
   (test-tak))
 
 
+;; simple swap
+(define-macro (sw! a b)
+  (let ((tmp (gensym)))
+    `(let ((,tmp ,a))
+       (set! ,a ,b)
+       (set! ,b ,tmp))))
+    
+(define (m7)
+  (let ((a 1) (b 2))
+    (do ((i 0 (+ i 1)))
+	((= i 200000))
+      (sw! a b))))
+(m7)
+
+
+
 (when (> (*s7* 'profile) 0)
   (show-profile 200))
 (exit)
