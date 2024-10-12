@@ -344,7 +344,7 @@ s7_pointer s7_make_byte_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *d
 s7_pointer s7_make_float_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info);
 s7_pointer s7_make_float_vector_wrapper(s7_scheme *sc, s7_int len, s7_double *data, s7_int dims, s7_int *dim_info, bool free_data);
 
-#if (!__TINYC__)
+#if (!__TINYC__) && ((!defined(__clang__)) || (!__cplusplus))
   s7_pointer s7_make_complex_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info);
   s7_pointer s7_make_complex_vector_wrapper(s7_scheme *sc, s7_int len, s7_complex *data, s7_int dims, s7_int *dim_info, bool free_data);
   s7_complex *s7_complex_vector_elements(s7_pointer vec);
