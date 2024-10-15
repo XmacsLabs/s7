@@ -6083,6 +6083,7 @@ int main(int argc, char **argv)
 
 /* linux: gcc -o threads threads.c s7.o -Wl,-export-dynamic -pthread -lm -I. -ldl
  * mac: clang -o threads threads.c s7.o -pthread -lm -I. -ldl
+ * g++ can compile s7.c, but clang++ can't.
  */
 </pre>
 

@@ -697,7 +697,7 @@ typedef struct opt_info opt_info;
 typedef union {
   s7_int i;
   s7_double x;
-  s7_complex z;
+  /* s7_complex z; */ /* not yet used */
   s7_pointer p;
   void *obj;
   opt_info *o1;
@@ -2022,7 +2022,7 @@ static void init_types(void)
   #define T_Cvc(P) check_ref_one(P, T_COMPLEX_VECTOR,    __func__, __LINE__, "sweep", NULL)
   #define T_Dyn(P) check_ref_one(P, T_DYNAMIC_WIND,      __func__, __LINE__, NULL, NULL)
   #define T_Eof(P) check_ref_one(P, T_EOF,               __func__, __LINE__, "sweep", NULL)
-  #define T_Exs(P) check_ref_exs(P,                      __func__, __LINE__)                /* not an internal type, but #<unused> and slot are ok */
+  #define T_Exs(P) check_ref_exs(P,                      __func__, __LINE__)                /* not an internal (user-visible) type, but #<unused> and slot are ok */
   #define T_Ext(P) check_ref_ext(P,                      __func__, __LINE__)                /* not an internal type */
   #define T_Fnc(P) check_ref_fnc(P,                      __func__, __LINE__)                /* any c_function|c_macro */
   #define T_Frc(P) check_ref_two(P, T_RATIO, T_INTEGER,  __func__, __LINE__, NULL, NULL)
@@ -3519,7 +3519,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define port_read_sharp(p)             port_port(p)->pf->read_sharp
 #define port_close(p)                  port_port(p)->pf->close_port
 
-#define is_c_function(f)               (type(f) >= T_C_FUNCTION) /* does not include T_C_FUNCTION_STAR */
+#define is_c_function(f)               (type(f) >= T_C_FUNCTION)                   /* does not include T_C_FUNCTION_STAR */
 #define is_c_function_star(f)          (type(f) == T_C_FUNCTION_STAR)
 #define is_any_c_function(f)           (type(f) >= T_C_FUNCTION_STAR)
 #define is_safe_c_function(f)          ((is_c_function(f)) && (is_safe_procedure(f)))
@@ -6650,9 +6650,10 @@ static s7_pointer g_is_immutable(s7_scheme *sc, s7_pointer args)
 {
   #define H_is_immutable "(immutable? obj (env (curlet))) returns #t if obj (or obj in the environment env) is immutable"
   #define Q_is_immutable s7_make_signature(sc, 3, sc->is_boolean_symbol, sc->T, sc->is_let_symbol)
-  s7_pointer p = car(args), slot;
+  s7_pointer p = car(args);
   if (is_symbol(p))
     {
+      s7_pointer slot;
       if (is_keyword(p)) return(sc->T);
       if (is_pair(cdr(args)))
 	{
@@ -6698,9 +6699,10 @@ static s7_pointer g_immutable(s7_scheme *sc, s7_pointer args)
 {
   #define H_immutable "(immutable! obj (env (curlet))) declares that the object obj (or obj in the environment env) can't be changed. obj is returned."
   #define Q_immutable s7_make_signature(sc, 3, sc->T, sc->T, sc->is_let_symbol)
-  s7_pointer p = car(args), slot;
+  s7_pointer p = car(args);
   if (is_symbol(p))
     {
+      s7_pointer slot;
       if (is_pair(cdr(args)))
 	{
 	  s7_pointer e = cadr(args);
@@ -11838,8 +11840,8 @@ static bool is_defined_b_7pp(s7_scheme *sc, s7_pointer p, s7_pointer e) {return(
 void s7_define(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointer value)
 {
   s7_pointer x;
-  if (let == sc->rootlet) let = sc->shadow_rootlet;
-  x = symbol_to_local_slot(sc, symbol, let); /* x can be #<undefined> */
+  if (let == sc->rootlet) let = sc->shadow_rootlet; /* if symbol is a gensym should we issue a warning? */
+  x = symbol_to_local_slot(sc, symbol, let);        /* x can be #<undefined> */
   if (is_slot(x))
     slot_set_value_with_hook(x, value);
   else
@@ -14358,7 +14360,9 @@ static inline double dpow(int32_t x, int32_t y)
 #ifndef WITH_DTOA
   #define WITH_DTOA 1
 #endif
-/* there was a time when libc was so slow that this code was all but mandatory, but now (Aug-2023) the difference is smaller (ca. factor of 2) */
+/* there was a time when libc was so slow that this code was mandatory, but now (Oct-2024) the difference is smaller (still a ca. factor of 4):
+ *   in tbig/callgrind with dtoa 6254M, with C's printf stuff instead 24410M
+ */
 
 #if WITH_DTOA
 /* fpconv, revised to fit the local coding style
@@ -16669,9 +16673,7 @@ static s7_int abs_i_i(s7_int x) {return((x < 0) ? (-x) : x);}
 /* -------------------------------- magnitude -------------------------------- */
 static double my_hypot(double x, double y)
 {
-#if 0
-  if (x == 0.0) return(fabs(y)); if (y == 0.0) return(fabs(x)); if (is_NaN(x)) return(x); if (is_NaN(y)) return(y);
-#endif
+  /* useless: if (x == 0.0) return(fabs(y)); if (y == 0.0) return(fabs(x)); if (is_NaN(x)) return(x); if (is_NaN(y)) return(y); */
   if ((fabs(x) < 1.0e6) && (fabs(y) < 1.0e6)) /* max error is ca. e-14 */
     return(sqrt(x * x + y * y));              /* timing diffs: 62 for this form, 107 if just libm's hypot */
   return(hypot(x, y));                        /* libm's hypot protects against over/underflow */
@@ -24653,10 +24655,9 @@ static s7_pointer g_leq_ixx(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer leq_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr)
 {
-  s7_pointer arg2;
   if (args == 2)
     {
-      arg2 = caddr(expr);
+      s7_pointer arg2 = caddr(expr);
       if ((is_t_integer(arg2)) && (integer(arg2) < S7_INT32_MAX) && (integer(arg2) > S7_INT32_MIN))
 	return(sc->leq_xi);
       return(sc->leq_2);
@@ -66598,6 +66599,11 @@ static s7_pointer opt_p_call_ccs(opt_info *o)
   return(o->v[4].call(o->sc, set_plist_3(o->sc, o->v[1].p, o->v[2].p, slot_value(o->v[3].p))));
 }
 
+static s7_pointer opt_p_call_scs(opt_info *o)
+{
+  return(o->v[4].call(o->sc, set_plist_3(o->sc, slot_value(o->v[1].p), o->v[2].p, slot_value(o->v[3].p))));
+}
+
 static s7_pointer opt_p_call_css(opt_info *o)
 {
   return(o->v[4].call(o->sc, set_plist_3(o->sc, o->v[1].p, slot_value(o->v[2].p), slot_value(o->v[3].p))));
@@ -66639,7 +66645,20 @@ static bool p_call_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_po
 		  if ((s_func == global_value(sc->vector_ref_symbol)) &&
 		      (is_t_vector(slot_value(slot))) && (vector_rank(slot_value(slot)) != 2))
 		    return_false(sc, car_x);
-		}
+		  /* arg1 ok as symbol */
+		  if ((is_code_constant(sc, arg2)) && (is_normal_symbol(arg3)))
+		    {
+		      s7_pointer val_slot = opt_simple_symbol(sc, arg3);
+		      if (val_slot)
+			{
+			  opc->v[2].p = arg2;
+			  opc->v[3].p = val_slot;
+			  opc->v[4].call = cf_call(sc, car_x, s_func, 3);
+			  if ((sc->do_body_p == car_x) && (arg1 == sc->F) && (car(car_x) == sc->format_symbol))
+			    opc->v[4].call = g_format_nr;
+			  opc->v[0].fp = opt_p_call_scs;
+			  return_true(sc, car_x);
+			}}}
 	      else return_false(sc, car_x); /* no need for sc->pc = start here, I think */
 	    }
 	  else
@@ -66649,7 +66668,7 @@ static bool p_call_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_po
 		  s7_pointer val_slot = opt_simple_symbol(sc, arg3);
 		  if (val_slot)
 		    {
-		      opc->v[1].p = (is_pair(arg1)) ? cadr(arg1) : arg1;
+		      opc->v[1].p = arg1;
 		      opc->v[2].p = (is_pair(arg2)) ? cadr(arg2) : arg2;
 		      opc->v[3].p = val_slot;
 		      opc->v[4].call = cf_call(sc, car_x, s_func, 3);
@@ -66752,8 +66771,8 @@ static bool p_call_any_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_po
       (is_safe_procedure(s_func)) &&
       (c_function_is_aritable(s_func, len - 1)))
     {
-      s7_pointer p = cdr(car_x);      /* (vector-set! v k i 2) gets here */
-      opc->v[1].i = (len - 1);
+      s7_pointer p = cdr(car_x);      /* (vector-set! v k i 2) gets here, as does (float-vector-set! v k i n (+ 0.0 i3 k3 n)) from tvect */
+      opc->v[1].i = (len - 1);        /*   also ccff in cb.scm I think */
       for (int32_t pctr = P_CALL_O1; is_pair(p); pctr++, p = cdr(p))
 	{
 	  opc->v[pctr].o1 = sc->opts[sc->pc];
@@ -69788,7 +69807,7 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
 	/* if head is ([let-ref] L 'multiply), it should be accessible now, so we could do the lookup, set up s_func and go on */
 	if (is_pair(head))
 	  {
-	    s7_pointer let, slot, sym;
+	    s7_pointer let, sym;
 	    if ((car(head) == sc->let_ref_symbol) && (s7_list_length(sc, head) == 3))
 	      {
 		let = cadr(head);
@@ -69811,7 +69830,7 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
 		else return_false(sc, car_x);
 	    if ((is_symbol(let)) && ((is_symbol_and_keyword(sym)) || (is_quoted_symbol(sym))))
 	      {
-		slot = s7_slot(sc, let);
+		s7_pointer slot = s7_slot(sc, let);
 		if (!is_slot(slot)) return_false(sc, car_x);
 		let = slot_value(slot);
 		if ((!is_let(let)) || (has_let_ref_fallback(let))) return_false(sc, car_x);
@@ -71410,7 +71429,7 @@ static s7_pointer op_safe_c_p_mv(s7_scheme *sc, s7_pointer args)
 	sc->args = safe_list_if_possible(sc, len);
 	use_safe = (!in_heap(sc->args));
 	lst = sc->args;
-	for (s7_pointer p = sc->value; is_pair(p); p = cdr(p), lst = cdr(lst)) set_car(lst, car(p));
+	for (s7_pointer p1 = sc->value; is_pair(p1); p1 = cdr(p1), lst = cdr(lst)) set_car(lst, car(p1));
       }
   sc->code = c_function_base(opt1_cfunc(sc->code));
   if (type(sc->code) == T_C_FUNCTION)
@@ -71441,7 +71460,7 @@ static s7_pointer op_safe_c_pc_mv(s7_scheme *sc, s7_pointer args)
 	sc->args = safe_list_if_possible(sc, len + 3);
 	use_safe = (!in_heap(sc->args));
 	lst = sc->args;
-	for (s7_pointer p = sc->value; is_pair(p); p = cdr(p), lst = cdr(lst)) set_car(lst, car(p));
+	for (s7_pointer p1 = sc->value; is_pair(p1); p1 = cdr(p1), lst = cdr(lst)) set_car(lst, car(p1));
 	set_car(lst, val);
       }
   sc->code = c_function_base(opt1_cfunc(sc->code));
@@ -71473,7 +71492,7 @@ static s7_pointer op_safe_c_ps_mv(s7_scheme *sc, s7_pointer args)  /* (define (h
 	sc->args = safe_list_if_possible(sc, len + 3); /* sc->args is not clobbered by fx_call (below) */
 	use_safe = (!in_heap(sc->args));
 	lst = sc->args;
-	for (s7_pointer p = sc->value; is_pair(p); p = cdr(p), lst = cdr(lst)) set_car(lst, car(p));
+	for (s7_pointer p1 = sc->value; is_pair(p1); p1 = cdr(p1), lst = cdr(lst)) set_car(lst, car(p1));
 	set_car(lst, val);
       }
   sc->code = c_function_base(opt1_cfunc(sc->code));
@@ -71511,7 +71530,7 @@ static s7_pointer op_safe_c_pa_mv(s7_scheme *sc, s7_pointer args)
 	sc->args = safe_list_if_possible(sc, len + 3); /* sc->args is not clobbered by fx_call (below) */
 	use_safe = (!in_heap(sc->args));
 	lst = sc->args;
-	for (s7_pointer p = sc->value; is_pair(p); p = cdr(p), lst = cdr(lst)) set_car(lst, car(p));
+	for (s7_pointer p1 = sc->value; is_pair(p1); p1 = cdr(p1), lst = cdr(lst)) set_car(lst, car(p1));
 	set_car(lst, fx_call(sc, cddr(sc->code)));
       }
   sc->code = c_function_base(opt1_cfunc(sc->code));
@@ -76726,8 +76745,7 @@ static bool check_recur(s7_scheme *sc, s7_pointer name, int32_t pars, s7_pointer
 			  (caadr(clause2) == name))
 			{
 			  s7_pointer la = caddr(la_clause);
-			  if ((pars == 2) &&
-			      (is_pair(la)) && (car(la) == name) && (is_pair(cdr(la))) && (is_fxable(sc, cadr(la))) &&
+			  if ((is_pair(la)) && (car(la) == name) && (is_pair(cdr(la))) && (is_fxable(sc, cadr(la))) &&
 			      (is_pair(cddr(la))) && (is_fxable(sc, caddr(la))) && (is_null(cdddr(la))))
 			    {
 			      s7_pointer l2a = cadr(clause2);
@@ -78352,12 +78370,11 @@ static void check_let_a_body(s7_scheme *sc, s7_pointer form)
       }
 }
 
-static void check_let_one_var(s7_scheme *sc, s7_pointer form, s7_pointer start)
+static void check_let_one_var(s7_scheme *sc, s7_pointer form, s7_pointer start) /* not a named let */
 {
-  s7_pointer binding = car(start), code = cdr(form);
+  s7_pointer binding = car(start), code = cdr(form); /* i.e. form=(let ((x '(1 2))) (list x x)), start=((x '(1 2))) */
   if (is_pair(cadr(binding)))
     {
-      /* this is not a named let */
       pair_set_syntax_op(form, ((is_pair(cdr(code))) && (is_null(cddr(code)))) ? OP_LET_ONE_P_OLD : OP_LET_ONE_OLD);
       set_opt2_sym(cdr(code), car(binding)); /* these don't collide -- cdr(code) and code */
       set_opt2_pair(code, cadr(binding));
@@ -78387,7 +78404,7 @@ static void check_let_one_var(s7_scheme *sc, s7_pointer form, s7_pointer start)
 			break;
 		    if (is_null(p))
 		      {
-			pair_set_syntax_op(form, OP_LET_A_NA_OLD);
+			pair_set_syntax_op(form, OP_LET_A_NA_OLD); /* let_a_aa_old|new is not worth the code (30 in tgc, nothing elsewhere) */
 			fx_annotate_args(sc, cdr(code), set_plist_1(sc, car(binding)));
 			fx_tree(sc, cdr(code), car(binding), NULL, NULL, false);
 			return;
@@ -78403,12 +78420,12 @@ static void check_let_one_var(s7_scheme *sc, s7_pointer form, s7_pointer start)
 	check_let_a_body(sc, form);
       else
 	{
-	  fx_annotate_args(sc, cdr(code), set_plist_1(sc, caaar(code))); /* no effect if not syntactic -- how to fix? */
+	  fx_annotate_args(sc, cdr(code), set_plist_1(sc, car(binding))); /* no effect if not syntactic -- how to fix? plist is the "env" = local varname */
 	  if (is_fx_treeable(cdr(code))) fx_tree(sc, cdr(code), car(binding), NULL, NULL, false);
 	}}
   if ((optimize_op(form) == OP_LET_A_OLD) &&
       (is_pair(cddr(code))) && (is_null(cdddr(code))))
-    pair_set_syntax_op(form, OP_LET_A_OLD_2);
+    pair_set_syntax_op(form, OP_LET_A_OLD_2); /* not fxable body, goto eval on each */
 }
 
 static s7_pointer check_named_let(s7_scheme *sc, int32_t vars)
@@ -81139,11 +81156,12 @@ static goto_t op_expansion(s7_scheme *sc)
       (caller != sc->define_expansion_symbol) &&    /* (define-expansion ...) being reloaded/redefined */
       (caller != sc->define_expansion_star_symbol)) /* (define-expansion* ...) being reloaded/redefined */
     {
-      s7_pointer symbol = car(sc->value), slot;
+      s7_pointer symbol = car(sc->value);
       if (!is_let(sc->curlet)) set_curlet(sc, sc->rootlet);
 
       if (is_symbol(symbol)) /* maybe (#_cond-expand) etc */
 	{
+	  s7_pointer slot;
 	  if ((is_global(symbol)) || (sc->curlet == sc->nil))
 	    slot = global_slot(symbol);
 	  else slot = s7_slot(sc, symbol);
@@ -92250,7 +92268,7 @@ static token_t read_sharp(s7_scheme *sc, s7_pointer pt)
 	    sc->strbuf[loc++] = (unsigned char)d;
 	  }
 	sc->strbuf[loc++] = d;
-	if ((d == 'd') || (d == 'i') || (d == 'r') || (d == 'u'))
+	if ((d == 'd') || (d == 'i') || (d == 'r') || (d == 'u') || (d == 'c'))
 	  {
 	    int32_t e = inchar(pt);
 	    if (e == EOF)
@@ -95428,6 +95446,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_LET_A_NEW:         inline_op_let_a_new(sc); sc->code = cdr(sc->code);  goto BEGIN;
 	case OP_LET_A_OLD_2:       inline_op_let_a_old(sc); push_stack_no_args(sc, OP_EVAL, caddr(sc->code)); sc->code = cadr(sc->code); goto EVAL;
 	case OP_LET_A_NEW_2:       inline_op_let_a_new(sc); push_stack_no_args(sc, OP_EVAL, caddr(sc->code)); sc->code = cadr(sc->code); goto EVAL;
+	  /* it is slower here to check if has_fx and use fx_call */
 	case OP_LET_A_P_OLD:       inline_op_let_a_old(sc); sc->code = cadr(sc->code); goto EVAL;
 	case OP_LET_A_P_NEW:       inline_op_let_a_new(sc); sc->code = cadr(sc->code); goto EVAL;
 	case OP_LET_ONE_OLD_1:     op_let_one_old_1(sc);    goto BEGIN;
@@ -100418,7 +100437,7 @@ int main(int argc, char **argv)
  * ----------------------------------------------------
  * tpeak      148    114    108    105    102    103
  * tref      1081    687    463    459    464    412
- * tlimit    3936   5371   5371   5371   5371    832
+ * tlimit    3936   5371   5371   5371   5371    817
  * index            1016    973    967    972    978
  * tmock            1145   1082   1042   1045   1030
  * tvect     3408   2464   1772   1669   1497   1464
@@ -100486,7 +100505,4 @@ int main(int argc, char **argv)
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
- *
- * fx wrappers -- need automated search for these!
- * do_body_p affects only returned value (might be set! etc)
  */
