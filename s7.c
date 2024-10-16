@@ -489,13 +489,13 @@ static const char *s7_type_names[] =
    "c_macro", "c_function*", "c_function", "c_rst_no_req_function",
    };
 
-/* 1:t_pair, 2:t_nil, 3:t_unused, 4:t_undefined, 5:t_unspecified, 6:t_eof, 7:t_boolean, 8:t_character, 9:t_syntax, 10:t_symbol,
-   11:t_integer, 12:t_ratio, 13:t_real, 14:t_complex, 15:t_big_integer, 16:t_big_ratio, 17:t_big_real, 18:t_big_complex,
-   19:t_string, 20:t_c_object, 21:t_vector, 22:t_int_vector, 23:t_float_vector, 24:t_byte_vector, 25:t_complex_vector,
-   26:t_catch, 27:t_dynamic_wind, 28:t_hash_table, 29:t_let, 30:t_iterator,
-   31:t_stack, 32:t_counter, 33:t_slot, 34:t_c_pointer, 35:t_output_port, 36:t_input_port, 37:t_random_state, 38:t_continuation, 39:t_goto,
-   40:t_closure, 41:t_closure_star, 42:t_macro, 43:t_macro_star, 44:t_bacro, 45:t_bacro_star,
-   46:t_c_macro, 47:t_c_function_star, 48:t_c_function, 49:t_c_rst_no_req_function,
+/* 1:pair, 2:nil, 3:unused, 4:undefined, 5:unspecified, 6:eof, 7:boolean, 8:character, 9:syntax, 10:symbol,
+   11:integer, 12:ratio, 13:real, 14:complex, 15:big_integer, 16:big_ratio, 17:big_real, 18:big_complex,
+   19:string, 20:c_object, 21:vector, 22:int_vector, 23:float_vector, 24:byte_vector, 25:complex_vector,
+   26:catch, 27:dynamic_wind, 28:hash_table, 29:let, 30:iterator,
+   31:stack, 32:counter, 33:slot, 34:c_pointer, 35:output_port, 36:input_port, 37:random_state, 38:continuation, 39:goto,
+   40:closure, 41:closure_star, 42:macro, 43:macro_star, 44:bacro, 45:bacro_star,
+   46:c_macro, 47:c_function_star, 48:c_function, 49:c_rst_no_req_function,
    50:num_types
 */
 
@@ -2341,8 +2341,8 @@ static void init_types(void)
 #define T_MID_SHARED                   (1 << 3)
 #define is_shared(p)                   has_mid_type_bit(T_Seq(p), T_MID_SHARED)
 #define set_shared(p)                  set_mid_type_bit(T_Seq(p), T_MID_SHARED)
-#define is_collected_or_shared(p)      has_mid_type_bit(p, T_MID_COLLECTED | T_MID_SHARED)
-#define clear_collected_and_shared(p)  clear_mid_type_bit(p, T_MID_COLLECTED | T_MID_SHARED) /* this can clear free cells = calloc */
+#define is_collected_or_shared(p)      has_mid_type_bit(T_Seq(p), T_MID_COLLECTED | T_MID_SHARED)
+#define clear_collected_and_shared(p)  clear_mid_type_bit(T_Seq(p), T_MID_COLLECTED | T_MID_SHARED) /* this can clear free cells = calloc */
 
 #define T_LOW_COUNT                    (1 << (16 + 4))
 #define T_MID_LOW_COUNT                (1 << 4)
@@ -2441,9 +2441,9 @@ static void init_types(void)
 
 #define T_MUTABLE                      (1 << (16 + 10))
 #define T_MID_MUTABLE                  (1 << 10)
-#define is_mutable_number(p)           has_mid_type_bit(p, T_MID_MUTABLE)
+#define is_mutable_number(p)           has_mid_type_bit(T_Num(p), T_MID_MUTABLE)
 #define is_mutable_integer(p)          has_mid_type_bit(T_Int(p), T_MID_MUTABLE)
-#define clear_mutable_number(p)        clear_mid_type_bit(p, T_MID_MUTABLE)
+#define clear_mutable_number(p)        clear_mid_type_bit(T_Num(p), T_MID_MUTABLE)
 #define clear_mutable_integer(p)       clear_mid_type_bit(T_Int(p), T_MID_MUTABLE)
 /* used for mutable numbers, can occur with T_IMMUTABLE (outside view vs inside) */
 
@@ -2453,7 +2453,7 @@ static void init_types(void)
 
 #define T_MARK_SEQ                     T_MID_MUTABLE
 #define has_carrier(p)                 has_mid_type_bit(T_Itr(p), T_MARK_SEQ)
-#define set_has_carrier(p)                set_mid_type_bit(T_Itr(p), T_MARK_SEQ)
+#define set_has_carrier(p)             set_mid_type_bit(T_Itr(p), T_MARK_SEQ)
 /* used in iterators for GC mark of sequence */
 
 #define T_HAS_LOOP_END                 T_MID_MUTABLE
@@ -2557,7 +2557,7 @@ static void init_types(void)
 #define slot_set_has_pending_value(p)  set_mid_type_bit(T_Slt(p), T_HAS_PENDING_VALUE)
 #define slot_has_pending_value(p)      has_mid_type_bit(T_Slt(p), T_HAS_PENDING_VALUE)
 #define slot_clear_has_pending_value(p) do {clear_mid_type_bit(T_Slt(p), T_HAS_PENDING_VALUE); slot_set_pending_value(p, sc->F);} while (0)
-#define slot_has_setter_or_pending_value(p) has_mid_type_bit(p, T_HAS_SETTER | T_HAS_PENDING_VALUE)
+#define slot_has_setter_or_pending_value(p) has_mid_type_bit(T_Slt(p), T_HAS_SETTER | T_HAS_PENDING_VALUE)
 
 #define T_HAS_METHODS                  (1 << (16 + 14))
 #define T_MID_HAS_METHODS              (1 << 14)
@@ -2738,7 +2738,7 @@ static void init_types(void)
 #define T_SHORT_CYCLIC_SET             (1 << 6)
 #define is_cyclic_set(p)               has_high_type_bit(T_Seq(p), T_SHORT_CYCLIC_SET)
 #define set_cyclic_set(p)              set_high_type_bit(T_Seq(p), T_SHORT_CYCLIC_SET)
-#define clear_cyclic_bits(p)           clear_type_bit(p, T_COLLECTED | T_SHARED | T_CYCLIC | T_CYCLIC_SET)
+#define clear_cyclic_bits(p)           clear_type_bit(p, T_COLLECTED | T_SHARED | T_CYCLIC | T_CYCLIC_SET) /* not T_Seq, p can be free(!) */
 
 #define T_KEYWORD                      (1LL << (48 + 7))
 #define T_SHORT_KEYWORD                (1 << 7)
@@ -78935,11 +78935,15 @@ static void op_let_a_a_new(s7_scheme *sc)
 
 static void op_let_a_a_old(s7_scheme *sc) /* these are not called as fx*, and restoring sc->curlet has noticeable cost (e.g. 8 in thash) */
 {
+#if 0
   s7_pointer let;
   sc->code = cdr(sc->code);
   let = update_let_with_slot(sc, opt3_let(sc->code), fx_call(sc, cdr(opt2_pair(sc->code))));
   let_set_outlet(let, sc->curlet);
   set_curlet(sc, let);
+#else
+  inline_op_let_a_old(sc);
+#endif
   sc->value = fx_call(sc, cdr(sc->code));
 }
 
@@ -78956,11 +78960,16 @@ static void op_let_a_na_new(s7_scheme *sc)
 /* this and others like it could easily be fx funcs, but check_let is called too late, so it's never seen as fxable */
 static void op_let_a_na_old(s7_scheme *sc)
 {
+#if 0
   s7_pointer let, p;
   sc->code = cdr(sc->code);
   let = update_let_with_slot(sc, opt3_let(sc->code), fx_call(sc, cdr(opt2_pair(sc->code))));
   let_set_outlet(let, sc->curlet);
   set_curlet(sc, let);
+#else
+  s7_pointer p;
+  inline_op_let_a_old(sc);
+#endif
   for (p = cdr(sc->code); is_pair(cdr(p)); p = cdr(p)) fx_call(sc, p);
   sc->value = fx_call(sc, p);
 }
@@ -99982,7 +99991,7 @@ s7_scheme *s7_init(void)
   s7_set_history_enabled(sc, true);
 
   s7_eval_c_string(sc, "(define make-hook                                                                 \n\
-                          (let ((+documentation+ \"(make-hook . pars) returns a new hook (a function) that passes the parameters to each function in its function list.\")) \n\
+                          (let ((+documentation+ \"(make-hook . pars) returns a new hook (a function) that passes that hook to each function in its function list.\")) \n\
                             (lambda hook-args                                                             \n\
                               (let ((body ()))   ; list of hook functions                                 \n\
                                 (apply lambda* hook-args                                                  \n\
