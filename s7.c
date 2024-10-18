@@ -3694,10 +3694,12 @@ static void begin_temp_1(s7_scheme *sc, s7_pointer p, s7_pointer val, const char
 {
   if(p != sc->unused)
     {
+      char *s1;
       fprintf(stderr, "%s[%d]: begin_temp %s %d %s\n", func, line,
 	      (p == sc->y) ? "y" : ((p == sc->v) ? "v" : "temp6"),
 	      (p == sc->y) ? sc->y_line : ((p == sc->v) ? sc->v_line : sc->temp6_line),
-	      s7_object_to_c_string(sc, p));
+	      s1 = s7_object_to_c_string(sc, p));
+      free(s1);
       if (sc->stop_at_error) abort();
     }
   if (p == sc->y) sc->y_line = line; else if (p == sc->v) sc->v_line = line; else sc->temp6_line = line;
@@ -36648,11 +36650,6 @@ static s7_pointer g_object_to_string(s7_scheme *sc, s7_pointer args)
   return(res);
 }
 
-#if S7_DEBUGGING
-const char *s7_object_to_c_string_x(s7_scheme *sc, s7_pointer obj, s7_pointer urchoice);
-const char *s7_object_to_c_string_x(s7_scheme *sc, s7_pointer obj, s7_pointer urchoice) {return(string_value(g_object_to_string(sc, list_2(sc, obj, urchoice))));}
-#endif
-
 
 /* -------------------------------- newline -------------------------------- */
 void s7_newline(s7_scheme *sc, s7_pointer port)
@@ -45251,7 +45248,8 @@ static hash_entry_t *hash_symbol(s7_scheme *sc, s7_pointer table, s7_pointer key
 /* ---------------- hash numbers ---------------- */
 static s7_int hash_map_int(s7_scheme *sc, s7_pointer table, s7_pointer key)
 {
-  return(s7_int_abs(integer(key)));
+  s7_int k = integer(key);
+  return((k >= 0) ? k : ((k == s7_int_min) ? S7_INT64_MAX : -k));
 }
 
 static s7_int hash_map_ratio(s7_scheme *sc, s7_pointer table, s7_pointer key)
@@ -45817,10 +45815,12 @@ static hash_entry_t *hash_equal_eq(s7_scheme *sc, s7_pointer table, s7_pointer k
   return(sc->unentry);
 }
 
+#define hash_int_abs(x) ((x) >= 0 ? (x) : ((x == s7_int_min) ? S7_INT64_MAX : -(x)))
+
 static hash_entry_t *hash_equal_integer(s7_scheme *sc, s7_pointer table, s7_pointer key)
 {
   s7_int keyint = integer(key);
-  s7_int loc = s7_int_abs(keyint) & hash_table_mask(table);  /* hash_loc -> hash_map_integer */
+  s7_int loc = hash_int_abs(keyint) & hash_table_mask(table);  /* hash_loc -> hash_map_integer */
   for (hash_entry_t *x = hash_table_element(table, loc); x; x = hash_entry_next(x))
     {
       if ((is_t_integer(hash_entry_key(x))) &&
@@ -52225,6 +52225,7 @@ s7_pointer s7_append(s7_scheme *sc, s7_pointer a, s7_pointer b)
       s7_pointer q, p, np, op;
       if ((!is_pair(b)) && (!is_null(b)))
 	return(g_list_append(sc, list_2(sc, a, b)));
+      sc->temp10 = a;
       q = list_1(sc, car(a));
       sc->temp8 = q;
       for (op = a, p = cdr(a), np = q; (is_pair(p)) && (p != op); p = cdr(p), np = cdr(np), op = cdr(op))
@@ -52235,8 +52236,9 @@ s7_pointer s7_append(s7_scheme *sc, s7_pointer a, s7_pointer b)
 	}
       if (!is_null(p))
 	wrong_type_error_nr(sc, sc->append_symbol, 1, a, a_proper_list_string);
-      set_cdr(np, b);
       sc->temp8 = sc->unused;
+      sc->temp10 = sc->unused;
+      set_cdr(np, b);
       return(q);
     }
   if (is_null(a)) return(b);
@@ -71916,7 +71918,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
     default:
       /* (let () (define (f1) (do ((i 0 (+ i 1))) ((= i 1)) (values (append "" (block)) 1))) (f1)) safe_dotimes_step_o */
       /* ((values memq (values #\a '(#\A 97 #\a)))) eval_args */
-      if (SHOW_EVAL_OPS) fprintf(stderr, "  %s[%d]: splice punts: %s\n", __func__, __LINE__, op_names[stack_top_op(sc)]);
+      if (SHOW_EVAL_OPS) fprintf(stderr, "  %s[%d]: splice gives up: %s\n", __func__, __LINE__, op_names[stack_top_op(sc)]);
       break;
     }
 
@@ -71936,7 +71938,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
 
 
 /* -------------------------------- values -------------------------------- */
-s7_pointer s7_values(s7_scheme *sc, s7_pointer args)
+static s7_pointer g_values(s7_scheme *sc, s7_pointer args)
 {
   #define H_values "(values obj ...) splices its arguments into whatever list holds it (its 'continuation')"
   #define Q_values s7_make_circular_signature(sc, 1, 2, sc->values_symbol, sc->T)
@@ -71950,7 +71952,19 @@ s7_pointer s7_values(s7_scheme *sc, s7_pointer args)
   return(splice_in_values(sc, args));
 }
 
-#define g_values s7_values
+s7_pointer s7_values(s7_scheme *sc, s7_pointer args)
+{
+  if (is_null(args))
+    return(sc->no_value);
+  if (is_null(cdr(args)))
+    return(car(args)); 
+ if (sc->stack_start >= sc->stack_end) /* s7_values called when no s7 stack (ffitest.c for example) */
+    {
+      set_multiple_value(args);
+      return(args);
+    }
+ return(splice_in_values(sc, args));
+}
 
 static s7_pointer values_p(s7_scheme *sc) {return(sc->no_value);}
 static s7_pointer values_p_p(s7_scheme *unused_sc, s7_pointer p) {return(p);}
@@ -78935,15 +78949,7 @@ static void op_let_a_a_new(s7_scheme *sc)
 
 static void op_let_a_a_old(s7_scheme *sc) /* these are not called as fx*, and restoring sc->curlet has noticeable cost (e.g. 8 in thash) */
 {
-#if 0
-  s7_pointer let;
-  sc->code = cdr(sc->code);
-  let = update_let_with_slot(sc, opt3_let(sc->code), fx_call(sc, cdr(opt2_pair(sc->code))));
-  let_set_outlet(let, sc->curlet);
-  set_curlet(sc, let);
-#else
   inline_op_let_a_old(sc);
-#endif
   sc->value = fx_call(sc, cdr(sc->code));
 }
 
@@ -78960,16 +78966,8 @@ static void op_let_a_na_new(s7_scheme *sc)
 /* this and others like it could easily be fx funcs, but check_let is called too late, so it's never seen as fxable */
 static void op_let_a_na_old(s7_scheme *sc)
 {
-#if 0
-  s7_pointer let, p;
-  sc->code = cdr(sc->code);
-  let = update_let_with_slot(sc, opt3_let(sc->code), fx_call(sc, cdr(opt2_pair(sc->code))));
-  let_set_outlet(let, sc->curlet);
-  set_curlet(sc, let);
-#else
   s7_pointer p;
   inline_op_let_a_old(sc);
-#endif
   for (p = cdr(sc->code); is_pair(cdr(p)); p = cdr(p)) fx_call(sc, p);
   sc->value = fx_call(sc, p);
 }
@@ -100514,4 +100512,11 @@ int main(int argc, char **argv)
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
+ *
+ * try new tests7 (repl)
+ * attribute nonnull?
+ * s7.c:45760:75: runtime error: signed integer overflow: 7956002802393471573 + 7956002802393471405 cannot be represented in type 'long int'
+ * s7.c:46005:15: runtime error: left shift of negative value -3039689857136706741
+ * s7.c:61028:77: runtime error: signed integer overflow: 8796093022208 * 4294967297 cannot be represented in type 'long int'
+ * s7.c:24286:30: runtime error: signed integer overflow: 8796093022208 * 1311738121 cannot be represented in type 'long int'
  */

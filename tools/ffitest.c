@@ -758,11 +758,13 @@ int main(int argc, char **argv)
     x->tf.flag = 53 + (1 << 11);
     if (s7_is_valid(sc, (s7_pointer)x))
       fprintf(stderr, "fake_cell is ok?\n");
+#if 0
     if (!s7_is_provided(sc, "debugging"))
       {
 	s1 = TO_STR((s7_pointer)x);
 	free(s1);
       }
+#endif
     free(x);
   }
   if (s7_is_c_pointer(s7_t(sc))) fprintf(stderr, "%d: s7_t(sc) is a raw c pointer?\n", __LINE__);
@@ -2866,10 +2868,12 @@ int main(int argc, char **argv)
 
   {
     s7_pointer v;
-    char *s1;
+    char *s1, *s2;
     s7_define_expansion(sc, "1+", g_expand, 1, 0, false, "adds 1 at read-time");
     v = s7_eval_c_string(sc, "#((1+ 0) 2 (1+ 2))");
-    if (strcmp(s7_object_to_c_string(sc, v), "#(1 2 3)") != 0) {fprintf(stderr, "%d v: %s\n", __LINE__, s1 = s7_object_to_c_string(sc, v)); free(s1);}
+    s2 = s7_object_to_c_string(sc, v);
+    if (strcmp(s2, "#(1 2 3)") != 0) {fprintf(stderr, "%d v: %s\n", __LINE__, s1 = s7_object_to_c_string(sc, v)); free(s1);}
+    free(s2);
   }
 
   { /* check realloc'd large block handling in s7_free */

@@ -90,7 +90,7 @@
   (let ((val (hash-ints 5000000)))
     (unless (= val 5000000)
       (format *stderr* "thash hash-ints: ~S?~%" val))))
-
+;; 542: 184 fx_hash_table_increment_1, 135 fx_random_i, 80 hash_int, 51 resize_heap_to, 50 op_dox, 40 :opt_p_ppp_hash_table_increment
 
 ;;; ----------------------------------------
 
