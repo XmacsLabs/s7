@@ -2367,13 +2367,13 @@ int main(int argc, char **argv)
     gc2 = s7_gc_protect(sc, iter);
     x = s7_iterate(sc, iter);
     if (!s7_is_pair(x))
-      {fprintf(stderr, "x: %s\n", s1 = TO_STR(x)); free(s1);}
+      {fprintf(stderr, "%d: x: %s\n", __LINE__, s1 = TO_STR(x)); free(s1);}
     x = s7_iterate(sc, iter);
     if (!s7_is_pair(x))
-      {fprintf(stderr, "x: %s\n", s1 = TO_STR(x)); free(s1);}
+      {fprintf(stderr, "%d: x: %s\n", __LINE__, s1 = TO_STR(x)); free(s1);}
     x = s7_iterate(sc, iter);
     if (!s7_is_eq(s7_eof_object(sc), x))
-      {fprintf(stderr, "x: %s\n", s1 = TO_STR(x)); free(s1);}
+      {fprintf(stderr, "%d: x: %s\n", __LINE__, s1 = TO_STR(x)); free(s1);}
     s7_gc_unprotect_at(sc, gc1);
     s7_gc_unprotect_at(sc, gc2);
   }

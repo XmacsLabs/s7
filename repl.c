@@ -51,30 +51,31 @@ static char *realdir(s7_scheme *sc, const char *filename)
 int main(int argc, char **argv)
 {
   s7_scheme *sc;
-
+  
   sc = s7_init();
   if (argc >= 2)
-    {
-      if (strcmp(argv[1], "-e") == 0)         /* repl -e '(+ 1 2)' */
-	{
-	  s7_pointer x;
-	  x = s7_eval_c_string(sc, argv[2]);
-	  fprintf(stdout, "%s\n", s7_object_to_c_string(sc, x));
-	  return(0);
-	}
-      if (strcmp(argv[1], "--version") == 0)
-	{
-	  fprintf(stdout, "s7: %s, %s\n", S7_VERSION, S7_DATE);
-	  return(0);
-	}
-      fprintf(stderr, "load %s\n", argv[1]);  /* repl test.scm */
-      errno = 0;
-      if (!s7_load(sc, argv[1]))
-	{
-	  fprintf(stderr, "%s: %s\n", strerror(errno), argv[1]);
-	  return(2);
-	}
-    }
+    for (int32_t i = 1; i < argc; i++)
+      {
+	if (strcmp(argv[i], "-e") == 0)         /* repl -e '(+ 1 2)' */
+	  {
+	    s7_pointer x;
+	    char *s1;
+	    x = s7_eval_c_string(sc, argv[++i]);
+	    fprintf(stdout, "%s\n", s1 = s7_object_to_c_string(sc, x));
+	    free(s1);
+	  }
+	else
+	  if (strcmp(argv[i], "--version") == 0)
+	    fprintf(stdout, "s7: %s, %s\n", S7_VERSION, S7_DATE);
+	  else
+	    {
+	      fprintf(stderr, "load %s\n", argv[i]);  /* repl test.scm */
+	      errno = 0;
+	      if (!s7_load(sc, argv[i]))
+		{
+		  fprintf(stderr, "%s: %s\n", strerror(errno), argv[i]);
+		  return(2);
+		}}}
   else
     {
 #ifdef _MSC_VER

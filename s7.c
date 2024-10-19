@@ -339,7 +339,8 @@
   #define no_return _Noreturn /* deprecated in C23 */
 #else
   #define no_return __attribute__((noreturn))
-  /* this is ok in gcc/g++/clang and tcc; pure attribute is rarely applicable here, and does not seem to be helpful (maybe safe_strlen) */
+  /* this is ok in gcc/g++/clang and tcc; clang++ complains about "noreturn", hence "no_return" */
+  /* pure attribute is rarely applicable here, and does not seem to be helpful (maybe safe_strlen) */
 #endif
 
 #ifndef S7_ALIGNED
@@ -399,6 +400,7 @@
     #include <complex>
     using namespace std;  /* the code has to work in C as well as C++, so we can't scatter std:: all over the place */
     /* typedef std::complex<s7_double> s7_complex; */
+    /* moved that typedef to s7.h.  This code does not work in clang++ and I can't find a work-around */
   #else
     #include <complex.h>
     /* typedef double complex s7_complex; */
@@ -5881,7 +5883,7 @@ static void print_debugging_state(s7_scheme *sc, s7_pointer obj, s7_pointer port
   free(current_bits);
   free(allocated_bits);
   if (is_null(port))
-    fprintf(stderr, "%p: %s\n", obj, str);
+    fprintf(stderr, "%s[%d]: %p: %s\n", __func__, __LINE__, obj, str);
   else port_write_string(port)(sc, str, clamp_length(nlen, len), port);
   liberate(sc, b);
 }
@@ -5911,7 +5913,7 @@ static s7_pointer wrap_mutable_integer(s7_scheme *sc, s7_int x) /* wrap_integer 
 {
   s7_pointer p = car(sc->integer_wrappers);
 #if S7_DEBUGGING
-  if ((full_type(p) & (~T_GC_MARK)) != (T_INTEGER | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
+  if ((full_type(p) & (~T_GC_MARK)) != (T_INTEGER | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, describe_type_bits(sc, p));
 #endif
   set_integer(p, x);
   sc->integer_wrappers = cdr(sc->integer_wrappers);
@@ -5924,7 +5926,7 @@ static s7_pointer wrap_integer(s7_scheme *sc, s7_int x)
   if (is_small_int(x)) return(small_int(x));
   p = car(sc->integer_wrappers);
 #if S7_DEBUGGING
-  if ((full_type(p) & (~T_GC_MARK)) != (T_INTEGER | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
+  if ((full_type(p) & (~T_GC_MARK)) != (T_INTEGER | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, describe_type_bits(sc, p));
   sc->integer_wrapper_allocs++;
 #endif
   set_integer(p, x);
@@ -5936,7 +5938,7 @@ static s7_pointer wrap_real(s7_scheme *sc, s7_double x)
 {
   s7_pointer p = car(sc->real_wrappers);
 #if S7_DEBUGGING
-  if ((full_type(p) & (~T_GC_MARK)) != (T_REAL | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
+  if ((full_type(p) & (~T_GC_MARK)) != (T_REAL | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, describe_type_bits(sc, p));
   sc->real_wrapper_allocs++;
 #endif
   set_real(p, x);
@@ -5949,7 +5951,7 @@ static s7_pointer wrap_complex(s7_scheme *sc, s7_double rl, s7_double im)
 {
   s7_pointer p = car(sc->complex_wrappers);
 #if S7_DEBUGGING
-  if ((full_type(p) & (~T_GC_MARK)) != (T_COMPLEX | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
+  if ((full_type(p) & (~T_GC_MARK)) != (T_COMPLEX | T_IMMUTABLE | T_UNHEAP | T_MUTABLE)) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, describe_type_bits(sc, p));
   sc->complex_wrapper_allocs++;
 #endif
   set_real_part(p, rl);
@@ -5972,7 +5974,7 @@ static s7_pointer wrap_let(s7_scheme *sc, s7_pointer old_let)
 {
   s7_pointer p = car(sc->let_wrappers);
 #if S7_DEBUGGING
-  if ((full_type(p) & (~T_GC_MARK)) != (T_LET | T_SAFE_PROCEDURE | T_UNHEAP)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
+  if ((full_type(p) & (~T_GC_MARK)) != (T_LET | T_SAFE_PROCEDURE | T_UNHEAP)) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, describe_type_bits(sc, p));
   sc->let_wrapper_allocs++;
 #endif
   let_set_id(p, ++sc->let_number);
@@ -5986,7 +5988,7 @@ static s7_pointer wrap_slot(s7_scheme *sc, s7_pointer symbol, s7_pointer value)
 {
   s7_pointer p = car(sc->slot_wrappers);
 #if S7_DEBUGGING
-  if ((full_type(p) & (~T_GC_MARK)) != (T_SLOT | T_UNHEAP)) fprintf(stderr, "%s\n", describe_type_bits(sc, p));
+  if ((full_type(p) & (~T_GC_MARK)) != (T_SLOT | T_UNHEAP)) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, describe_type_bits(sc, p));
   sc->slot_wrapper_allocs++;
 #endif
   slot_set_symbol_and_value(p, symbol, value);
@@ -12030,7 +12032,7 @@ s7_pointer s7_make_c_pointer_wrapper_with_type(s7_scheme *sc, void *ptr, s7_poin
 {
   s7_pointer x = car(sc->c_pointer_wrappers);
 #if S7_DEBUGGING
-  if ((full_type(x) & (~T_GC_MARK)) != (T_C_POINTER | T_IMMUTABLE | T_UNHEAP)) fprintf(stderr, "%s\n", describe_type_bits(sc, x));
+  if ((full_type(x) & (~T_GC_MARK)) != (T_C_POINTER | T_IMMUTABLE | T_UNHEAP)) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, describe_type_bits(sc, x));
   sc->c_pointer_wrapper_allocs++;
 #endif
   sc->c_pointer_wrappers = cdr(sc->c_pointer_wrappers);
@@ -14012,7 +14014,7 @@ static bool c_rationalize(s7_double ux, s7_double error, s7_int *numer, s7_int *
 	    {
 	      (*numer) = p0;
 	      (*denom) = q0;
-	      if ((S7_DEBUGGING) && (q0 == 0)) fprintf(stderr, "%f %" ld64 "/0\n", ux, p0);
+	      if ((S7_DEBUGGING) && (q0 == 0)) fprintf(stderr, "%s[%d]: %f %" ld64 "/0\n", __func__, __LINE__, ux, p0);
 	    }
 	  return(true);
 	}
@@ -17770,6 +17772,7 @@ static s7_pointer cos_p_d(s7_scheme *sc, s7_double x)
 }
 #else
 static s7_pointer cos_p_d(s7_scheme *sc, s7_double x) {return(make_real(sc, cos(x)));}
+/* the optimizer can replace (cos x) = cos_p_p(x) with cos_p_d(x) if x is real, but x might be 0 so (byte? (cos x)) will return different results */
 #endif
 
 static s7_double cos_d_d(s7_double x) {return(cos(x));}
@@ -27476,7 +27479,7 @@ static s7_pointer wrap_string(s7_scheme *sc, const char *str, s7_int len)
 {
   s7_pointer x = car(sc->string_wrappers);
 #if S7_DEBUGGING
-  if ((full_type(x) & (~T_GC_MARK)) != (T_STRING | T_IMMUTABLE | T_UNHEAP | T_SAFE_PROCEDURE)) fprintf(stderr, "%s\n", describe_type_bits(sc, x));
+  if ((full_type(x) & (~T_GC_MARK)) != (T_STRING | T_IMMUTABLE | T_UNHEAP | T_SAFE_PROCEDURE)) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, describe_type_bits(sc, x));
   /* if (safe_strlen(str) < len) {fprintf(stderr, "wrap_string \"%s\" length should be %" ld64 " not %" ld64 "\n", str, safe_strlen(str), len); gdb_break();} */
   sc->string_wrapper_allocs++;
 #endif
@@ -53341,7 +53344,7 @@ static void swap_stack(s7_scheme *sc, opcode_t new_op, s7_pointer new_code, s7_p
   args = stack_end_args(sc);
   op = (opcode_t)T_Op(stack_end_op(sc)); /* this should be begin1 */
   if ((S7_DEBUGGING) && (op != OP_BEGIN_NO_HOOK) && (op != OP_BEGIN_HOOK))
-    fprintf(stderr, "swap %s in %s\n", op_names[op], display(s7_name_to_value(sc, "estr")));
+    fprintf(stderr, "%s[%d]: swap %s in %s\n", __func__, __LINE__, op_names[op], display(s7_name_to_value(sc, "estr")));
   push_stack(sc, new_op, new_args, new_code);
   stack_end_code(sc) = code;
   stack_end_let(sc) = e;
@@ -100513,8 +100516,11 @@ int main(int argc, char **argv)
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
- * try new tests7 (repl)
- * attribute nonnull?
+ * s7-debugging check for stepped-on wrapper (and sc->temp*?)
+ * thash: check overuse of loc=0
+ * 18OctDiffs -- signatures in cload is hashing pairs, so surely this was hash_map_pair?
+ *   at least get the gnuc stuff back
+ *
  * s7.c:45760:75: runtime error: signed integer overflow: 7956002802393471573 + 7956002802393471405 cannot be represented in type 'long int'
  * s7.c:46005:15: runtime error: left shift of negative value -3039689857136706741
  * s7.c:61028:77: runtime error: signed integer overflow: 8796093022208 * 4294967297 cannot be represented in type 'long int'
