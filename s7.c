@@ -5471,7 +5471,7 @@ static s7_pointer check_ref_nmv(s7_pointer p, const char *func, int32_t line)
       (!safe_strcmp(func, "mark_slot"))) /* match == multiple-values which causes false error messages */
     complain(cur_sc, "%s%s[%d]: slot value is a multiple-value, %s (%s)%s?\n", p, func, line, typ);
   if (has_odd_bits(p))
-    {char *s; fprintf(stderr, "odd bits: %s\n", s = describe_type_bits(cur_sc, p)); free(s);}
+    {char *s; fprintf(stderr, "%s[%d]: odd bits: %s\n", __func__, __LINE__, s = describe_type_bits(cur_sc, p)); free(s);}
   if (t_exs_p[typ])
     {
       fprintf(stderr, "%s[%d]: slot_value is %s?\n", func, line, s7_type_names[typ]);
@@ -8222,7 +8222,6 @@ static inline void remove_from_heap(s7_scheme *sc, s7_pointer x)
 {
   /* global functions are very rarely redefined, so we can remove the function body from the heap when it is defined */
   if (!in_heap(x)) return;
-  /* fprintf(stderr, "remove %s\n", display(x)); */
   if (is_pair(x))   /* all the compute time is here, might be faster to go down a level explicitly */
     {
       s7_pointer p = x;
@@ -8559,7 +8558,7 @@ static uint32_t resize_stack_unchecked(s7_scheme *sc)
   block_t *nb = reallocate(sc, ob, new_size * sizeof(s7_pointer));
   block_info(nb) = NULL;
   stack_block(sc->stack) = nb;
-  /* if (block_index(nb) == TOP_BLOCK_LIST) fprintf(stderr, "top %u\n", new_size); */
+  /* if (block_index(nb) == TOP_BLOCK_LIST) fprintf(stderr, "%s[%d]: top %u\n", __func__, __LINE__, new_size); */
   stack_elements(sc->stack) = (s7_pointer *)block_data(nb);
   {
     s7_pointer *orig = stack_elements(sc->stack);
@@ -12178,11 +12177,11 @@ static s7_pointer check_wrap_return(s7_pointer lst)
 {
   for (s7_pointer fast = lst, slow = lst; is_pair(fast); slow = cdr(slow), fast = cdr(fast))
     {
-      if (is_matched_pair(fast)) fprintf(stderr, "matched_pair not cleared\n");
+      if (is_matched_pair(fast)) fprintf(stderr, "%s[%d]: matched_pair not cleared\n", __func__, __LINE__);
       fast = cdr(fast);
       if (!is_pair(fast)) return(lst);
       if (fast == slow) return(lst);
-      if (is_matched_pair(fast)) fprintf(stderr, "matched_pair not cleared\n");
+      if (is_matched_pair(fast)) fprintf(stderr, "%s[%d]: matched_pair not cleared\n", __func__, __LINE__);
     }
   return(lst);
 }
@@ -12403,7 +12402,6 @@ static void make_room_for_cc_stack(s7_scheme *sc)
 {
   if ((int64_t)(sc->free_heap_top - sc->free_heap) < (int64_t)(sc->heap_size / 32)) /* we probably never need this much space (8 becomes enormous, 512 seems ok) */
     {                                                                               /*  but this doesn't seem to make much difference in timings */
-      /* fprintf(stderr, "%" ld64 " < %" ld64 "\n", (int64_t)(sc->free_heap_top - sc->free_heap), (int64_t)(sc->heap_size / 32)); */
       call_gc(sc);
       if ((int64_t)(sc->free_heap_top - sc->free_heap) < (int64_t)(sc->heap_size / 32))
 	resize_heap(sc);
@@ -17480,18 +17478,14 @@ static s7_pointer g_log(s7_scheme *sc, s7_pointer args)
 	      if (ix > 0)
 		{
 		  s7_double fx;
-#if (__ANDROID__) || (MS_WINDOWS) || (((__GNUC__) && ((__GNUC__ < 4) || ((__GNUC__ == 4) && (__GNUC_MINOR__ <= 4)))) && (!defined(__clang__)))
+#if (__ANDROID__) || (MS_WINDOWS)
 		  /* just a guess -- log2 gets a warning in gcc 4.3.2, but not in 4.4.4 */
 		  fx = log((double)ix) * LOG_2;
 #else
 		  fx = log2((double)ix);
 #endif
 		  /* (s7_int)fx rounds (log 8 2) to 2 in FreeBSD! */
-#if (((__GNUC__) && ((__GNUC__ < 4) || ((__GNUC__ == 4) && (__GNUC_MINOR__ < 4)))) && (!defined(__clang__)))
-		  return(make_real(sc, fx));
-#else
 		  return(((ix & (ix - 1)) == 0) ? make_integer(sc, (s7_int)s7_round(fx)) : make_real(sc, fx));
-#endif
 		}}
 	  if ((is_real(x)) &&
 	      (is_positive(sc, x)))
@@ -21818,7 +21812,7 @@ static s7_int multiply_i_ii(s7_int i1, s7_int i2)
   if (multiply_overflow(i1, i2, &val))
     {
 #if WITH_WARNINGS
-      fprintf(stderr, "integer multiply overflow: (* %" ld64 " %" ld64 ")\n", i1, i2);
+      fprintf(stderr, "%s[%d]: integer multiply overflow: (* %" ld64 " %" ld64 ")\n", __func__, __LINE__, i1, i2);
 #endif
       return(S7_INT64_MAX); /* this is inconsistent with other unopt cases where an overflow -> double result */
     }
@@ -21837,7 +21831,7 @@ static s7_int multiply_i_iii(s7_int i1, s7_int i2, s7_int i3)
       (multiply_overflow(val1, i3, &val2)))
     {
 #if WITH_WARNINGS
-      fprintf(stderr, "integer multiply overflow: (* %" ld64 " %" ld64 " %" ld64 ")\n", i1, i2, i3);
+      fprintf(stderr, "%s[%d]: integer multiply overflow: (* %" ld64 " %" ld64 " %" ld64 ")\n", __func__, __LINE__, i1, i2, i3);
 #endif
       return(S7_INT64_MAX);
     }
@@ -32362,7 +32356,7 @@ static s7_pointer c_function_name_to_symbol(s7_scheme *sc, s7_pointer f)
 {
   if ((is_c_function(f)) || (is_c_macro(f)))
     return(c_function_symbol(f));  /* c_function* uses c_sym slot for arg_names */
-  if ((S7_DEBUGGING) && (!is_c_function_star(f))) fprintf(stderr, "%s is not a c-function-star\n", display(f));
+  if ((S7_DEBUGGING) && (!is_c_function_star(f))) fprintf(stderr, "%s[%d]: %s is not a c-function-star\n", __func__, __LINE__, display(f));
   return(make_symbol(sc, c_function_name(f), c_function_name_length(f))); /* c_function* */
 }
 
@@ -66809,7 +66803,6 @@ static bool p_fx_any_ok(s7_scheme *sc, opt_info *opc, s7_pointer x)
       fx_annotate_arg(sc, x, sc->curlet);
       if (has_fx(x)) f = fx_proc(x);
     }
-  /* fprintf(stderr, "f: %p, car(x): %s, op: %s %d\n", f, display(car(x)), op_names[optimize_op(car(x))], has_fx(car(x))); */
 #endif
   if (!f) return_false(sc, x);
   opc->v[0].fp = opt_p_fx_any;
@@ -69610,7 +69603,7 @@ static bool int_optimize_1(s7_scheme *sc, s7_pointer expr)
 	  if ((is_null(cdr(body))) && (is_pair(car(body))))   /* this hits every test in s7test! */
 	    {
 	      if (caar(body) != sc->let_symbol)
-		fprintf(stderr, "%s %s\n", display(body), display(expr));
+		fprintf(stderr, "%s[%d]: %s %s\n", __func__, __LINE__, display(body), display(expr));
 	      /* see s7test (f3 123) -- expansion can lead to funclet confusion -- same in macros? but this would not be int_optimizable */
 	      /* timing tests don't get many useful hits */
 	    }}
@@ -69780,7 +69773,7 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
 {
   s7_pointer car_x = car(expr), head, s_func, s_slot = NULL;
   s7_int len;
-#if OPT_PRINT
+#if OPT_PRINT /* needed due to line arg */
   fprintf(stderr, "     cell_optimize[%d] %s\n", line, display(expr));
 #endif
   if (WITH_GMP) return(false);
@@ -69804,7 +69797,6 @@ static bool cell_optimize_1(s7_scheme *sc, s7_pointer expr)
       s_func = head;
     else
       { /* ((let-ref L 'mult) 1 2) or 'a etc */
-	/* fprintf(stderr, "%d: car_x: %s, head: %s\n", __LINE__, display(car_x), display(head)); */
 	if ((head == sc->quote_function) &&
 	    ((is_pair(cdr(car_x))) && (is_null(cddr(car_x)))))
 	  return_bool(sc, opt_cell_quote(sc, car_x), car_x);
@@ -73354,7 +73346,8 @@ static bool is_safe_fxable(s7_scheme *sc, s7_pointer p)
 	return(true);
     }
   if (is_proper_quote(sc, p)) return(true);
-  if ((S7_DEBUGGING) && (is_optimized(p)) && (fx_function[optimize_op(p)])) fprintf(stderr, "omit %s: %s\n", op_names[optimize_op(p)], display(p));
+  if ((S7_DEBUGGING) && (is_optimized(p)) && (fx_function[optimize_op(p)]))
+    fprintf(stderr, "%s[%d]: omit %s: %s\n", __func__, __LINE__, op_names[optimize_op(p)], display(p));
   return(false);
 }
 
@@ -92883,7 +92876,7 @@ static bool op_load_close_and_pop_if_eof(s7_scheme *sc)
       sc->code = sc->value;
       return(true);             /* we read an expression, now evaluate it, and return to read the next */
     }
-  if ((S7_DEBUGGING) && (!is_loader_port(current_input_port(sc)))) fprintf(stderr, "%s not loading?\n", display(current_input_port(sc)));
+  if ((S7_DEBUGGING) && (!is_loader_port(current_input_port(sc)))) fprintf(stderr, "%s[%d]: %s not loading?\n", __func__, __LINE__, display(current_input_port(sc)));
   /* if *#readers* func hits error, clear_loader_port might not be undone? */
   s7_close_input_port(sc, current_input_port(sc));
   pop_input_port(sc);
@@ -95777,7 +95770,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_UNOPT:
 	  goto UNOPT;
 	default:
-	  if (S7_DEBUGGING) fprintf(stderr, "eval unknown op: %d\n", (int)(sc->cur_op));
+	  if (S7_DEBUGGING) fprintf(stderr, "%s[%d]: eval unknown op: %d\n", __func__, __LINE__, (int)(sc->cur_op));
 	  return(sc->F);
 	}
 
@@ -100516,10 +100509,9 @@ int main(int argc, char **argv)
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
- * s7-debugging check for stepped-on wrapper (and sc->temp*?)
+ * s7-debugging check for stepped-on wrapper (and sc->temp*?); temporarily immutable?
  * thash: check overuse of loc=0
  * 18OctDiffs -- signatures in cload is hashing pairs, so surely this was hash_map_pair?
- *   at least get the gnuc stuff back
  *
  * s7.c:45760:75: runtime error: signed integer overflow: 7956002802393471573 + 7956002802393471405 cannot be represented in type 'long int'
  * s7.c:46005:15: runtime error: left shift of negative value -3039689857136706741
