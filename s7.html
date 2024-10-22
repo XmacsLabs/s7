@@ -1379,26 +1379,27 @@ hygienification (using "exit" rather than "break"):
 </p>
 
 <pre>
-(define-macro (innocent-while test . body)
+(define-macro (unsafe-while test . body)
   `(call-with-exit
-    (lambda (exit)
-      (let loop ()
-	(call-with-exit
-	 (lambda (continue)
-	   (do () ((not ,test) (exit))
-	     ,@body)))
+     (lambda (exit)
+       (let loop ()
+	 (call-with-exit
+	   (lambda (continue)
+	     (do () ((not ,test) (exit))
+	       ,@body)))
 	(loop)))))
 
-(define-macro (cynical-while test . body)
-  (let ((loop (gensym)))
-    `(#_call-with-exit
-       (#_lambda (exit)
-         (#_let ,loop ()
-           (#_call-with-exit
-	     (#_lambda (continue)
-	       (#_do () ((#_not ,test) (exit))
-	         ,@body)))
-	   (,loop))))))
+(define-macro (safe-while test . body)
+  (with-let (sublet (unlet) :test test :body body)
+    (let ((loop (gensym)))
+      (call-with-exit
+        (lambda (exit)
+          (let ,loop ()
+	    (call-with-exit
+	      (lambda (continue)
+	        (do () ((not ,test) (exit))
+	          ,@body)))
+	    (,loop)))))))
 </pre>
 <p>There are many more examples in s7test.scm (see especially the "or" macros
 toward the end of s7test.scm).
