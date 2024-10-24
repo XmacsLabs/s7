@@ -1286,7 +1286,7 @@ struct s7_scheme {
   s7_int big_symbol_tag;
   uint32_t small_symbol_tag;
 #if S7_DEBUGGING
-  int32_t big_symbol_set_line, small_symbol_set_line, big_symbol_set_state, small_symbol_set_state, y_line, v_line, x_line, temp6_line;
+  int32_t big_symbol_set_line, small_symbol_set_line, big_symbol_set_state, small_symbol_set_state, y_line, v_line, x_line, t_line;
   const char *big_symbol_set_func, *small_symbol_set_func;
 #endif
   int32_t bignum_precision;
@@ -1953,18 +1953,22 @@ static void init_types(void)
 
 #if S7_DEBUGGING
   t_ext_p[T_UNUSED] = true;
-  t_ext_p[T_STACK] = true;
   t_ext_p[T_SLOT] = true;
+  t_ext_p[T_STACK] = true;
   t_ext_p[T_DYNAMIC_WIND] = true;
   t_ext_p[T_CATCH] = true;
   t_ext_p[T_COUNTER] = true;
 #if !WITH_GMP
   t_ext_p[T_BIG_INTEGER] = true; t_ext_p[T_BIG_RATIO] = true; t_ext_p[T_BIG_REAL] = true; t_ext_p[T_BIG_COMPLEX] = true;
 #endif
+  /* these cases are errors (null pointer, T_FREE checked by check_nref called by check_ref_exs) */
   t_exs_p[T_STACK] = true;
   t_exs_p[T_DYNAMIC_WIND] = true;
   t_exs_p[T_CATCH] = true;
   t_exs_p[T_COUNTER] = true;
+#if !WITH_GMP
+  t_exs_p[T_BIG_INTEGER] = true; t_exs_p[T_BIG_RATIO] = true; t_exs_p[T_BIG_REAL] = true; t_exs_p[T_BIG_COMPLEX] = true;
+#endif
 #endif
 }
 
@@ -3555,7 +3559,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define c_function_arg_defaults(f)     c_function_data(T_Fst(f))->dam.arg_defaults /* array of s7_pointer */
 #define c_function_call_args(f)        c_function_data(T_Fst(f))->cam.call_args    /* pair or NULL */
 #define c_function_arg_names(f)        c_function_data(T_Fst(f))->sam.arg_names    /* array of s7_pointer */
-#define c_function_opt_data(f)         c_function_data(f)->opt_data                /* array or opt_funcs_t (vunion) */
+#define c_function_opt_data(f)         c_function_data(f)->opt_data                /* opt_funcs_t (vunion) */
 
 #define is_c_macro(p)                  (type(p) == T_C_MACRO)
 #define c_macro_data(f)                (T_CMac(f))->object.fnc.c_proc
@@ -3698,13 +3702,13 @@ static void begin_temp_1(s7_scheme *sc, s7_pointer p, s7_pointer val, const char
     {
       char *s1;
       fprintf(stderr, "%s[%d]: begin_temp %s %d %s\n", func, line,
-	      (p == sc->y) ? "y" : ((p == sc->v) ? "v" : ((p == sc->x) ? "x" : "temp6")),
-	      (p == sc->y) ? sc->y_line : ((p == sc->v) ? sc->v_line : ((p == sc->x) ? sc->x_line : sc->temp6_line)),
+	      (p == sc->y) ? "y" : ((p == sc->v) ? "v" : "x"),
+	      (p == sc->y) ? sc->y_line : ((p == sc->v) ? sc->v_line : ((p == sc->x) ? sc->x_line : sc->t_line)),
 	      s1 = s7_object_to_c_string(sc, p));
       free(s1);
       if (sc->stop_at_error) abort();
     }
-  if (p == sc->y) sc->y_line = line; else if (p == sc->v) sc->v_line = line; else if (p == sc->x) sc->x_line = line; else sc->temp6_line = line;
+  if (p == sc->y) sc->y_line = line; else if (p == sc->v) sc->v_line = line; else if (p == sc->x) sc->x_line = line; else sc->t_line = line;
 }
 #else
 #define begin_temp(p, Val)              p = Val
@@ -10338,14 +10342,17 @@ static s7_pointer g_simple_inlet(s7_scheme *sc, s7_pointer args)
   int64_t id = let_id(new_e);
   s7_pointer sp = NULL;
 
-  sc->temp3 = new_e;
+  begin_temp(sc->temp6, new_e);
   for (s7_pointer x = args; is_pair(x); x = cddr(x))
     {
       s7_pointer symbol = car(x);
       if (is_keyword(symbol))                 /* (inlet ':allow-other-keys 3) */
 	symbol = keyword_symbol(symbol);
       if (is_constant_symbol(sc, symbol))     /* (inlet 'pi 1) */
-	wrong_type_error_nr(sc, sc->inlet_symbol, 1, symbol, a_non_constant_symbol_string);
+	{
+	  end_temp(sc->temp6);
+	  wrong_type_error_nr(sc, sc->inlet_symbol, 1, symbol, a_non_constant_symbol_string);
+	}
       if (!sp)
 	{
 	  add_slot_unchecked(sc, new_e, symbol, cadr(x), id);
@@ -10353,7 +10360,7 @@ static s7_pointer g_simple_inlet(s7_scheme *sc, s7_pointer args)
 	}
       else sp = add_slot_checked_at_end(sc, id, sp, symbol, cadr(x));
     }
-  sc->temp3 = sc->unused;
+  end_temp(sc->temp6);
   return(new_e);
 }
 
@@ -10457,24 +10464,25 @@ static s7_pointer abbreviate_let(s7_scheme *sc, s7_pointer val)
 s7_pointer s7_let_to_list(s7_scheme *sc, s7_pointer let)
 {
   s7_pointer x;
-  sc->temp3 = sc->w;
-  sc->w = sc->nil;
-
   if (let == sc->rootlet)
     {
+      begin_temp(sc->temp6, sc->nil);
       for (s7_pointer lib = global_value(sc->libraries_symbol); is_pair(lib); lib = cdr(lib))
-	sc->w = cons(sc, caar(lib), sc->w);
-      sc->w = cons(sc, cons(sc, sc->libraries_symbol, sc->w), sc->nil);
+	sc->temp6 = cons(sc, caar(lib), sc->temp6);
+      sc->temp6 = cons(sc, cons(sc, sc->libraries_symbol, sc->temp6), sc->nil);
       for (s7_pointer y = sc->rootlet_slots; tis_slot(y); y = next_slot(y))
 	if (slot_symbol(y) != sc->libraries_symbol)
-	  sc->w = cons_unchecked(sc, cons(sc, slot_symbol(y), abbreviate_let(sc, slot_value(y))), sc->w);
-      sc->w = proper_list_reverse_in_place(sc, sc->w);
+	  sc->temp6 = cons_unchecked(sc, cons(sc, slot_symbol(y), abbreviate_let(sc, slot_value(y))), sc->temp6);
+      x = proper_list_reverse_in_place(sc, sc->temp6);
+      end_temp(sc->temp6);
     }
   else
     {
       s7_pointer iter, func;
       s7_int gc_loc = -1;
       /* need to check make-iterator method before dropping into let->list */
+      sc->temp3 = sc->w;
+      sc->w = sc->nil;
 
       if ((has_active_methods(sc, let)) &&
 	  ((func = find_method(sc, let, sc->make_iterator_symbol)) != sc->undefined))
@@ -10501,10 +10509,11 @@ s7_pointer s7_let_to_list(s7_scheme *sc, s7_pointer let)
       sc->w = proper_list_reverse_in_place(sc, sc->w);
       if (gc_loc != -1)
 	s7_gc_unprotect_at(sc, gc_loc);
+
+      x = sc->w;
+      sc->w = sc->temp3;
+      sc->temp3 = sc->unused;
     }
-  x = sc->w;
-  sc->w = sc->temp3;
-  sc->temp3 = sc->unused;
   return(x);
 }
 
@@ -11248,6 +11257,7 @@ static s7_pointer g_symbol_to_dynamic_value(s7_scheme *sc, s7_pointer args)
 	if (top_id == symbol_id(sym))
 	  return(val);
       }
+  /* what about call/cc stacks? */
   return((val == sc->unused) ? s7_symbol_value(sc, sym) : val);
 }
 
@@ -32128,12 +32138,12 @@ static s7_pointer g_eval_string(s7_scheme *sc, s7_pointer args)
  	wrong_type_error_nr(sc, sc->eval_string_symbol, 2, e, a_let_string);
       set_curlet(sc, e);
     }
-  sc->temp3 = sc->args; /* see t101-17.scm */
+  begin_temp(sc->temp6, sc->args); /* see t101-17.scm */
   push_stack(sc, OP_EVAL_STRING, args, sc->code);
   port = open_and_protect_input_string(sc, str);
   push_input_port(sc, port);
   push_stack_op_let(sc, OP_READ_INTERNAL);
-  sc->temp3 = sc->unused;
+  end_temp(sc->temp6);
   return(sc->F);  /* I think this means that sc->value defaults to #f in op_eval_string below, so (eval-string "") mimics (eval) -> #f */
 }
 
@@ -38625,7 +38635,7 @@ static /* inline */ s7_pointer copy_proper_list(s7_scheme *sc, s7_pointer lst)
   if (!is_pair(lst)) return(sc->nil);
   begin_temp(sc->x, lst);
   tp = list_1(sc, car(lst));
-  sc->temp8 = tp;
+  begin_temp(sc->temp6, tp);
   for (s7_pointer p = cdr(lst), np = tp; is_pair(p); p = cdr(p), np = cdr(np))
     {
       set_cdr(np, list_1_unchecked(sc, car(p)));
@@ -38634,7 +38644,7 @@ static /* inline */ s7_pointer copy_proper_list(s7_scheme *sc, s7_pointer lst)
       p = cdr(p);
       if (is_pair(p)) {np = cdr(np); set_cdr(np, list_1(sc, car(p)));} else break;
     }
-  sc->temp8 = sc->unused;
+  end_temp(sc->temp6);
   end_temp(sc->x);
   return(tp);
 }
@@ -41541,14 +41551,14 @@ static s7_pointer g_vector_to_list(s7_scheme *sc, s7_pointer args)
 			 wrap_integer(sc, sc->max_list_length)));
 
   check_free_heap_size(sc, end - start);
-  sc->w = sc->nil;
+  begin_temp(sc->temp6, sc->nil);
   gc_protect_via_stack(sc, vec);
   if (is_t_vector(vec))
-    for (i = end - 1; i >= start; i--) sc->w = cons_unchecked(sc, vector_element(vec, i), sc->w);
-  else for (i = end - 1; i >= start; i--) sc->w = cons_unchecked(sc, vector_getter(vec)(sc, vec, i), sc->w);
+    for (i = end - 1; i >= start; i--) sc->temp6 = cons_unchecked(sc, vector_element(vec, i), sc->temp6);
+  else for (i = end - 1; i >= start; i--) sc->temp6 = cons_unchecked(sc, vector_getter(vec)(sc, vec, i), sc->temp6);
   unstack_gc_protect(sc);
-  p = sc->w;
-  sc->w = sc->unused;
+  p = sc->temp6;
+  end_temp(sc->temp6);
   return(p);
 }
 
@@ -43160,10 +43170,10 @@ static s7_pointer g_multivector(s7_scheme *sc, s7_int dims, s7_pointer data)
     error_nr(sc, sc->out_of_range_symbol,
 	     set_elist_3(sc, wrap_string(sc, "#nD(...) dimensions, ~D, should be less that (*s7* 'max-vector-dimensions): ~D", 78),
 			 wrap_integer(sc, dims), wrap_integer(sc, sc->max_vector_dimensions)));
-  sc->w = sc->nil;
   if (is_null(data))  /* dims are already 0 (calloc above) */
     return(g_make_vector(sc, set_plist_1(sc, make_list(sc, dims, int_zero))));
 
+  sc->w = sc->nil;
   sizes = (s7_int *)Calloc(dims, sizeof(s7_int));
   for (s7_int i = 0; i < dims; i++)
     {
@@ -52269,18 +52279,18 @@ s7_pointer s7_append(s7_scheme *sc, s7_pointer a, s7_pointer b)
       s7_pointer q, p, np, op;
       if ((!is_pair(b)) && (!is_null(b)))
 	return(g_list_append(sc, list_2(sc, a, b)));
-      sc->temp10 = a;
+      sc->temp10 = a; /* tempx? */
       q = list_1(sc, car(a));
-      sc->temp8 = q;
+      begin_temp(sc->temp6, q);
       for (op = a, p = cdr(a), np = q; (is_pair(p)) && (p != op); p = cdr(p), np = cdr(np), op = cdr(op))
 	{
 	  set_cdr(np, list_1_unchecked(sc, car(p))); p = cdr(p); np = cdr(np);
 	  if (!is_pair(p)) break;
 	  set_cdr(np, list_1(sc, car(p)));
 	}
+      end_temp(sc->temp6);
       if (!is_null(p))
 	wrong_type_error_nr(sc, sc->append_symbol, 1, a, a_proper_list_string);
-      sc->temp8 = sc->unused;
       sc->temp10 = sc->unused;
       set_cdr(np, b);
       return(q);
@@ -70277,7 +70287,7 @@ static s7_pointer make_iterators(s7_scheme *sc, s7_pointer caller, s7_pointer ar
 {
   s7_pointer p = cdr(args);
   sc->temp3 = args;
-  sc->z = sc->nil;               /* don't use sc->args here -- it needs GC protection until we get the iterators */
+  sc->z = sc->nil;           /* don't use sc->args here -- it needs GC protection until we get the iterators */
   for (s7_int i = 2; is_pair(p); p = cdr(p), i++)
     {
       s7_pointer iter = car(p);
@@ -72070,7 +72080,7 @@ static s7_pointer g_list_values(s7_scheme *sc, s7_pointer args)
 	      return(copy_proper_list(sc, args));
 	  return(args);
 	}
-      sc->temp5 = args;
+      begin_temp(sc->temp6, args);
       check_free_heap_size(sc, 8192);
       if (sc->safety > NO_SAFETY)
 	{
@@ -72080,7 +72090,7 @@ static s7_pointer g_list_values(s7_scheme *sc, s7_pointer args)
 				  (is_unquoted_pair(cdr(args))) ? copy_tree_with_type(sc, cdr(args)) : cdr(args));
 	}
       else args = copy_tree(sc, args);      /* not copy_any_list here -- see comment below */
-      sc->temp5 = sc->unused;
+      end_temp(sc->temp6);
       return(args);
     }
   /* if a macro expands into a recursive function with a macro argument as its body (or reasonable facsimile thereof),
@@ -72222,7 +72232,7 @@ and splices the resultant list into the outer list. `(1 ,(+ 1 1) ,@(list 3 4)) -
     gc_protect_via_stack(sc, sc->w);
 
     check_free_heap_size(sc, len + 1);
-    sc->w = sc->nil;
+    sc->w = sc->nil; /* temp6? */
     for (i = 0; i <= len; i++)
       sc->w = cons_unchecked(sc, sc->nil, sc->w);
 
@@ -83619,22 +83629,22 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		    if ((!is_pair(cdr(expr))) || (!is_pair(cddr(expr))))  /* (do) or (do (...)) */
 		      return(false);
 		    cp = var_list;
-		    sc->temp6 = cp; /* this can be stepped on -- t101-12..16 */
+		    sc->temp5 = cp; /* this can be stepped on -- t101-12..16 */
 		    combined_vars = (is_pair(cadr(expr))) ? pair_append(sc, cadr(expr), step_vars) : step_vars;
 		    sc->w = combined_vars;
 		    for (vars = cadr(expr); is_pair(vars); vars = cdr(vars))
 		      {
 			s7_pointer var;
-			if (!is_pair(car(vars))) {end_temp(sc->w); end_temp(sc->temp6); return(false);}
+			if (!is_pair(car(vars))) {end_temp(sc->w); end_temp(sc->temp5); return(false);}
 			var = caar(vars);
-			if ((direct_memq(var, cp)) || (var == stepper)) {end_temp(sc->w); end_temp(sc->temp6); return(false);}
+			if ((direct_memq(var, cp)) || (var == stepper)) {end_temp(sc->w); end_temp(sc->temp5); return(false);}
 			cp = cons(sc, var, cp);
-			sc->temp6 = cp;
+			sc->temp5 = cp;
 			if ((is_pair(cdar(vars))) &&
 			    (!do_is_safe(sc, cdar(vars), stepper, cp, combined_vars, has_set)))
-			  {end_temp(sc->temp6); end_temp(sc->w); return(false);}
+			  {end_temp(sc->temp5); end_temp(sc->w); return(false);}
 		      }
-		    end_temp(sc->temp6);
+		    end_temp(sc->temp5);
 		    end_temp(sc->w);
 		    if (!do_is_safe(sc, caddr(expr), stepper, cp, combined_vars, has_set)) return(false);
 		    if ((is_pair(cdddr(expr))) &&
@@ -100531,7 +100541,7 @@ int main(int argc, char **argv)
  * tclo             8025   7645   8809   7770   7629
  * tlamb                          8003   7941   7892
  * tgc              11.1   8177   7857   7986   8010
- * thash            11.7   9734   9479   9526   9241
+ * thash            11.7   9734   9479   9526   9241  9277
  * cb        12.9   11.0   9658   9564   9609   9648
  * tmap-hash                                    10.3
  * tgen             11.4   12.0   12.1   12.2   12.3
@@ -100558,6 +100568,6 @@ int main(int argc, char **argv)
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
- * sc->z is mostly safe, thash: check overuse of loc=0
+ * thash: check overuse of loc=0
  * 46049:15: runtime error: left shift of 3707426450614955446 by 3 places cannot be represented in type 'long int'
  */
