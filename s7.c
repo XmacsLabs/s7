@@ -1221,7 +1221,7 @@ struct s7_scheme {
   s7_int read_line_buf_size;
 
   s7_pointer v, w, x, y, z;
-  s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9, temp10, read_dims;
+  s7_pointer temp1, temp2, temp3, temp4, temp5, temp6, temp7, temp8, temp9, read_dims;
   s7_pointer t1_1, t2_1, t2_2, t3_1, t3_2, t3_3, t4_1, u1_1;
   s7_pointer elist_1, elist_2, elist_3, elist_4, elist_5, elist_6, elist_7;
   s7_pointer plist_1, plist_2, plist_2_2, plist_3, plist_4;
@@ -7759,7 +7759,6 @@ static int64_t gc(s7_scheme *sc)
   gc_mark(sc->temp7);
   gc_mark(sc->temp8);
   gc_mark(sc->temp9);
-  gc_mark(sc->temp10);
   just_mark(sc->read_dims);
 
   gc_mark(car(sc->t1_1));
@@ -16733,7 +16732,19 @@ static s7_pointer g_magnitude(s7_scheme *sc, s7_pointer args)
 
 static s7_int magnitude_i_i(s7_int x) {return((x < 0) ? (-x) : x);}
 static s7_double magnitude_d_d(s7_double x) {return((signbit(x)) ? (-x) : x);}
+static s7_pointer magnitude_p_z(s7_scheme *sc, s7_pointer z) {return(make_real(sc, my_hypot(real_part(z), imag_part(z))));}
 
+#if 0
+static s7_pointer magnitude_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr)
+{
+#if !WITH_GMP
+  s7_pointer arg = cadr(expr);
+  if ((is_pair(arg)) && (has_fn(arg)) && (fn_proc(arg) == complex_vector_ref_p_pi))
+    set_fn_direct(arg, complex_vector_ref_p_pi_wrapped);
+#endif
+  return(f);
+}
+#endif
 
 /* -------------------------------- rationalize -------------------------------- */
 #if WITH_GMP
@@ -35610,11 +35621,11 @@ static void write_closure_readably_1(s7_scheme *sc, s7_pointer obj, s7_pointer a
   if ((is_pair(arglist)) &&
       (allows_other_keys(arglist)))
     {
-      sc->temp9 = (is_null(cdr(arglist))) ? set_plist_2(sc, car(arglist), sc->allow_other_keys_keyword) :
+      sc->temp7 = (is_null(cdr(arglist))) ? set_plist_2(sc, car(arglist), sc->allow_other_keys_keyword) :
 	          ((is_null(cddr(arglist))) ? set_plist_3(sc, car(arglist), cadr(arglist), sc->allow_other_keys_keyword) :
 	                                      pair_append(sc, arglist, list_1(sc, sc->allow_other_keys_keyword)));
-      object_to_port(sc, sc->temp9, port, P_WRITE, NULL);
-      sc->temp9 = sc->unused;
+      object_to_port(sc, sc->temp7, port, P_WRITE, NULL);
+      sc->temp7 = sc->unused;
     }
   else object_to_port(sc, arglist, port, P_WRITE, NULL); /* here we just want the straight output (a b) not (list 'a 'b) */
 
@@ -38820,10 +38831,10 @@ static s7_pointer implicit_pair_index_checked(s7_scheme *sc, s7_pointer obj, s7_
 {
   if (!is_applicable(in_obj))
     {
-      sc->temp10 = indices; /* ulist_1 below is not GC protected */
+      sc->temp9 = indices; /* ulist_1 below is not GC protected */
       error_nr(sc, sc->syntax_error_symbol,
 	       set_elist_4(sc, wrap_string(sc, "~$ becomes (apply ~$ ...), but ~$ can't take arguments", 54),
-			   set_ulist_1(sc, obj, sc->temp10), in_obj, in_obj));
+			   set_ulist_1(sc, obj, sc->temp9), in_obj, in_obj));
     }
   return(implicit_index(sc, in_obj, cdr(indices)));
 }
@@ -41313,12 +41324,12 @@ static s7_pointer g_vector_append(s7_scheme *sc, s7_pointer args)
 		  s7_pointer v, y;
 		  if (i == 0)
 		    return(s7_apply_function(sc, func, args));
-		  sc->temp9 = make_list(sc, i, sc->unused); /* we have to copy the arglist here */
-		  for (k = 0, y = args, v = sc->temp9; k < i; k++, y = cdr(y), v = cdr(v))
+		  sc->temp7 = make_list(sc, i, sc->unused); /* we have to copy the arglist here */
+		  for (k = 0, y = args, v = sc->temp7; k < i; k++, y = cdr(y), v = cdr(v))
 		    set_car(v, car(y));
-		  v = g_vector_append(sc, sc->temp9);
+		  v = g_vector_append(sc, sc->temp7);
 		  y = s7_apply_function(sc, func, set_ulist_1(sc, v, p));
-		  sc->temp9 = sc->unused;
+		  sc->temp7 = sc->unused;
 		  return(y);
 		}}
 	  wrong_type_error_nr(sc, sc->vector_append_symbol, i + 1, x, sc->type_names[T_VECTOR]);
@@ -43492,6 +43503,15 @@ static s7_pointer complex_vector_ref_p_pi(s7_scheme *sc, s7_pointer v, s7_int i)
   if ((!is_complex_vector(v)) || (vector_rank(v) > 1) || (i < 0) || (i >= vector_length(v)))
     return(g_complex_vector_ref(sc, set_plist_2(sc, v, make_integer(sc, i))));
   return(c_complex_to_s7(sc, complex_vector(v, i)));
+}
+
+static s7_pointer complex_vector_ref_p_pi_wrapped(s7_scheme *sc, s7_pointer v, s7_int i)
+{
+  s7_complex z;
+  if ((!is_complex_vector(v)) || (vector_rank(v) > 1) || (i < 0) || (i >= vector_length(v)))
+    return(g_complex_vector_ref(sc, set_plist_2(sc, v, make_integer(sc, i))));
+  z = complex_vector(v, i);
+  return(wrap_complex(sc, creal(z), cimag(z)));
 }
 
 static s7_pointer complex_vector_ref_p_pi_direct(s7_scheme *sc, s7_pointer v, s7_int i) {return(c_complex_to_s7(sc, complex_vector(v, i)));}
@@ -49148,10 +49168,10 @@ static s7_pointer call_setter(s7_scheme *sc, s7_pointer slot, s7_pointer new_val
     return(call_c_function_setter(sc, func, slot_symbol(slot), new_value));
   if (!is_any_procedure(func))
     return(new_value);
-  sc->temp10 = (has_let_arg(func)) ? list_3(sc, slot_symbol(slot), new_value, sc->curlet) : list_2(sc, slot_symbol(slot), new_value);
+  sc->temp9 = (has_let_arg(func)) ? list_3(sc, slot_symbol(slot), new_value, sc->curlet) : list_2(sc, slot_symbol(slot), new_value);
   /* safe lists here are much slower -- the setters are called more often for some reason (see tset.scm) */
-  result = s7_call(sc, func, sc->temp10);
-  sc->temp10 = sc->unused;
+  result = s7_call(sc, func, sc->temp9);
+  sc->temp9 = sc->unused;
   return(result);
 }
 
@@ -52279,7 +52299,7 @@ s7_pointer s7_append(s7_scheme *sc, s7_pointer a, s7_pointer b)
       s7_pointer q, p, np, op;
       if ((!is_pair(b)) && (!is_null(b)))
 	return(g_list_append(sc, list_2(sc, a, b)));
-      sc->temp10 = a; /* tempx? */
+      sc->temp9 = a; /* tempx? */
       q = list_1(sc, car(a));
       begin_temp(sc->temp6, q);
       for (op = a, p = cdr(a), np = q; (is_pair(p)) && (p != op); p = cdr(p), np = cdr(np), op = cdr(op))
@@ -52291,7 +52311,7 @@ s7_pointer s7_append(s7_scheme *sc, s7_pointer a, s7_pointer b)
       end_temp(sc->temp6);
       if (!is_null(p))
 	wrong_type_error_nr(sc, sc->append_symbol, 1, a, a_proper_list_string);
-      sc->temp10 = sc->unused;
+      sc->temp9 = sc->unused;
       set_cdr(np, b);
       return(q);
     }
@@ -55130,9 +55150,9 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
 	error_nr(sc, sc->syntax_error_symbol,  /* ((list (lambda (x) (values x x))) 0 1) */
 		 set_elist_3(sc, wrap_string(sc, "can't call a (possibly unsafe) function implicitly: ~S ~S", 57), obj, indices));
       check_stack_size(sc);
-      sc->temp10 = indices; /* (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices; */ /* s7_call copies and this is safe? 2-Oct-22 (and below) */
-      sc->value = s7_call(sc, obj, sc->temp10);
-      sc->temp10 = sc->unused;
+      sc->temp9 = indices; /* (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices; */ /* s7_call copies and this is safe? 2-Oct-22 (and below) */
+      sc->value = s7_call(sc, obj, sc->temp9);
+      sc->temp9 = sc->unused;
       if ((S7_DEBUGGING) && (is_multiple_value(sc->value))) fprintf(stderr, "mv: %s %s %s\n", display(obj), display(indices), display(sc->value));
       /* if mv: sc->value = splice_in_values(sc, multiple_value(sc->value)); */
       return(sc->value);
@@ -55146,9 +55166,9 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
     default:
       if (!is_applicable(obj)) /* (#2d((0 0)(0 0)) 0 0 0) */
 	apply_error_nr(sc, obj, indices);
-      sc->temp10 = indices; /* (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices; */ /* do not use sc->args here! */
-      sc->value = s7_call(sc, obj, sc->temp10);
-      sc->temp10 = sc->unused;
+      sc->temp9 = indices; /* (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices; */ /* do not use sc->args here! */
+      sc->value = s7_call(sc, obj, sc->temp9);
+      sc->temp9 = sc->unused;
       if (is_multiple_value(sc->value))
 	sc->value = splice_in_values(sc, multiple_value(sc->value));
       return(sc->value);
@@ -65069,17 +65089,21 @@ static s7_pointer opt_p_p_f_exp(opt_info *o) {return(exp_p_p(o->sc, o->v[4].fp(o
 static s7_pointer opt_p_7d_c_random(opt_info *o) {return(make_real(o->sc, random_d_7d(o->sc, o->v[1].x)));}
 static s7_pointer opt_p_p_s_iterate(opt_info *o) {return(iterate_p_p(o->sc, slot_value(o->v[1].p)));}
 static s7_pointer opt_p_p_f_iterate(opt_info *o) {return(iterate_p_p(o->sc, o->v[4].fp(o->v[3].o1)));}
+static s7_pointer opt_p_z_f_magnitude(opt_info *o) {return(magnitude_p_z(o->sc, o->v[4].fp(o->v[3].o1)));}
 static s7_pointer opt_p_p_f_string_to_number(opt_info *o) {return(string_to_number_p_p(o->sc, o->v[4].fp(o->v[3].o1)));}
 static s7_pointer opt_p_p_s_iterate_unchecked(opt_info *o) {s7_pointer iter = slot_value(o->v[1].p); return(iterator_next(iter)(o->sc, iter));}
 /* string_iterate built-in here if iterator_sequence is a string is about 12% faster, but currently we can have an unchecked iterator
  *   that changes sequence type (via (set! L1 L2) where L1 and L2 are both iterators)
  */
 
+static s7_pointer opt_p_pi_ss(opt_info *o);
+static s7_pointer opt_p_pi_sf(opt_info *o);
 static s7_pointer opt_p_pi_ss_vref_direct(opt_info *o);
 static s7_pointer opt_p_pi_ss_fvref_direct(opt_info *o);
 static s7_pointer opt_p_pi_ss_ivref_direct(opt_info *o);
 static s7_pointer opt_p_pi_ss_fvref_direct_wrapped(opt_info *o);
 static s7_pointer opt_p_pi_ss_ivref_direct_wrapped(opt_info *o);
+
 static s7_pointer opt_p_p_fvref(opt_info *o) {return(o->v[2].p_p_f(o->sc, opt_p_pi_ss_fvref_direct_wrapped(o->v[3].o1)));} /* unwrap to fvref is not faster */
 static s7_pointer opt_p_p_ivref(opt_info *o) {return(o->v[2].p_p_f(o->sc, opt_p_pi_ss_ivref_direct_wrapped(o->v[3].o1)));} /* unwrap to ivref is not faster */
 static s7_pointer opt_p_p_vref(opt_info *o) {return(o->v[2].p_p_f(o->sc, opt_p_pi_ss_vref_direct(o->v[3].o1)));}
@@ -65186,6 +65210,14 @@ static bool p_p_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer c
 	  if (!p_p_f_combinable(sc, opc))
 	    {
 	      s7_pointer (*fp)(opt_info *o);
+	      if ((ppf == magnitude_p_p) &&
+		  ((o1->v[0].fp == opt_p_pi_ss) || (o1->v[0].fp == opt_p_pi_sf)) &&
+		  (o1->v[3].p_pi_f == complex_vector_ref_p_pi))
+		{
+		  o1->v[3].p_pi_f = complex_vector_ref_p_pi_wrapped;
+		  opc->v[0].fp = opt_p_z_f_magnitude;
+		}
+	      else
 	      opc->v[0].fp = (ppf == exp_p_p) ? opt_p_p_f_exp : ((ppf == iterate_p_p) ? opt_p_p_f_iterate :
 			       ((ppf == string_to_number_p_p) ? opt_p_p_f_string_to_number : opt_p_p_f));
 	      if (caadr(car_x) == sc->string_ref_symbol)
@@ -65514,10 +65546,10 @@ static bool p_pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
   if (is_symbol(cadr(sig)))
     checker = cadr(sig);
 
+  obj = slot_value(opc->v[1].p);
   if ((s7_p_pi_unchecked_function(s_func)) &&
       (checker))
     {
-      obj = slot_value(opc->v[1].p);
       if ((is_string(obj)) ||
 	  (is_pair(obj)) ||
 	  (is_any_vector(obj)))
@@ -65532,7 +65564,7 @@ static bool p_pi_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
   if (slot1)
     {
       opc->v[2].p = slot1;
-      if ((obj) &&
+      if ((obj) && /* this depends above on s7_p_pi_unchecked_function, but none of the typed vectors have one?? */
 	  (has_loop_end(slot1)))
 	check_unchecked(sc, obj, slot1, opc, car_x);
       fixup_p_pi_ss(opc);
@@ -68911,14 +68943,14 @@ static s7_pointer opt_do_very_simple(opt_info *o)
 	  }}
   else
     {
-      if (f == opt_p_pip_sso)
+      if (f == opt_p_pip_sso) /* is this code dead? does it belong above? */
 	{ /* vector-set from vector-ref (i.e. copy), but treating vector-* as generic */
 	  if (((let_dox_slot1(do_curlet_unchecked(o)) == o1->v[2].p) && (o1->v[2].p == o1->v[4].p)) &&
 	      (((o1->v[5].p_pip_f == float_vector_set_p_pip_direct) && (o1->v[6].p_pi_f == float_vector_ref_p_pi_direct)) ||
 	       ((o1->v[5].p_pip_f == complex_vector_set_p_pip_direct) && (o1->v[6].p_pi_f == complex_vector_ref_p_pi_direct)) ||
-	       ((o1->v[5].p_pip_f == int_vector_set_p_pip_direct) &&   (o1->v[6].p_pi_f == int_vector_ref_p_pi_direct))   ||
-	       ((o1->v[5].p_pip_f == string_set_p_pip_direct) &&       (o1->v[6].p_pi_f == string_ref_p_pi_direct))       ||
-	       ((o1->v[5].p_pip_f == byte_vector_set_p_pip_direct) &&  (o1->v[6].p_pi_f == byte_vector_ref_p_pi_direct))))
+	       ((o1->v[5].p_pip_f == int_vector_set_p_pip_direct) && (o1->v[6].p_pi_f == int_vector_ref_p_pi_direct))   ||
+	       ((o1->v[5].p_pip_f == string_set_p_pip_direct) && (o1->v[6].p_pi_f == string_ref_p_pi_direct))       ||
+	       ((o1->v[5].p_pip_f == byte_vector_set_p_pip_direct) && (o1->v[6].p_pi_f == byte_vector_ref_p_pi_direct))))
 	    {
 	      copy_to_same_type(sc, slot_value(o1->v[1].p), slot_value(o1->v[3].p), integer(vp), end, integer(vp));
 	      unstack_gc_protect(sc);
@@ -71310,7 +71342,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
     case T_C_OBJECT:
       /* args if sc->args (plist + c_object) can be clobbered here by s7_is_aritable, so we need to protect it */
       args = copy_proper_list(sc, args);
-      sc->temp10 = args;
+      sc->temp9 = args;
 
     default:
       if (!is_applicable(f))
@@ -72942,7 +72974,7 @@ static opt_t optimize_thunk(s7_scheme *sc, s7_pointer expr, s7_pointer func, int
       if (c_function_min_args(func) != 0)
 	return(OPT_F);
       if ((hop == 0) && (is_global(car(expr)))) hop = 1; /* not good: (define + *) clears hop earlier */
-      if ((is_safe_procedure(func)) || (c_function_call(func) == s7_values))
+      if ((is_safe_procedure(func)) || (c_function_call(func) == g_values))
 	{
 	  set_safe_optimize_op(expr, hop + OP_SAFE_C_NC);
 	  choose_c_function(sc, expr, func, 0);
@@ -73251,7 +73283,7 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
   if (SHOW_EVAL_OPS) fprintf(stderr, "  %s[%d]: %s, func_is_safe: %d, pairs: %d, hop: %d\n", __func__, __LINE__, display_truncated(expr), func_is_safe, pairs, hop);
   if (pairs == 0)
     {
-      if ((func_is_safe) || (c_function_call(func) == s7_values))                /* safe c function */
+      if ((func_is_safe) || (c_function_call(func) == g_values))  /* safe c function */
 	{
 	  set_safe_optimize_op(expr, hop + ((symbols == 0) ? OP_SAFE_C_NC : OP_SAFE_C_S));
 	  choose_c_function(sc, expr, func, 1);
@@ -75287,16 +75319,16 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
 	      if ((SHOW_EVAL_OPS) && (!is_maybe_shadowed(vars))) fprintf(stderr, "  %s set maybe shadowed\n", display(vars));
 	      set_is_maybe_shadowed(vars);
 	    }
-	  sc->temp9 = e;
+	  sc->temp7 = e;
 	  for (s7_pointer p = body; is_pair(p); p = cdr(p))
 	    if ((is_pair(car(p))) &&
 		(!is_checked(car(p))) && /* ((full_type(p) & (TYPE_MASK | T_CHECKED)) == T_PAIR) is not faster */
 		(optimize_expression(sc, car(p), hop, e, false) == OPT_OOPS)) /* "body" here is not body in terms of export_ok */
 	      {
-		sc->temp9 = sc->unused;
+		sc->temp7 = sc->unused;
 		return(OPT_OOPS);
 	      }
-	  sc->temp9 = sc->unused;
+	  sc->temp7 = sc->unused;
 
 	  if (export_ok)
 	    {
@@ -75446,16 +75478,16 @@ static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, in
     default: break;
     }
 
-  sc->temp9 = e;
+  sc->temp7 = e;
   for (s7_pointer p = body; is_pair(p); p = cdr(p))
     if ((is_pair(car(p))) &&
 	(!is_checked(car(p))) && /* ((full_type(p) & (TYPE_MASK | T_CHECKED)) == T_PAIR) is not faster */
 	(optimize_expression(sc, car(p), hop, e, body_export_ok) == OPT_OOPS))
       {
-	sc->temp9 = sc->unused;
+	sc->temp7 = sc->unused;
 	return(OPT_OOPS);
       }
-  sc->temp9 = sc->unused;
+  sc->temp7 = sc->unused;
 
   if ((hop == 1) &&
       ((is_syntax(car(expr))) ||
@@ -88367,6 +88399,7 @@ static void op_closure_aas(s7_scheme *sc) /* possibly inline b */
   s7_pointer f = opt1_lambda(sc->code);
   sc->z = fx_call(sc, args);
   make_let_with_three_slots(sc, f, sc->z, fx_call(sc, cdr(args)), lookup(sc, caddr(args)));
+  sc->z = sc->unused;
   sc->code = T_Pair(closure_body(f));
   if_pair_set_up_begin(sc);
 }
@@ -88377,6 +88410,7 @@ static void op_closure_saa(s7_scheme *sc)
   s7_pointer f = opt1_lambda(sc->code);
   sc->z = fx_call(sc, cdr(args));
   make_let_with_three_slots(sc, f, lookup(sc, car(args)), sc->z, fx_call(sc, cddr(args)));
+  sc->z = sc->unused;
   sc->code = T_Pair(closure_body(f));
   if_pair_set_up_begin(sc);
 }
@@ -88387,6 +88421,7 @@ static void op_closure_asa(s7_scheme *sc)
   s7_pointer f = opt1_lambda(sc->code);
   sc->z = fx_call(sc, args);
   make_let_with_three_slots(sc, f, sc->z, lookup(sc, cadr(args)), fx_call(sc, cddr(args)));
+  sc->z = sc->unused;
   sc->code = T_Pair(closure_body(f));
   if_pair_set_up_begin(sc);
 }
@@ -93235,7 +93270,7 @@ static bool op_unknown_s(s7_scheme *sc)
       if (!c_function_is_aritable(f, 1)) break;
     case T_C_RST_NO_REQ_FUNCTION:
       set_class_and_fn_proc(code, f);
-      if ((is_safe_procedure(f)) || (c_function_call(f) == s7_values))
+      if ((is_safe_procedure(f)) || (c_function_call(f) == g_values))
 	{
 	  set_optimize_op(code, OP_SAFE_C_S);
 	  sc->value = fx_c_s(sc, sc->code);
@@ -96115,7 +96150,6 @@ void s7_heap_analyze(s7_scheme *sc)
   mark_holdee(NULL, sc->temp7, "sc->temp7");
   mark_holdee(NULL, sc->temp8, "sc->temp8");
   mark_holdee(NULL, sc->temp9, "sc->temp9");
-  mark_holdee(NULL, sc->temp10, "sc->temp10");
   mark_holdee(NULL, sc->rec_p1, "sc->rec_p1");
   mark_holdee(NULL, sc->rec_p2, "sc->rec_p2");
 
@@ -99742,7 +99776,6 @@ s7_scheme *s7_init(void)
   sc->temp7 = sc->unused;
   sc->temp8 = sc->unused;
   sc->temp9 = sc->unused;
-  sc->temp10 = sc->unused;
   sc->rec_p1 = sc->unused;
   sc->rec_p2 = sc->unused;
   sc->read_dims = int_zero;
@@ -100502,28 +100535,28 @@ int main(int argc, char **argv)
  * tlimit    3936   5371   5371   5371   5371    817
  * index            1016    973    967    972    978
  * tmock            1145   1082   1042   1045   1030
- * tvect     3408   2464   1772   1669   1497   1464
+ * tvect     3408   2464   1772   1669   1497   1460
  * thook     7651   ----   2590   2030   2046   1729
  * texit     1884   1950   1778   1741   1770   1758
  * tauto                   2562   2048   1729   1761
  * s7test           1831   1818   1829   1830   1843
  * lt        2222   2172   2150   2185   1950   1892
- * dup              3788   2492   2239   2097   1987
+ * dup              3788   2492   2239   2097   2006
  * tread            2421   2419   2408   2405   2241
- * tcopy            5546   2539   2375   2386   2356
+ * tcopy            5546   2539   2375   2386   2352
  * trclo     8248   2782   2615   2634   2622   2486
  * tload                   3046   2404   2566   2506
- * tmat             3042   2524   2578   2590   2522
- * fbench    2933   2583   2460   2430   2478   2537
+ * tmat             3042   2524   2578   2590   2521
+ * fbench    2933   2583   2460   2430   2478   2536
  * tsort     3683   3104   2856   2804   2858   2858
  * titer     4550   3349   3070   2985   2966   2918
  * tio              3752   3683   3620   3583   3127
  * tobj             3970   3828   3577   3508   3432
  * teq              4045   3536   3486   3544   3555
  * tmac             4373   ----   4193   4188   4022
- * tcomplex         3650   3583   3625   3679   4158
+ * tcomplex         3650   3583   3625   3679   4158  4031
  * tcase            4793   4439   4430   4439   4376
- * tmap             8774   4489   4541   4586   4389
+ * tmap             8774   4489   4541   4586   4379
  * tlet      11.0   6974   5609   5980   5965   4462
  * tfft             7729   4755   4476   4536   4531
  * tshoot           5447   5183   5055   5034   4828
@@ -100534,14 +100567,14 @@ int main(int argc, char **argv)
  * tlist     9219   7546   6558   6240   6300   5769
  * trec      19.6   6980   6599   6656   6658   6005
  * tari      15.0   12.7   6827   6543   6278   6137
- * tgsl             7802   6373   6282   6208   6211
- * tset                           6260   6364   6266
- * tleft     12.2   9753   7537   7331   7331   6417
+ * tgsl             7802   6373   6282   6208   6208
+ * tset                           6260   6364   6276
+ * tleft     12.2   9753   7537   7331   7331   6393
  * tmisc                          7614   7115   7134
  * tclo             8025   7645   8809   7770   7629
  * tlamb                          8003   7941   7892
  * tgc              11.1   8177   7857   7986   8010
- * thash            11.7   9734   9479   9526   9241  9277
+ * thash            11.7   9734   9479   9526   9277
  * cb        12.9   11.0   9658   9564   9609   9648
  * tmap-hash                                    10.3
  * tgen             11.4   12.0   12.1   12.2   12.3

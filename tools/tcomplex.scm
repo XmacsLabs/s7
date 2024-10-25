@@ -57,6 +57,7 @@
      ; 113 complex_vector_ref_p_pp complex_vector_set_p_ppp opt_p_ppp_ssf -- why not the pi/pip cases (68367)? 65011--needs p_pi 65655
      ; removed pointless cv1 return val -> opt_do_very_simple 113
      ; 83 complex_vector_ref_p_pi opt_do_very_simple complex_vector_set_p_pip_direct
+     ; 68 after bugfix in p_pi_ok but not copy yet, and (set! (cv1 i) (cv i)) is also not copy
 
 
 (define (c4)
@@ -91,7 +92,9 @@
 ;(c5) ; 1481: 508 magnitude_p_p, 125 qsort, 117 gc, 116 opt_b_7pp_ffo, 80 opt_bool_sort_0, 76 complex_vector_ref_p_pi, 66 gt_b_7pp etc
       ; 1460 complex_p_ii_wrapped
       ;   maybe specialized sort_func for each data type (to avoid make_real etc)
-      
+      ; 1383 complex_vector_ref_p_pi_wrapped
+      ; 1340 with opt_p_z_magnitude
+
 
 (define (c6)
   (let ((cv1 (make-complex-vector size))
@@ -121,7 +124,7 @@
 	  (set! (data j) (data i))
 	  (set! (data i) temp)))
     (do ((m (/ n 2) (/ m 2)))
-        ((or (< m 2) 
+        ((or (< m 2)
              (< j m))
          (set! j (+ j m)))
      (set! j (- j m))))
@@ -175,7 +178,7 @@
 (define (compare-cfft-and-z-transform)
   (let ((size 128))
     (let ((cv1 (make-complex-vector size 0.0)))
-      (do ((i 0 (+ i 1))) 
+      (do ((i 0 (+ i 1)))
 	  ((= i size))
 	(set! (cv1 i) (complex (- 1.0 (random 2.0)) (- 1.0 (random 2.0)))))
       (let ((cv2 (copy cv1)))
@@ -248,7 +251,7 @@
       (set! cv1 (reverse! (reverse! cv1)))
       (set! cv1 (reverse (reverse cv1)))
       (unless (equivalent? cv2 cv1)
-	(display cv1))))) 
+	(display cv1)))))
 
 ;(c9) ; 36: 12 g_reverse_in_place, 11 vector_equivalent, 9 reverse_p_p
       ; 36: complex_p_ii (too insignificant)
