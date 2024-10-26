@@ -242,3 +242,10 @@ echo ' '
 gcc s7.c -c -I. -g3 -ldl -lm -Wl,-export-dynamic
 gcc -o threads threads.c s7.o -O -g -Wl,-export-dynamic -pthread -lm -I. -ldl
 threads
+
+echo ' '
+echo '-------- clang --------'
+echo ' '
+clang s7.c -c -I. -g3 -Wall -Wno-array-bounds -Wno-parentheses -Wextra -Wno-unused-parameter
+clang -o repl repl.c -I. -g3 s7.o -ldl -lm -Wl,-export-dynamic
+repl s7test.scm

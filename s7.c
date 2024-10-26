@@ -40827,7 +40827,7 @@ static inline s7_pointer make_simple_int_vector(s7_scheme *sc, s7_int len) /* le
 static s7_pointer make_simple_byte_vector(s7_scheme *sc, s7_int len)
 {
   s7_pointer x;
-  block_t *b = inline_mallocate(sc, len);
+  block_t *b = mallocate_vector(sc, len); /* not inline_mallocate because we need to set block_data to NULL if len==0 */
   new_cell(sc, x, T_BYTE_VECTOR | T_SAFE_PROCEDURE);
   vector_block(x) = b;
   byte_vector_bytes(x) = (uint8_t *)block_data(b);
@@ -46076,7 +46076,7 @@ static s7_int hash_map_pair(s7_scheme *sc, s7_pointer table, s7_pointer key)
   else
     if (!is_sequence_or_iterator(p1)) /* include () */
       loc += hash_loc(sc, table, p1);
-  return((loc << 3) + len_upto_100(key));
+  return((loc << 3) + len_upto_100(key)); /* undefined sanitizer is unhappy here, hash_mask was not a solution */
 }
 
 static hash_entry_t *hash_closure(s7_scheme *sc, s7_pointer table, s7_pointer key)
@@ -65218,8 +65218,8 @@ static bool p_p_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer c
 		  opc->v[0].fp = opt_p_z_f_magnitude;
 		}
 	      else
-	      opc->v[0].fp = (ppf == exp_p_p) ? opt_p_p_f_exp : ((ppf == iterate_p_p) ? opt_p_p_f_iterate :
-			       ((ppf == string_to_number_p_p) ? opt_p_p_f_string_to_number : opt_p_p_f));
+		opc->v[0].fp = (ppf == exp_p_p) ? opt_p_p_f_exp : ((ppf == iterate_p_p) ? opt_p_p_f_iterate :
+			        ((ppf == string_to_number_p_p) ? opt_p_p_f_string_to_number : opt_p_p_f));
 	      if (caadr(car_x) == sc->string_ref_symbol)
 		{
 		  if (opc->v[2].p_p_f == char_upcase_p_p)
@@ -100590,7 +100590,7 @@ int main(int argc, char **argv)
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  *
- * complex-vector: opt/do: "z" maybe in optimizer?? lint (tari has opt cases for complex-vector-set!)
+ * complex-vector: opt/do, lint (tari has opt cases for complex-vector-set!)
  *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
  *   inline_op_implicit_vector_ref_a -> complex_vector_getter: (data j)=cfft notice type at run-time, or set_ref_aa?
  *
@@ -100600,7 +100600,4 @@ int main(int argc, char **argv)
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
- *
- * thash: check overuse of loc=0
- * 46049:15: runtime error: left shift of 3707426450614955446 by 3 places cannot be represented in type 'long int'
  */
