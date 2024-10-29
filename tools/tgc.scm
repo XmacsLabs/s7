@@ -87,10 +87,7 @@
 				      (check-cyclic b1)
 				      (for-each 
 				       (lambda (a)
-					 (let ((pos (random (wait-size))))
-					   (if (eq? (vector-ref wait pos) #\c) ; just check that it hasn't been freed
-					       (format *stderr* "~S?" (vector-ref wait pos)))
-					   (vector-set! wait pos a))
+					 (vector-set! wait (random (wait-size)) a)
 					 (dynamic-wind
 					     #f
 					     (lambda ()
@@ -141,10 +138,7 @@
 	     (c1 (c-pointer 0 integer? "info" (cons h1 h2) (vector p3 p2 p1))))
 	(for-each 
 	 (lambda (a)
-	   (let ((pos (random (wait-size))))
-	     (if (eq? (vector-ref wait pos) #\c) ; just check that it hasn't been freed
-		 (format *stderr* "~S?" (vector-ref wait pos)))
-	     (vector-set! wait pos a))
+	   (vector-set! wait (random (wait-size)) a)
 	   (dynamic-wind
 	       #f
 	       (lambda ()

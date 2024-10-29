@@ -81,12 +81,12 @@
  *   #define HAVE_COMPLEX_NUMBERS 1
  *   #define HAVE_COMPLEX_TRIG 1
  *
- *   In C++ I use:
+ *   In g++ I use:
  *
  *   #define HAVE_COMPLEX_NUMBERS 1
  *   #define HAVE_COMPLEX_TRIG 0
  *
- *   In Windows and tcc, both are 0.
+ *   In Windows, tcc and clang++ both are 0.
  *
  *   Some systems (FreeBSD) have complex.h, but some random subset of the trig funcs, so
  *   HAVE_COMPLEX_NUMBERS means we can find
@@ -245,7 +245,7 @@
   #endif
 #else
   #ifndef HAVE_COMPLEX_NUMBERS
-    #if __TINYC__
+    #if __TINYC__ || (__clang__ && __cplusplus) /* clang++ is hopeless */
       #define HAVE_COMPLEX_NUMBERS 0
       /* typedef double s7_complex; */
     #else
@@ -55547,6 +55547,7 @@ static void init_typers(s7_scheme *sc)
   sc->type_to_typers[T_COMPLEX] =             sc->is_complex_symbol;
   sc->type_to_typers[T_CONTINUATION] =        sc->is_continuation_symbol;
   sc->type_to_typers[T_COUNTER] =             sc->F;
+  sc->type_to_typers[T_FREE] =                sc->error_symbol;
   sc->type_to_typers[T_C_FUNCTION] =          sc->is_procedure_symbol;
   sc->type_to_typers[T_C_FUNCTION_STAR] =     sc->is_procedure_symbol;
   sc->type_to_typers[T_C_MACRO] =             sc->is_macro_symbol;
@@ -55961,6 +55962,11 @@ static s7_pointer fx_random_i(s7_scheme *sc, s7_pointer arg)
 #else
   return(make_integer(sc, (s7_int)(integer(cadr(arg)) * next_random(sc->default_random_state))));
 #endif
+}
+
+static s7_pointer fx_random_i_wrapped(s7_scheme *sc, s7_pointer arg)
+{
+  return(wrap_integer(sc, (s7_int)(integer(cadr(arg)) * next_random(sc->default_random_state))));
 }
 
 #if !WITH_GMP
@@ -59606,9 +59612,12 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 	  return(fx_c_ac);
 
 	case HOP_SAFE_C_CA:
+
+	  if ((!WITH_GMP) && (fx_proc(cddr(arg)) == fx_random_i)) set_fx_direct(cddr(arg), fx_random_i_wrapped);
 	  return((fn_proc(arg) == g_cons) ? fx_cons_ca : fx_c_ca);
 
 	case HOP_SAFE_C_SA:
+	  if ((!WITH_GMP) && (fx_proc(cddr(arg)) == fx_random_i)) set_fx_direct(cddr(arg), fx_random_i_wrapped);
 	  if (fn_proc(arg) == g_multiply_2) return(fx_multiply_sa);
 	  if (fn_proc(arg) == g_add_2) return(fx_add_sa);
 	  if (is_global_and_has_func(car(arg), s7_p_pp_function))
@@ -100511,7 +100520,6 @@ int main(int argc, char **argv)
 /* in Linux:  gcc s7.c -o repl -DWITH_MAIN -I. -O2 -g -ldl -lm -Wl,-export-dynamic ; also need libc.scm cload.scm repl.scm to get a decent repl
  * in *BSD:   gcc s7.c -o repl -DWITH_MAIN -I. -O2 -g -lm -Wl,-export-dynamic
  * in OSX:    gcc s7.c -o repl -DWITH_MAIN -I. -O2 -g -lm
- *   (clang also needs LDFLAGS="-Wl,-export-dynamic" in Linux and "-fPIC")
  * in msys2:  gcc s7.c -o s7 -DWITH_MAIN -I. -O2 -g -ldl -lm -Wl,-export-all-symbols,--out-implib,s7.lib
  * for tcc:   tcc -o s7 s7.c -I. -lm -DWITH_MAIN -ldl -rdynamic -DWITH_C_LOADER
  *
@@ -100571,9 +100579,9 @@ int main(int argc, char **argv)
  * tset                           6260   6364   6276
  * tleft     12.2   9753   7537   7331   7331   6393
  * tmisc                          7614   7115   7134
+ * tgc              10.4   7763   7579   7617   7619
  * tclo             8025   7645   8809   7770   7629
  * tlamb                          8003   7941   7892
- * tgc              11.1   8177   7857   7986   8010
  * thash            11.7   9734   9479   9526   9277
  * cb        12.9   11.0   9658   9564   9609   9648
  * tmap-hash                                    10.3
@@ -100600,4 +100608,6 @@ int main(int argc, char **argv)
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
+ *
+ * does tgc actually do anything?
  */
