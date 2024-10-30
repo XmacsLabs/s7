@@ -57264,31 +57264,6 @@ static s7_pointer fx_add_mul_opssq_s(s7_scheme *sc, s7_pointer arg)
   return(add_p_pp(sc, multiply_p_pp_wrapped(sc, a, b), c));
 }
 
-static s7_pointer fx_add_vref_s(s7_scheme *sc, s7_pointer arg)
-{
-  return(add_p_pp(sc, vector_ref_p_pp(sc, lookup(sc, car(opt3_pair(arg))), lookup(sc, opt2_sym(opt3_pair(arg)))), lookup(sc, caddr(arg))));
-}
-
-static s7_pointer fx_add_s_vref(s7_scheme *sc, s7_pointer arg)
-{
-  return(add_p_pp(sc, lookup(sc, cadr(arg)), vector_ref_p_pp(sc, lookup(sc, car(opt3_pair(arg))), lookup(sc, opt2_sym(opt3_pair(arg))))));
-}
-
-static s7_pointer fx_subtract_vref_s(s7_scheme *sc, s7_pointer arg)
-{
-  return(subtract_p_pp(sc, vector_ref_p_pp(sc, lookup(sc, car(opt3_pair(arg))), lookup(sc, opt2_sym(opt3_pair(arg)))), lookup(sc, caddr(arg))));
-}
-
-static s7_pointer fx_subtract_s_vref(s7_scheme *sc, s7_pointer arg)
-{
-  return(subtract_p_pp(sc, lookup(sc, cadr(arg)), vector_ref_p_pp(sc, lookup(sc, car(opt3_pair(arg))), lookup(sc, opt2_sym(opt3_pair(arg))))));
-}
-
-static s7_pointer fx_multiply_s_vref(s7_scheme *sc, s7_pointer arg)
-{
-  return(multiply_p_pp(sc, lookup(sc, cadr(arg)), vector_ref_p_pp(sc, lookup(sc, car(opt3_pair(arg))), lookup(sc, opt2_sym(opt3_pair(arg))))));
-}
-
 static s7_pointer fx_cons_cons_s(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer largs = opt3_pair(arg); /* cdadr(arg) */
@@ -59159,16 +59134,13 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 		set_opt3_pair(arg, cdr(s2));
 		if (car(s2) == sc->vector_ref_symbol)
 		  {
-		    if (car(arg) == sc->add_symbol)      return(fx_add_s_vref);
-		    if (car(arg) == sc->subtract_symbol) return(fx_subtract_s_vref);
-		    if (car(arg) == sc->multiply_symbol) return(fx_multiply_s_vref);
-		    if (car(arg) == sc->geq_symbol)      return(fx_geq_s_vref);
-		    if (car(arg) == sc->is_eq_symbol)    return(fx_is_eq_s_vref);
-		    if (car(arg) == sc->hash_table_ref_symbol) return(fx_href_s_vref);
+		    if (car(arg) == sc->geq_symbol)      return(fx_geq_s_vref);      /* ? */
+		    if (car(arg) == sc->is_eq_symbol)    return(fx_is_eq_s_vref);    /* ? */
+		    if (car(arg) == sc->hash_table_ref_symbol) return(fx_href_s_vref); /* tbig */
 		    if (car(arg) == sc->let_ref_symbol)  return(fx_lref_s_vref);
 		    if ((is_defined_global(cadr(arg))) && (is_defined_global(cadr(s2))) && (car(arg) == sc->vector_ref_symbol)) return(fx_vref_g_vref_gs);
 		  }
-		if ((car(arg) == sc->vector_ref_symbol) && (car(s2) == sc->add_symbol)) return(fx_vref_s_add);
+		if ((car(arg) == sc->vector_ref_symbol) && (car(s2) == sc->add_symbol)) return(fx_vref_s_add); /* ~b */
 		return(fx_c_s_opssq_direct);
 	      }
 	    return(fx_c_s_opssq);
@@ -59187,10 +59159,8 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 	      set_opt3_pair(arg, cdadr(arg));
 	      if (caadr(arg) == sc->vector_ref_symbol)
 		{
-		  if (car(arg) == sc->subtract_symbol) return(fx_subtract_vref_s);
-		  if (car(arg) == sc->gt_symbol) return(fx_gt_vref_s);
-		  if (car(arg) == sc->vector_ref_symbol) return(fx_vref_vref_ss_s);
-		  if (car(arg) == sc->add_symbol) return(fx_add_vref_s);
+		  if (car(arg) == sc->gt_symbol) return(fx_gt_vref_s);              /* ? */
+		  if (car(arg) == sc->vector_ref_symbol) return(fx_vref_vref_ss_s); /* b */
 		}
 	      if (car(arg) == sc->add_symbol)
 		{
@@ -100522,6 +100492,7 @@ int main(int argc, char **argv)
  * in OSX:    gcc s7.c -o repl -DWITH_MAIN -I. -O2 -g -lm
  * in msys2:  gcc s7.c -o s7 -DWITH_MAIN -I. -O2 -g -ldl -lm -Wl,-export-all-symbols,--out-implib,s7.lib
  * for tcc:   tcc -o s7 s7.c -I. -lm -DWITH_MAIN -ldl -rdynamic -DWITH_C_LOADER
+ * according to callgrind, clang is noticeably slower than gcc
  *
  * for nrepl: gcc s7.c -o repl -DWITH_MAIN -DWITH_NOTCURSES -I. -O2 -g -lnotcurses-core -ldl -lm -Wl,-export-dynamic
  *
@@ -100598,8 +100569,8 @@ int main(int argc, char **argv)
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  *
- * complex-vector: opt/do, lint (tari has opt cases for complex-vector-set!)
- *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector [avoid complex_vector_getter in vector-ref case] [also tbig]
+ * complex-vector: opt/do, lint (tari has possible opt cases for complex-vectors -- cvals)
+ *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector
  *   inline_op_implicit_vector_ref_a -> complex_vector_getter: (data j)=cfft notice type at run-time, or set_ref_aa?
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
@@ -100608,6 +100579,4 @@ int main(int argc, char **argv)
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
- *
- * does tgc actually do anything?
  */
