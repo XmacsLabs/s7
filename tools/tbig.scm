@@ -138,7 +138,7 @@
       (do ((lg 0 (+ lg 1))
 	   (mmax 2 (* mmax 2))
 	   (pow (/ n 2) (/ pow 2))
-	   (theta (rationalize (* pi dir)) (* theta 0.5)))
+	   (theta (rationalize (* pi dir)) (* theta 1/2)))
 	  ((= lg ipow))
 	(let ((wpr (rationalize (cos theta)))
 	      (wpi (rationalize (sin theta)))

@@ -481,7 +481,7 @@ enum {T_FREE = 0,
       NUM_TYPES};
 /* T_UNUSED, T_STACK, T_SLOT, T_DYNAMIC_WIND, T_CATCH, and T_COUNTER are internal */
 
-static const char *s7_type_names[] =
+static const char * const s7_type_names[] =
   {"free", "pair", "nil", "unused", "undefined", "unspecified", "eof_object", "boolean", "character", "syntax", "symbol",
    "integer", "ratio", "real", "complex", "big_integer", "big_ratio", "big_real", "big_complex",
    "string", "c_object", "vector", "int_vector", "float_vector", "byte_vector", "complex_vector",
@@ -1099,7 +1099,7 @@ typedef struct {
 
 typedef enum {NO_JUMP, CALL_WITH_EXIT_JUMP, THROW_JUMP, CATCH_JUMP, ERROR_JUMP, ERROR_QUIT_JUMP} jump_loc_t;
 typedef enum {NO_SET_JUMP, READ_SET_JUMP, LOAD_SET_JUMP, DYNAMIC_WIND_SET_JUMP, S7_CALL_SET_JUMP, EVAL_SET_JUMP} setjmp_loc_t;
-static const char *jump_string[6] = {"no_jump", "call_with_exit_jump", "throw_jump", "catch_jump", "error_jump", "error_quit_jump"};
+static const char * const jump_string[6] = {"no_jump", "call_with_exit_jump", "throw_jump", "catch_jump", "error_jump", "error_quit_jump"};
 
 
 /* -------------------------------- s7_scheme struct -------------------------------- */
@@ -3816,6 +3816,12 @@ static void set_number_name(s7_pointer p, const char *name, int32_t len)
 
 static s7_int s7_int_min = 0;
 static int32_t s7_int_digits_by_radix[17];
+static const char * const radstr[17] = {NULL, NULL, "01", "012", "0123", "01234", "012345", "0123456", "01234567", "012345678", "0123456789",
+  "0123456789aA", "0123456789aAbB", "0123456789aAbBcC", "0123456789aAbBcCdD", "0123456789aAbBcCdDeE", "0123456789aAbBcCdDeEfF"};
+/* static char rdig[2][256]...rdig[16][256], clear all
+ * for (j=2..16) s=radstr[j]; while (*s++) rdig[j][*s]=1;
+ * my_strspn(s, accept=rdig[radix]) check 1234, then go by 4? [see tmp]
+ */
 
 #define S7_INT_BITS 63
 
@@ -3865,7 +3871,7 @@ static s7_pointer *small_ints = NULL;
 static s7_pointer real_zero, real_NaN, complex_NaN, real_pi, real_one, arity_not_set, max_arity, real_infinity, real_minus_infinity;
 static s7_pointer int_zero, int_one, int_two, int_three, minus_one, minus_two, mostfix, leastfix;
 
-static const char *ones[10] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+static const char * const ones[10] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
 static void init_small_ints(void)
 {
@@ -4438,9 +4444,8 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
 
 typedef enum{E_C_P, E_C_PP, E_C_CP, E_C_SP, E_C_PC, E_C_PS} combine_op_t;
 
-static const char* op_names[NUM_OPS] =
-     {
-      "unopt", "gc_protect",
+static const char * const op_names[NUM_OPS] =
+     {"unopt", "gc_protect",
 
       "safe_c_nc", "h_safe_c_nc", "safe_c_s", "h_safe_c_s",
       "safe_c_ss", "h_safe_c_ss", "safe_c_sc", "h_safe_c_sc", "safe_c_cs", "h_safe_c_cs", "safe_c_cq", "h_safe_c_cq",
@@ -4674,7 +4679,7 @@ typedef enum {SL_NO_FIELD=0, SL_ACCEPT_ALL_KEYWORD_ARGUMENTS, SL_AUTOLOADING, SL
 	      SL_SYMBOL_QUOTE, SL_SYMBOL_PRINTER, SL_UNDEFINED_CONSTANT_WARNINGS, SL_UNDEFINED_IDENTIFIER_WARNINGS, SL_VERSION,
 	      SL_NUM_FIELDS} starlet_t;
 
-static const char *starlet_names[SL_NUM_FIELDS] =
+static const char * const starlet_names[SL_NUM_FIELDS] =
   {"no-field", "accept-all-keyword-arguments", "autoloading?", "bignum-precision", "catches", "cpu-time", "c-types",
    "debug", "default-hash-table-length", "default-random-state", "default-rationalize-error", "equivalent-float-epsilon",
    "expansions?", "filenames", "file-names", "float-format-precision", "free-heap-size", "gc-freed", "gc-info",
@@ -5149,13 +5154,13 @@ static char *object_raw_type_to_string(s7_pointer p)
   return(buf);
 }
 
-static void complain(s7_scheme *sc, const char* complaint, s7_pointer p, const char *func, int32_t line, uint8_t typ)
+static void complain(s7_scheme *sc, const char *complaint, s7_pointer p, const char *func, int32_t line, uint8_t typ)
 {
   fprintf(stderr, complaint, bold_text, func, line, checked_type_name(sc, typ), object_raw_type_to_string(p), unbold_text);
   if (sc->stop_at_error) abort();
 }
 
-static char* show_debugger_bits(s7_pointer p)
+static char *show_debugger_bits(s7_pointer p)
 {
   char *bits_str = (char *)Malloc(512);
   int64_t bits = p->debugger_bits;
@@ -14544,7 +14549,7 @@ static dtoa_np dtoa_multiply(dtoa_np* a, dtoa_np* b)
   return(fp);
 }
 
-static void dtoa_round_digit(char* digits, int32_t ndigits, uint64_t delta, uint64_t rem, uint64_t kappa, uint64_t frac)
+static void dtoa_round_digit(char *digits, int32_t ndigits, uint64_t delta, uint64_t rem, uint64_t kappa, uint64_t frac)
 {
   while ((rem < frac) && (delta - rem >= kappa) &&
 	 ((rem + kappa < frac) || (frac - rem > rem + kappa - frac)))
@@ -14554,7 +14559,7 @@ static void dtoa_round_digit(char* digits, int32_t ndigits, uint64_t delta, uint
     }
 }
 
-static int32_t dtoa_generate_digits(dtoa_np* fp, dtoa_np* upper, dtoa_np* lower, char* digits, int* K)
+static int32_t dtoa_generate_digits(dtoa_np* fp, dtoa_np* upper, dtoa_np* lower, char *digits, int* K)
 {
   uint64_t part1, part2, wfrac = upper->frac - fp->frac, delta = upper->frac - lower->frac;
   uint64_t *unit;
@@ -14605,7 +14610,7 @@ static int32_t dtoa_generate_digits(dtoa_np* fp, dtoa_np* upper, dtoa_np* lower,
     }
 }
 
-static int32_t dtoa_grisu2(double d, char* digits, int* K)
+static int32_t dtoa_grisu2(double d, char *digits, int* K)
 {
   int32_t k;
   dtoa_np cp, lower, upper;
@@ -14622,7 +14627,7 @@ static int32_t dtoa_grisu2(double d, char* digits, int* K)
   return(dtoa_generate_digits(&w, &upper, &lower, digits, K));
 }
 
-static int32_t dtoa_emit_digits(char* digits, int32_t ndigits, char* dest, int32_t K, bool neg)
+static int32_t dtoa_emit_digits(char *digits, int32_t ndigits, char *dest, int32_t K, bool neg)
 {
   int32_t idx, cent;
   char sign;
@@ -14695,7 +14700,7 @@ static int32_t dtoa_emit_digits(char* digits, int32_t ndigits, char* dest, int32
   return(idx);
 }
 
-static int32_t dtoa_filter_special(double fp, char* dest, bool neg)
+static int32_t dtoa_filter_special(double fp, char *dest, bool neg)
 {
   uint64_t bits;
   bool nan;
@@ -14760,7 +14765,7 @@ static size_t integer_to_string_any_base(char *p, s7_int n, int32_t radix)  /* c
 
   if (n == S7_INT64_MIN) /* can't negate this, so do it by hand */
     {
-      static const char *mnfs[17] = {"","",
+      static const char * const mnfs[17] = {"","",
 	"-1000000000000000000000000000000000000000000000000000000000000000", "-2021110011022210012102010021220101220222",
 	"-20000000000000000000000000000000", "-1104332401304422434310311213", "-1540241003031030222122212",
 	"-22341010611245052052301", "-1000000000000000000000", "-67404283172107811828",	"-9223372036854775808",
@@ -15399,7 +15404,7 @@ static s7_pointer g_sharp_readers_set(s7_scheme *sc, s7_pointer args)
   return(cadr(args));
 }
 
-static s7_pointer make_undefined(s7_scheme *sc, const char* name)
+static s7_pointer make_undefined(s7_scheme *sc, const char *name)
 {
   s7_int len = safe_strlen(name);
   char *newstr = (char *)Malloc(len + 2);
@@ -15763,13 +15768,17 @@ static s7_double string_to_double_with_radix_1(const char *ur_str, int32_t radix
   while (*str == '0') {str++;};
 
   ipart = str;
-  while (digits[(int32_t)(*str)] < radix) str++;
-  int_len = str - ipart;
+  /* while (digits[(int32_t)(*str)] < radix) str++; */
+  /* int_len = str - ipart; */
+  int_len = strspn((const char *)str, radstr[radix]); /* this is faster than the while loop with digits[] */
+  str += int_len;
 
   if (*str == '.') str++;
   fpart = str;
-  while (digits[(int32_t)(*str)] < radix) str++;
-  frac_len = str - fpart;
+  /* while (digits[(int32_t)(*str)] < radix) str++; */
+  /* frac_len = str - fpart; */
+  frac_len = strspn((const char *)str, radstr[radix]);
+  str += frac_len;
 
   if ((*str) && (exponent_table[(uint8_t)(*str)]))
     {
@@ -33857,7 +33866,7 @@ static void make_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port)
   s7_int vlen;
   int32_t plen;
   char buf[128];
-  const char* vtyp = "";
+  const char *vtyp = "";
 
   if (is_float_vector(vect))
     vtyp = "float-";
@@ -37074,7 +37083,7 @@ static void format_number(s7_scheme *sc, format_data_t *fdat, int32_t radix, s7_
   fdat->ctr++;
 }
 
-static const char *ordinal[11] = {"zeroth", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"};
+static const char * const ordinal[11] = {"zeroth", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"};
 static const s7_int ordinal_length[11] = {6, 5, 6, 5, 6, 5, 5, 7, 6, 5, 5};
 
 static void format_ordinal_number(s7_scheme *sc, format_data_t *fdat, s7_pointer port)
@@ -55672,7 +55681,7 @@ static s7_pointer g_abort(s7_scheme *sc, s7_pointer args) {abort(); return(NULL)
  */
 
 #if S7_DEBUGGING
-static void check_t_1(s7_scheme *sc, s7_pointer e, const char* func, s7_pointer expr, s7_pointer var)
+static void check_t_1(s7_scheme *sc, s7_pointer e, const char *func, s7_pointer expr, s7_pointer var)
 {
   if (let_slots(e) != s7_slot(sc, var))
     {
@@ -55695,7 +55704,7 @@ static s7_pointer T_lookup_1(s7_scheme *sc, s7_pointer symbol, const char *func,
   return(slot_value(let_slots(let_outlet(sc->curlet))));
 }
 
-static void check_u_1(s7_scheme *sc, s7_pointer e, const char* func, s7_pointer expr, s7_pointer var)
+static void check_u_1(s7_scheme *sc, s7_pointer e, const char *func, s7_pointer expr, s7_pointer var)
 {
   if (next_slot(let_slots(e)) != s7_slot(sc, var))
     {
@@ -55717,7 +55726,7 @@ static s7_pointer U_lookup_1(s7_scheme *sc, s7_pointer symbol, const char *func,
   return(slot_value(next_slot(let_slots(let_outlet(sc->curlet)))));
 }
 
-static void check_v_1(s7_scheme *sc, s7_pointer e, const char* func, s7_pointer expr, s7_pointer var)
+static void check_v_1(s7_scheme *sc, s7_pointer e, const char *func, s7_pointer expr, s7_pointer var)
 {
   if (next_slot(next_slot(let_slots(e))) != s7_slot(sc, var))
     {
@@ -55739,7 +55748,7 @@ static s7_pointer V_lookup_1(s7_scheme *sc, s7_pointer symbol, const char *func,
   return(slot_value(next_slot(next_slot(let_slots(let_outlet(sc->curlet))))));
 }
 
-static void check_o_1(s7_scheme *sc, s7_pointer e, const char* func, s7_pointer expr, s7_pointer var)
+static void check_o_1(s7_scheme *sc, s7_pointer e, const char *func, s7_pointer expr, s7_pointer var)
 {
   s7_pointer slot = s7_slot(sc, var);
   if (lookup_slot_with_let(sc, var, e) != slot)
@@ -56916,11 +56925,6 @@ static s7_pointer fx_vset_sts(s7_scheme *sc, s7_pointer arg)
   return(vector_set_p_ppp(sc, lookup(sc, cadr(arg)), t_lookup(sc, opt1_sym(cdr(arg)), arg), lookup(sc, opt2_sym(cdr(arg)))));
 }
 
-static s7_pointer fx_vset_oto(s7_scheme *sc, s7_pointer arg)
-{
-  return(vector_set_p_ppp(sc, o_lookup(sc, cadr(arg), arg), t_lookup(sc, opt1_sym(cdr(arg)), arg), o_lookup(sc, opt2_sym(cdr(arg)), arg)));
-}
-
 #define fx_c_scs_any(Name, Lookup1, Lookup2) \
   static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
   { \
@@ -57413,12 +57417,6 @@ static s7_pointer fx_c_opstq_c_direct(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer largs = cadr(arg);
   return(((s7_p_pp_t)opt3_direct(arg))(sc, fn_proc(largs)(sc, set_plist_2(sc, lookup(sc, cadr(largs)), t_lookup(sc, caddr(largs), arg))), opt3_con(cdr(arg))));
-}
-
-static s7_pointer fx_is_eq_vref_opotq_c(s7_scheme *sc, s7_pointer arg) /* experiment, (eqv? <> char) is <>==char without error checks? */
-{
-  s7_pointer largs = cdadr(arg);
-  return(make_boolean(sc, vector_ref_p_pp(sc, o_lookup(sc, car(largs), largs), t_lookup(sc, cadr(largs), arg)) == opt3_con(cdr(arg))));
 }
 
 #define fx_c_opsq_s_any(Name, Lookup1, Lookup2) \
@@ -60119,11 +60117,7 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	return(with_fx(tree, (cadddr(p) == var3) ? ((fx_proc(tree) == fx_c_sss_direct) ? fx_c_tuv_direct : fx_c_tuv) : fx_c_tus));
       if (caddr(p) == var1)
 	{
-	  if (car(p) == sc->vector_set_symbol)
-	    {
-	      if ((!more_vars) && (o_var_ok(cadr(p), var1, var2, var3)) && (o_var_ok(cadddr(p), var1, var2, var3))) return(with_fx(tree, fx_vset_oto));
-	      return(with_fx(tree, fx_vset_sts));
-	    }
+	  if (car(p) == sc->vector_set_symbol) return(with_fx(tree, fx_vset_sts));
 	  return(with_fx(tree, fx_c_sts));
 	}
       break;
@@ -60332,9 +60326,6 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 	{
 	  if (is_global_and_has_func(car(p), s7_p_pp_function))
 	    {
-	      if ((car(p) == sc->is_eq_symbol) && (!is_unspecified(caddr(p))) && (caadr(p) == sc->vector_ref_symbol) &&
-		  (!more_vars) && (o_var_ok(cadadr(p), var1, var2, var3)))
-		return(with_fx(tree, fx_is_eq_vref_opotq_c));
 	      set_opt3_direct(p, (s7_pointer)(s7_p_pp_function(global_value(car(p)))));
 	      return(with_fx(tree, fx_c_opstq_c_direct));
 	    }
@@ -60490,12 +60481,13 @@ static void add_opt_func(s7_scheme *sc, s7_pointer f, opt_func_t typ, void *func
 {
   opt_funcs_t *op;
 #if S7_DEBUGGING
-  static const char *o_names[] = {"o_d_v", "o_d_vd", "o_d_vdd", "o_d_vid", "o_d_id", "o_d_7pi", "o_d_7pii", "o_d_7piid", "o_d_7piii", "o_d_7piiid",
-				"o_d_ip", "o_d_pd", "o_d_7p", "o_d_7pid", "o_d", "o_d_d", "o_d_dd", "o_d_7dd", "o_d_ddd", "o_d_dddd",
-				"o_i_i", "o_i_7i", "o_i_ii", "o_i_7ii", "o_i_iii", "o_i_7pi", "o_i_7pii", "o_i_7_piii", "o_d_p",
-				"o_b_p", "o_b_7p", "o_b_pp", "o_b_7pp", "o_b_pp_unchecked", "o_b_pi", "o_b_ii", "o_b_7ii", "o_b_dd",
-				"o_p", "o_p_p", "o_p_ii", "o_p_d", "o_p_dd", "o_i_7d", "o_i_7p", "o_d_7d", "o_p_pp", "o_p_ppp", "o_p_pi", "o_p_pi_unchecked",
-				"o_p_ppi", "o_p_i", "o_p_pii", "o_p_pip", "o_p_pip_unchecked", "o_p_piip", "o_b_i", "o_b_d"};
+  static const char * const o_names[] = 
+    {"o_d_v", "o_d_vd", "o_d_vdd", "o_d_vid", "o_d_id", "o_d_7pi", "o_d_7pii", "o_d_7piid", "o_d_7piii", "o_d_7piiid",
+     "o_d_ip", "o_d_pd", "o_d_7p", "o_d_7pid", "o_d", "o_d_d", "o_d_dd", "o_d_7dd", "o_d_ddd", "o_d_dddd",
+     "o_i_i", "o_i_7i", "o_i_ii", "o_i_7ii", "o_i_iii", "o_i_7pi", "o_i_7pii", "o_i_7_piii", "o_d_p",
+     "o_b_p", "o_b_7p", "o_b_pp", "o_b_7pp", "o_b_pp_unchecked", "o_b_pi", "o_b_ii", "o_b_7ii", "o_b_dd",
+     "o_p", "o_p_p", "o_p_ii", "o_p_d", "o_p_dd", "o_i_7d", "o_i_7p", "o_d_7d", "o_p_pp", "o_p_ppp", "o_p_pi", "o_p_pi_unchecked",
+     "o_p_ppi", "o_p_i", "o_p_pii", "o_p_pip", "o_p_pip_unchecked", "o_p_piip", "o_b_i", "o_b_d"};
   if (!is_c_function(f))
     {
       fprintf(stderr, "%s[%d]: %s is not a c_function\n", __func__, __LINE__, display(f));
@@ -98629,7 +98621,7 @@ static s7_pointer copy_args_syntax(s7_scheme *sc, const char *name, opcode_t op,
   return(x);
 }
 
-static s7_pointer make_unique(s7_scheme *sc, const char* name, uint64_t typ)
+static s7_pointer make_unique(s7_scheme *sc, const char *name, uint64_t typ)
 {
   s7_pointer p = alloc_pointer(sc);
   set_full_type(p, typ | T_IMMUTABLE | T_UNHEAP);
@@ -100206,7 +100198,7 @@ void s7_free(s7_scheme *sc)
 	(block_index(unchecked_port_data_block(gp->list[i])) == TOP_BLOCK_LIST))
       free(block_data(unchecked_port_data_block(gp->list[i])));    /* the file contents, port_block is other stuff */
   gc_list_free(gp);
-  gc_list_free(sc->input_string_ports); /* port_data_block is null, port_block is the const char* data, so I assume it is handled elsewhere */
+  gc_list_free(sc->input_string_ports); /* port_data_block is null, port_block is the const char *data, so I assume it is handled elsewhere */
 
   gp = sc->hash_tables;
   for (i = 0; i < gp->loc; i++)
@@ -100533,7 +100525,7 @@ int main(int argc, char **argv)
  * tobj             3970   3828   3577   3508   3432
  * teq              4045   3536   3486   3544   3555
  * tmac             4373   ----   4193   4188   4022
- * tcomplex         3650   3583   3625   3679   4158  4031
+ * tcomplex         3650   3583   3625   3679   4031
  * tcase            4793   4439   4430   4439   4376
  * tmap             8774   4489   4541   4586   4379
  * tlet      11.0   6974   5609   5980   5965   4462
@@ -100562,7 +100554,7 @@ int main(int argc, char **argv)
  * tmv              21.9   21.1   20.7   20.6   16.6
  * calls            37.5   37.0   37.5   37.1   37.1
  * sg                      55.9   55.8   55.4   55.1
- * tbig            175.8  156.5  148.1  146.2  146.2
+ * tbig            175.8  156.5  148.1  146.2  145.6
  * ----------------------------------------------------
  *
  * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
@@ -100579,4 +100571,6 @@ int main(int argc, char **argv)
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
+ *
+ * my_strspn: make the radstrs char[256] arrs, 1 where member etc
  */
