@@ -3816,12 +3816,6 @@ static void set_number_name(s7_pointer p, const char *name, int32_t len)
 
 static s7_int s7_int_min = 0;
 static int32_t s7_int_digits_by_radix[17];
-static const char * const radstr[17] = {NULL, NULL, "01", "012", "0123", "01234", "012345", "0123456", "01234567", "012345678", "0123456789",
-  "0123456789aA", "0123456789aAbB", "0123456789aAbBcC", "0123456789aAbBcCdD", "0123456789aAbBcCdDeE", "0123456789aAbBcCdDeEfF"};
-/* static char rdig[2][256]...rdig[16][256], clear all
- * for (j=2..16) s=radstr[j]; while (*s++) rdig[j][*s]=1;
- * my_strspn(s, accept=rdig[radix]) check 1234, then go by 4? [see tmp]
- */
 
 #define S7_INT_BITS 63
 
@@ -14440,7 +14434,7 @@ static const dtoa_np dtoa_powers_ten[] = {
     { 11392378155556871081U, 1013 },  { 16975966327722178521U, 1039 },
     { 12648080533535911531U, 1066 }};
 
-static dtoa_np dtoa_find_cachedpow10(int exp, int* k)
+static dtoa_np dtoa_find_cachedpow10(int exp, int *k)
 {
   const double one_log_ten = 0.30102999566398114;
   int32_t approx = -(exp + dtoa_npowers) * one_log_ten;
@@ -14501,7 +14495,7 @@ static dtoa_np dtoa_build_np(double d)
   return(fp);
 }
 
-static void dtoa_normalize(dtoa_np* fp)
+static void dtoa_normalize(dtoa_np *fp)
 {
   int32_t shift = 64 - 52 - 1;
   while ((fp->frac & dtoa_hiddenbit) == 0)
@@ -14513,7 +14507,7 @@ static void dtoa_normalize(dtoa_np* fp)
   fp->exp -= shift;
 }
 
-static void dtoa_get_normalized_boundaries(const dtoa_np* fp, dtoa_np* lower, dtoa_np* upper)
+static void dtoa_get_normalized_boundaries(const dtoa_np *fp, dtoa_np *lower, dtoa_np *upper)
 {
   int32_t u_shift, l_shift;
   upper->frac = (fp->frac << 1) + 1;
@@ -14533,7 +14527,7 @@ static void dtoa_get_normalized_boundaries(const dtoa_np* fp, dtoa_np* lower, dt
   lower->exp = upper->exp;
 }
 
-static dtoa_np dtoa_multiply(dtoa_np* a, dtoa_np* b)
+static dtoa_np dtoa_multiply(dtoa_np *a, dtoa_np *b)
 {
   dtoa_np fp;
   const uint64_t lomask = 0x00000000FFFFFFFF;
@@ -14559,7 +14553,7 @@ static void dtoa_round_digit(char *digits, int32_t ndigits, uint64_t delta, uint
     }
 }
 
-static int32_t dtoa_generate_digits(dtoa_np* fp, dtoa_np* upper, dtoa_np* lower, char *digits, int* K)
+static int32_t dtoa_generate_digits(dtoa_np *fp, dtoa_np *upper, dtoa_np *lower, char *digits, int *K)
 {
   uint64_t part1, part2, wfrac = upper->frac - fp->frac, delta = upper->frac - lower->frac;
   uint64_t *unit;
@@ -14610,7 +14604,7 @@ static int32_t dtoa_generate_digits(dtoa_np* fp, dtoa_np* upper, dtoa_np* lower,
     }
 }
 
-static int32_t dtoa_grisu2(double d, char *digits, int* K)
+static int32_t dtoa_grisu2(double d, char *digits, int *K)
 {
   int32_t k;
   dtoa_np cp, lower, upper;
@@ -15724,14 +15718,8 @@ static s7_int string_to_integer(const char *str, int32_t radix, bool *overflow)
   return((negative) ? -lval : lval);
 }
 
-/*  9223372036854775807                9223372036854775807
- * -9223372036854775808               -9223372036854775808
- * 0000000000000000000000000001.0     1.0
- * 1.0000000000000000000000000000     1.0
- * 1000000000000000000000000000.0e-40 1.0e-12
- * 0.0000000000000000000000000001e40  1.0e12
- * 1.0e00000000000000000001           10.0
- */
+static const char * const radstr[17] = {NULL, NULL, "01", "012", "0123", "01234", "012345", "0123456", "01234567", "012345678", "0123456789",
+  "0123456789aA", "0123456789aAbB", "0123456789aAbBcC", "0123456789aAbBcCdD", "0123456789aAbBcCdDeE", "0123456789aAbBcCdDeEfF"};
 
 #if WITH_GMP
 static s7_double string_to_double_with_radix(const char *ur_str, int32_t radix, bool *overflow)
@@ -16686,7 +16674,7 @@ static s7_pointer g_abs(s7_scheme *sc, s7_pointer args)
   return(abs_p_p(sc, car(args)));
 }
 
-static s7_double abs_d_d(s7_double x) {return((signbit(x)) ? (-x) : x);}
+static s7_double abs_d_d(s7_double x) {return((signbit(x)) ? (-x) : x);} /* very slow in tcc */
 static s7_int abs_i_i(s7_int x) {return((x < 0) ? (-x) : x);}
 
 
@@ -16919,7 +16907,7 @@ static s7_pointer big_rationalize(s7_scheme *sc, s7_pointer args)
       mpfr_set_z(r->val, r->p0, MPFR_RNDN);
       mpfr_div_z(r->val, r->val, r->q0, MPFR_RNDN);  /* val = p0/q0 */
 
-      if (((mpfr_lessequal_p(r->x0, r->val)) &&        /* if ((x0 <= val) && (val <= x1)) */
+      if (((mpfr_lessequal_p(r->x0, r->val)) &&      /* if ((x0 <= val) && (val <= x1)) */
 	   (mpfr_lessequal_p(r->val, r->x1))) ||
 	  (mpfr_cmp_ui(r->e1, 0) == 0) ||
 	  (mpfr_cmp_ui(r->e1p, 0) == 0))
@@ -16931,30 +16919,30 @@ static s7_pointer big_rationalize(s7_scheme *sc, s7_pointer args)
 	}
 
       mpfr_div(r->val, r->e0, r->e1, MPFR_RNDN);
-      mpfr_get_z(r->r, r->val, MPFR_RNDD);           /* r = floor(e0/e1) */
+      mpfr_get_z(r->r, r->val, MPFR_RNDD);         /* r = floor(e0/e1) */
       mpfr_div(r->val, r->e0p, r->e1p, MPFR_RNDN);
-      mpfr_get_z(r->r1, r->val, MPFR_RNDU);          /* r1 = ceil(e0p/e1p) */
-      if (mpz_cmp(r->r1, r->r) < 0)                 /* if (r1 < r) */
-	mpz_set(r->r, r->r1);                       /*   r = r1 */
+      mpfr_get_z(r->r1, r->val, MPFR_RNDU);        /* r1 = ceil(e0p/e1p) */
+      if (mpz_cmp(r->r1, r->r) < 0)                /* if (r1 < r) */
+	mpz_set(r->r, r->r1);                      /*   r = r1 */
 
-      mpz_set(r->old_p1, r->p1);                    /* old_p1 = p1 */
-      mpz_set(r->p1, r->p0);                        /* p1 = p0 */
-      mpz_set(r->old_q1, r->q1);                    /* old_q1 = q1 */
-      mpz_set(r->q1, r->q0);                        /* q1 = q0 */
+      mpz_set(r->old_p1, r->p1);                   /* old_p1 = p1 */
+      mpz_set(r->p1, r->p0);                       /* p1 = p0 */
+      mpz_set(r->old_q1, r->q1);                   /* old_q1 = q1 */
+      mpz_set(r->q1, r->q0);                       /* q1 = q0 */
 
-      mpfr_set(r->old_e0, r->e0, MPFR_RNDN);         /* old_e0 = e0 */
-      mpfr_set(r->e0, r->e1p, MPFR_RNDN);            /* e0 = e1p */
-      mpfr_set(r->old_e0p, r->e0p, MPFR_RNDN);       /* old_e0p = e0p */
-      mpfr_set(r->e0p, r->e1, MPFR_RNDN);            /* e0p = e1 */
-      mpfr_set(r->old_e1, r->e1, MPFR_RNDN);         /* old_e1 = e1 */
+      mpfr_set(r->old_e0, r->e0, MPFR_RNDN);       /* old_e0 = e0 */
+      mpfr_set(r->e0, r->e1p, MPFR_RNDN);          /* e0 = e1p */
+      mpfr_set(r->old_e0p, r->e0p, MPFR_RNDN);     /* old_e0p = e0p */
+      mpfr_set(r->e0p, r->e1, MPFR_RNDN);          /* e0p = e1 */
+      mpfr_set(r->old_e1, r->e1, MPFR_RNDN);       /* old_e1 = e1 */
 
-      mpz_mul(r->p0, r->p0, r->r);                  /* p0 = old_p1 + r * p0 */
+      mpz_mul(r->p0, r->p0, r->r);                 /* p0 = old_p1 + r * p0 */
       mpz_add(r->p0, r->p0, r->old_p1);
 
-      mpz_mul(r->q0, r->q0, r->r);                  /* q0 = old_q1 + r * q0 */
+      mpz_mul(r->q0, r->q0, r->r);                 /* q0 = old_q1 + r * q0 */
       mpz_add(r->q0, r->q0, r->old_q1);
 
-      mpfr_mul_z(r->e1, r->e1p, r->r, MPFR_RNDN);    /* e1 = old_e0p - r * e1p */
+      mpfr_mul_z(r->e1, r->e1p, r->r, MPFR_RNDN);  /* e1 = old_e0p - r * e1p */
       mpfr_sub(r->e1, r->old_e0p, r->e1, MPFR_RNDN);
 
       mpfr_mul_z(r->e1p, r->old_e1, r->r, MPFR_RNDN);/* e1p = old_e0 - r * old_e1 */
@@ -34351,7 +34339,7 @@ static char *complex_to_string_base_10(s7_scheme *sc, s7_complex obj, s7_int wid
 static void complex_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port, use_write_t use_write, shared_info_t *unused_ci)
 {
   #define CV_BUFSIZE 1024 /* some floats can take around 312 bytes */
-  char buf[CV_BUFSIZE];
+  /* char buf[CV_BUFSIZE]; */
   s7_int i, plen;
   bool too_long;
   const s7_complex *els = complex_vector_complexs(vect);
@@ -34401,6 +34389,7 @@ static void complex_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer po
     }
   else
     {
+      char buf[CV_BUFSIZE];
       plen = catstrs_direct(buf, "#c", pos_int_to_str_direct(sc, vector_ndims(vect)), "d", (const char *)NULL);
       port_write_string(port)(sc, buf, plen, port);
       gc_protect_via_stack(sc, vect);
@@ -87620,10 +87609,10 @@ static void op_define_with_setter(s7_scheme *sc)
 	{
 	  if (is_immutable_slot(slot))
 	    {
-	      s7_pointer old_symbol = code, old_value = slot_value(slot);
+	      s7_pointer old_value = slot_value(slot);
 	      if ((type(old_value) != type(sc->value)) ||
 		  (!s7_is_equivalent(sc, old_value, sc->value)))    /* if value is unchanged, just ignore this (re)definition */
-		syntax_error_nr(sc, "define ~S, but it is immutable", 30, old_symbol);
+		syntax_error_nr(sc, "define ~S, but it is immutable", 30, code);
 	    }
 	  else
 	    {
@@ -100561,16 +100550,10 @@ int main(int argc, char **argv)
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
  *
- * complex-vector: opt/do, lint (tari has possible opt cases for complex-vectors -- cvals)
- *   (real|imag-part (vector|complex-vector-ref ...)) -> creal cimag if complex-vector
- *   inline_op_implicit_vector_ref_a -> complex_vector_getter: (data j)=cfft notice type at run-time, or set_ref_aa?
- *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
  *   extend oprec_i* and also to oprec_p[air]* where base p is protected but locals need not be?
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
- *
- * my_strspn: make the radstrs char[256] arrs, 1 where member etc
  */
