@@ -4668,7 +4668,7 @@ typedef enum {SL_NO_FIELD=0, SL_ACCEPT_ALL_KEYWORD_ARGUMENTS, SL_AUTOLOADING, SL
 	      SL_INITIAL_STRING_PORT_LENGTH, SL_MAJOR_VERSION, SL_MAKE_FUNCTION, SL_MAX_FORMAT_LENGTH, SL_MAX_HEAP_SIZE, SL_MAX_LIST_LENGTH,
 	      SL_MAX_PORT_DATA_SIZE, SL_MAX_STACK_SIZE, SL_MAX_STRING_LENGTH, SL_MAX_VECTOR_DIMENSIONS, SL_MAX_VECTOR_LENGTH,
 	      SL_MEMORY_USAGE, SL_MINOR_VERSION, SL_MOST_NEGATIVE_FIXNUM, SL_MOST_POSITIVE_FIXNUM, SL_MUFFLE_WARNINGS,
-	      SL_NUMBER_SEPARATOR, SL_OPENLETS, SL_OUTPUT_FILE_PORT_DATA_SIZE, SL_PRINT_LENGTH, SL_PROFILE, SL_PROFILE_INFO,
+	      SL_NUMBER_SEPARATOR, SL_OPENLETS, SL_OUTPUT_PORT_DATA_SIZE, SL_PRINT_LENGTH, SL_PROFILE, SL_PROFILE_INFO,
 	      SL_PROFILE_PREFIX, SL_ROOTLET_SIZE, SL_SAFETY, SL_STACK, SL_STACKTRACE_DEFAULTS, SL_STACK_SIZE, SL_STACK_TOP,
 	      SL_SYMBOL_QUOTE, SL_SYMBOL_PRINTER, SL_UNDEFINED_CONSTANT_WARNINGS, SL_UNDEFINED_IDENTIFIER_WARNINGS, SL_VERSION,
 	      SL_NUM_FIELDS} starlet_t;
@@ -96944,7 +96944,7 @@ static s7_pointer starlet(s7_scheme *sc, s7_int choice)
     case SL_MUFFLE_WARNINGS:               return(make_boolean(sc, sc->muffle_warnings));
     case SL_NUMBER_SEPARATOR:              return(chars[(int)(sc->number_separator)]);
     case SL_OPENLETS:                      return(make_boolean(sc, sc->has_openlets));
-    case SL_OUTPUT_FILE_PORT_DATA_SIZE:    return(make_integer(sc, sc->output_file_port_data_size));
+    case SL_OUTPUT_PORT_DATA_SIZE:    return(make_integer(sc, sc->output_file_port_data_size));
     case SL_PRINT_LENGTH:                  return(make_integer(sc, sc->print_length));
     case SL_PROFILE:                       return(make_integer(sc, sc->profile));
     case SL_PROFILE_INFO:                  return(profile_info_out(sc));
@@ -97381,7 +97381,8 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       sc->has_openlets = s7_boolean(sc, val);
       return(val);
 
-    case SL_OUTPUT_FILE_PORT_DATA_SIZE:
+    case SL_OUTPUT_PORT_DATA_SIZE:
+      /* the name is (*s7* 'output-port-data-size) but it affects sc->output_file_port_data_size, and can be confused with inital-string-port-length! */
       sc->output_file_port_data_size = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
       return(val);
     case SL_PRINT_LENGTH: /* for pairs and vectors this affects how many elements are printed -- confusing */
@@ -100492,7 +100493,7 @@ int main(int argc, char **argv)
  * ----------------------------------------------------
  * tpeak      148    114    108    105    102    103
  * tref      1081    687    463    459    464    412
- * tlimit    3936   5371   5371   5371   5371    817
+ * tlimit    3936   5371   5371   5371   5371    786
  * index            1016    973    967    972    978
  * tmock            1145   1082   1042   1045   1030
  * tvect     3408   2464   1772   1669   1497   1460
@@ -100546,14 +100547,6 @@ int main(int argc, char **argv)
  * tbig            175.8  156.5  148.1  146.2  145.6
  * ----------------------------------------------------
  *
- * snd-region|select: (since we can't check for consistency when set), should there be more elaborate writable checks for default-output-header|sample-type?
- * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
- * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
- *
- * use optn pointers for if branches (also on existing cases -- many ops can be removed)
- *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
- *   extend oprec_i* and also to oprec_p[air]* where base p is protected but locals need not be?
- *   tc_if_a_z_la et al in tc_cond et al need code merge
- *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
- *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
+ * 86555 apply_c_function args needs truncation if enormous
+ * tlimit strings in t725?
  */

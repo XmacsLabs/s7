@@ -728,7 +728,7 @@
 	     (i3 (* i size3))
 	     (n 0 (+ n 1)))
 	    ((= n size3))
-	  (vector-set! v k i n (+ i3 k3 n)))))))
+	  (vector-set! v k i n (+ i3 k3 n))))))) ; -> g_vector_set (similarly below) via opt_p_call_any in opt_dotimes->opt_do_very_simple->opt_do_any
 
 (define (sum-h1111)
   (let ((sum 0)
