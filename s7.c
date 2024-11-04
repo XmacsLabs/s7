@@ -66814,23 +66814,34 @@ static s7_pointer opt_p_call_any(opt_info *o)
   return(arg);
 }
 
+static s7_pointer opt_p_call_4g(opt_info *o)
+{
+  s7_scheme *sc = o->sc;
+  opt_info *o1 = o->v[0 + P_CALL_O1].o1;
+  opt_info *o2 = o->v[1 + P_CALL_O1].o1;
+  opt_info *o3 = o->v[2 + P_CALL_O1].o1;
+  opt_info *o4 = o->v[3 + P_CALL_O1].o1;
+  return(o->v[2].call(o->sc, set_plist_4(sc, o1->v[0].fp(o1), o2->v[0].fp(o2), o3->v[0].fp(o3), o4->v[0].fp(o4))));
+}
+
 static bool p_call_any_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer car_x, int32_t len)
 {
   if ((len < (NUM_VUNIONS - P_CALL_O1)) &&
       (is_safe_procedure(s_func)) &&
       (c_function_is_aritable(s_func, len - 1)))
     {
+      bool safe = true;
       s7_pointer p = cdr(car_x);      /* (vector-set! v k i 2) gets here, as does (float-vector-set! v k i n (+ 0.0 i3 k3 n)) from tvect */
       opc->v[1].i = (len - 1);        /*   also ccff in cb.scm I think */
       for (int32_t pctr = P_CALL_O1; is_pair(p); pctr++, p = cdr(p))
 	{
 	  opc->v[pctr].o1 = sc->opts[sc->pc];
-	  if (!cell_optimize(sc, p))
-	    break;
+	  if (!cell_optimize(sc, p)) break;
+	  if (is_pair(car(p))) safe = false;
 	}
       if (is_null(p))
 	{
-	  opc->v[0].fp = opt_p_call_any;
+	  opc->v[0].fp = ((len == 5) && (safe)) ? opt_p_call_4g : opt_p_call_any;
 	  opc->v[2].call = cf_call(sc, car_x, s_func, len - 1);
 	  return_true(sc, car_x);
 	}}
@@ -66848,11 +66859,7 @@ static bool p_fx_any_ok(s7_scheme *sc, opt_info *opc, s7_pointer x)
   s7_function f = ((is_pair(car(x))) && (has_fx(car(x)))) ? fx_proc(car(x)) : NULL;
 #if 0
   /* this is slower! -- fx choices are pessimal here */
-  if ((!f) && (is_fxable(sc, car(x))))
-    {
-      fx_annotate_arg(sc, x, sc->curlet);
-      if (has_fx(x)) f = fx_proc(x);
-    }
+  if ((!f) && (is_fxable(sc, car(x)))) {fx_annotate_arg(sc, x, sc->curlet); if (has_fx(x)) f = fx_proc(x);}
 #endif
   if (!f) return_false(sc, x);
   opc->v[0].fp = opt_p_fx_any;
@@ -100104,6 +100111,7 @@ s7_scheme *s7_init(void)
    *   so that #_... can be used because the global_value is not semipermanent, but could it be made so? (via remove_from_heap?)
    */
 #endif
+/* at this point there are about 640 symbols in the symbol table, only 3 or 4 of which are sharing a bin -- nearly perfect */
 
 #if S7_DEBUGGING
   s7_define_function(sc, "report-missed-calls", g_report_missed_calls, 0, 0, false, NULL); /* tc/recur tests in s7test.scm */
@@ -100546,7 +100554,4 @@ int main(int argc, char **argv)
  * sg                      55.9   55.8   55.4   55.1
  * tbig            175.8  156.5  148.1  146.2  145.6
  * ----------------------------------------------------
- *
- * 86555 apply_c_function args needs truncation if enormous
- * tlimit strings in t725?
  */
