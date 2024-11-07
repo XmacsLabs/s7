@@ -394,11 +394,6 @@
 (define-macro (progv vars vals . body)
   `(apply (apply lambda ,vars ',body) ,vals))
 
-;; these also appear to work:
-;;   (define-macro (progv vars vals . body) `((apply lambda ,vars ',body) (apply values ,vals)))
-;;   (define-macro (progv vars vals . body) `((apply lambda ,vars ',body) `,@,vals))
-
-
 (define-macro (symbol-set! var val) ; like CL's set
   `(apply set! ,var ',val ()))
 

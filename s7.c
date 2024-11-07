@@ -613,7 +613,7 @@ typedef struct opt_funcs_t {
 typedef struct {
   const char *name;
   int32_t name_length;
-  uint32_t id;
+  uint32_t class_id; /* can't use "class" -- confuses g++ */
   const char *doc;
   opt_funcs_t *opt_data; /* vunion-functions (see below) */
   s7_pointer generic_ff, setter, signature, pars, let;
@@ -3542,7 +3542,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define c_function_set_signature(f, Val) c_function_data(f)->signature = T_Prf(Val)
 #define c_function_setter(f)           T_Prc(c_function_data(f)->setter)
 #define c_function_set_setter(f, Val)  c_function_data(f)->setter = T_Prc(Val)
-#define c_function_class(f)            c_function_data(f)->id                      /* uint32_t */
+#define c_function_class(f)            c_function_data(f)->class_id                /* uint32_t */
 #define c_function_chooser(f)          c_function_data(f)->chooser
 #define c_function_base(f)             T_CFn(c_function_data(f)->generic_ff)
 #define c_function_set_base(f, Val)    c_function_data(f)->generic_ff = T_CFn(Val)
@@ -14353,7 +14353,7 @@ static void init_pows(void)
   pepow[0] = NULL;
   pepow[1] = NULL;
   for (int32_t i = 2; i < 17; i++) pepow[i] = (double *)Malloc((MAX_POW * 2) * sizeof(double));
-  for (int32_t i = 2; i < 17; i++)        /* radix between 2 and 16 */
+  for (int32_t i = 2; i < 17; i++)               /* radix between 2 and 16 */
     for (int32_t j = -MAX_POW; j < MAX_POW; j++) /* saved exponent between 0 and +/- MAX_POW */
       pepow[i][j + MAX_POW] = pow((double)i, (double)j);
 }
@@ -16603,8 +16603,10 @@ static inline s7_pointer abs_p_p(s7_scheme *sc, s7_pointer x)
     }
   if (is_t_real(x))
     {
+#if 0
       if (is_NaN(real(x)))
 	return((nan_payload(real(x)) > 0) ? x : real_NaN);         /* (abs -nan.0) -> +nan.0?? */
+#endif
       return((signbit(real(x))) ? make_real(sc, -real(x)) : x);
     }
 #endif
@@ -100499,59 +100501,59 @@ int main(int argc, char **argv)
 /* ----------------------------------------------------
  *           19.0   21.0   22.0   23.0   24.0   24.9
  * ----------------------------------------------------
- * tpeak      148    114    108    105    102    103
+ * tpeak      148    114    108    105    102    109
  * tref      1081    687    463    459    464    412
- * tlimit    3936   5371   5371   5371   5371    786
- * index            1016    973    967    972    978
- * tmock            1145   1082   1042   1045   1030
- * tvect     3408   2464   1772   1669   1497   1460
- * thook     7651   ----   2590   2030   2046   1729
- * texit     1884   1950   1778   1741   1770   1758
+ * tlimit    3936   5371   5371   5371   5371    783
+ * index            1016    973    967    972    988
+ * tmock            1145   1082   1042   1045   1032
+ * tvect     3408   2464   1772   1669   1497   1457
+ * thook     7651   ----   2590   2030   2046   1732
+ * texit     1884   1950   1778   1741   1770   1759
  * tauto                   2562   2048   1729   1761
- * s7test           1831   1818   1829   1830   1843
+ * s7test           1831   1818   1829   1830   1849
  * lt        2222   2172   2150   2185   1950   1892
  * dup              3788   2492   2239   2097   2006
  * tread            2421   2419   2408   2405   2241
  * tcopy            5546   2539   2375   2386   2352
  * trclo     8248   2782   2615   2634   2622   2486
  * tload                   3046   2404   2566   2506
- * tmat             3042   2524   2578   2590   2521
+ * tmat             3042   2524   2578   2590   2522
  * fbench    2933   2583   2460   2430   2478   2536
  * tsort     3683   3104   2856   2804   2858   2858
- * titer     4550   3349   3070   2985   2966   2918
+ * titer     4550   3349   3070   2985   2966   2917
  * tio              3752   3683   3620   3583   3127
- * tobj             3970   3828   3577   3508   3432
- * teq              4045   3536   3486   3544   3555
- * tmac             4373   ----   4193   4188   4022
+ * tobj             3970   3828   3577   3508   3434
+ * teq              4045   3536   3486   3544   3556
+ * tmac             4373   ----   4193   4188   4027
  * tcomplex         3650   3583   3625   3679   4031
  * tcase            4793   4439   4430   4439   4376
- * tmap             8774   4489   4541   4586   4379
- * tlet      11.0   6974   5609   5980   5965   4462
- * tfft             7729   4755   4476   4536   4531
- * tshoot           5447   5183   5055   5034   4828
- * tstar            6705   5834   5278   5177   5055
- * tform            5348   5307   5316   5084   5061
- * tstr      10.0   6342   5488   5162   5180   5252
- * tnum             6013   5433   5396   5409   5405
- * tlist     9219   7546   6558   6240   6300   5769
- * trec      19.6   6980   6599   6656   6658   6005
- * tari      15.0   12.7   6827   6543   6278   6137
+ * tmap             8774   4489   4541   4586   4380
+ * tlet      11.0   6974   5609   5980   5965   4466
+ * tfft             7729   4755   4476   4536   4538
+ * tshoot           5447   5183   5055   5034   4829
+ * tstar            6705   5834   5278   5177   5057
+ * tform            5348   5307   5316   5084   5056
+ * tstr      10.0   6342   5488   5162   5180   5250
+ * tnum             6013   5433   5396   5409   5408
+ * tlist     9219   7546   6558   6240   6300   5770
+ * trec      19.6   6980   6599   6656   6658   6006
+ * tari      15.0   12.7   6827   6543   6278   6139
  * tgsl             7802   6373   6282   6208   6208
- * tset                           6260   6364   6276
+ * tset                           6260   6364   6278
  * tleft     12.2   9753   7537   7331   7331   6393
- * tmisc                          7614   7115   7134
+ * tmisc                          7614   7115   7132
  * tgc              10.4   7763   7579   7617   7619
- * tclo             8025   7645   8809   7770   7629
- * tlamb                          8003   7941   7892
- * thash            11.7   9734   9479   9526   9277
+ * tclo             8025   7645   8809   7770   7633
+ * tlamb                          8003   7941   7905
+ * thash            11.7   9734   9479   9526   9278
  * cb        12.9   11.0   9658   9564   9609   9648
  * tmap-hash                                    10.3
- * tgen             11.4   12.0   12.1   12.2   12.3
+ * tgen             11.4   12.0   12.1   12.2   12.4
  * tall      15.9   15.6   15.6   15.6   15.1   15.1
- * timp             24.4   20.0   19.6   19.7   15.5
+ * timp             24.4   20.0   19.6   19.7   15.6
  * tmv              21.9   21.1   20.7   20.6   16.6
- * calls            37.5   37.0   37.5   37.1   37.1
- * sg                      55.9   55.8   55.4   55.1
- * tbig            175.8  156.5  148.1  146.2  145.6
+ * calls            37.5   37.0   37.5   37.1   37.2
+ * sg                      55.9   55.8   55.4   55.4
+ * tbig            175.8  156.5  148.1  146.2  145.5
  * ----------------------------------------------------
  */
