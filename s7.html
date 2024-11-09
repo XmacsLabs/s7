@@ -3094,6 +3094,8 @@ puts it back to its original value.
 </pre>
 <p>Despite the name, no new environment is created by let-temporarily:
 <code>(let () (let-temporarily () (define x 2)) (+ x 1))</code> is 3.
+Also, if the variable in question has a setter, that setter is called
+twice (to set the new value, then later to restore the old). 
 </p>
 
 <p>
@@ -3916,7 +3918,7 @@ notices it has exceeded this limit, it returns the partial string.
 ~W        object-&gt;string with :readable (write readably: "serialization"; s7 is the intended reader)
 </pre>
 
-<p>The eight directives before ~W take the usual numeric arguments to specify field width and precision.
+<p>The eight directives before ~N take the usual numeric arguments to specify field width and precision.
 These can also be ~N or ~n in which case the numeric argument is read from the list of arguments:
 </p>
 <pre class="indented">
@@ -5796,7 +5798,7 @@ minor-version                 an integer (0 in the example above)
 
 print-length                  number of elements to print of a non-string sequence
 max-string-length             maximum size arg to make-string and read-string
-max-format-length             maximum size arg to ~N or the width and precision fields for floats in format
+max-format-length             maximum size arg to ~N or the width and precision fields for floats (default=10000)
 max-list-length               maximum size arg to make-list
 max-port-data-size            maximum size of a port data buffer
 max-vector-length             maximum size arg to make-vector and make-hash-table

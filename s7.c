@@ -4064,6 +4064,7 @@ static void try_to_call_gc(s7_scheme *sc);
 /* --------------------------------------------------------------------------------
  * local versions of some standard C library functions
  * timing tests involving these are very hard to interpret, local_memset is faster using int64_t than int32_t
+ * apparently gcc recognizes our code and substitutes the libc call!
  */
 
 static void local_memset(void *s, uint8_t val, size_t n)
@@ -21098,7 +21099,7 @@ static s7_pointer g_subtract_1_wrapped(s7_scheme *sc, s7_pointer args) {return(n
 static s7_pointer g_subtract_2(s7_scheme *sc, s7_pointer args) {return(subtract_p_pp(sc, car(args), cadr(args)));}
 static s7_pointer g_subtract_2_wrapped(s7_scheme *sc, s7_pointer args) {return(subtract_p_pp_wrapped(sc, car(args), cadr(args)));}
 
-static s7_pointer g_subtract_3(s7_scheme *sc, s7_pointer args)
+static s7_pointer g_subtract_3(s7_scheme *sc, s7_pointer args) /* wrapped version gets no hits */
 {
   s7_pointer x = car(args);
   x = subtract_p_pp_wrapped(sc, x, cadr(args));
@@ -37150,15 +37151,15 @@ static s7_int format_n_arg(s7_scheme *sc, const char *str, format_data_t *fdat, 
   s7_int n;
 
   if (is_null(fdat->args))          /* (format #f "~nT") */
-    format_error_nr(sc, "~~N: missing argument", 21, str, args, fdat);
+    format_error_nr(sc, "~N: missing argument", 20, str, args, fdat);
   if (!s7_is_integer(car(fdat->args)))
-    format_error_nr(sc, "~~N: integer argument required", 30, str, args, fdat);
+    format_error_nr(sc, "~N: integer argument required", 29, str, args, fdat);
   n = s7_integer_clamped_if_gmp(sc, car(fdat->args));
 
   if (n < 0)
-    format_error_nr(sc, "~~N value is negative?", 22, str, args, fdat);
+    format_error_nr(sc, "~N value is negative?", 21, str, args, fdat);
   if (n > sc->max_format_length)
-    format_error_nr(sc, "~~N value is too big", 20, str, args, fdat);
+    format_error_nr(sc, "~N value is too big", 19, str, args, fdat);
 
   fdat->args = cdr(fdat->args);    /* I don't think fdat->ctr should be incremented here -- it's for (*s7* 'print-length) etc */
   return(n);
@@ -98711,17 +98712,17 @@ static void init_setters(s7_scheme *sc)
    *    in scheme because error and warn send output to it by default.  It is not a "dynamic variable".
    */
 
-  c_function_set_setter(global_value(sc->car_symbol),              global_value(sc->set_car_symbol));
-  c_function_set_setter(global_value(sc->cdr_symbol),              global_value(sc->set_cdr_symbol));
-  c_function_set_setter(global_value(sc->hash_table_ref_symbol),   global_value(sc->hash_table_set_symbol));
-  c_function_set_setter(global_value(sc->vector_ref_symbol),       global_value(sc->vector_set_symbol));
-  c_function_set_setter(global_value(sc->float_vector_ref_symbol), global_value(sc->float_vector_set_symbol));
+  c_function_set_setter(global_value(sc->car_symbol),                global_value(sc->set_car_symbol));
+  c_function_set_setter(global_value(sc->cdr_symbol),                global_value(sc->set_cdr_symbol));
+  c_function_set_setter(global_value(sc->hash_table_ref_symbol),     global_value(sc->hash_table_set_symbol));
+  c_function_set_setter(global_value(sc->vector_ref_symbol),         global_value(sc->vector_set_symbol));
+  c_function_set_setter(global_value(sc->float_vector_ref_symbol),   global_value(sc->float_vector_set_symbol));
   c_function_set_setter(global_value(sc->complex_vector_ref_symbol), global_value(sc->complex_vector_set_symbol));
-  c_function_set_setter(global_value(sc->int_vector_ref_symbol),   global_value(sc->int_vector_set_symbol));
-  c_function_set_setter(global_value(sc->byte_vector_ref_symbol),  global_value(sc->byte_vector_set_symbol));
-  c_function_set_setter(global_value(sc->list_ref_symbol),         global_value(sc->list_set_symbol));
-  c_function_set_setter(global_value(sc->let_ref_symbol),          global_value(sc->let_set_symbol));
-  c_function_set_setter(global_value(sc->string_ref_symbol),       global_value(sc->string_set_symbol));
+  c_function_set_setter(global_value(sc->int_vector_ref_symbol),     global_value(sc->int_vector_set_symbol));
+  c_function_set_setter(global_value(sc->byte_vector_ref_symbol),    global_value(sc->byte_vector_set_symbol));
+  c_function_set_setter(global_value(sc->list_ref_symbol),           global_value(sc->list_set_symbol));
+  c_function_set_setter(global_value(sc->let_ref_symbol),            global_value(sc->let_set_symbol));
+  c_function_set_setter(global_value(sc->string_ref_symbol),         global_value(sc->string_set_symbol));
   c_function_set_setter(global_value(sc->outlet_symbol),
 			s7_make_safe_function(sc, "#<set-outlet>", g_set_outlet, 2, 0, false, "outlet setter"));
   c_function_set_setter(global_value(sc->port_line_number_symbol),
@@ -99387,7 +99388,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->cyclic_sequences_symbol =      defun("cyclic-sequences",  cyclic_sequences,	1, 0, false);
   sc->call_cc_symbol =               semisafe_defun("call/cc",	call_cc,		1, 0, false);
   sc->call_with_current_continuation_symbol = semisafe_defun("call-with-current-continuation", call_cc, 1, 0, false);
-  sc->call_with_exit_symbol =        semisafe_defun("call-with-exit", call_with_exit,     1, 0, false);
+  sc->call_with_exit_symbol =        semisafe_defun("call-with-exit", call_with_exit,   1, 0, false); /* semisafe: see t101-6.scm, apply on stack */
 
   sc->load_symbol =                  semisafe_defun("load",	load,			1, 1, false);
   sc->autoload_symbol =              defun("autoload",	        autoload,		2, 0, false);
