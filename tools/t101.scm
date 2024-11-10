@@ -285,6 +285,9 @@
 (format *stderr* "~NC tlimit ~NC~%" 20 #\- 20 #\-)
 (system "./repl tlimit.scm")
 
+(format *stderr* "~NC tbit ~NC~%" 20 #\- 20 #\-)
+(system "./repl tbit.scm")
+
 (format *stderr* "~NC index ~NC~%" 20 #\- 20 #\-)
 (system "./snd make-index.scm")
 

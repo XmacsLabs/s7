@@ -989,7 +989,7 @@ Unlike full-find-if, safe-find-if can handle any circularity in the sequences.")
 	 (error 'wrong-type-arg "log-n-of first argument, ~A, should be an integer" n))
 	((not (every? integer? ints))
 	 (error 'wrong-type-arg "log-n-of ints arguments, ~A, should all be integers" ints))
-	((not (positive? n))
+	((negative? n)
 	 (error 'out-of-range "log-n-of first argument should be positive: ~A" n))
 	(else
 	 (let ((len (length ints)))
