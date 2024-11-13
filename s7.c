@@ -481,7 +481,7 @@ enum {T_FREE = 0,
       NUM_TYPES};
 /* T_UNUSED, T_STACK, T_SLOT, T_DYNAMIC_WIND, T_CATCH, and T_COUNTER are internal */
 
-static const char * const s7_type_names[] =
+static const char *s7_type_names[] =
   {"free", "pair", "nil", "unused", "undefined", "unspecified", "eof_object", "boolean", "character", "syntax", "symbol",
    "integer", "ratio", "real", "complex", "big_integer", "big_ratio", "big_real", "big_complex",
    "string", "c_object", "vector", "int_vector", "float_vector", "byte_vector", "complex_vector",
@@ -1099,7 +1099,7 @@ typedef struct {
 
 typedef enum {NO_JUMP, CALL_WITH_EXIT_JUMP, THROW_JUMP, CATCH_JUMP, ERROR_JUMP, ERROR_QUIT_JUMP} jump_loc_t;
 typedef enum {NO_SET_JUMP, READ_SET_JUMP, LOAD_SET_JUMP, DYNAMIC_WIND_SET_JUMP, S7_CALL_SET_JUMP, EVAL_SET_JUMP} setjmp_loc_t;
-static const char * const jump_string[6] = {"no_jump", "call_with_exit_jump", "throw_jump", "catch_jump", "error_jump", "error_quit_jump"};
+static const char *jump_string[6] = {"no_jump", "call_with_exit_jump", "throw_jump", "catch_jump", "error_jump", "error_quit_jump"};
 
 
 /* -------------------------------- s7_scheme struct -------------------------------- */
@@ -1404,12 +1404,13 @@ struct s7_scheme {
   s7_pointer pcl_bc, pcl_bs, pcl_bt, pcl_c, pcl_e, pcl_f, pcl_i, pcl_n, pcl_r, pcl_s, pcl_v, pl_bc, pl_bn, pl_bt, pl_p, pl_sf, pl_tl, pl_nn;
 
   /* optimizer s7_functions */
-  s7_pointer add_1x, add_2, add_3, add_4, add_i_random, add_x1, append_2, bv_ref_2, bv_ref_3, bv_set_3,
+  s7_pointer add_1x, add_2, add_3, add_4, add_i_random, add_x1, append_2, ash_ii, bv_ref_2, bv_ref_3, bv_set_3,
              cdr_let_ref, cdr_let_set, char_equal_2, char_greater_2, char_less_2, char_position_csi, complex_wrapped, curlet_ref, cv_ref_2, cv_set_3,
              display_2, display_f, dynamic_wind_body, dynamic_wind_init, dynamic_wind_unchecked,
              format_as_objstr, format_f, format_just_control_string, format_no_column, fv_ref_2, fv_ref_3, fv_set_3, fv_set_unchecked, geq_2,
              get_output_string_uncopied, hash_table_2, hash_table_ref_2, int_log2, is_defined_in_rootlet, is_defined_in_unlet, iv_ref_2, iv_ref_3, iv_set_3,
-             list_0, list_1, list_2, list_3, list_4, list_ref_at_0, list_ref_at_1, list_ref_at_2, list_set_i, memq_2, memq_3, memq_4, memq_any, multiply_3,
+             list_0, list_1, list_2, list_3, list_4, list_ref_at_0, list_ref_at_1, list_ref_at_2, list_set_i, logand_2, logand_ii, logior_ii, 
+             memq_2, memq_3, memq_4, memq_any, multiply_3,
              outlet_unlet, profile_out, read_char_1, restore_setter, rootlet_ref, simple_char_eq, simple_inlet, simple_list_values, starlet_ref, starlet_set,
              string_append_2, string_c1, string_equal_2, string_equal_2c, string_greater_2, string_less_2, sublet_curlet, substring_uncopied, subtract_1,
              subtract_2, subtract_2f, subtract_3, subtract_f2, subtract_x1, sv_unlet_ref, symbol_to_string_uncopied, tree_set_memq_syms,
@@ -3865,7 +3866,7 @@ static s7_pointer *small_ints = NULL;
 static s7_pointer real_zero, real_NaN, complex_NaN, real_pi, real_one, arity_not_set, max_arity, real_infinity, real_minus_infinity;
 static s7_pointer int_zero, int_one, int_two, int_three, minus_one, minus_two, mostfix, leastfix;
 
-static const char * const ones[10] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
+static const char *ones[10] = {"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
 static void init_small_ints(void)
 {
@@ -4439,7 +4440,7 @@ enum {OP_UNOPT, OP_GC_PROTECT, /* must be an even number of ops here, op_gc_prot
 
 typedef enum{E_C_P, E_C_PP, E_C_CP, E_C_SP, E_C_PC, E_C_PS} combine_op_t;
 
-static const char * const op_names[NUM_OPS] =
+static const char *op_names[NUM_OPS] =
      {"unopt", "gc_protect",
 
       "safe_c_nc", "h_safe_c_nc", "safe_c_s", "h_safe_c_s",
@@ -4674,7 +4675,7 @@ typedef enum {SL_NO_FIELD=0, SL_ACCEPT_ALL_KEYWORD_ARGUMENTS, SL_AUTOLOADING, SL
 	      SL_SYMBOL_QUOTE, SL_SYMBOL_PRINTER, SL_UNDEFINED_CONSTANT_WARNINGS, SL_UNDEFINED_IDENTIFIER_WARNINGS, SL_VERSION,
 	      SL_NUM_FIELDS} starlet_t;
 
-static const char * const starlet_names[SL_NUM_FIELDS] =
+static const char *starlet_names[SL_NUM_FIELDS] =
   {"no-field", "accept-all-keyword-arguments", "autoloading?", "bignum-precision", "catches", "cpu-time", "c-types",
    "debug", "default-hash-table-length", "default-random-state", "default-rationalize-error", "equivalent-float-epsilon",
    "expansions?", "filenames", "file-names", "float-format-precision", "free-heap-size", "gc-freed", "gc-info",
@@ -5151,7 +5152,9 @@ static char *object_raw_type_to_string(s7_pointer p)
 
 static void complain(s7_scheme *sc, const char *complaint, s7_pointer p, const char *func, int32_t line, uint8_t typ)
 {
-  fprintf(stderr, complaint, bold_text, func, line, checked_type_name(sc, typ), object_raw_type_to_string(p), unbold_text);
+  char *pstr = object_raw_type_to_string(p);
+  fprintf(stderr, complaint, bold_text, func, line, checked_type_name(sc, typ), pstr, unbold_text);
+  free(pstr);
   if (sc->stop_at_error) abort();
 }
 
@@ -14760,7 +14763,7 @@ static size_t integer_to_string_any_base(char *p, s7_int n, int32_t radix)  /* c
 
   if (n == S7_INT64_MIN) /* can't negate this, so do it by hand */
     {
-      static const char * const mnfs[17] = {"","",
+      static const char *mnfs[17] = {"","",
 	"-1000000000000000000000000000000000000000000000000000000000000000", "-2021110011022210012102010021220101220222",
 	"-20000000000000000000000000000000", "-1104332401304422434310311213", "-1540241003031030222122212",
 	"-22341010611245052052301", "-1000000000000000000000", "-67404283172107811828",	"-9223372036854775808",
@@ -15719,7 +15722,7 @@ static s7_int string_to_integer(const char *str, int32_t radix, bool *overflow)
   return((negative) ? -lval : lval);
 }
 
-static const char * const radstr[17] = {NULL, NULL, "01", "012", "0123", "01234", "012345", "0123456", "01234567", "012345678", "0123456789",
+static const char *radstr[17] = {NULL, NULL, "01", "012", "0123", "01234", "012345", "0123456", "01234567", "012345678", "0123456789",
   "0123456789aA", "0123456789aAbB", "0123456789aAbBcC", "0123456789aAbBcCdD", "0123456789aAbBcCdDeE", "0123456789aAbBcCdDeEfF"};
 
 #if WITH_GMP
@@ -20512,7 +20515,7 @@ static s7_pointer add_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_poin
       if ((is_t_integer(arg1)) && ((is_pair(arg2)) && (is_optimized(arg2)) && (is_h_safe_c_nc(arg2)) && (fn_proc(arg2) == g_random_i)))
 	{
 	  set_opt3_int(cdr(expr), integer(cadr(arg2)));
-	  set_safe_optimize_op(expr, HOP_SAFE_C_NC); /* op if r op? */
+	  set_safe_optimize_op(expr, HOP_SAFE_C_NC); /* i.e. don't evaluate random call beforehand(?) */
 	  return(sc->add_i_random);
 	}
       if (arg1 == int_one) return(sc->add_1x);
@@ -25964,6 +25967,34 @@ sign of 'x' (1 = positive, -1 = negative).  (integer-decode-float 0.0): (0 0 1)"
 
 
 /* -------------------------------- logior -------------------------------- */
+
+static bool has_two_int_args(s7_scheme *sc, s7_pointer expr)
+{
+  s7_pointer arg1 = cadr(expr), arg2 = caddr(expr);
+  if (is_t_integer(arg1))
+    {
+      if (is_t_integer(arg2)) return(true);
+      if ((is_pair(arg2)) && (is_symbol(car(arg2))) && (is_defined_global(car(arg2))) && (is_c_function(global_value(car(arg2)))))
+	{
+	  s7_pointer sig = c_function_signature(global_value(car(arg2)));
+	  if ((is_pair(sig)) && (car(sig) == sc->is_integer_symbol)) return(true);
+	}
+      return(false);
+    }
+  if ((is_pair(arg1)) && (is_symbol(car(arg1))) && (is_defined_global(car(arg1))) && (is_c_function(global_value(car(arg1)))))
+    {
+      s7_pointer sig = c_function_signature(global_value(car(arg1)));
+      if ((is_pair(sig)) && (car(sig) == sc->is_integer_symbol))
+	{
+	  if (is_t_integer(arg2)) return(true);
+	  if ((is_pair(arg2)) && (is_symbol(car(arg2))) && (is_defined_global(car(arg2))) && (is_c_function(global_value(car(arg2)))))
+	    {
+	      s7_pointer sig = c_function_signature(global_value(car(arg2)));
+	      if ((is_pair(sig)) && (car(sig) == sc->is_integer_symbol)) return(true);
+	    }}}
+  return(false);
+}
+
 #if WITH_GMP
 static s7_pointer big_logior(s7_scheme *sc, s7_int start, s7_pointer args)
 {
@@ -26014,6 +26045,14 @@ static s7_pointer g_logior(s7_scheme *sc, s7_pointer args)
 
 static s7_int logior_i_ii(s7_int i1, s7_int i2) {return(i1 | i2);}
 static s7_int logior_i_iii(s7_int i1, s7_int i2, s7_int i3) {return(i1 | i2 | i3);}
+
+static s7_pointer g_logior_ii(s7_scheme *sc, s7_pointer args) {return(make_integer(sc, integer(car(args)) | integer(cadr(args))));}
+
+static s7_pointer logior_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr)
+{
+  if ((args == 2) && (has_two_int_args(sc, expr))) return(sc->logior_ii);
+  return(f);
+}
 
 
 /* -------------------------------- logxor -------------------------------- */
@@ -26120,6 +26159,25 @@ static s7_pointer g_logand(s7_scheme *sc, s7_pointer args)
 
 static s7_int logand_i_ii(s7_int i1, s7_int i2) {return(i1 & i2);}
 static s7_int logand_i_iii(s7_int i1, s7_int i2, s7_int i3) {return(i1 & i2 & i3);}
+
+static s7_pointer g_logand_ii(s7_scheme *sc, s7_pointer args) {return(make_integer(sc, integer(car(args)) & integer(cadr(args))));}
+static s7_pointer g_logand_2(s7_scheme *sc, s7_pointer args) 
+{
+  s7_pointer arg1 = car(args), arg2 = cadr(args);
+  if ((is_t_integer(arg1)) && (is_t_integer(arg2)))
+    return(make_integer(sc, integer(arg1) & integer(arg2)));
+  return(g_logand(sc, args));
+}
+
+static s7_pointer logand_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr)
+{
+  if (args == 2)
+    {
+      if (has_two_int_args(sc, expr)) return(sc->logand_ii);
+      return(sc->logand_2);
+    }
+  return(f);
+}
 
 
 /* -------------------------------- lognot -------------------------------- */
@@ -26305,12 +26363,27 @@ static s7_pointer g_ash(s7_scheme *sc, s7_pointer args)
   return(make_integer(sc, c_ash(sc, s7_integer_clamped_if_gmp(sc, x), s7_integer_clamped_if_gmp(sc, y))));
 }
 
-#if !WITH_GMP
-  static s7_int ash_i_7ii(s7_scheme *sc, s7_int i1, s7_int i2) {return(c_ash(sc, i1, i2));}
-#endif
 static s7_int lsh_i_ii_unchecked(s7_int i1, s7_int i2) {return(i1 << i2);} /* this may need gmp special handling, and out-of-range as in c_ash */
 static s7_int rsh_i_ii_unchecked(s7_int i1, s7_int i2) {return(i1 >> (-i2));}
 static s7_int rsh_i_i2_direct(s7_int i1, s7_int unused_i2) {return(i1 >> 1);}
+
+#if !WITH_GMP
+static s7_int ash_i_7ii(s7_scheme *sc, s7_int i1, s7_int i2) {return(c_ash(sc, i1, i2));}
+/* this duplication (with c_ash) makes a big difference to callgrind -- why? */
+
+static s7_pointer g_ash_ii(s7_scheme *sc, s7_pointer args) {return(make_integer(sc, c_ash(sc, integer(car(args)), integer(cadr(args)))));}
+
+static s7_pointer ash_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr)
+{
+  if ((args == 2) && (has_two_int_args(sc, expr))) return(sc->ash_ii);
+  return(f);
+}
+#endif
+
+/* TODO: [g_ash_ii], [g_logand_ii] [g_logior_ii], perhaps logxor lognot_i (if arg sig -> int) 
+ *   g_logbit_ii (sig=int), (logbit (ivref...)...) via op_safe_c_nc? ivref_wrapped  (or reused if in heap?)
+ *   also [logand_2] logior_2 etc?
+ */
 
 
 /* -------------------------------- random-state -------------------------------- */
@@ -37075,7 +37148,7 @@ static void format_number(s7_scheme *sc, format_data_t *fdat, int32_t radix, s7_
   fdat->ctr++;
 }
 
-static const char * const ordinal[11] = {"zeroth", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"};
+static const char *ordinal[11] = {"zeroth", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"};
 static const s7_int ordinal_length[11] = {6, 5, 6, 5, 6, 5, 5, 7, 6, 5, 5};
 
 static void format_ordinal_number(s7_scheme *sc, format_data_t *fdat, s7_pointer port)
@@ -50617,23 +50690,23 @@ static s7_pointer rs_length(s7_scheme *sc, s7_pointer port) {return((WITH_GMP) ?
 static void init_length_functions(void)
 {
   for (int32_t i = 0; i < 256; i++) length_functions[i] = any_length;
-  length_functions[T_NIL]          = nil_length;
-  length_functions[T_PAIR]         = pair_length;
-  length_functions[T_VECTOR]       = v_length;
-  length_functions[T_FLOAT_VECTOR] = v_length;
+  length_functions[T_NIL]            = nil_length;
+  length_functions[T_PAIR]           = pair_length;
+  length_functions[T_VECTOR]         = v_length;
+  length_functions[T_FLOAT_VECTOR]   = v_length;
   length_functions[T_COMPLEX_VECTOR] = v_length;
-  length_functions[T_INT_VECTOR]   = v_length;
-  length_functions[T_STRING]       = str_length;
-  length_functions[T_BYTE_VECTOR]  = bv_length;
-  length_functions[T_ITERATOR]     = iter_length;
-  length_functions[T_HASH_TABLE]   = h_length;
-  length_functions[T_C_OBJECT]     = c_obj_length;
-  length_functions[T_LET]          = lt_length;
-  length_functions[T_CLOSURE]      = fnc_length;
-  length_functions[T_CLOSURE_STAR] = fnc_length;
-  length_functions[T_INPUT_PORT]   = ip_length;
-  length_functions[T_OUTPUT_PORT]  = op_length;
-  length_functions[T_RANDOM_STATE] = rs_length;
+  length_functions[T_INT_VECTOR]     = v_length;
+  length_functions[T_STRING]         = str_length;
+  length_functions[T_BYTE_VECTOR]    = bv_length;
+  length_functions[T_ITERATOR]       = iter_length;
+  length_functions[T_HASH_TABLE]     = h_length;
+  length_functions[T_C_OBJECT]       = c_obj_length;
+  length_functions[T_LET]            = lt_length;
+  length_functions[T_CLOSURE]        = fnc_length;
+  length_functions[T_CLOSURE_STAR]   = fnc_length;
+  length_functions[T_INPUT_PORT]     = ip_length;
+  length_functions[T_OUTPUT_PORT]    = op_length;
+  length_functions[T_RANDOM_STATE]   = rs_length;
 }
 
 static s7_pointer s7_length(s7_scheme *sc, s7_pointer lst) {return((*length_functions[unchecked_type(lst)])(sc, lst));}
@@ -50646,8 +50719,6 @@ list has infinite length.  Length of anything else returns #f."
   #define Q_length s7_make_signature(sc, 2, s7_make_signature(sc, 3, sc->is_integer_symbol, sc->is_infinite_symbol, sc->not_symbol), sc->T)
   return((*length_functions[unchecked_type(car(args))])(sc, car(args)));
 }
-
-/* length_p_p = s7_length */
 
 
 /* -------------------------------- copy -------------------------------- */
@@ -60473,7 +60544,7 @@ static void add_opt_func(s7_scheme *sc, s7_pointer f, opt_func_t typ, void *func
 {
   opt_funcs_t *op;
 #if S7_DEBUGGING
-  static const char * const o_names[] = 
+  static const char *o_names[] = 
     {"o_d_v", "o_d_vd", "o_d_vdd", "o_d_vid", "o_d_id", "o_d_7pi", "o_d_7pii", "o_d_7piid", "o_d_7piii", "o_d_7piiid",
      "o_d_ip", "o_d_pd", "o_d_7p", "o_d_7pid", "o_d", "o_d_d", "o_d_dd", "o_d_7dd", "o_d_ddd", "o_d_dddd",
      "o_i_i", "o_i_7i", "o_i_ii", "o_i_7ii", "o_i_iii", "o_i_7pi", "o_i_7pii", "o_i_7_piii", "o_d_p",
@@ -72408,6 +72479,21 @@ static void init_choosers(s7_scheme *sc)
   /* log */
   f = set_function_chooser(sc->log_symbol, log_chooser);
   sc->int_log2 = make_function_with_class(sc, f, "log", g_int_log2, 2, 0, false);
+
+  /* logior */
+  f = set_function_chooser(sc->logior_symbol, logior_chooser);
+  sc->logior_ii = make_function_with_class(sc, f, "logior", g_logior_ii, 2, 0, false);
+
+  /* logand */
+  f = set_function_chooser(sc->logand_symbol, logand_chooser);
+  sc->logand_2 = make_function_with_class(sc, f, "logand", g_logand_2, 2, 0, false);
+  sc->logand_ii = make_function_with_class(sc, f, "logand", g_logand_ii, 2, 0, false);
+
+#if !WITH_GMP
+  /* ash */
+  f = set_function_chooser(sc->ash_symbol, ash_chooser);
+  sc->ash_ii = make_function_with_class(sc, f, "ash", g_ash_ii, 2, 0, false);
+#endif
 
   /* random */
   f = set_function_chooser(sc->random_symbol, random_chooser);
@@ -100523,7 +100609,7 @@ int main(int argc, char **argv)
  * tsort     3683   3104   2856   2804   2858   2858
  * titer     4550   3349   3070   2985   2966   2917
  * tio              3752   3683   3620   3583   3127
- * tbit      3836   3305   3245   3261   3264   3305 [fx->op safe_closure_ss_a, modulo_p_pp, eval up]
+ * tbit      3836   3305   3245   3261   3264   3189
  * tobj             3970   3828   3577   3508   3434
  * teq              4045   3536   3486   3544   3556
  * tmac             4373   ----   4193   4188   4027
@@ -100558,4 +100644,6 @@ int main(int argc, char **argv)
  * sg                      55.9   55.8   55.4   55.4
  * tbig            175.8  156.5  148.1  146.2  145.5
  * ----------------------------------------------------
+ *
+ * check gmp version
  */

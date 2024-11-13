@@ -306,7 +306,7 @@
 (format *stderr* "~NC full s7test ~NC~%" 20 #\- 20 #\-)
 (system "./repl full-s7test.scm")
 
-(format *stderr* "~NC full s7test ~NC~%" 20 #\- 20 #\-)
+(format *stderr* "~NC trepl full s7test ~NC~%" 20 #\- 20 #\-)
 (system "gcc -o trepl ~/cl/trepl.c s7.o -O -Wl,-export-dynamic -lm -I. -ldl")
 (system "trepl")
 

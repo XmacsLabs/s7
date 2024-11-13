@@ -37,8 +37,8 @@
     (do ((i 0 (+ i 1))
 	 (loc (random 100) (random 100)))
 	((= i size))
-      (if (not (eq? (bit-vector-ref bv loc) (odd? loc)))
-	  (display 'oops)))))
+      (unless (eq? (bit-vector-ref bv loc) (odd? loc))
+	(display 'oops)))))
 
 ;; (bit-test1) ; 543, eval 191, fx_num_eq_us 52, fx_c_s_opsiq_direct 37, fx_c_aa 36, int_vector_ref_p_pp 32, fx_random_i 27
 
@@ -67,6 +67,7 @@
     (bit-reverse #x63084210))) ; #x84210c6
 
 ;; (bit-test2) ; 499, g_logand 96, fx_c_opscq_c 92, g_ash 86, eval 83, g_logior 49
+               ; 480, g_ash_ii 74
 
 
 (define 2^n?
@@ -186,10 +187,7 @@
 		     (if (zero? n)
 			 tot
 			 (logcnt (quotient n 16)
-				 (+ (vector-ref
-				     #(0 1 1 2 1 2 2 3 1 2 2 3 2 3 3 4)
-				     (modulo n 16))
-				    tot))))))
+				 (+ (vector-ref #(0 1 1 2 1 2 2 3 1 2 2 3 2 3 3 4) (modulo n 16)) tot)))))) ; int-vector slower?
     (lambda (n)
       (cond ((negative? n) (lognot (logcnt (lognot n) 0)))
 	    ((positive? n) (logcnt n 0))
