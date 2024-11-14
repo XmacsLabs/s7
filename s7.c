@@ -25970,6 +25970,8 @@ sign of 'x' (1 = positive, -1 = negative).  (integer-decode-float 0.0): (0 0 1)"
 
 static bool has_two_int_args(s7_scheme *sc, s7_pointer expr)
 {
+  /* TODO: this needs to be split into 2 calls on has_one_int, and maybe support (apply int-func...) */
+  /*   also the global business is wrong if it is currently shadowed */
   s7_pointer arg1 = cadr(expr), arg2 = caddr(expr);
   if (is_t_integer(arg1))
     {
@@ -56038,7 +56040,11 @@ static s7_pointer fx_random_i(s7_scheme *sc, s7_pointer arg)
 
 static s7_pointer fx_random_i_wrapped(s7_scheme *sc, s7_pointer arg)
 {
+#if WITH_GMP
+  return(g_random_i(sc, cdr(arg)));
+#else
   return(wrap_integer(sc, (s7_int)(integer(cadr(arg)) * next_random(sc->default_random_state))));
+#endif
 }
 
 #if !WITH_GMP
@@ -100644,6 +100650,4 @@ int main(int argc, char **argv)
  * sg                      55.9   55.8   55.4   55.4
  * tbig            175.8  156.5  148.1  146.2  145.5
  * ----------------------------------------------------
- *
- * check gmp version
  */

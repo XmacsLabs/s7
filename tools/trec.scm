@@ -352,3 +352,16 @@
 (when (> (*s7* 'profile) 0)
   (show-profile 200))
 (exit)
+
+#|
+(define (add n acc) (if (< n 1) acc (add (- n 1) (+ acc 1))))
+(add 1000000 0)
+
+32,761,701  PROGRAM TOTALS
+
+13,000,137  s7.c:op_tc_if_a_z_l2a [/home/bil/motif-snd/repl]
+ 6,000,006  s7.c:opt_b_ii_sc_lt_1 [/home/bil/motif-snd/repl]
+ 6,000,000  s7.c:opt_i_ii_sc_add [/home/bil/motif-snd/repl]
+ 6,000,000  s7.c:opt_i_ii_sc_sub [/home/bil/motif-snd/repl]
+   303,598  s7.c:s7_init [/home/bil/motif-snd/repl]
+|#

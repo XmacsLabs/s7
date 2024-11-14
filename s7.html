@@ -6530,6 +6530,7 @@ the name 'quote', so it is annoying that its result can be altered by redefining
 of the difference (I'm using guile because it is available on this machine):
 </p>
 <pre class="indented">
+(let ((quote "Friends, Romans...")) 'x) ; guile Unbound variable: x, s7 x
 (let (' 1) quote)                  ; guile 1, s7 error (#_quote is not a symbol)
 (let ((quote 32)) (length '(1 2))) ; guile error Wrong type to apply: 1, s7 2
 (let ((quote cos)) '0)             ; guile 1, s7 0

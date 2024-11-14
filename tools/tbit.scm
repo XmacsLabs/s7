@@ -107,9 +107,6 @@
 	 (for-each (lambda (arg) (if (not (f arg)) (return #f))) sequence)
 	 #t)))))
 
-(define log-all-of logand)    ; bits on in all of ints
-(define log-any-of logior)    ; bits on in at least 1 of ints
-
 (define (log-n-of n . ints)   ; return the bits on in exactly n of ints
   (cond ((not (integer? n))
 	 (error 'wrong-type-arg "log-n-of first argument, ~A, should be an integer" n))
@@ -151,6 +148,7 @@
     (logeqv i (+ i 1))))
 
 ;; (bit-test3) ; 442, eval 128, op_any_closure_sym 48, g_logand 30
+               ; 431, g_logand_2 14
 
 (define (bit-test4)
   (do ((i 0 (+ i 1)))
@@ -158,7 +156,7 @@
     (log-n-of 1 i (+ i 1))))
 
 ;; (bit-test4) ; 817, eval 386, gc 63, op_do_init_1 46, fx_s 30
-
+               ; 811, g_logand_2
 
 
 (define (byte siz pos) ;; -> cache size, position and mask.
@@ -178,7 +176,7 @@
     (dpb (ldb (byte 8 0) #x123) (byte 8 1) #x100)))
 
 ;; (bit-test5) ; 321, eval 48, g_ash 45
-
+               ; 308, g_logand_2
 
 
 ;; from slib
@@ -223,6 +221,7 @@
       (rotate-byte i b -3))))
 
 ;; (bit-test7) ; 405, eval 93, gc 35, op_let_star_na 32, g_ash 29
+               ; 387. g_logand_2
 
 
 (define (bit-test)
