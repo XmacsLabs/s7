@@ -220,7 +220,7 @@
 	((= i size/5))
       (rotate-byte i b -3))))
 
-;; (bit-test7) ; 405, eval 93, gc 35, op_let_star_na 32, g_ash 29
+(bit-test7) ; 405, eval 93, gc 35, op_let_star_na 32, g_ash 29
                ; 387. g_logand_2
 
 
@@ -233,4 +233,4 @@
   (bit-test6)
   (bit-test7))
 
-(bit-test)
+;(bit-test)

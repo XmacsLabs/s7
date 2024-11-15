@@ -19727,6 +19727,7 @@ static s7_pointer g_round(s7_scheme *sc, s7_pointer args)
   #define Q_round s7_make_signature(sc, 2, sc->is_integer_symbol, sc->is_real_symbol)
   return(round_p_p(sc, car(args)));
 }
+/* (round (/ ...)) -> real_divide etc (wrapped) -- round_p_p is called in tbit via fx_c_op_opssqq_s_direct */
 
 static s7_int round_i_i(s7_int i) {return(i);}
 
@@ -22048,8 +22049,8 @@ static s7_pointer divide_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 
 	case T_COMPLEX:
 	  {
-	    s7_double den, r1 = (s7_double)integer(x), r2 = real_part(y), i2 = imag_part(y);
-	    den = 1.0 / (r2 * r2 + i2 * i2);
+	    s7_double r1 = (s7_double)integer(x), r2 = real_part(y), i2 = imag_part(y);
+	    s7_double den = 1.0 / (r2 * r2 + i2 * i2);
 	    /* we could avoid the squaring (see Knuth II p613 16), not a big deal: (/ 1.0e308+1.0e308i 2.0e308+2.0e308i) => nan, (gmp case is ok here) */
 	    return(make_complex(sc, r1 * r2 * den, -(r1 * i2 * den)));
 	  }
@@ -22558,7 +22559,6 @@ static s7_pointer g_divide_2(s7_scheme *sc, s7_pointer args) {return(divide_p_pp
 
 static s7_pointer g_divide_by_2(s7_scheme *sc, s7_pointer args)
 {
-  /* (/ x 2) */
   s7_pointer num = car(args);
   if (is_t_integer(num))
     {
@@ -100650,4 +100650,7 @@ int main(int argc, char **argv)
  * sg                      55.9   55.8   55.4   55.4
  * tbig            175.8  156.5  148.1  146.2  145.5
  * ----------------------------------------------------
+ *
+ * terr: catch+errors, tchar? tcase? tsetter: integer? et al as setter?
+ * handle alloc>heap-size error better (precheck+backout)
  */
