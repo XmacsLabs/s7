@@ -88968,7 +88968,14 @@ static bool op_tc_if_a_z_l2a(s7_scheme *sc, s7_pointer code)
 	    }
 	  if (tf == fx_is_null_t)
 	    {
-	      do {s7_pointer p = cdr(slot_value(la_slot)); slot_set_value(l2a_slot, fx_call(sc, l2a)); slot_set_value(la_slot, p);} while (!is_null(slot_value(la_slot)));
+	      do {
+		s7_pointer p;
+		if (is_pair(slot_value(la_slot))) /* needed if improper list passed here */
+		  p = cdr(slot_value(la_slot));
+		else sole_arg_wrong_type_error_nr(sc, sc->cdr_symbol, slot_value(la_slot), sc->type_names[T_PAIR]);
+		slot_set_value(l2a_slot, fx_call(sc, l2a)); 
+		slot_set_value(la_slot, p);
+	      } while (!is_null(slot_value(la_slot)));
 	      return(op_tc_z(sc, if_done));
 	    }}
       while (tf(sc, if_test) == sc->F)
@@ -88982,7 +88989,11 @@ static bool op_tc_if_a_z_l2a(s7_scheme *sc, s7_pointer code)
       if ((tf == fx_is_pair_t) && (fx_proc(la) == fx_cdr_t) && (is_pair(slot_value(la_slot))))
 	{
 	  /* we need to save la new value before getting the new l2a value since l2a might refer to the current la value or vice versa */
-	  do {s7_pointer p = cdr(slot_value(la_slot)); slot_set_value(l2a_slot, fx_call(sc, l2a)); slot_set_value(la_slot, p);} while (is_pair(slot_value(la_slot)));
+	  do {
+	    s7_pointer p = cdr(slot_value(la_slot));
+	    slot_set_value(l2a_slot, fx_call(sc, l2a));
+	    slot_set_value(la_slot, p);
+	  } while (is_pair(slot_value(la_slot)));
 	  return(op_tc_z(sc, if_done));
 	}
       while (tf(sc, if_test) != sc->F)
@@ -89147,7 +89158,9 @@ static s7_pointer op_tc_and_a_or_a_l2a(s7_scheme *sc, s7_pointer code)
 	{
 	  if (is_null(l2a_val)) return(sc->F);
 	  if (is_null(la_val)) return(sc->T);
-	  la_val = cdr(la_val);
+	  if (!is_pair(l2a_val)) sole_arg_wrong_type_error_nr(sc, sc->cdr_symbol, l2a_val, sc->type_names[T_PAIR]);
+	  if (!is_pair(la_val)) sole_arg_wrong_type_error_nr(sc, sc->cdr_symbol, la_val, sc->type_names[T_PAIR]);
+	  la_val = cdr(la_val); 
 	  l2a_val = cdr(l2a_val);
 	}}
   while (true)
@@ -89383,12 +89396,14 @@ static bool op_tc_if_a_z_if_a_z_l2a(s7_scheme *sc, s7_pointer code)
     {
       if ((slot1 == l2a_slot) && (fx_proc(if2_test) == fx_is_null_t) && (fx_proc(la) == fx_cdr_t) && (fx_proc(l2a) == fx_cdr_u) &&
 	  (is_boolean(car(if1_true))) && (is_boolean(car(if2_true))))
-	{
+	{ /* is this ever hit? */
 	  s7_pointer la_val = slot_value(la_slot), l2a_val = slot_value(l2a_slot);
 	  while (true)
 	    {
 	      if (is_null(l2a_val)) {sc->value = car(if1_true); return(true);}
 	      if (is_null(la_val)) {sc->value = car(if2_true); return(true);}
+	      if (!is_pair(l2a_val)) sole_arg_wrong_type_error_nr(sc, sc->cdr_symbol, l2a_val, sc->type_names[T_PAIR]);
+	      if (!is_pair(la_val)) sole_arg_wrong_type_error_nr(sc, sc->cdr_symbol, la_val, sc->type_names[T_PAIR]);
 	      la_val = cdr(la_val);
 	      l2a_val = cdr(l2a_val);
 	    }}
@@ -100591,9 +100606,9 @@ int main(int argc, char **argv)
 #endif
 #endif
 
-/* ----------------------------------------------------
- *           19.0   21.0   22.0   23.0   24.0   24.9
- * ----------------------------------------------------
+/* ------------------------------------------------------------
+ *           19.0   21.0   22.0   23.0   24.0   25.0
+ * ------------------------------------------------------------
  * tpeak      148    114    108    105    102    109
  * tref      1081    687    463    459    464    412
  * tlimit    3936   5371   5371   5371   5371    783
@@ -100649,7 +100664,7 @@ int main(int argc, char **argv)
  * calls            37.5   37.0   37.5   37.1   37.2
  * sg                      55.9   55.8   55.4   55.4
  * tbig            175.8  156.5  148.1  146.2  145.5
- * ----------------------------------------------------
+ * ------------------------------------------------------------
  *
  * terr: catch+errors, tchar? tcase? tsetter: integer? et al as setter?
  * handle alloc>heap-size error better (precheck+backout)
