@@ -1409,7 +1409,7 @@ struct s7_scheme {
              display_2, display_f, dynamic_wind_body, dynamic_wind_init, dynamic_wind_unchecked,
              format_as_objstr, format_f, format_just_control_string, format_no_column, fv_ref_2, fv_ref_3, fv_set_3, fv_set_unchecked, geq_2,
              get_output_string_uncopied, hash_table_2, hash_table_ref_2, int_log2, is_defined_in_rootlet, is_defined_in_unlet, iv_ref_2, iv_ref_3, iv_set_3,
-             list_0, list_1, list_2, list_3, list_4, list_ref_at_0, list_ref_at_1, list_ref_at_2, list_set_i, logand_2, logand_ii, logior_ii, 
+             list_0, list_1, list_2, list_3, list_4, list_ref_at_0, list_ref_at_1, list_ref_at_2, list_set_i, logand_2, logand_ii, logior_ii,
              memq_2, memq_3, memq_4, memq_any, multiply_3,
              outlet_unlet, profile_out, read_char_1, restore_setter, rootlet_ref, simple_char_eq, simple_inlet, simple_list_values, starlet_ref, starlet_set,
              string_append_2, string_c1, string_equal_2, string_equal_2c, string_greater_2, string_less_2, sublet_curlet, substring_uncopied, subtract_1,
@@ -26163,7 +26163,7 @@ static s7_int logand_i_ii(s7_int i1, s7_int i2) {return(i1 & i2);}
 static s7_int logand_i_iii(s7_int i1, s7_int i2, s7_int i3) {return(i1 & i2 & i3);}
 
 static s7_pointer g_logand_ii(s7_scheme *sc, s7_pointer args) {return(make_integer(sc, integer(car(args)) & integer(cadr(args))));}
-static s7_pointer g_logand_2(s7_scheme *sc, s7_pointer args) 
+static s7_pointer g_logand_2(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer arg1 = car(args), arg2 = cadr(args);
   if ((is_t_integer(arg1)) && (is_t_integer(arg2)))
@@ -26382,7 +26382,7 @@ static s7_pointer ash_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_poin
 }
 #endif
 
-/* TODO: [g_ash_ii], [g_logand_ii] [g_logior_ii], perhaps logxor lognot_i (if arg sig -> int) 
+/* TODO: [g_ash_ii], [g_logand_ii] [g_logior_ii], perhaps logxor lognot_i (if arg sig -> int)
  *   g_logbit_ii (sig=int), (logbit (ivref...)...) via op_safe_c_nc? ivref_wrapped  (or reused if in heap?)
  *   also [logand_2] logior_2 etc?
  */
@@ -60550,7 +60550,7 @@ static void add_opt_func(s7_scheme *sc, s7_pointer f, opt_func_t typ, void *func
 {
   opt_funcs_t *op;
 #if S7_DEBUGGING
-  static const char *o_names[] = 
+  static const char *o_names[] =
     {"o_d_v", "o_d_vd", "o_d_vdd", "o_d_vid", "o_d_id", "o_d_7pi", "o_d_7pii", "o_d_7piid", "o_d_7piii", "o_d_7piiid",
      "o_d_ip", "o_d_pd", "o_d_7p", "o_d_7pid", "o_d", "o_d_d", "o_d_dd", "o_d_7dd", "o_d_ddd", "o_d_dddd",
      "o_i_i", "o_i_7i", "o_i_ii", "o_i_7ii", "o_i_iii", "o_i_7pi", "o_i_7pii", "o_i_7_piii", "o_d_p",
@@ -72092,7 +72092,7 @@ s7_pointer s7_values(s7_scheme *sc, s7_pointer args)
   if (is_null(args))
     return(sc->no_value);
   if (is_null(cdr(args)))
-    return(car(args)); 
+    return(car(args));
  if (sc->stack_start >= sc->stack_end) /* s7_values called when no s7 stack (ffitest.c for example) */
     {
       set_multiple_value(args);
@@ -73378,7 +73378,7 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
 	    {
 	      hop = 0;
 	      if (!is_symbol(car(expr)))      /* calling op was optimized to #_ previously, but now we notice its argument is problematic?! */
-		set_car(expr, c_function_symbol(car(expr))); 
+		set_car(expr, c_function_symbol(car(expr)));
 	      /* maybe symbol_initial_value(...) -- but both can differ from global_value, (set! abs 32) (#_abs -1) */
 	      /* maybe return(OPT_F); or dependent on is_maybe_shadowed? */
 	      /* probably not the right way to fix this (s7test tc_or_a_and_a_a_la), but (define + *) needs this */
@@ -88841,7 +88841,12 @@ static bool op_tc_if_a_z_la(s7_scheme *sc, s7_pointer code)
 	      return(op_tc_z(sc, if_done));
 	    }}}
   if (fx_proc(la) == fx_cdr_t)
-    while ((fx_call(sc, if_test) != sc->F) != true_quits) {slot_set_value(la_slot, cdr(slot_value(la_slot)));}
+    while ((fx_call(sc, if_test) != sc->F) != true_quits)
+      {
+	if (!is_pair(slot_value(la_slot)))
+	  sole_arg_wrong_type_error_nr(sc, sc->cdr_symbol, slot_value(la_slot), sc->type_names[T_PAIR]);
+	slot_set_value(la_slot, cdr(slot_value(la_slot)));
+      }
   else while ((fx_call(sc, if_test) != sc->F) != true_quits) {slot_set_value(la_slot, fx_call(sc, la));}
   return(op_tc_z(sc, if_done));
 }
@@ -88973,7 +88978,7 @@ static bool op_tc_if_a_z_l2a(s7_scheme *sc, s7_pointer code)
 		if (is_pair(slot_value(la_slot))) /* needed if improper list passed here */
 		  p = cdr(slot_value(la_slot));
 		else sole_arg_wrong_type_error_nr(sc, sc->cdr_symbol, slot_value(la_slot), sc->type_names[T_PAIR]);
-		slot_set_value(l2a_slot, fx_call(sc, l2a)); 
+		slot_set_value(l2a_slot, fx_call(sc, l2a));
 		slot_set_value(la_slot, p);
 	      } while (!is_null(slot_value(la_slot)));
 	      return(op_tc_z(sc, if_done));
@@ -89160,7 +89165,7 @@ static s7_pointer op_tc_and_a_or_a_l2a(s7_scheme *sc, s7_pointer code)
 	  if (is_null(la_val)) return(sc->T);
 	  if (!is_pair(l2a_val)) sole_arg_wrong_type_error_nr(sc, sc->cdr_symbol, l2a_val, sc->type_names[T_PAIR]);
 	  if (!is_pair(la_val)) sole_arg_wrong_type_error_nr(sc, sc->cdr_symbol, la_val, sc->type_names[T_PAIR]);
-	  la_val = cdr(la_val); 
+	  la_val = cdr(la_val);
 	  l2a_val = cdr(l2a_val);
 	}}
   while (true)
@@ -100611,21 +100616,21 @@ int main(int argc, char **argv)
  * ------------------------------------------------------------
  * tpeak      148    114    108    105    102    109
  * tref      1081    687    463    459    464    412
- * tlimit    3936   5371   5371   5371   5371    783
+ * tlimit    3936   5371   5371   5371   5371    784
  * index            1016    973    967    972    988
- * tmock            1145   1082   1042   1045   1032
+ * tmock            1145   1082   1042   1045   1031
  * tvect     3408   2464   1772   1669   1497   1457
  * thook     7651   ----   2590   2030   2046   1732
  * texit     1884   1950   1778   1741   1770   1759
- * tauto                   2562   2048   1729   1761
+ * tauto                   2562   2048   1729   1760
  * s7test           1831   1818   1829   1830   1849
  * lt        2222   2172   2150   2185   1950   1892
  * dup              3788   2492   2239   2097   2006
  * tread            2421   2419   2408   2405   2241
  * tcopy            5546   2539   2375   2386   2352
- * trclo     8248   2782   2615   2634   2622   2486
- * tload                   3046   2404   2566   2506
- * tmat             3042   2524   2578   2590   2522
+ * trclo     8248   2782   2615   2634   2622   2499
+ * tload                   3046   2404   2566   2506 [rerun]
+ * tmat             3042   2524   2578   2590   2514
  * fbench    2933   2583   2460   2430   2478   2536
  * tsort     3683   3104   2856   2804   2858   2858
  * titer     4550   3349   3070   2985   2966   2917
@@ -100633,27 +100638,27 @@ int main(int argc, char **argv)
  * tbit      3836   3305   3245   3261   3264   3189
  * tobj             3970   3828   3577   3508   3434
  * teq              4045   3536   3486   3544   3556
- * tmac             4373   ----   4193   4188   4027
- * tcomplex         3650   3583   3625   3679   4031
+ * tmac             4373   ----   4193   4188   4024
+ * tcomplex         3650   3583   3625   3679   4030
  * tcase            4793   4439   4430   4439   4376
  * tmap             8774   4489   4541   4586   4380
  * tlet      11.0   6974   5609   5980   5965   4466
  * tfft             7729   4755   4476   4536   4538
  * tshoot           5447   5183   5055   5034   4829
- * tstar            6705   5834   5278   5177   5057
+ * tstar            6705   5834   5278   5177   5055
  * tform            5348   5307   5316   5084   5056
  * tstr      10.0   6342   5488   5162   5180   5250
  * tnum             6013   5433   5396   5409   5408
  * tlist     9219   7546   6558   6240   6300   5770
- * trec      19.6   6980   6599   6656   6658   6006
- * tari      15.0   12.7   6827   6543   6278   6139
+ * trec      19.6   6980   6599   6656   6658   6015
+ * tari      15.0   12.7   6827   6543   6278   6135
  * tgsl             7802   6373   6282   6208   6208
  * tset                           6260   6364   6278
  * tleft     12.2   9753   7537   7331   7331   6393
  * tmisc                          7614   7115   7132
  * tgc              10.4   7763   7579   7617   7619
- * tclo             8025   7645   8809   7770   7633
- * tlamb                          8003   7941   7905
+ * tclo             8025   7645   8809   7770   7627
+ * tlamb                          8003   7941   7900
  * thash            11.7   9734   9479   9526   9278
  * cb        12.9   11.0   9658   9564   9609   9648
  * tmap-hash                                    10.3
