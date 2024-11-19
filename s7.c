@@ -802,7 +802,7 @@ typedef struct unlet_entry_t {
 typedef struct s7_cell {
   union {
     uint64_t u64_type;            /* type info */
-    int64_t s64_type;
+    s7_int s64_type;
     uint8_t type_field;
     struct {
       uint16_t low_bits;          /* 8 bits for type (type_field above, pair?/string? etc, 6 bits in use), 8 flag bits */
@@ -839,7 +839,7 @@ typedef struct s7_cell {
     } number;
 
     struct {
-      s7_int unused1, unused2;    /* always int64_t so this is 16 bytes */
+      s7_int unused1, unused2;    /* 16 bytes */
       uint8_t name[24];
     } number_name;
 
@@ -883,7 +883,7 @@ typedef struct s7_cell {
       s7_int length;
       s7_pointer *objects;
       block_t *block;
-      int64_t top, flags;
+      s7_int top, flags;
     } stk;
 
     struct {                        /* hash-tables */
@@ -950,7 +950,7 @@ typedef struct s7_cell {
 
     struct {                       /* symbols */
       s7_pointer name, global_slot, local_slot;
-      int64_t id;                  /* which let last bound the symbol -- for faster symbol lookup */
+      s7_int id;                   /* which let last bound the symbol -- for faster symbol lookup */
       uint32_t ctr;                /* how many times has symbol been bound */
       uint32_t small_symbol_tag;   /* symbol as member of a (small) set (tree-set-memq etc) */
     } sym;
@@ -968,7 +968,7 @@ typedef struct s7_cell {
 
     struct {                       /* lets (environments) */
       s7_pointer slots, nxt;
-      int64_t id;                  /* id of rootlet is -1 */
+      s7_int id;                   /* id of rootlet is -1 */
       union {
 	struct {
 	  s7_pointer function;     /* *function* (symbol) if this is a funclet */
@@ -983,7 +983,7 @@ typedef struct s7_cell {
 
     struct {                        /* special stuff like #<unspecified> */
       s7_pointer car, cdr;          /* unique_car|cdr, for sc->nil these are sc->unspecified for faster assoc etc */
-      int64_t unused_let_id;        /* let_id(sc->nil) is -1, so this needs to align with envr.id above, only used by sc->nil, so free elsewhere */
+      s7_int unused_let_id;         /* let_id(sc->nil) is -1, so this needs to align with envr.id above, only used by sc->nil, so free elsewhere */
       const char *name;
       s7_int len;
     } unq;
@@ -1046,7 +1046,7 @@ typedef struct s7_cell {
 
 #if S7_DEBUGGING
   int32_t alloc_line, uses, explicit_free_line, gc_line, holders;
-  int64_t alloc_type, debugger_bits;
+  s7_int alloc_type, debugger_bits;
   const char *alloc_func, *gc_func, *root;
   s7_pointer holder;
 #endif
@@ -1055,13 +1055,13 @@ typedef struct s7_cell {
 
 typedef struct s7_big_cell {
   s7_cell cell;
-  int64_t big_hloc;
+  s7_int big_hloc;
 } s7_big_cell;
 typedef struct s7_big_cell *s7_big_pointer;
 
 typedef struct heap_block_t {
   intptr_t start, end;
-  int64_t offset;
+  s7_int offset;
   struct heap_block_t *next;
 } heap_block_t;
 
@@ -1119,7 +1119,7 @@ struct s7_scheme {
   uint32_t op_stack_size, max_stack_size;
 
   s7_cell **heap, **free_heap, **free_heap_top, **free_heap_trigger, **previous_free_heap_top;
-  int64_t heap_size, gc_freed, gc_total_freed, max_heap_size, gc_temps_size;
+  s7_int heap_size, gc_freed, gc_total_freed, max_heap_size, gc_temps_size;
   s7_double gc_resize_heap_fraction, gc_resize_heap_by_4_fraction;
   s7_int gc_calls, gc_total_time, gc_start, gc_end;
   heap_block_t *heap_blocks;
@@ -1175,7 +1175,7 @@ struct s7_scheme {
   bool short_print, is_autoloading, in_with_let, object_out_locked, has_openlets, is_expanding, accept_all_keyword_arguments, muffle_warnings, symbol_quote;
   bool got_tc, got_rec, not_tc;
   s7_int rec_tc_args, continuation_counter;
-  int64_t let_number;
+  s7_int let_number;
   unsigned char number_separator;
   s7_double default_rationalize_error, equivalent_float_epsilon, hash_table_float_epsilon;
   s7_int default_hash_table_length, initial_string_port_length, print_length, objstr_max_len, history_size, true_history_size, output_file_port_data_size;
@@ -1275,8 +1275,8 @@ struct s7_scheme {
   size_t alloc_string_k;
   char *alloc_string_cells;
 #if S7_DEBUGGING
-  int64_t blocks_borrowed[NUM_BLOCK_LISTS], blocks_freed[NUM_BLOCK_LISTS], blocks_mallocated[NUM_BLOCK_LISTS];
-  int64_t string_wrapper_allocs, integer_wrapper_allocs, real_wrapper_allocs, complex_wrapper_allocs, c_pointer_wrapper_allocs, let_wrapper_allocs, slot_wrapper_allocs;
+  s7_int blocks_borrowed[NUM_BLOCK_LISTS], blocks_freed[NUM_BLOCK_LISTS], blocks_mallocated[NUM_BLOCK_LISTS];
+  s7_int string_wrapper_allocs, integer_wrapper_allocs, real_wrapper_allocs, complex_wrapper_allocs, c_pointer_wrapper_allocs, let_wrapper_allocs, slot_wrapper_allocs;
 #endif
 
   c_object_t **c_object_types;
@@ -1576,7 +1576,7 @@ static void memclr(void *s, size_t n)
 #if (defined(__x86_64__) || defined(__i386__))
   if (n >= 8)
     {
-      int64_t *s1 = (int64_t *)s;
+      s7_int *s1 = (s7_int *)s;
       size_t n8 = n >> 3;
       do {*s1++ = 0;} while (--n8 > 0); /* LOOP_4 here is slower */
       n &= 7;
@@ -1605,7 +1605,7 @@ static void memclr(void *s, size_t n)
 static Vectorized void memclr64(void *p, size_t bytes)
 {
   size_t n = bytes >> 3;
-  int64_t *vals = (int64_t *)p;
+  s7_int *vals = (s7_int *)p;
   for (size_t i = 0; i < n; )
     LOOP_8(vals[i++] = 0);
 }
@@ -3782,15 +3782,15 @@ static void set_type_1(s7_pointer p, uint64_t f, const char *func, int32_t line)
   p->explicit_free_line = 0;
   p->uses++;
   if (((f) & TYPE_MASK) == T_FREE)
-    fprintf(stderr, "%d: set free, %p type to %" PRIx64 "\n", __LINE__, p, (int64_t)(f));
+    fprintf(stderr, "%d: set free, %p type to %" ld64 "\n", __LINE__, p, (s7_int)(f));
   else
     if (((f) & TYPE_MASK) >= NUM_TYPES)
-      fprintf(stderr, "%d: set invalid type, %p type to %" PRIx64 "\n", __LINE__, p, (int64_t)(f));
+      fprintf(stderr, "%d: set invalid type, %p type to %" ld64 "\n", __LINE__, p, (s7_int)(f));
     else
       {
 	if (((full_type(p) & T_IMMUTABLE) != 0) && ((full_type(p) != (uint64_t)(f))))
 	  {
-	    fprintf(stderr, "%s[%d]: set immutable %p type %d to %" ld64 "\n", __func__, __LINE__, p, unchecked_type(p), (int64_t)(f));
+	    fprintf(stderr, "%s[%d]: set immutable %p type %d to %" ld64 "\n", __func__, __LINE__, p, unchecked_type(p), (s7_int)(f));
 	    abort();
 	  }
 	if (((full_type(p) & T_UNHEAP) != 0) && (((f) & T_UNHEAP) == 0))
@@ -3821,7 +3821,7 @@ static int32_t s7_int_digits_by_radix[17];
 #define S7_INT_BITS 63
 
 #define S7_INT64_MAX 9223372036854775807LL
-#define S7_INT64_MIN (int64_t)(-S7_INT64_MAX - 1LL)
+#define S7_INT64_MIN (s7_int)(-S7_INT64_MAX - 1LL)
 
 #define S7_INT32_MAX 2147483647LL
 #define S7_INT32_MIN (-S7_INT32_MAX - 1LL)
@@ -4064,7 +4064,7 @@ static void try_to_call_gc(s7_scheme *sc);
 
 /* --------------------------------------------------------------------------------
  * local versions of some standard C library functions
- * timing tests involving these are very hard to interpret, local_memset is faster using int64_t than int32_t
+ * timing tests involving these are very hard to interpret, local_memset is faster using s7_int than int32_t
  * apparently gcc recognizes our code and substitutes the libc call!
  */
 
@@ -4077,9 +4077,9 @@ static void local_memset(void *s, uint8_t val, size_t n)
 #if (defined(__x86_64__) || defined(__i386__))
   if (n >= 8)
     {
-      int64_t *s1 = (int64_t *)s;
+      s7_int *s1 = (s7_int *)s;
       size_t n8 = n >> 3;
-      int64_t ival = val | (val << 8) | (val << 16) | (((uint64_t)val) << 24); /* uint64_t casts make gcc/clang/fsanitize happy */
+      s7_int ival = val | (val << 8) | (val << 16) | (((uint64_t)val) << 24); /* uint64_t casts make gcc/clang/fsanitize happy */
       ival = (((uint64_t)ival) << 32) | ival;
       if ((n8 & 0x3) == 0)
 	while (n8 > 0) {LOOP_4(*s1++ = ival); n8 -= 4;}
@@ -4135,7 +4135,7 @@ static bool local_strncmp(const char *s1, const char *s2, size_t n) /* not strnc
   if (n >= 8)
     {
       size_t n8 = n >> 3;
-      int64_t *is1 = (int64_t *)s1, *is2 = (int64_t *)s2;
+      s7_int *is1 = (s7_int *)s1, *is2 = (s7_int *)s2;
       do {if (*is1++ != *is2++) return(false);} while (--n8 > 0); /* in tbig LOOP_4 is slower? */
       s1 = (const char *)is1;
       s2 = (const char *)is2;
@@ -4703,7 +4703,7 @@ static s7_pointer unbound_variable(s7_scheme *sc, s7_pointer sym);
 
 
 /* -------------------------------- internal debugging apparatus -------------------------------- */
-static int64_t heap_location(s7_scheme *sc, s7_pointer p)
+static s7_int heap_location(s7_scheme *sc, s7_pointer p)
 {
   for (heap_block_t *hp = sc->heap_blocks; hp; hp = hp->next)
     if (((intptr_t)p >= hp->start) && ((intptr_t)p < hp->end))
@@ -4741,7 +4741,7 @@ bool s7_is_valid(s7_scheme *sc, s7_pointer arg)
 	    result = true;
 	  else
 	    {
-	      int64_t loc = heap_location(sc, arg);
+	      s7_int loc = heap_location(sc, arg);
 	      if ((loc >= 0) && (loc < sc->heap_size))
 		result = (sc->heap[loc] == arg);
 	    }}
@@ -4983,7 +4983,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj)
 	  NULL);
 
   buf = (char *)Malloc(1024);
-  snprintf(buf, 1024, "type: %s? (%d), opt_op: %d %s, full_type: #x%" PRIx64 "%s",
+  snprintf(buf, 1024, "type: %s? (%d), opt_op: %d %s, full_type: #x%" ld64 "%s",
 	   type_name(sc, obj, NO_ARTICLE), typ,
 	   unchecked_optimize_op(obj), (unchecked_optimize_op(obj) < NUM_OPS) ? op_names[unchecked_optimize_op(obj)] : "", full_typ,
 	   str);
@@ -5161,7 +5161,7 @@ static void complain(s7_scheme *sc, const char *complaint, s7_pointer p, const c
 static char *show_debugger_bits(s7_pointer p)
 {
   char *bits_str = (char *)Malloc(512);
-  int64_t bits = p->debugger_bits;
+  s7_int bits = p->debugger_bits;
   snprintf(bits_str, 512, " %s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
 	   ((bits & OPT1_SET) != 0) ? " opt1_set" : "",
 	   ((bits & OPT1_FAST) != 0) ? " opt1_fast" : "",
@@ -5438,7 +5438,7 @@ static void print_gc_info(s7_scheme *sc, s7_pointer obj, const char *func, int32
 	full_type(obj) = free_type;
 	if (obj->explicit_free_line > 0)
 	  snprintf(fline, 128, ", freed at %d, ", obj->explicit_free_line);
-	fprintf(stderr, "%s%p is free (%s[%d], alloc type: %s %" ld64 " #x%" PRIx64 " (%s)), alloc: %s[%d], %sgc: %s[%d], gc: %d%s",
+	fprintf(stderr, "%s%p is free (%s[%d], alloc type: %s %" ld64 " #x%" ld64 " (%s)), alloc: %s[%d], %sgc: %s[%d], gc: %d%s",
 		bold_text, obj, func, line, s7_type_names[obj->alloc_type & 0xff], obj->alloc_type, obj->alloc_type,
 		bits, obj->alloc_func, obj->alloc_line,
 		(obj->explicit_free_line > 0) ? fline : "", obj->gc_func, obj->gc_line,	obj->uses, unbold_text);
@@ -5602,7 +5602,7 @@ static const char *opt3_role_name(uint64_t role)
 static void show_opt1_bits(s7_pointer p, const char *func, int32_t line, uint64_t role)
 {
   char *bits = show_debugger_bits(p);
-  fprintf(stderr, "%s%s[%d]%s: opt1: %p->%p wants %s, debugger bits are %" PRIx64 "%s but expects %" ld64,
+  fprintf(stderr, "%s%s[%d]%s: opt1: %p->%p wants %s, debugger bits are %" ld64 "%s but expects %" ld64,
 	  bold_text, func, line, unbold_text,
 	  p, p->object.cons.opt1, opt1_role_name(role), p->debugger_bits, bits, (s7_int)role);
   free(bits);
@@ -5659,7 +5659,7 @@ static void set_opt1_hash_1(s7_pointer p, uint64_t x)
 static void show_opt2_bits(s7_pointer p, const char *func, int32_t line, uint64_t role)
 {
   char *bits = show_debugger_bits(p);
-  fprintf(stderr, "%s%s[%d]%s: %s opt2: %p->%p wants %s, debugger bits are %" PRIx64 "%s but expects %" ld64 " %s",
+  fprintf(stderr, "%s%s[%d]%s: %s opt2: %p->%p wants %s, debugger bits are %" ld64 "%s but expects %" ld64 " %s",
 	  bold_text, func, line, unbold_text,
 	  display(p), p, p->object.cons.o2.opt2, opt2_role_name(role), p->debugger_bits, bits, (s7_int)role, opt2_role_name(role));
   free(bits);
@@ -5764,7 +5764,7 @@ static void set_opt2_name_1(s7_pointer p, const char *str)
 static void show_opt3_bits(s7_pointer p, const char *func, int32_t line, uint64_t role)
 {
   char *bits = show_debugger_bits(p);
-  fprintf(stderr, "%s%s[%d]%s: opt3: %s %" PRIx64 "%s", bold_text, func, line, unbold_text, opt3_role_name(role), p->debugger_bits, bits);
+  fprintf(stderr, "%s%s[%d]%s: opt3: %s %" ld64 "%s", bold_text, func, line, unbold_text, opt3_role_name(role), p->debugger_bits, bits);
   free(bits);
 }
 
@@ -5871,7 +5871,7 @@ static void print_debugging_state(s7_scheme *sc, s7_pointer obj, s7_pointer port
 {
   /* show current state, current allocated state */
   char *allocated_bits, *str;
-  int64_t save_full_type = full_type(obj);
+  s7_int save_full_type = full_type(obj);
   s7_int len, nlen;
   const char *excl_name = (is_free(obj)) ? "free cell!" : "unknown object!";
   block_t *b;
@@ -7713,9 +7713,9 @@ static void s7_warn(s7_scheme *sc, s7_int len, const char *ctrl, ...);
 #endif
 
 #if S7_DEBUGGING
-static int64_t gc(s7_scheme *sc, const char *func, int32_t line)
+static s7_int gc(s7_scheme *sc, const char *func, int32_t line)
 #else
-static int64_t gc(s7_scheme *sc)
+static s7_int gc(s7_scheme *sc)
 #endif
 {
   s7_cell **old_free_heap_top;
@@ -7903,7 +7903,7 @@ static int64_t gc(s7_scheme *sc)
   unmark_semipermanent_objects(sc);
   unmark_wrappers(sc);
 
-  sc->gc_freed = (int64_t)(sc->free_heap_top - old_free_heap_top);
+  sc->gc_freed = (s7_int)(sc->free_heap_top - old_free_heap_top);
   sc->gc_total_freed += sc->gc_freed;
   sc->gc_end = my_clock();
   sc->gc_total_time += (sc->gc_end - sc->gc_start);
@@ -7948,13 +7948,13 @@ static int64_t gc(s7_scheme *sc)
 
 #if S7_DEBUGGING
 #define resize_heap_to(Sc, Size) resize_heap_to_1(Sc, Size, __func__, __LINE__)
-static void resize_heap_to_1(s7_scheme *sc, int64_t size, const char *func, int line)
+static void resize_heap_to_1(s7_scheme *sc, s7_int size, const char *func, int line)
 #else
-static void resize_heap_to(s7_scheme *sc, int64_t size)
+static void resize_heap_to(s7_scheme *sc, s7_int size)
 #endif
 {
-  int64_t old_size = sc->heap_size;
-  int64_t old_free = sc->free_heap_top - sc->free_heap;
+  s7_int old_size = sc->heap_size;
+  s7_int old_free = sc->free_heap_top - sc->free_heap;
   s7_cell *cells;
   s7_cell **cp;
   heap_block_t *hp;
@@ -7962,7 +7962,7 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
 #if S7_DEBUGGING && (!MS_WINDOWS)
   if (show_gc_stats(sc))
     s7_warn(sc, 512, "%s from %s[%d]: old: %" ld64 " / %" ld64 ", new: %" ld64 ", fraction: %.3f -> %" ld64 "\n",
-	    __func__, func, line, old_free, old_size, size, sc->gc_resize_heap_fraction, (int64_t)(floor(sc->heap_size * sc->gc_resize_heap_fraction)));
+	    __func__, func, line, old_free, old_size, size, sc->gc_resize_heap_fraction, (s7_int)(floor(sc->heap_size * sc->gc_resize_heap_fraction)));
 #endif
 
   if (size == 0)
@@ -7978,6 +7978,20 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
     if (size > sc->heap_size)
       while (sc->heap_size < size) sc->heap_size *= 2;
     else return;
+  if (sc->heap_size >= sc->max_heap_size)
+    {
+      s7_int new_heap_size = 32 * (s7_int)floor(sc->max_heap_size / 32.0);
+      if (new_heap_size > old_size)
+	{
+	  s7_warn(sc, 256, "heap size requested is greater than (*s7* 'max-heap-size); trying %" ld64 "\n", new_heap_size);
+	  sc->heap_size = new_heap_size;
+	}
+      else
+	error_nr(sc, make_symbol(sc, "heap-too-big", 12),
+		 set_elist_3(sc, wrap_string(sc, "heap has grown past (*s7* 'max-heap-size): ~D > ~D", 50),
+			     wrap_integer(sc, sc->max_heap_size),
+			     wrap_integer(sc, sc->heap_size)));
+    }
   /* do not call new_cell here! */
 #if POINTER_32
   if (((2 * sc->heap_size * sizeof(s7_cell *)) + ((sc->heap_size - old_size) * sizeof(s7_cell))) >= SIZE_MAX)
@@ -7995,7 +8009,7 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
   else /* can this happen? */
     {
       s7_warn(sc, 256, "heap reallocation failed! tried to get %" ld64 " bytes (will retry with a smaller amount)\n",
-	      (int64_t)(sc->heap_size * sizeof(s7_cell *)));
+	      (s7_int)(sc->heap_size * sizeof(s7_cell *)));
       sc->heap_size = old_size + 64000;
       sc->heap = (s7_cell **)Realloc(sc->heap, sc->heap_size * sizeof(s7_cell *));
     }
@@ -8007,7 +8021,7 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
   add_saved_pointer(sc, (void *)cells);
   {
     s7_pointer p = cells;
-    for (int64_t k = old_size; k < sc->heap_size;)
+    for (s7_int k = old_size; k < sc->heap_size;)
       {
 	LOOP_8(sc->heap[k++] = p; (*sc->free_heap_top++) = p++);
 	LOOP_8(sc->heap[k++] = p; (*sc->free_heap_top++) = p++);
@@ -8030,11 +8044,6 @@ static void resize_heap_to(s7_scheme *sc, int64_t size)
       else s7_warn(sc, 512, "heap grows to %" ld64 " (old free/size: %" ld64 "/%" ld64 ", %.3f)\n",
 		   sc->heap_size, old_free, old_size, sc->gc_resize_heap_fraction);
     }
-  if (sc->heap_size >= sc->max_heap_size)
-    error_nr(sc, make_symbol(sc, "heap-too-big", 12),
-	     set_elist_3(sc, wrap_string(sc, "heap has grown past (*s7* 'max-heap-size): ~D > ~D", 50),
-			 wrap_integer(sc, sc->max_heap_size),
-			 wrap_integer(sc, sc->heap_size)));
 }
 
 #define GC_STRINGS_DEBUGGING ((S7_DEBUGGING) && (false))
@@ -8065,7 +8074,7 @@ static void try_to_call_gc(s7_scheme *sc)
 #else
       gc(sc);
 #endif
-      if ((int64_t)(sc->free_heap_top - sc->free_heap) < (sc->heap_size * sc->gc_resize_heap_fraction)) /* changed 21-Jul-22 */
+      if ((s7_int)(sc->free_heap_top - sc->free_heap) < (sc->heap_size * sc->gc_resize_heap_fraction)) /* changed 21-Jul-22 */
 	resize_heap(sc);
     }
 }
@@ -8151,7 +8160,7 @@ static s7_cell *alloc_pointer(s7_scheme *sc)
 }
 
 #define ALLOC_BIG_POINTER_SIZE 256
-static s7_big_cell *alloc_big_pointer(s7_scheme *sc, int64_t loc)
+static s7_big_cell *alloc_big_pointer(s7_scheme *sc, s7_int loc)
 {
   s7_big_pointer p;
   if (sc->alloc_big_pointer_k == ALLOC_BIG_POINTER_SIZE)
@@ -8187,7 +8196,7 @@ static void add_semipermanent_let_or_slot(s7_scheme *sc, s7_pointer obj)
 
 static inline s7_pointer petrify(s7_scheme *sc, s7_pointer x)
 {
-  int64_t loc = heap_location(sc, x);
+  s7_int loc = heap_location(sc, x);
   s7_pointer p = (s7_pointer)alloc_big_pointer(sc, loc);
   sc->heap[loc] = p;
   (*(sc->free_heap_top++)) = p;
@@ -8202,7 +8211,7 @@ static void remove_gensym_from_heap_1(s7_scheme *sc, s7_pointer x, const char *f
 static void remove_gensym_from_heap(s7_scheme *sc, s7_pointer x) /* x known to be a symbol and in the heap */
 #endif
 {
-  int64_t loc = heap_location(sc, x);
+  s7_int loc = heap_location(sc, x);
   sc->heap[loc] = (s7_pointer)alloc_big_pointer(sc, loc);
   (*(sc->free_heap_top++)) = sc->heap[loc];
 #if S7_DEBUGGING
@@ -10341,7 +10350,7 @@ static s7_pointer g_simple_inlet(s7_scheme *sc, s7_pointer args)
 {
   /* here all args are paired with normal symbol/value, no fallbacks, no immutable symbols, no syntax, etc */
   s7_pointer new_e = make_let(sc, sc->rootlet);
-  int64_t id = let_id(new_e);
+  s7_int id = let_id(new_e);
   s7_pointer sp = NULL;
 
   begin_temp(sc->temp6, new_e);
@@ -10394,7 +10403,7 @@ static s7_pointer internal_inlet(s7_scheme *sc, s7_int num_args, ...)
 {
   va_list ap;
   s7_pointer new_e = make_let(sc, sc->rootlet);
-  int64_t id = let_id(new_e);
+  s7_int id = let_id(new_e);
   s7_pointer sp = NULL;
 
   begin_temp(sc->x, new_e);
@@ -11211,7 +11220,7 @@ static s7_pointer symbol_to_value_chooser(s7_scheme *sc, s7_pointer f, int32_t u
 
 
 /* -------------------------------- symbol->dynamic-value -------------------------------- */
-static s7_pointer find_dynamic_value(s7_scheme *sc, s7_pointer x, s7_pointer sym, int64_t *id)
+static s7_pointer find_dynamic_value(s7_scheme *sc, s7_pointer x, s7_pointer sym, s7_int *id)
 {
   for (; let_id(x) > symbol_id(sym); x = let_outlet(x));
   if (let_id(x) == symbol_id(sym))
@@ -11235,7 +11244,7 @@ static s7_pointer g_symbol_to_dynamic_value(s7_scheme *sc, s7_pointer args)
   #define Q_symbol_to_dynamic_value s7_make_signature(sc, 2, sc->T, sc->is_symbol_symbol)
 
   s7_pointer sym = car(args), val;
-  int64_t top_id = -1;
+  s7_int top_id = -1;
 
   if (!is_symbol(sym))
     return(method_or_bust(sc, sym, sc->symbol_to_dynamic_value_symbol, args, sc->type_names[T_SYMBOL], 1));
@@ -11250,7 +11259,7 @@ static s7_pointer g_symbol_to_dynamic_value(s7_scheme *sc, s7_pointer args)
   if (top_id == symbol_id(sym))
     return(val);
 
-  for (int64_t i = stack_top(sc) - 1; i > 0; i -= 4)
+  for (s7_int i = stack_top(sc) - 1; i > 0; i -= 4)
     if (is_let_unchecked(stack_let(sc->stack, i))) /* OP_GC_PROTECT let slot can be anything (even free) */
       {
 	s7_pointer cur_val = find_dynamic_value(sc, stack_let(sc->stack, i), sym, &top_id);
@@ -12289,7 +12298,7 @@ static void copy_stack_list_set_immutable(s7_pointer pold, s7_pointer pnew)
 	}}
 }
 
-static s7_pointer copy_stack(s7_scheme *sc, s7_pointer new_v, s7_pointer old_v, int64_t top)
+static s7_pointer copy_stack(s7_scheme *sc, s7_pointer new_v, s7_pointer old_v, s7_int top)
 {
   bool has_pairs = false;
   s7_pointer *nv = stack_elements(new_v);
@@ -12300,7 +12309,7 @@ static s7_pointer copy_stack(s7_scheme *sc, s7_pointer new_v, s7_pointer old_v, 
   s7_gc_on(sc, false);
   if (stack_has_counters(old_v))
     {
-      for (int64_t i = 2; i < top; i += 4)
+      for (s7_int i = 2; i < top; i += 4)
 	{
 	  s7_pointer p = ov[i];                               /* args */
 	  /* if op_gc_protect, any ov[i] (except op) can be a list, but it isn't the arglist, so it seems to be safe */
@@ -12327,7 +12336,7 @@ static s7_pointer copy_stack(s7_scheme *sc, s7_pointer new_v, s7_pointer old_v, 
 		nv[i] = copy_counter(sc, p);
 	      }}}
   else
-    for (int64_t i = 2; i < top; i += 4)
+    for (s7_int i = 2; i < top; i += 4)
       if (is_pair(ov[i]))
 	{
 	  s7_pointer p = ov[i];
@@ -12412,10 +12421,10 @@ static bool op_with_baffle_unchecked(s7_scheme *sc)
 /* -------------------------------- call/cc -------------------------------- */
 static void make_room_for_cc_stack(s7_scheme *sc)
 {
-  if ((int64_t)(sc->free_heap_top - sc->free_heap) < (int64_t)(sc->heap_size / 32)) /* we probably never need this much space (8 becomes enormous, 512 seems ok) */
+  if ((s7_int)(sc->free_heap_top - sc->free_heap) < (s7_int)(sc->heap_size / 32)) /* we probably never need this much space (8 becomes enormous, 512 seems ok) */
     {                                                                               /*  but this doesn't seem to make much difference in timings */
       call_gc(sc);
-      if ((int64_t)(sc->free_heap_top - sc->free_heap) < (int64_t)(sc->heap_size / 32))
+      if ((s7_int)(sc->free_heap_top - sc->free_heap) < (s7_int)(sc->heap_size / 32))
 	resize_heap(sc);
     }
 }
@@ -12423,7 +12432,7 @@ static void make_room_for_cc_stack(s7_scheme *sc)
 s7_pointer s7_make_continuation(s7_scheme *sc)
 {
   s7_pointer x, stack;
-  int64_t loc;
+  s7_int loc;
   block_t *block;
 
   sc->continuation_counter++;
@@ -12476,8 +12485,8 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
    *    this was (i > 0), but that goes too far back; perhaps s7 should save the position of the call/cc invocation.
    *    also the two stacks can be different sizes (either can be larger)
    */
-  int64_t top1 = stack_top(sc), top2 = continuation_stack_top(c);
-  for (int64_t i = top1 - 1; (i > 0) && ((i >= top2) || (stack_code(sc->stack, i) != stack_code(continuation_stack(c), i))); i -= 4)
+  s7_int top1 = stack_top(sc), top2 = continuation_stack_top(c);
+  for (s7_int i = top1 - 1; (i > 0) && ((i >= top2) || (stack_code(sc->stack, i) != stack_code(continuation_stack(c), i))); i -= 4)
     {
       opcode_t op = stack_op(sc->stack, i);
       switch (op)
@@ -12486,8 +12495,8 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
 	case OP_LET_TEMP_DONE:
 	  {
 	    s7_pointer x = stack_code(sc->stack, i);
-	    int64_t s_base = 0;
-	    for (int64_t j = 3; j < top2; j += 4)
+	    s7_int s_base = 0;
+	    for (s7_int j = 3; j < top2; j += 4)
 	      if (((stack_op(continuation_stack(c), j) == OP_DYNAMIC_WIND) ||
 		   (stack_op(continuation_stack(c), j) == OP_LET_TEMP_DONE)) &&
 		  (x == stack_code(continuation_stack(c), j)))
@@ -12558,7 +12567,7 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
 	}}
 
   /* check continuation-stack for dynamic-winds we're jumping into */
-  for (int64_t i = stack_top(sc) - 1; i < top2; i += 4)
+  for (s7_int i = stack_top(sc) - 1; i < top2; i += 4)
     {
       opcode_t op = stack_op(continuation_stack(c), i);
       if (op == OP_DYNAMIC_WIND)
@@ -12690,7 +12699,7 @@ static void pop_input_port(s7_scheme *sc);
 
 static void call_with_exit(s7_scheme *sc)
 {
-  int64_t i, new_stack_top, quit = 0;
+  s7_int i, new_stack_top, quit = 0;
 
   if (!call_exit_active(sc->code))
     error_nr(sc, sc->invalid_exit_function_symbol,
@@ -12971,9 +12980,9 @@ static bool is_NaN(s7_double x) {return(x != x);}
 
 
 /* -------------------------------- NaN payloads -------------------------------- */
-typedef union {int64_t ix; double fx;} decode_float_t;
+typedef union {s7_int ix; double fx;} decode_float_t;
 
-static double nan_with_payload(int64_t payload)
+static double nan_with_payload(s7_int payload)
 {
   decode_float_t num;
   if (payload <= 0) return(NAN);
@@ -13328,7 +13337,7 @@ static s7_pointer s7_number_to_big_real(s7_scheme *sc, s7_pointer p)
       break;
     case T_RATIO:
       /* here we can't use fraction(number(p)) even though that uses long_double division because
-       *   there are lots of int64_t ratios that will still look the same.
+       *   there are lots of s7_int ratios that will still look the same.
        *   We have to do the actual bignum divide by hand.
        */
       mpq_set_si(sc->mpq_1, numerator(p), denominator(p));
@@ -13782,7 +13791,7 @@ static s7_int big_integer_to_s7_int(s7_scheme *sc, mpz_t n)
 #else
 #define s7_int_abs(x) ((x) >= 0 ? (x) : -(x))
 #endif
-/* can't use abs even in gcc -- it doesn't work with int64_ts! */
+/* can't use abs even in gcc -- it doesn't work with s7_ints! */
 
 #if !__NetBSD__
   #define s7_fabsl(X) fabsl(X)
@@ -15739,7 +15748,7 @@ static s7_double string_to_double_with_radix_1(const char *ur_str, int32_t radix
    */
   int32_t i, sign = 1, frac_len, int_len, dig, exponent = 0;
   int32_t max_len = s7_int_digits_by_radix[radix];
-  int64_t int_part = 0, frac_part = 0;
+  s7_int int_part = 0, frac_part = 0;
   const char *str = ur_str;
   const char *ipart, *fpart;
   s7_double dval = 0.0;
@@ -15934,7 +15943,7 @@ static s7_double string_to_double_with_radix_1(const char *ur_str, int32_t radix
   else
     {
       int32_t flen, len = int_len + exponent;
-      int64_t frpart = 0;
+      s7_int frpart = 0;
 
       /* 98765432101234567890987654321.0e-20    987654321.012346
        * 98765432101234567890987654321.0e-29    0.98765432101235
@@ -16055,7 +16064,7 @@ static s7_pointer nan1_or_bust(s7_scheme *sc, s7_double x, const char *p, const 
   return((want_symbol) ? make_symbol_with_strlen(sc, q) : sc->F);
 }
 
-static s7_pointer nan2_or_bust(s7_scheme *sc, s7_double x, const char *q, int32_t radix, bool want_symbol, int64_t rl_len)
+static s7_pointer nan2_or_bust(s7_scheme *sc, s7_double x, const char *q, int32_t radix, bool want_symbol, s7_int rl_len)
 {
   s7_int len = safe_strlen(q);
   if ((len > rl_len) && (len < 1024)) /* make compiler happy */
@@ -16159,7 +16168,7 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 		  for (i = 3; is_digit(p[i], 10); i++);
 		  if ((p[i] == '+') || (p[i] == '-')) /* complex case */
 		    {
-		      int64_t payload = string_to_integer((char *)(p + 3), 10, &overflow);
+		      s7_int payload = string_to_integer((char *)(p + 3), 10, &overflow);
 		      return(nan1_or_bust(sc, nan_with_payload(payload), p, q, radix, want_symbol, i));
 		    }
 		  if ((p[i] != '\0') && (!white_space[(uint8_t)(p[i])])) /* check for +nan.0i etc, '\0' is not white_space apparently */
@@ -16303,7 +16312,7 @@ static s7_pointer make_atom(s7_scheme *sc, char *q, int32_t radix, bool want_sym
 		    (local_strncmp(plus, "nan.", 4)))
 		  {
 		    bool overflow1 = false;
-		    int64_t payload = string_to_integer((char *)(p + 5), 10, &overflow1);
+		    s7_int payload = string_to_integer((char *)(p + 5), 10, &overflow1);
 		    return(nan2_or_bust(sc, nan_with_payload(payload), q, radix, want_symbol, (intptr_t)(p - q)));
 		  }
 		if ((plus[0] == 'i') &&
@@ -18707,7 +18716,7 @@ static s7_int int_to_int(s7_int x, s7_int n)
   return(value);
 }
 
-static const int64_t nth_roots[63] = {
+static const s7_int nth_roots[63] = {
   S7_INT64_MAX, S7_INT64_MAX, 3037000499LL, 2097151, 55108, 6208, 1448, 511, 234, 127, 78, 52, 38, 28, 22,
   18, 15, 13, 11, 9, 8, 7, 7, 6, 6, 5, 5, 5, 4, 4, 4, 4, 3, 3, 3, 3, 3, 3, 3, 3, 2, 2, 2, 2, 2, 2,
   2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2};
@@ -26239,8 +26248,8 @@ order here follows gmp, and is the opposite of the CL convention.  (logbit? int 
    *   so logbit? has a wider range than the logand/ash shuffle above.
    */
 
-  /* all these int64_ts are necessary, else C turns it into an int, gets confused about signs etc */
-  return(make_boolean(sc, ((((int64_t)(1LL << (int64_t)index)) & (int64_t)integer(x)) != 0)));
+  /* all these s7_ints are necessary, else C turns it into an int, gets confused about signs etc */
+  return(make_boolean(sc, ((((s7_int)(1LL << (s7_int)index)) & (s7_int)integer(x)) != 0)));
 }
 
 static bool logbit_b_7ii(s7_scheme *sc, s7_int i1, s7_int i2)
@@ -26251,7 +26260,7 @@ static bool logbit_b_7ii(s7_scheme *sc, s7_int i1, s7_int i2)
       return(false);
     }
   if (i2 >= S7_INT_BITS) return(i1 < 0);
-  return((((int64_t)(1LL << (int64_t)i2)) & (int64_t)i1) != 0);
+  return((((s7_int)(1LL << (s7_int)i2)) & (s7_int)i1) != 0);
 }
 
 static bool logbit_b_7pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
@@ -26642,7 +26651,7 @@ static s7_pointer g_random(s7_scheme *sc, s7_pointer args)
 		numer = (s7_int)floor(numerator(num) * next_random(r));
 	      else
 		{
-		  int64_t diff = S7_INT64_MAX - denominator(num);
+		  s7_int diff = S7_INT64_MAX - denominator(num);
 		  numer = numerator(num);
 		  if (diff < 100)
 		    return(make_ratio(sc, numer, denominator(num)));
@@ -52489,7 +52498,7 @@ static s7_pointer iterator_to_list(s7_scheme *sc, s7_pointer obj)
 
 static s7_pointer c_obj_to_list(s7_scheme *sc, s7_pointer obj) /* "c_object_to_list" is the ->list method mentioned below */
 {
-  int64_t len;
+  s7_int len;
   s7_pointer x, z, zc, result;
   s7_int gc_z;
 
@@ -52510,7 +52519,7 @@ static s7_pointer c_obj_to_list(s7_scheme *sc, s7_pointer obj) /* "c_object_to_l
   z = list_2_unchecked(sc, obj, zc);
   gc_z = gc_protect_1(sc, z);
   x = result;
-  for (int64_t i = 0; i < len; i++, x = cdr(x))
+  for (s7_int i = 0; i < len; i++, x = cdr(x))
     {
       set_integer(zc, i);
       set_car(x, (*(c_object_ref(sc, obj)))(sc, z));
@@ -53085,22 +53094,22 @@ static s7_pointer stacktrace_find_caller(s7_scheme *sc, s7_pointer e)
   return(sc->F);
 }
 
-static bool stacktrace_find_let(s7_scheme *sc, int64_t loc, s7_pointer e)
+static bool stacktrace_find_let(s7_scheme *sc, s7_int loc, s7_pointer e)
 {
   return((loc > 0) &&
 	 ((stack_let(sc->stack, loc) == e) ||
 	  (stacktrace_find_let(sc, loc - 4, e))));
 }
 
-static int64_t stacktrace_find_error_hook_quit(s7_scheme *sc)
+static s7_int stacktrace_find_error_hook_quit(s7_scheme *sc)
 {
-  for (int64_t i = stack_top(sc) - 1; i >= 3; i -= 4)
+  for (s7_int i = stack_top(sc) - 1; i >= 3; i -= 4)
     if (stack_op(sc->stack, i) == OP_ERROR_HOOK_QUIT)
       return(i);
   return(-1);
 }
 
-static bool stacktrace_in_error_handler(s7_scheme *sc, int64_t loc)
+static bool stacktrace_in_error_handler(s7_scheme *sc, s7_int loc)
 {
   return((let_outlet(sc->owlet) == sc->curlet) ||
 	 (stacktrace_find_let(sc, loc * 4, let_outlet(sc->owlet))) ||
@@ -53275,8 +53284,8 @@ static s7_pointer stacktrace_1(s7_scheme *sc, s7_int frames_max, s7_int code_col
 {
   char *str = NULL;
   block_t *strp = NULL;
-  int64_t loc, frames = 0;
-  int64_t top = (sc->stack_end - sc->stack_start) / 4; /* (*s7* 'stack_top), not stack_top(sc)! */
+  s7_int loc, frames = 0;
+  s7_int top = (sc->stack_end - sc->stack_start) / 4; /* (*s7* 'stack_top), not stack_top(sc)! */
   begin_small_symbol_set(sc);
 
   if (stacktrace_in_error_handler(sc, top))
@@ -54326,7 +54335,7 @@ It looks for an existing catch with a matching tag, and jumps to it if found.  O
   gc_protect_via_stack(sc, args);
   /* type can be anything: (throw (list 1 2 3) (make-list 512)), sc->w and sc->value not good here for gc protection */
 
-  for (int64_t i = stack_top(sc) - 5; i >= 3; i -= 4) /* look for a catcher */
+  for (s7_int i = stack_top(sc) - 5; i >= 3; i -= 4) /* look for a catcher */
     {
       catch_function_t catcher = catchers[stack_op(sc->stack, i)];
       if ((catcher) &&
@@ -54469,7 +54478,7 @@ static no_return void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
 
   /* look for a catcher, call catch*function in the error context (before unwinding the stack), outlet(owlet) is curlet */
   /* top is 1 past actual top, top - 1 is op, if op = OP_CATCH, top - 4 is the cell containing the catch struct */
-  for (int64_t i = stack_top(sc) - 1; i >= 3; i -= 4)
+  for (s7_int i = stack_top(sc) - 1; i >= 3; i -= 4)
     {
       catch_function_t catcher = catchers[stack_op(sc->stack, i)];
       if ((SHOW_EVAL_OPS) && (catcher)) {fprintf(stderr, "before catch:\n"); s7_show_stack(sc);}
@@ -55711,7 +55720,7 @@ static s7_pointer g_exit(s7_scheme *sc, s7_pointer args)
    *   should clean up resources themselves.  Anyway, scheme's exit is also supposed to allow atexit functions
    *   to be called, so we need to use libc's exit, not _exit -- there's an example C program at the end of s7test.scm.
    */
-  for (int64_t i = stack_top(sc) - 1; i > 0; i -= 4)
+  for (s7_int i = stack_top(sc) - 1; i > 0; i -= 4)
     if (stack_op(sc->stack, i) == OP_DYNAMIC_WIND)
       {
 	s7_pointer dwind = T_Dyn(stack_code(sc->stack, i));
@@ -58497,7 +58506,7 @@ static s7_pointer fx_c_all_ca(s7_scheme *sc, s7_pointer code)
 static s7_pointer fx_inlet_ca(s7_scheme *sc, s7_pointer code)
 {
   s7_pointer new_e, sp = NULL;
-  int64_t id;
+  s7_int id;
 
   new_cell(sc, new_e, T_LET | T_SAFE_PROCEDURE);
   let_set_slots(new_e, slot_end); /* needed by add_slot_unchecked */
@@ -64901,7 +64910,7 @@ static bool opt_b_ii_sc_eq_1(opt_info *o) {return(integer(slot_value(o->v[1].p))
 
 static bool opt_b_7ii_ss(opt_info *o)    {return(o->v[3].b_7ii_f(o->sc, integer(slot_value(o->v[1].p)), integer(slot_value(o->v[2].p))));}
 static bool opt_b_7ii_sc(opt_info *o)    {return(o->v[3].b_7ii_f(o->sc, integer(slot_value(o->v[1].p)), o->v[2].i));}
-static bool opt_b_7ii_sc_bit(opt_info *o) {return((integer(slot_value(o->v[1].p)) & ((int64_t)(1LL << o->v[2].i))) != 0);}
+static bool opt_b_7ii_sc_bit(opt_info *o) {return((integer(slot_value(o->v[1].p)) & ((s7_int)(1LL << o->v[2].i))) != 0);}
 
 static bool opt_b_ii_ff(opt_info *o)
 {
@@ -73287,7 +73296,7 @@ static opt_t wrap_bad_args(s7_scheme *sc, s7_pointer func, s7_pointer expr, int3
 static inline s7_pointer find_uncomplicated_symbol(s7_scheme *sc, s7_pointer symbol, s7_pointer e)
 {
   s7_pointer x;
-  int64_t id;
+  s7_int id;
 
   if ((symbol_is_in_big_symbol_set(sc, symbol)) &&
       (direct_memq(symbol, e)))   /* it's probably a local variable reference */
@@ -78847,7 +78856,7 @@ static bool op_let_1(s7_scheme *sc)
    */
   /* true -> BEGIN, false -> EVAL */
   s7_pointer y;
-  int64_t id;
+  s7_int id;
   while (true)
     {
       sc->args = cons(sc, sc->value, sc->args);
@@ -84678,7 +84687,7 @@ static goto_t op_dox(s7_scheme *sc)
   /* any number of steppers using dox exprs, end also dox, body and end result arbitrary.
    *    since all these exprs are local, we don't need to jump until the body
    */
-  int64_t id;
+  s7_int id;
   int32_t steppers = 0;
   s7_pointer code, end, endp, stepper = NULL, form = sc->code, slots;
   s7_function endf;
@@ -89401,8 +89410,9 @@ static bool op_tc_if_a_z_if_a_z_l2a(s7_scheme *sc, s7_pointer code)
     {
       if ((slot1 == l2a_slot) && (fx_proc(if2_test) == fx_is_null_t) && (fx_proc(la) == fx_cdr_t) && (fx_proc(l2a) == fx_cdr_u) &&
 	  (is_boolean(car(if1_true))) && (is_boolean(car(if2_true))))
-	{ /* is this ever hit? */
+	{
 	  s7_pointer la_val = slot_value(la_slot), l2a_val = slot_value(l2a_slot);
+	  if (S7_DEBUGGING) fprintf(stderr, "hit op_tc_if code at %d\n", __LINE__); /* hit in s7test because we laboriously wrote code to hit it */
 	  while (true)
 	    {
 	      if (is_null(l2a_val)) {sc->value = car(if1_true); return(true);}
@@ -96972,7 +96982,7 @@ static s7_pointer sl_history(s7_scheme *sc)
 static s7_pointer sl_active_catches(s7_scheme *sc)
 {
   s7_pointer lst = sc->nil;
-  for (int64_t i = stack_top(sc) - 1; i >= 3; i -= 4)
+  for (s7_int i = stack_top(sc) - 1; i >= 3; i -= 4)
     switch (stack_op(sc->stack, i))
       {
       case OP_CATCH_ALL:
@@ -96985,11 +96995,11 @@ static s7_pointer sl_active_catches(s7_scheme *sc)
   return(reverse_in_place_unchecked(sc, sc->nil, lst));
 }
 
-static s7_pointer sl_stack_entries(s7_scheme *sc, s7_pointer stack, int64_t top)
+static s7_pointer sl_stack_entries(s7_scheme *sc, s7_pointer stack, s7_int top)
 {
   s7_pointer lst = sc->nil;       /* the stack can contain  anything (like #<unused>): this is a dangerous function */
   begin_temp(sc->y, sc->nil);
-  for (int64_t i = top - 1; i >= 3; i -= 4)
+  for (s7_int i = top - 1; i >= 3; i -= 4)
     {
       s7_pointer func = stack_code(stack, i), args = stack_args(stack, i), e = stack_let(stack, i);
       opcode_t op = stack_op(stack, i);
@@ -97699,7 +97709,7 @@ const char *s7_decode_bt(s7_scheme *sc)
   FILE *fp = fopen("gdb.txt", "r");
   if (fp)
     {
-      int64_t size;
+      s7_int size;
       size_t bytes;
       bool in_quotes = false, old_stop = sc->stop_at_error;
       uint8_t *bt;
@@ -97722,7 +97732,7 @@ const char *s7_decode_bt(s7_scheme *sc)
       bt[size] = '\0';
       fclose(fp);
 
-      for (int64_t i = 0; i < size; i++)
+      for (s7_int i = 0; i < size; i++)
 	{
 	  fputc(bt[i], stdout);
 	  if ((bt[i] == '"') && ((i == 0) || (bt[i - 1] != '\\')))
@@ -99878,7 +99888,7 @@ s7_scheme *s7_init(void)
 
   sc->heap_size = INITIAL_HEAP_SIZE;
   if ((sc->heap_size % 32) != 0)
-    sc->heap_size = 32 * (int64_t)ceil((double)(sc->heap_size) / 32.0);
+    sc->heap_size = 32 * (s7_int)ceil((double)(sc->heap_size) / 32.0);
   sc->heap = (s7_pointer *)Malloc(sc->heap_size * sizeof(s7_pointer));
   sc->free_heap = (s7_cell **)Malloc(sc->heap_size * sizeof(s7_cell *));
   sc->free_heap_top = (s7_cell **)(sc->free_heap + INITIAL_HEAP_SIZE);
@@ -100629,7 +100639,7 @@ int main(int argc, char **argv)
  * tread            2421   2419   2408   2405   2241
  * tcopy            5546   2539   2375   2386   2352
  * trclo     8248   2782   2615   2634   2622   2499
- * tload                   3046   2404   2566   2506 [rerun]
+ * tload                   3046   2404   2566   2506
  * tmat             3042   2524   2578   2590   2514
  * fbench    2933   2583   2460   2430   2478   2536
  * tsort     3683   3104   2856   2804   2858   2858
@@ -100672,5 +100682,4 @@ int main(int argc, char **argv)
  * ------------------------------------------------------------
  *
  * terr: catch+errors, tchar? tcase? tsetter: integer? et al as setter?
- * handle alloc>heap-size error better (precheck+backout)
  */
