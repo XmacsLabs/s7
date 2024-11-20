@@ -2,7 +2,7 @@
 #define S7_H
 
 #define S7_VERSION "11.2"
-#define S7_DATE "20-Nov-2024"
+#define S7_DATE "21-Nov-2024"
 #define S7_MAJOR_VERSION 11
 #define S7_MINOR_VERSION 2
 
@@ -30,12 +30,16 @@ typedef double s7_double;
   #include <mpc.h>
 #endif
 
-#if (__TINYC__ || (__clang__ && __cplusplus))
+#if __TINYC__
   typedef double s7_complex;
 #else
   #if __cplusplus
     #include <complex>
-    typedef std::complex<s7_double> s7_complex;
+    #ifdef __GNUC__
+      typedef std::complex<s7_double> s7_complex;
+    #else
+      using s7_complex = std::complex<double>;
+    #endif
   #else
     #include <complex.h>
     typedef double complex s7_complex;

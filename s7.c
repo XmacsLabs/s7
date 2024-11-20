@@ -3821,7 +3821,7 @@ static int32_t s7_int_digits_by_radix[17];
 #define S7_INT_BITS 63
 
 #define S7_INT64_MAX 9223372036854775807LL
-#define S7_INT64_MIN (s7_int)(-S7_INT64_MAX - 1LL)
+#define S7_INT64_MIN (int64_t)(-S7_INT64_MAX - 1LL)
 
 #define S7_INT32_MAX 2147483647LL
 #define S7_INT32_MIN (-S7_INT32_MAX - 1LL)
@@ -4046,7 +4046,7 @@ static void try_to_call_gc(s7_scheme *sc);
 				  ({ s7_pointer _C_; new_cell_no_check(Sc, _C_, T_COMPLEX); set_real_part(_C_, R); set_imag_part(_C_, _im_); _C_;}) ); })
 
 #define real_to_double(Sc, X, Caller) ({ s7_pointer _x_; _x_ = (X); ((type(_x_) == T_REAL) ? real(_x_) : s7_number_to_real_with_caller(Sc, _x_, Caller)); })
-#define rational_to_double(Sc, X)     ({ s7_pointer _x_; _x_ = (X); ((type(_x_) == T_INTEGER) ? (s7_double)integer(_x_) : fraction(_x_)); })
+#define rational_to_double(Sc, X)     ({ s7_pointer _x_; _x_ = (X); ((type(_x_) == T_INTEGER) ? (s7_double)integer(_x_) : (s7_double)fraction(_x_)); })
 
 #else
 
@@ -7034,7 +7034,7 @@ static void sweep(s7_scheme *sc)
   process_gc_list(free(undefined_name(s1)));
 
   gp = sc->c_objects;
-  process_gc_list((c_object_gc_free(sc, s1)) ? (void)(*(c_object_gc_free(sc, s1)))(sc, s1) : (void)(*(c_object_free(sc, s1)))(c_object_value(s1)))
+  process_gc_list((c_object_gc_free(sc, s1)) ? (void)(*(c_object_gc_free(sc, s1)))(sc, s1) : (void)(*(c_object_free(sc, s1)))(c_object_value(s1)));
 
   gp = sc->vectors;
   process_gc_list(liberate(sc, vector_block(s1)));
@@ -11074,7 +11074,7 @@ static Inline s7_pointer inline_lookup_from(s7_scheme *sc, const s7_pointer symb
 
   if (is_slot(global_slot(symbol)))
     return(global_value(symbol));
-#if WITH_GCC
+#if WITH_GCC && ((!__cplusplus) || (!__clang__))
   return(NULL); /* much faster than various alternatives */
 #else
   return(unbound_variable(sc, symbol)); /* only use of sc */
@@ -17930,7 +17930,7 @@ static s7_pointer asin_p_p(s7_scheme *sc, s7_pointer p)
       return(c_asin(sc, (s7_double)integer(p)));
 
     case T_RATIO:
-      return(c_asin(sc, fraction(p)));
+      return(c_asin(sc, (s7_double)fraction(p)));
 
     case T_COMPLEX:
 #if HAVE_COMPLEX_NUMBERS
@@ -18017,7 +18017,7 @@ static s7_pointer acos_p_p(s7_scheme *sc, s7_pointer p)
       return((integer(p) == 1) ? int_zero : c_acos(sc, (s7_double)integer(p)));
 
     case T_RATIO:
-      return(c_acos(sc, fraction(p)));
+      return(c_acos(sc, (s7_double)fraction(p)));
 
     case T_COMPLEX:
 #if HAVE_COMPLEX_NUMBERS
@@ -18096,7 +18096,7 @@ static s7_pointer g_atan(s7_scheme *sc, s7_pointer args)
       switch (type(x))
 	{
 	case T_INTEGER:  return((integer(x) == 0) ? int_zero : make_real(sc, atan((double)integer(x))));
-	case T_RATIO:    return(make_real(sc, atan(fraction(x))));
+	case T_RATIO:    return(make_real(sc, atan((s7_double)fraction(x))));
 	case T_REAL:     return(make_real(sc, atan(real(x))));
 
 	case T_COMPLEX:
@@ -18329,7 +18329,7 @@ static s7_pointer tanh_p_p(s7_scheme *sc, s7_pointer x)
   switch (type(x))
     {
     case T_INTEGER: return((integer(x) == 0) ? int_zero : make_real(sc, tanh((s7_double)integer(x))));
-    case T_RATIO:   return(make_real(sc, tanh(fraction(x))));
+    case T_RATIO:   return(make_real(sc, tanh((s7_double)fraction(x))));
     case T_REAL:    return(make_real(sc, tanh(real(x))));
 
     case T_COMPLEX:
@@ -18396,7 +18396,7 @@ static s7_pointer asinh_p_p(s7_scheme *sc, s7_pointer x)
   switch (type(x))
     {
     case T_INTEGER: return((integer(x) == 0) ? int_zero : make_real(sc, asinh((s7_double)integer(x))));
-    case T_RATIO:   return(make_real(sc, asinh(fraction(x))));
+    case T_RATIO:   return(make_real(sc, asinh((s7_double)fraction(x))));
     case T_REAL:    return(make_real(sc, asinh(real(x))));
     case T_COMPLEX:
 #if HAVE_COMPLEX_NUMBERS
@@ -19562,7 +19562,7 @@ static s7_int ceiling_i_7p(s7_scheme *sc, s7_pointer p)
 {
   if (is_t_integer(p)) return(integer(p));
   if (is_t_real(p)) return(ceiling_i_7d(sc, real(p)));
-  if (is_t_ratio(p)) return((s7_int)(ceil(fraction(p))));
+  if (is_t_ratio(p)) return((s7_int)(ceil((s7_double)fraction(p))));
   return(s7_integer(method_or_bust_p(sc, p, sc->ceiling_symbol, sc->type_names[T_REAL])));
 }
 
@@ -19937,7 +19937,7 @@ static s7_pointer add_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	case T_REAL:
 	  return(make_real(sc, fraction(x) + real(y)));
 	case T_COMPLEX:
-	  return(make_complex_not_0i(sc, fraction(x) + real_part(y), imag_part(y)));
+	  return(make_complex_not_0i(sc, (s7_double)fraction(x) + real_part(y), imag_part(y)));
 #if WITH_GMP
 	case T_BIG_INTEGER:
 	  mpq_set_si(sc->mpq_1, numerator(x), denominator(x));
@@ -19976,7 +19976,7 @@ static s7_pointer add_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 #endif
 	  return(make_real(sc, real(x) + (long_double)integer(y)));
 	case T_RATIO:
-	  return(make_real(sc, real(x) + fraction(y)));
+	  return(make_real(sc, real(x) + (s7_double)fraction(y)));
 	case T_REAL:
 	  return(make_real(sc, real(x) + real(y)));
 	case T_COMPLEX:
@@ -20008,7 +20008,7 @@ static s7_pointer add_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	case T_INTEGER:
 	  return(make_complex_not_0i(sc, real_part(x) + integer(y), imag_part(x)));
 	case T_RATIO:
-	  return(make_complex_not_0i(sc, real_part(x) + fraction(y), imag_part(x)));
+	  return(make_complex_not_0i(sc, real_part(x) + (s7_double)fraction(y), imag_part(x)));
 	case T_REAL:
 	  return(make_complex_not_0i(sc, real_part(x) + real(y), imag_part(x)));
 	case T_COMPLEX:
@@ -20452,7 +20452,7 @@ static s7_pointer g_add_xf(s7_scheme *sc, s7_pointer x, s7_double y, int32_t loc
   switch (type(x))
     {
     case T_INTEGER: return(make_real(sc, integer(x) + y));
-    case T_RATIO:   return(make_real(sc, fraction(x) + y));
+    case T_RATIO:   return(make_real(sc, (s7_double)fraction(x) + y));
     case T_COMPLEX: return(make_complex_not_0i(sc, real_part(x) + y, imag_part(x)));
 #if WITH_GMP
     case T_BIG_INTEGER: case T_BIG_RATIO: case T_BIG_REAL: case T_BIG_COMPLEX:
@@ -20754,9 +20754,9 @@ static s7_pointer subtract_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 #endif
 	  }
 	case T_REAL:
-	  return(make_real(sc, fraction(x) - real(y)));
+	  return(make_real(sc, (s7_double)fraction(x) - real(y)));
 	case T_COMPLEX:
-	  return(make_complex_not_0i(sc, fraction(x) - real_part(y), -imag_part(y)));
+	  return(make_complex_not_0i(sc, (s7_double)fraction(x) - real_part(y), -imag_part(y)));
 #if WITH_GMP
 	case T_BIG_INTEGER:
 	  mpq_set_si(sc->mpq_1, numerator(x), denominator(x));
@@ -20796,7 +20796,7 @@ static s7_pointer subtract_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 #endif
 	  return(make_real(sc, real(x) - (long_double)integer(y))); /* long_double saves (- 9007199254740996.0 9007199254740995): 1.0 */
 	case T_RATIO:
-	  return(make_real(sc, real(x) - fraction(y)));
+	  return(make_real(sc, real(x) - (s7_double)fraction(y)));
 	case T_REAL:
 	  return(make_real(sc, real(x) - real(y)));
 	case T_COMPLEX:
@@ -20828,7 +20828,7 @@ static s7_pointer subtract_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	case T_INTEGER:
 	  return(make_complex_not_0i(sc, real_part(x) - integer(y), imag_part(x)));
 	case T_RATIO:
-	  return(make_complex_not_0i(sc, real_part(x) - fraction(y), imag_part(x)));
+	  return(make_complex_not_0i(sc, real_part(x) - (s7_double)fraction(y), imag_part(x)));
 	case T_REAL:
 	  return(make_complex_not_0i(sc, real_part(x) - real(y), imag_part(x)));
 	case T_COMPLEX:
@@ -21158,7 +21158,7 @@ static s7_pointer g_subtract_2f(s7_scheme *sc, s7_pointer args) /* (- x f) */
   switch (type(x))
     {
     case T_INTEGER: return(make_real(sc, integer(x) - n));
-    case T_RATIO:   return(make_real(sc, fraction(x) - n));
+    case T_RATIO:   return(make_real(sc, (s7_double)fraction(x) - n));
     case T_COMPLEX: return(make_complex_not_0i(sc, real_part(x) - n, imag_part(x)));
 #if WITH_GMP
     case T_BIG_INTEGER: case T_BIG_RATIO: case T_BIG_REAL: case T_BIG_COMPLEX:
@@ -21179,7 +21179,7 @@ static s7_pointer g_subtract_f2(s7_scheme *sc, s7_pointer args) /* (- f x) */
   switch (type(x))
     {
     case T_INTEGER: return(make_real(sc, n - integer(x)));
-    case T_RATIO:   return(make_real(sc, n - fraction(x)));
+    case T_RATIO:   return(make_real(sc, n - (s7_double)fraction(x)));
     case T_COMPLEX: return(make_complex_not_0i(sc, n - real_part(x), -imag_part(x)));
 #if WITH_GMP
     case T_BIG_INTEGER: case T_BIG_RATIO: case T_BIG_REAL: case T_BIG_COMPLEX:
@@ -21293,7 +21293,7 @@ static s7_pointer integer_ratio_multiply_if_overflow_to_real_or_ratio(s7_scheme 
 #else
     {
       if (WITH_WARNINGS) s7_warn(sc, 128, "integer * ratio overflow: (* %" ld64 " %" ld64 "/%" ld64 ")\n", x, numerator(y), denominator(y));
-      return(make_real(sc, (s7_double)x * fraction(y)));
+      return(make_real(sc, (s7_double)x * (s7_double)fraction(y)));
     }
 #endif
     return(make_ratio(sc, z, denominator(y)));
@@ -21369,7 +21369,7 @@ static s7_pointer multiply_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 #else
 	        {
 		  if (WITH_WARNINGS) s7_warn(sc, 128, "ratio * ratio overflow: (* %" ld64 "/%" ld64 " %" ld64 "/%" ld64 ")\n", n1, d1, n2, d2);
-		  return(make_real(sc, fraction(x) * fraction(y)));
+		  return(make_real(sc, (s7_double)fraction(x) * (s7_double)fraction(y)));
 		}
 #endif
 	      return(make_ratio_with_div_check(sc, sc->multiply_symbol, n1n2, d1d2));
@@ -21388,9 +21388,9 @@ static s7_pointer multiply_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	      return(mpfr_to_big_real(sc, sc->mpfr_1));
 	    }
 #endif
-	  return(make_real(sc, fraction(x) * real(y)));
+	  return(make_real(sc, (s7_double)fraction(x) * real(y)));
 	case T_COMPLEX:
-	  return(make_complex(sc, fraction(x) * real_part(y), fraction(x) * imag_part(y)));
+	  return(make_complex(sc, (s7_double)fraction(x) * real_part(y), (s7_double)fraction(x) * imag_part(y)));
 #if WITH_GMP
 	case T_BIG_INTEGER:
 	  mpq_set_si(sc->mpq_1, numerator(x), denominator(x));
@@ -21439,7 +21439,7 @@ static s7_pointer multiply_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	      return(mpfr_to_big_real(sc, sc->mpfr_1));
 	    }
 #endif
-	  return(make_real(sc, fraction(y) * real(x)));
+	  return(make_real(sc, (s7_double)fraction(y) * real(x)));
 	case T_REAL:
 	  return(make_real(sc, real(x) * real(y)));
 	case T_COMPLEX:
@@ -21471,7 +21471,7 @@ static s7_pointer multiply_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	case T_INTEGER:
 	  return(make_complex(sc, real_part(x) * integer(y), imag_part(x) * integer(y)));
 	case T_RATIO:
-	  return(make_complex(sc, real_part(x) * fraction(y), imag_part(x) * fraction(y)));
+	  return(make_complex(sc, real_part(x) * (s7_double)fraction(y), imag_part(x) * (s7_double)fraction(y)));
 	case T_REAL:
 	  return(make_complex(sc, real_part(x) * real(y), imag_part(x) * real(y)));
 	case T_COMPLEX:
@@ -22156,7 +22156,7 @@ static s7_pointer divide_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	case T_REAL:
 	  if (real(y) == 0.0)
 	    division_by_zero_error_2_nr(sc, sc->divide_symbol, x, y);
-	  return(make_real(sc, fraction(x) / real(y)));
+	  return(make_real(sc, (s7_double)fraction(x) / real(y)));
 
 	case T_COMPLEX:
 	  {
@@ -25262,7 +25262,7 @@ s7_double s7_real_part(s7_pointer x)
   switch(type(x))
     {
     case T_INTEGER:     return((s7_double)integer(x));
-    case T_RATIO:       return(fraction(x));
+    case T_RATIO:       return((s7_double)fraction(x));
     case T_REAL:        return(real(x));
     case T_COMPLEX:     return(real_part(x));
 #if WITH_GMP
@@ -50383,7 +50383,7 @@ static bool integer_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, shared
     case T_INTEGER:
       return(integer(x) == integer(y));
     case T_RATIO:
-      return(floats_are_equivalent(sc, (double)integer(x), fraction(y)));
+      return(floats_are_equivalent(sc, (double)integer(x), (s7_double)fraction(y)));
     case T_REAL:
       return(floats_are_equivalent(sc, (double)integer(x), real(y)));
     case T_COMPLEX:
@@ -50414,7 +50414,7 @@ static bool fraction_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, share
     case T_INTEGER:
       return(floats_are_equivalent(sc, (double)fraction(x), integer(y)));
     case T_RATIO:
-      return(floats_are_equivalent(sc, (double)fraction(x), fraction(y)));
+      return(floats_are_equivalent(sc, (double)fraction(x), (s7_double)fraction(y)));
     case T_REAL:
       return(floats_are_equivalent(sc, (double)fraction(x), real(y)));
     case T_COMPLEX:
@@ -50447,7 +50447,7 @@ static bool real_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_in
     case T_INTEGER:
       return(floats_are_equivalent(sc, real(x), integer(y)));
     case T_RATIO:
-      return(floats_are_equivalent(sc, real(x), fraction(y)));
+      return(floats_are_equivalent(sc, real(x), (s7_double)fraction(y)));
     case T_REAL:
       return(floats_are_equivalent(sc, real(x), real(y)));
     case T_COMPLEX:
@@ -50481,7 +50481,7 @@ static bool complex_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, shared
       return((floats_are_equivalent(sc, real_part(x), integer(y))) &&
 	     (floats_are_equivalent(sc, imag_part(x), 0.0)));
     case T_RATIO:
-      return((floats_are_equivalent(sc, real_part(x), fraction(y))) &&
+      return((floats_are_equivalent(sc, real_part(x), (s7_double)fraction(y))) &&
 	     (floats_are_equivalent(sc, imag_part(x), 0.0)));
     case T_REAL:
       return((floats_are_equivalent(sc, real_part(x), real(y))) &&
@@ -56166,7 +56166,7 @@ static s7_pointer fx_subtract_fs(s7_scheme *sc, s7_pointer arg)
   switch (type(x))
     {
     case T_INTEGER: return(make_real(sc, n - integer(x)));
-    case T_RATIO:   return(make_real(sc, n - fraction(x)));
+    case T_RATIO:   return(make_real(sc, n - (s7_double)fraction(x)));
     case T_REAL:    return(make_real(sc, n - real(x)));
     case T_COMPLEX: return(make_complex_not_0i(sc, n - real_part(x), -imag_part(x)));
 #if WITH_GMP
