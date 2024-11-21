@@ -30,7 +30,7 @@ typedef double s7_double;
   #include <mpc.h>
 #endif
 
-#if (__TINYC__ || (__clang__ && __cplusplus))
+#if (__TINYC__ || (__clang__ && __cplusplus) || _MSC_VER)
   typedef double s7_complex;
 #else
   #if __cplusplus
