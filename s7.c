@@ -7034,7 +7034,7 @@ static void sweep(s7_scheme *sc)
   process_gc_list(free(undefined_name(s1)));
 
   gp = sc->c_objects;
-  process_gc_list((c_object_gc_free(sc, s1)) ? (void)(*(c_object_gc_free(sc, s1)))(sc, s1) : (void)(*(c_object_free(sc, s1)))(c_object_value(s1)));
+  process_gc_list(if (c_object_gc_free(sc, s1)) (*(c_object_gc_free(sc, s1)))(sc, s1); else (*(c_object_free(sc, s1)))(c_object_value(s1)));
 
   gp = sc->vectors;
   process_gc_list(liberate(sc, vector_block(s1)));
@@ -89410,9 +89410,8 @@ static bool op_tc_if_a_z_if_a_z_l2a(s7_scheme *sc, s7_pointer code)
     {
       if ((slot1 == l2a_slot) && (fx_proc(if2_test) == fx_is_null_t) && (fx_proc(la) == fx_cdr_t) && (fx_proc(l2a) == fx_cdr_u) &&
 	  (is_boolean(car(if1_true))) && (is_boolean(car(if2_true))))
-	{
+	{ /* ugly... */
 	  s7_pointer la_val = slot_value(la_slot), l2a_val = slot_value(l2a_slot);
-	  if (S7_DEBUGGING) fprintf(stderr, "hit op_tc_if code at %d\n", __LINE__); /* hit in s7test because we laboriously wrote code to hit it */
 	  while (true)
 	    {
 	      if (is_null(l2a_val)) {sc->value = car(if1_true); return(true);}
