@@ -1409,8 +1409,8 @@ struct s7_scheme {
              display_2, display_f, dynamic_wind_body, dynamic_wind_init, dynamic_wind_unchecked,
              format_as_objstr, format_f, format_just_control_string, format_no_column, fv_ref_2, fv_ref_3, fv_set_3, fv_set_unchecked, geq_2,
              get_output_string_uncopied, hash_table_2, hash_table_ref_2, int_log2, is_defined_in_rootlet, is_defined_in_unlet, iv_ref_2, iv_ref_3, iv_set_3,
-             list_0, list_1, list_2, list_3, list_4, list_ref_at_0, list_ref_at_1, list_ref_at_2, list_set_i, logand_2, logand_ii, logior_ii,
-             memq_2, memq_3, memq_4, memq_any, multiply_3,
+             list_0, list_1, list_2, list_3, list_4, list_ref_at_0, list_ref_at_1, list_ref_at_2, list_set_i, 
+             logand_2, logand_ii, logior_ii, logior_2, logxor_2, memq_2, memq_3, memq_4, memq_any, multiply_3,
              outlet_unlet, profile_out, read_char_1, restore_setter, rootlet_ref, simple_char_eq, simple_inlet, simple_list_values, starlet_ref, starlet_set,
              string_append_2, string_c1, string_equal_2, string_equal_2c, string_greater_2, string_less_2, sublet_curlet, substring_uncopied, subtract_1,
              subtract_2, subtract_2f, subtract_3, subtract_f2, subtract_x1, sv_unlet_ref, symbol_to_string_uncopied, tree_set_memq_syms,
@@ -26058,10 +26058,21 @@ static s7_int logior_i_ii(s7_int i1, s7_int i2) {return(i1 | i2);}
 static s7_int logior_i_iii(s7_int i1, s7_int i2, s7_int i3) {return(i1 | i2 | i3);}
 
 static s7_pointer g_logior_ii(s7_scheme *sc, s7_pointer args) {return(make_integer(sc, integer(car(args)) | integer(cadr(args))));}
+static s7_pointer g_logior_2(s7_scheme *sc, s7_pointer args)
+{
+  s7_pointer arg1 = car(args), arg2 = cadr(args);
+  if ((is_t_integer(arg1)) && (is_t_integer(arg2)))
+    return(make_integer(sc, integer(arg1) | integer(arg2)));
+  return(g_logior(sc, args));
+}
 
 static s7_pointer logior_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr)
 {
-  if ((args == 2) && (has_two_int_args(sc, expr))) return(sc->logior_ii);
+  if (args == 2)
+    {
+      if (has_two_int_args(sc, expr)) return(sc->logior_ii);
+      return(sc->logior_2);
+    }
   return(f);
 }
 
@@ -26117,6 +26128,16 @@ static s7_pointer g_logxor(s7_scheme *sc, s7_pointer args)
 
 static s7_int logxor_i_ii(s7_int i1, s7_int i2) {return(i1 ^ i2);}
 static s7_int logxor_i_iii(s7_int i1, s7_int i2, s7_int i3) {return(i1 ^ i2 ^ i3);}
+
+static s7_pointer g_logxor_2(s7_scheme *sc, s7_pointer args)
+{
+  s7_pointer arg1 = car(args), arg2 = cadr(args);
+  if ((is_t_integer(arg1)) && (is_t_integer(arg2)))
+    return(make_integer(sc, integer(arg1) ^ integer(arg2)));
+  return(g_logxor(sc, args));
+}
+
+static s7_pointer logxor_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr) {return((args == 2) ? sc->logxor_2 : f);}
 
 
 /* -------------------------------- logand -------------------------------- */
@@ -26393,7 +26414,6 @@ static s7_pointer ash_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_poin
 
 /* TODO: [g_ash_ii], [g_logand_ii] [g_logior_ii], perhaps logxor lognot_i (if arg sig -> int)
  *   g_logbit_ii (sig=int), (logbit (ivref...)...) via op_safe_c_nc? ivref_wrapped  (or reused if in heap?)
- *   also [logand_2] logior_2 etc?
  */
 
 
@@ -37355,7 +37375,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 	  switch (str[i + 1])
 	    {
 	    case '%':                           /* -------- newline -------- */
-	      /* sbcl apparently accepts numeric args here (including 0) */
+	      /* sbcl apparently accepts numeric args here (including 0); use ~NC in s7: (format #f "~NC" 3 #\newline) */
 	      if ((port_data(port)) &&
 		  (port_position(port) < port_data_size(port)))
 		{
@@ -72497,12 +72517,17 @@ static void init_choosers(s7_scheme *sc)
 
   /* logior */
   f = set_function_chooser(sc->logior_symbol, logior_chooser);
+  sc->logior_2 = make_function_with_class(sc, f, "logior", g_logior_2, 2, 0, false);
   sc->logior_ii = make_function_with_class(sc, f, "logior", g_logior_ii, 2, 0, false);
 
   /* logand */
   f = set_function_chooser(sc->logand_symbol, logand_chooser);
   sc->logand_2 = make_function_with_class(sc, f, "logand", g_logand_2, 2, 0, false);
   sc->logand_ii = make_function_with_class(sc, f, "logand", g_logand_ii, 2, 0, false);
+
+  /* logxor */
+  f = set_function_chooser(sc->logxor_symbol, logxor_chooser);
+  sc->logxor_2 = make_function_with_class(sc, f, "logxor", g_logxor_2, 2, 0, false);
 
 #if !WITH_GMP
   /* ash */
@@ -100660,7 +100685,7 @@ int main(int argc, char **argv)
  * tnum             6013   5433   5396   5409   5408
  * tlist     9219   7546   6558   6240   6300   5770
  * trec      19.6   6980   6599   6656   6658   6015
- * tari      15.0   12.7   6827   6543   6278   6135
+ * tari      15.0   12.7   6827   6543   6278   6126
  * tgsl             7802   6373   6282   6208   6208
  * tset                           6260   6364   6278
  * tleft     12.2   9753   7537   7331   7331   6393
