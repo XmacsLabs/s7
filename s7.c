@@ -239,6 +239,7 @@
 #ifdef _MSC_VER
   #ifndef HAVE_COMPLEX_NUMBERS
     #define HAVE_COMPLEX_NUMBERS 0
+    /* Da Shen adds that you'll need the compiler flag /fp:precise if you're using github actions */
   #endif
   #ifndef HAVE_COMPLEX_TRIG
     #define HAVE_COMPLEX_TRIG 0
@@ -76042,6 +76043,12 @@ static opt_t optimize(s7_scheme *sc, s7_pointer code, int32_t hop, s7_pointer e)
 }
 
 
+static s7_pointer key_or_constant_arg(s7_scheme *sc, s7_pointer arg)
+{
+  bool key = is_symbol_and_keyword(arg);
+  return(wrap_string(sc, (key) ? "keyword" : "constant", (key) ? 7 : 8));
+}
+
 static void check_lambda_args(s7_scheme *sc, s7_pointer args, int32_t *arity, s7_pointer form)
 {
   s7_pointer x;
@@ -76051,7 +76058,8 @@ static void check_lambda_args(s7_scheme *sc, s7_pointer args, int32_t *arity, s7
     {
       if (is_constant(sc, args))                       /* (lambda :a ...) or (define (f :a) ...) */
 	error_nr(sc, sc->syntax_error_symbol,
-		 set_elist_3(sc, wrap_string(sc, "lambda parameter is a constant: (~S ~S ...)", 43), car(form), cadr(form)));
+		 set_elist_5(sc, wrap_string(sc, "~A parameter is a ~A: (~S ~S ...)", 33),
+			     car(form), key_or_constant_arg(sc, args), car(form), cadr(form)));
       /* we currently accept (lambda i i . i) (lambda quote i)  (lambda : : . #()) (lambda : 1 . "")
        *   at this level, but when the lambda form is evaluated, it will trigger an error.
        */
@@ -76068,32 +76076,33 @@ static void check_lambda_args(s7_scheme *sc, s7_pointer args, int32_t *arity, s7
 	{
 	  if (is_pair(car_x))                          /* (lambda ((:hi . "hi") . "hi") 1) */
 	    error_nr(sc, sc->syntax_error_symbol,      /* don't use ~A here or below, (lambda #\null do) for example */
-		     set_elist_4(sc, wrap_string(sc, "lambda parameter ~S is a pair (perhaps use lambda*?): (~S ~S ...)", 65),
-				 car_x, car(form), cadr(form)));
+		     set_elist_5(sc, wrap_string(sc, "~A parameter ~S is a pair (perhaps use lambda*?): (~S ~S ...)", 61),
+				 car(form), car_x, car(form), cadr(form)));
 	  if ((car_x == sc->rest_keyword) &&
 	      ((car(form) == sc->define_symbol) || (car(form) == sc->lambda_symbol)))
 	    error_nr(sc, sc->syntax_error_symbol,
-		     set_elist_5(sc, wrap_string(sc, "lambda parameter is ~S? (~S ~S ...), perhaps use ~S", 51),
-				 car_x, car(form), cadr(form),
+		     set_elist_6(sc, wrap_string(sc, "~A parameter is ~S? (~S ~S ...), perhaps use ~S", 47),
+				 car(form), car_x, car(form), cadr(form),
 				 (car(form) == sc->define_symbol) ? sc->define_star_symbol : sc->lambda_star_symbol));
 	  error_nr(sc, sc->syntax_error_symbol,        /* (lambda (a :b c) 1) */
-		   set_elist_4(sc, wrap_string(sc, "lambda parameter ~S is a constant: (~S ~S ...)", 46),
-			       car_x, car(form), cadr(form)));
+		   set_elist_6(sc, wrap_string(sc, "~A parameter ~S is a ~A: (~S ~S ...)", 36),
+			       car(form), car_x, key_or_constant_arg(sc, car_x), car(form), cadr(form)));
 	}
       if (symbol_is_in_small_symbol_set(sc, car_x))
 	error_nr(sc, sc->syntax_error_symbol,
-		 set_elist_4(sc, wrap_string(sc, "lambda parameter ~S is used twice in the parameter list, (~S ~S ...)", 68),
-			     car_x, car(form), cadr(form)));
+		 set_elist_5(sc, wrap_string(sc, "~A parameter ~S is used twice in the parameter list, (~S ~S ...)", 64),
+			     car(form), car_x, car(form), cadr(form)));
       add_symbol_to_small_symbol_set(sc, car_x);
       set_local(car_x);
     }
   if (is_not_null(x))
     {
       if ((is_symbol(x)) && (symbol_is_in_small_symbol_set(sc, x)))
-	error_nr(sc, sc->syntax_error_symbol, set_elist_2(sc, wrap_string(sc, "lambda :rest parameter ~S is used earlier in the parameter list", 63), x));
+	error_nr(sc, sc->syntax_error_symbol, set_elist_3(sc, wrap_string(sc, "~A :rest parameter ~S is used earlier in the parameter list", 59), car(form), x));
       if (is_constant(sc, x))                         /* (lambda (a . 0.0) a) or (lambda (a . :b) a) */
 	error_nr(sc, sc->syntax_error_symbol,
-		 set_elist_4(sc, wrap_string(sc, "lambda :rest parameter ~S is a constant in (~S ~S ...)", 54), x, car(form), cadr(form)));
+		 set_elist_6(sc, wrap_string(sc, "~A :rest parameter ~S is a ~A in (~S ~S ...)", 44),
+			     car(form), x, key_or_constant_arg(sc, x), car(form), cadr(form)));
       i = -i - 1;
     }
   end_small_symbol_set(sc);
@@ -76109,7 +76118,8 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
     {
       if (is_constant(sc, args))                                /* (lambda* :a ...) or (define* (f . :a) ...) */
 	error_nr(sc, sc->syntax_error_symbol,
-		 set_elist_3(sc, wrap_string(sc, "lambda* parameter is a constant: (~S ~S ...)", 44), car(form), cadr(form)));
+		 set_elist_5(sc, wrap_string(sc, "~A parameter is a ~A: (~S ~S ...)", 33),
+			     car(form), key_or_constant_arg(sc, args), car(form), cadr(form)));
       if (is_symbol(args)) set_local(args);
       return(args);
     }
@@ -76125,32 +76135,32 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
 	  has_defaults = true;
 	  if (is_constant(sc, car(car_w)))                      /* (lambda* ((:a 1)) ...) */
 	    error_nr(sc, sc->syntax_error_symbol,
-		     set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S is a constant: (~S ~S ...)", 47),
-				 car(car_w), car(form), cadr(form)));
+		     set_elist_6(sc, wrap_string(sc, "~A parameter ~S is a ~A: (~S ~S ...)", 36),
+				 car(form), car(car_w), key_or_constant_arg(sc, car(car_w)), car(form), cadr(form)));
 	  if (symbol_is_in_small_symbol_set(sc, car(car_w)))
 	    error_nr(sc, sc->syntax_error_symbol,
-		     set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S is used twice in the parameter list, (~S ~S ...)", 69),
-				 car(car_w), car(form), cadr(form)));
+		     set_elist_5(sc, wrap_string(sc, "~A parameter ~S is used twice in the parameter list, (~S ~S ...)", 64),
+				 car(form), car(car_w), car(form), cadr(form)));
 	  add_symbol_to_small_symbol_set(sc, car(car_w));
 	  if (!is_pair(cdr(car_w)))
 	    {
 	      if (is_null(cdr(car_w)))                          /* (lambda* ((a)) ...) */
 		error_nr(sc, sc->syntax_error_symbol,
-			 set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S default value missing in (~S ~S ...)", 57),
-				     car_w, car(form), cadr(form)));
+			 set_elist_5(sc, wrap_string(sc, "~A parameter ~S default value missing in (~S ~S ...)", 52),
+				     car(form), car_w, car(form), cadr(form)));
 	      error_nr(sc, sc->syntax_error_symbol,             /* (lambda* ((a . 0.0)) a) */
-		       set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S is a dotted pair in (~S ~S ...)", 52),
-				   car_w, car(form), cadr(form)));
+		       set_elist_5(sc, wrap_string(sc, "~A parameter ~S is a dotted pair in (~S ~S ...)", 47),
+				   car(form), car_w, car(form), cadr(form)));
 	    }
 	  if ((is_pair(cadr(car_w))) &&                         /* (lambda* ((a (quote . -1))) ...) */
 	      (s7_list_length(sc, cadr(car_w)) < 0))
 	    error_nr(sc, sc->syntax_error_symbol,
-		     set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S default value is not a proper list in (~S ~S ...)", 70),
-				 car_w, car(form), cadr(form)));
+		     set_elist_5(sc, wrap_string(sc, "~A parameter ~S default value is not a proper list in (~S ~S ...)", 65),
+				 car(form), car_w, car(form), cadr(form)));
 	  if (is_not_null(cddr(car_w)))                         /* (lambda* ((a 0.0 'hi)) a) */
 	    error_nr(sc, sc->syntax_error_symbol,
-		     set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S has multiple default values in (~S ~S ...)", 63),
-				 car_w, car(form), cadr(form)));
+		     set_elist_5(sc, wrap_string(sc, "~A parameter ~S has multiple default values in (~S ~S ...)", 58),
+				 car(form), car_w, car(form), cadr(form)));
 	  set_local(car(car_w));
 	}
       else
@@ -76160,8 +76170,8 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
 	      {
 		if (car_w != sc->allow_other_keys_keyword)
 		  error_nr(sc, sc->syntax_error_symbol,         /* (lambda* (pi) ...) */
-			   set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S is a constant: (~S ~S ...)", 47),
-				       car_w, car(form), cadr(form)));
+			   set_elist_6(sc, wrap_string(sc, "~A parameter ~S is a ~A: (~S ~S ...)", 36),
+				       car(form), car_w, key_or_constant_arg(sc, car_w), car(form), cadr(form)));
 		if (is_not_null(cdr(w)))                        /* (lambda* (:allow-other-keys x) x) */
 		  error_nr(sc, sc->syntax_error_symbol,
 			   set_elist_3(sc, wrap_string(sc, ":allow-other-keys should be the last parameter: (~S ~S ...)", 59),
@@ -76175,8 +76185,8 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
 	      }
 	    if (symbol_is_in_small_symbol_set(sc, car_w))
 	      error_nr(sc, sc->syntax_error_symbol,
-		       set_elist_4(sc, wrap_string(sc, "lambda* parameter ~S is used twice in the parameter list, (~S ~S ...)", 69),
-				   car_w, car(form), cadr(form)));
+		       set_elist_5(sc, wrap_string(sc, "~A parameter ~S is used twice in the parameter list, (~S ~S ...)", 64),
+				   car(form), car_w, car(form), cadr(form)));
 	    add_symbol_to_small_symbol_set(sc, car_w);
 	    if (!is_keyword(car_w)) set_local(car_w);
 	  }
@@ -76185,32 +76195,32 @@ static s7_pointer check_lambda_star_args(s7_scheme *sc, s7_pointer args, s7_poin
 	    has_defaults = true;
 	    if (!is_pair(cdr(w)))                               /* (lambda* (:rest) ...) */
 	      error_nr(sc, sc->syntax_error_symbol,
-		       set_elist_3(sc, wrap_string(sc, "lambda* :rest parameter missing in (~S ~S ...)", 46),
-				   car(form), cadr(form)));
+		       set_elist_4(sc, wrap_string(sc, "~A :rest parameter missing in (~S ~S ...)", 41),
+				   car(form), car(form), cadr(form)));
 	    if (!is_symbol(cadr(w)))                            /* (lambda* (:rest (a 1)) ...) */
 	      {
 		if (!is_pair(cadr(w)))                          /* (lambda* (:rest 1) ...) */
 		  error_nr(sc, sc->syntax_error_symbol,
-			   set_elist_4(sc, wrap_string(sc, "lambda* :rest parameter is not a symbol: ~S in (~S ~S ...)", 58),
-				       w, car(form), cadr(form)));
+			   set_elist_5(sc, wrap_string(sc, "~A :rest parameter is not a symbol: ~S in (~S ~S ...)", 53),
+				       car(form), w, car(form), cadr(form)));
 		error_nr(sc, sc->syntax_error_symbol,           /* (lambda* (:rest '(1 2)) 1) */
-			 set_elist_4(sc, wrap_string(sc, "lambda* :rest parameter can't have a default value: ~S in (~S ~S ...)", 69),
-				     w, car(form), cadr(form)));
+			 set_elist_5(sc, wrap_string(sc, "~A :rest parameter can't have a default value: ~S in (~S ~S ...)", 64),
+				     car(form), w, car(form), cadr(form)));
 	      }
 	    if (is_constant(sc, cadr(w)))                       /* (lambda* (a :rest x) ...) where x is locally a constant */
 	      error_nr(sc, sc->wrong_type_arg_symbol,
-		       set_elist_4(sc, wrap_string(sc, "lambda*: ~S is immutable, so it can't be the :rest parameter name: (~S ~S ...)", 78),
-				   cadr(w), car(form), cadr(form)));
+		       set_elist_5(sc, wrap_string(sc, "~A: ~S is immutable, so it can't be the :rest parameter name: (~S ~S ...)", 73),
+				   car(form), cadr(w), car(form), cadr(form)));
 	    set_local(cadr(w));
 	  }}
   if (is_not_null(w))
     {
       if ((is_symbol(w)) && (symbol_is_in_small_symbol_set(sc, w)))
-	error_nr(sc, sc->syntax_error_symbol, set_elist_2(sc, wrap_string(sc, "lambda* :rest parameter ~S is used earlier in the parameter list", 64), w));
-      if (is_constant(sc, w))                                   /* (lambda* (a . 0.0) a) or (lambda* (a . :b) a) */
+	error_nr(sc, sc->syntax_error_symbol, set_elist_3(sc, wrap_string(sc, "~A :rest parameter ~S is used earlier in the parameter list", 59), car(form), w));
+      if (is_constant(sc, w))                                   /* (lambda* (a 0.0) a) or (lambda* (a :b) a) */
 	error_nr(sc, sc->syntax_error_symbol,
-		 set_elist_4(sc, wrap_string(sc, "lambda* :rest parameter ~S is a constant, (~S ~S ...)", 53),
-			     w, car(form), cadr(form)));
+		 set_elist_6(sc, wrap_string(sc, "~A :rest parameter ~S is a ~A, (~S ~S ...)", 42),
+			     car(form), w, key_or_constant_arg(sc, w), car(form), cadr(form)));
       if (is_symbol(w))
 	set_local(w);
     }
@@ -92627,7 +92637,7 @@ static int32_t read_x_char(s7_scheme *sc, int32_t i, s7_pointer pt)
 	  sc->strbuf[i++] = (unsigned char)d1;
 	  return(i);
 	}
-      if (c == EOF)                  /* "\x4<eof */
+      if (c == EOF)                  /* "\x4<eof> */
 	{
 	  read_error_nr(sc, "#<eof> in midst of hex-char");
 	  return(i);
