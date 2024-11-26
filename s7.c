@@ -6526,20 +6526,6 @@ static s7_pointer method_or_bust_with_type_and_loc_pp(s7_scheme *sc, s7_pointer 
   return(find_and_apply_method(sc, obj, method, set_mlist_2(sc, x1, x2)));
 }
 
-static s7_pointer method_or_bust_with_type_pi(s7_scheme *sc, s7_pointer obj, s7_pointer method,
-					      s7_pointer x1, s7_int x2, s7_pointer typ, int32_t num)
-{
-  if (!has_active_methods(sc, obj)) wrong_type_error_nr(sc, method, num, obj, typ);
-  return(find_and_apply_method(sc, obj, method, set_mlist_2(sc, x1, make_integer(sc, x2))));
-}
-
-static s7_pointer method_or_bust_with_type_pf(s7_scheme *sc, s7_pointer obj, s7_pointer method,
-					      s7_pointer x1, s7_double x2, s7_pointer typ, int32_t num)
-{
-  if (!has_active_methods(sc, obj)) wrong_type_error_nr(sc, method, num, obj, typ);
-  return(find_and_apply_method(sc, obj, method, set_mlist_2(sc, x1, make_real(sc, x2))));
-}
-
 static s7_pointer sole_arg_method_or_bust(s7_scheme *sc, s7_pointer obj, s7_pointer method, s7_pointer args, s7_pointer typ)
 {
   if (!has_active_methods(sc, obj))  sole_arg_wrong_type_error_nr(sc, method, obj, typ);
@@ -9297,6 +9283,8 @@ s7_pointer s7_symbol_set_initial_value(s7_scheme *sc, s7_pointer symbol, s7_poin
 
 
 /* -------- small symbol set -------- */
+#define MAX_SMALL_SYMBOL_TAG (uint32_t)4294967295 /* 2^32 - 1*/
+
 #if S7_DEBUGGING
 enum {SET_IGNORE, SET_BEGIN, SET_END};
 
@@ -9330,14 +9318,14 @@ static void clear_small_symbol_set_1(s7_scheme *sc, int status, const char *func
     fprintf(stderr, "%s[%d]: small_symbol_set is not running but end requested (started at %s[%d])\n", func, line, sc->small_symbol_set_func, sc->small_symbol_set_line);
   sc->small_symbol_set_state = status;
 
-  sc->small_symbol_tag++;
-  if (sc->small_symbol_tag == 0)
+  if (sc->small_symbol_tag == MAX_SMALL_SYMBOL_TAG)
     {
       for (int32_t i = 0; i < SYMBOL_TABLE_SIZE; i++) /* clear old small_symbol_tags */
 	for (s7_pointer p = vector_element(sc->symbol_table, i); is_not_null(p); p = cdr(p))
 	  set_small_symbol_tag(car(p), 0);
       sc->small_symbol_tag = 1;
     }
+  else sc->small_symbol_tag++;
 }
 
 #define begin_small_symbol_set(Sc) clear_small_symbol_set_1(Sc, SET_BEGIN, __func__, __LINE__)
@@ -9355,14 +9343,14 @@ static /* inline */ s7_pointer add_symbol_to_small_symbol_set(s7_scheme *sc, s7_
 
 static /* inline */ void clear_small_symbol_set(s7_scheme *sc)
 {
-  sc->small_symbol_tag++;
-  if (sc->small_symbol_tag == 0)
+  if (sc->small_symbol_tag == MAX_SMALL_SYMBOL_TAG) /* 2^32 - 1 */
     {
       for (int32_t i = 0; i < SYMBOL_TABLE_SIZE; i++) /* clear old small_symbol_tags */
 	for (s7_pointer p = vector_element(sc->symbol_table, i); is_not_null(p); p = cdr(p))
 	  set_small_symbol_tag(car(p), 0);
       sc->small_symbol_tag = 1;
     }
+  else sc->small_symbol_tag++;
 }
 
 #define begin_small_symbol_set(Sc) clear_small_symbol_set(Sc)
@@ -19320,6 +19308,7 @@ static s7_pointer g_gcd(s7_scheme *sc, s7_pointer args)
   #define Q_gcd sc->pcl_f
 
   s7_int n = 0, d = 1;
+  s7_pointer n_args;
 
   if (!is_pair(args))       /* (gcd) */
     return(int_zero);
@@ -19331,7 +19320,14 @@ static s7_pointer g_gcd(s7_scheme *sc, s7_pointer args)
       return(abs_p_p(sc, car(args)));
     }
 
-  for (s7_pointer p = args; is_pair(p); p = cdr(p))
+  if (is_t_integer(car(args)))
+    {
+      n = integer(car(args));
+      n_args = cdr(args);
+    }
+  else n_args = args;
+
+  for (s7_pointer p = n_args; is_pair(p); p = cdr(p))
     {
       s7_pointer x = car(p);
       switch (type(x))
@@ -19341,7 +19337,10 @@ static s7_pointer g_gcd(s7_scheme *sc, s7_pointer args)
 #if WITH_GMP
 	    return(big_gcd(sc, n, d, p));
 #else
-	    sole_arg_out_of_range_error_nr(sc, sc->lcm_symbol, args, it_is_too_large_string);
+	  {
+	    if ((n == s7_int_min) && (is_null(cdr(p)))) /* gcd is supposed to return a positive integer, but we can't take abs(s7_int_min) */
+	      sole_arg_out_of_range_error_nr(sc, sc->gcd_symbol, args, it_is_too_large_string);
+	  }
 #endif
 	  n = c_gcd(n, integer(x));
 	  break;
@@ -20442,7 +20441,7 @@ static s7_pointer g_add_xi(s7_scheme *sc, s7_pointer x, s7_int y, int32_t loc)
     case T_BIG_COMPLEX:
       return(add_p_pp(sc, x, wrap_integer(sc, y)));
 #endif
-    default: return(method_or_bust_with_type_pi(sc, x, sc->add_symbol, x, y, a_number_string, loc));
+    default: return(method_or_bust_pp(sc, x, sc->add_symbol, x, make_integer(sc, y), a_number_string, loc));
     }
   return(x);
 }
@@ -20459,7 +20458,7 @@ static s7_pointer g_add_xf(s7_scheme *sc, s7_pointer x, s7_double y, int32_t loc
     case T_BIG_INTEGER: case T_BIG_RATIO: case T_BIG_REAL: case T_BIG_COMPLEX:
       return(add_p_pp(sc, x, wrap_real(sc, y)));
 #endif
-    default: return(method_or_bust_with_type_pf(sc, x, sc->add_symbol, x, y, a_number_string, loc));
+    default: return(method_or_bust_pp(sc, x, sc->add_symbol, x, make_real(sc, y), a_number_string, loc));
     }
   return(x);
 }
@@ -21225,7 +21224,7 @@ static s7_pointer g_sub_xi(s7_scheme *sc, s7_pointer x, s7_int y)
     case T_BIG_COMPLEX:
       return(subtract_p_pp(sc, x, wrap_integer(sc, y)));
 #endif
-    default: return(method_or_bust_with_type_pi(sc, x, sc->subtract_symbol, x, y, a_number_string, 1));
+    default: return(method_or_bust_pp(sc, x, sc->subtract_symbol, x, make_integer(sc, y), a_number_string, 1));
     }
   return(x);
 }
@@ -21798,7 +21797,7 @@ static s7_pointer g_mul_xi(s7_scheme *sc, s7_pointer x, s7_int n, int32_t loc)
 #endif
     default:
       /* we can get here from mul_2_xi for example so the non-integer argument might not be a symbol */
-      return(method_or_bust_with_type_pi(sc, x, sc->multiply_symbol, x, n, a_number_string, loc));
+      return(method_or_bust_pp(sc, x, sc->multiply_symbol, x, make_integer(sc, n), a_number_string, loc));
     }
   return(x);
 }
@@ -21835,7 +21834,7 @@ static s7_pointer g_mul_xf(s7_scheme *sc, s7_pointer x, s7_double y, int32_t num
       mpc_mul_fr(sc->mpc_1, big_complex(x), sc->mpfr_1, MPC_RNDNN);
       return(mpc_to_number(sc, sc->mpc_1));
 #endif
-    default: return(method_or_bust_with_type_pf(sc, x, sc->multiply_symbol, x, y, a_number_string, num));
+    default: return(method_or_bust_pp(sc, x, sc->multiply_symbol, x, make_real(sc, y), a_number_string, num));
     }
   return(x);
 }
@@ -27954,7 +27953,7 @@ static s7_pointer string_ref_p_p0(s7_scheme *sc, s7_pointer p1, s7_pointer unuse
 static s7_pointer string_plast_via_method(s7_scheme *sc, s7_pointer p1) /* tmock */
 {
   s7_pointer len = method_or_bust_p(sc, p1, sc->length_symbol, sc->type_names[T_STRING]);
-  return(method_or_bust_with_type_pi(sc, p1, sc->string_ref_symbol, p1, integer(len) - 1, sc->type_names[T_STRING], 1));
+  return(method_or_bust_pp(sc, p1, sc->string_ref_symbol, p1, make_integer(sc, integer(len) - 1), sc->type_names[T_STRING], 1));
 }
 
 static s7_pointer string_ref_p_plast(s7_scheme *sc, s7_pointer p1, s7_pointer unused_i1)
@@ -39145,7 +39144,7 @@ static s7_pointer list_tail_p_pp(s7_scheme *sc, s7_pointer lst, s7_pointer p)
   index = s7_integer_clamped_if_gmp(sc, p);
 
   if (!is_list(lst)) /* (list-tail () 0) -> () */
-    return(method_or_bust_with_type_pi(sc, lst, sc->list_tail_symbol, lst, index, a_list_string, 1));
+    return(method_or_bust_pp(sc, lst, sc->list_tail_symbol, lst, p, a_list_string, 1));
   if ((index < 0) || (index > sc->max_list_length))
     out_of_range_error_nr(sc, sc->list_tail_symbol, int_two, wrap_integer(sc, index), (index < 0) ? it_is_negative_string : it_is_too_large_string);
   for (i = 0; (i < index) && (is_pair(lst)); i++, lst = cdr(lst)) {}
@@ -100695,7 +100694,7 @@ int main(int argc, char **argv)
  * tnum             6013   5433   5396   5409   5408
  * tlist     9219   7546   6558   6240   6300   5770
  * trec      19.6   6980   6599   6656   6658   6015
- * tari      15.0   12.7   6827   6543   6278   6126
+ * tari      15.0   12.7   6827   6543   6278   6117
  * tgsl             7802   6373   6282   6208   6208
  * tset                           6260   6364   6278
  * tleft     12.2   9753   7537   7331   7331   6393
