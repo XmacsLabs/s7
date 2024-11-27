@@ -17217,7 +17217,7 @@ static s7_pointer g_complex(s7_scheme *sc, s7_pointer args)
 }
 
 static s7_pointer g_complex_wrapped(s7_scheme *sc, s7_pointer args) {return(complex_p_pp_wrapped(sc, car(args), cadr(args)));}
-static s7_pointer complex_p_ii_wrapped(s7_scheme *sc, s7_int x, s7_int y) {return(wrap_complex(sc, (s7_double)x, (s7_double)y));}
+static s7_pointer complex_p_ii_wrapped(s7_scheme *sc, s7_int x, s7_int y) {return(wrap_complex(sc, (s7_double)x, (s7_double)y));} /* tcomplex p_ii_ok */
 static s7_pointer complex_p_dd_wrapped(s7_scheme *sc, s7_double x, s7_double y) {return(wrap_complex(sc, x, y));}
 
 static s7_pointer complex_p_ii(s7_scheme *sc, s7_int x, s7_int y)
@@ -26810,6 +26810,17 @@ static s7_pointer random_p_p(s7_scheme *sc, s7_pointer num)
   return(g_random(sc, set_plist_1(sc, num)));
 }
 
+static s7_pointer random_p_p_wrapped(s7_scheme *sc, s7_pointer num)
+{
+#if !WITH_GMP
+  if (is_t_integer(num))
+    return(wrap_integer(sc, (s7_int)(integer(num) * next_random(sc->default_random_state))));
+  if (is_t_real(num))
+    return(wrap_real(sc, real(num) * next_random(sc->default_random_state)));
+#endif
+  return(g_random(sc, set_plist_1(sc, num)));
+}
+
 static s7_pointer random_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr)
 {
   if (args == 1)
@@ -26825,7 +26836,7 @@ static s7_pointer random_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_p
 static s7_pointer g_add_i_random(s7_scheme *sc, s7_pointer args)
 {
 #if WITH_GMP
-  return(add_p_pp(sc, car(args), random_p_p(sc, cadadr(args))));
+  return(add_p_pp(sc, car(args), random_p_p_wrapped(sc, cadadr(args))));
 #else
   s7_int x = integer(car(args)), y = opt3_int(args); /* cadadr */
   return(make_integer(sc, x + (s7_int)(y * next_random(sc->default_random_state)))); /* (+ -1 (random 1)) -- placement of the (s7_int) cast matters! */
@@ -59434,6 +59445,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 	      set_opt1_sym(cdr(arg), cadaddr(arg));
 	      set_opt2_direct(cdr(arg), (s7_pointer)(s7_p_pp_function(global_value(car(arg)))));
 	      set_opt3_direct(cdr(arg), (s7_pointer)(s7_p_p_function(global_value(caaddr(arg))))); /* arg opt3 only location, but no change in callgrind */
+	      if (opt3_direct(cdr(arg)) == (s7_pointer)random_p_p) set_opt3_direct(cdr(arg), (s7_pointer)random_p_p_wrapped);
 	      return(fx_c_s_opsq_direct);
 	    }
 	  return(fx_c_s_opsq);
@@ -65151,6 +65163,7 @@ static s7_pointer opt_p_7d_c(opt_info *o)    {return(make_real(o->sc, o->v[2].d_
 static s7_pointer opt_p_p_s(opt_info *o)     {return(o->v[2].p_p_f(o->sc, slot_value(o->v[1].p)));}
 static s7_pointer opt_p_p_s_abs(opt_info *o) {return(abs_p_p(o->sc, slot_value(o->v[1].p)));}
 static s7_pointer opt_p_p_s_random(opt_info *o) {return(random_p_p(o->sc, slot_value(o->v[1].p)));}
+static s7_pointer opt_p_p_s_random_wrapped(opt_info *o) {return(random_p_p_wrapped(o->sc, slot_value(o->v[1].p)));}
 static s7_pointer opt_p_p_s_cdr(opt_info *o) {s7_pointer p = slot_value(o->v[1].p); return((is_pair(p)) ? cdr(p) : cdr_p_p(o->sc, p));}
 static s7_pointer opt_p_p_f(opt_info *o)     {return(o->v[2].p_p_f(o->sc, o->v[4].fp(o->v[3].o1)));}
 static s7_pointer opt_p_p_f1(opt_info *o)    {return(o->v[2].p_p_f(o->sc, o->v[3].p_p_f(o->sc, slot_value(o->v[1].p))));}
@@ -65932,6 +65945,7 @@ static bool p_pp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer 
                                    ((func == vector_ref_p_pp) ? opt_p_pp_fs_vref : ((func == cons_p_pp) ? opt_p_pp_fs_cons : opt_p_pp_fs)));
 		  opc->v[4].o1 = o1;
 		  opc->v[5].fp = o1->v[0].fp;
+		  if (opc->v[5].fp == opt_p_p_s_random) opc->v[5].fp = opt_p_p_s_random_wrapped;
 		  return_true(sc, car_x);
 		}
 	      sc->pc = pstart;
@@ -66657,7 +66671,7 @@ static bool p_ppp_ok(s7_scheme *sc, opt_info *opc, s7_pointer s_func, s7_pointer
 			if (opc->v[4].o1->v[3].p_dd_f == complex_p_dd)
 			  opc->v[4].o1->v[3].p_dd_f = complex_p_dd_wrapped;
 			else
-			  if (opc->v[4].o1->v[3].p_ii_f == complex_p_ii)
+			  if (opc->v[4].o1->v[3].p_ii_f == complex_p_ii) /* (complex-vector-set! cv1 i (complex i i)) */
 			    opc->v[4].o1->v[3].p_ii_f = complex_p_ii_wrapped;
 		      /* opc->v[3].p_ppp_f = complex_vector_set_p_ppp and  fn_proc(arg3) == g_complex_wrapped */
 		      /* p_pip case is different! o->v[9].fp(o->v[8].o1 */
@@ -72666,7 +72680,7 @@ static void init_choosers(s7_scheme *sc)
   /* complex-vector-set */
   f = set_function_chooser(sc->complex_vector_set_symbol, complex_vector_set_chooser);
   sc->cv_set_3 = make_function_with_class(sc, f, "complex-vector-set!", g_cv_set_3, 3, 0, false);
-  sc->complex_wrapped = make_function_with_class(sc, f, "complex", g_complex_wrapped, 2, 0, false);
+  sc->complex_wrapped = make_function_with_class(sc, f, "complex", g_complex_wrapped, 2, 0, false); /* not used currently? */
 
   /* float-vector-ref */
   f = set_function_chooser(sc->float_vector_ref_symbol, float_vector_ref_chooser);
@@ -76046,6 +76060,7 @@ static s7_pointer key_or_constant_arg(s7_scheme *sc, s7_pointer arg)
 {
   bool key = is_symbol_and_keyword(arg);
   return(wrap_string(sc, (key) ? "keyword" : "constant", (key) ? 7 : 8));
+  /* maybe better, but there is no sc->keyword_symbol: return((is_symbol_and_keyword(arg)) ? sc->keyword_symbol : sc->constant_symbol); */
 }
 
 static void check_lambda_args(s7_scheme *sc, s7_pointer args, int32_t *arity, s7_pointer form)
@@ -100694,7 +100709,7 @@ int main(int argc, char **argv)
  * tnum             6013   5433   5396   5409   5408
  * tlist     9219   7546   6558   6240   6300   5770
  * trec      19.6   6980   6599   6656   6658   6015
- * tari      15.0   12.7   6827   6543   6278   6117
+ * tari      15.0   12.7   6827   6543   6278   6111
  * tgsl             7802   6373   6282   6208   6208
  * tset                           6260   6364   6278
  * tleft     12.2   9753   7537   7331   7331   6393
@@ -100715,4 +100730,6 @@ int main(int argc, char **argv)
  * ------------------------------------------------------------
  *
  * terr: catch+errors, tchar? tcase? tsetter: integer? et al as setter?
+ * c4a|b tcomplex
+ * random wrappers [tlet]
  */

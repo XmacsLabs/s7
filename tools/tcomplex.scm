@@ -73,6 +73,31 @@
       ; 109 same but complex_p_ii_wrapped and less gc
 
 
+(define (c4a)
+  (let* ((len (length cv))
+	 (cv1 (make-complex-vector len)))
+    (do ((j 0 (+ j 1))
+	 (d 1.0 (+ d 1.0)))
+	((= j tries))
+      (do ((i 0 (+ i 1)))
+	  ((= i len))
+	(complex-vector-set! cv1 i (complex d d))))))
+
+;(c4a) ; hits complex_p_pp_wrapped, 93, complex_vector_set_p_ppp 36, complex_p_pp_wrapped 16
+
+(define (c4b)
+  (let* ((len (length cv))
+	 (cv1 (make-complex-vector len)))
+    (do ((j 0 (+ j 1))
+	 (d 1.0 (+ d 1.0)))
+	((= j tries))
+      (do ((i 0 (+ i 1)))
+	  ((= i len))
+	(complex-vector-set! cv1 i (complex d 1.0))))))
+
+;(c4b) ; hits complex_p_dd_wrapped, 94, complex_vector_set_p_ppp 36, complex_p_dd_wrapped 8
+
+
 (define (c5)
   (let* ((len (length cv))
 	 (cv1 (copy cv))
