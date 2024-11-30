@@ -579,7 +579,7 @@ typedef struct {
   s7_pointer (*read_name)(s7_scheme *sc, s7_pointer pt);                 /* internal get-next-name reader */
   s7_pointer (*read_sharp)(s7_scheme *sc, s7_pointer pt);                /* internal get-next-sharp-constant reader */
   s7_pointer (*read_line)(s7_scheme *sc, s7_pointer pt, bool eol_case);  /* function to read a string up to \n */
-  void (*displayer)(s7_scheme *sc, const char *s, s7_pointer pt);
+  void (*displayer)(s7_scheme *sc, const char *s, s7_pointer pt);        /* (display s pt) -- port_write_string without strlen?? */
   void (*close_port)(s7_scheme *sc, s7_pointer p);                       /* close-in|output-port */
 } port_functions_t;
 
@@ -29706,7 +29706,7 @@ static int32_t string_read_char(s7_scheme *sc, s7_pointer port)
   return((port_data_size(port) <= port_position(port)) ? EOF : (uint8_t)port_data(port)[port_position(port)++]); /* port_string_length is 0 if no port string */
 }
 
-static int32_t output_read_char(s7_scheme *sc, s7_pointer port)
+static int32_t output_read_char(s7_scheme *sc, s7_pointer port) /* not reachable I think */
 {
   sole_arg_wrong_type_error_nr(sc, sc->read_char_symbol, port, an_input_port_string);
   return(0);
@@ -29721,7 +29721,7 @@ static int32_t closed_port_read_char(s7_scheme *sc, s7_pointer port)
 
 /* -------- read line functions -------- */
 
-static s7_pointer output_read_line(s7_scheme *sc, s7_pointer port, bool with_eol)
+static s7_pointer output_read_line(s7_scheme *sc, s7_pointer port, bool with_eol) /* not reachable I think */
 {
   sole_arg_wrong_type_error_nr(sc, sc->read_line_symbol, port, an_input_port_string);
   return(NULL);
@@ -29880,7 +29880,7 @@ static Inline void inline_file_write_char(s7_scheme *sc, uint8_t c, s7_pointer p
 
 static void file_write_char(s7_scheme *sc, uint8_t c, s7_pointer port) {inline_file_write_char(sc, c, port);}
 
-static void input_write_char(s7_scheme *sc, uint8_t c, s7_pointer port)
+static void input_write_char(s7_scheme *sc, uint8_t c, s7_pointer port) /* not reachable I think */
 {
   sole_arg_wrong_type_error_nr(sc, sc->write_char_symbol, port, an_output_port_string);
 }
@@ -31084,7 +31084,7 @@ static s7_pointer g_read_char(s7_scheme *sc, s7_pointer args)
   #define Q_read_char s7_make_signature(sc, 2, s7_make_signature(sc, 2, sc->is_char_symbol, sc->is_eof_object_symbol), sc->is_input_port_symbol)
 
   s7_pointer port;
-  if (is_not_null(args))
+  if (is_pair(args))
     port = car(args);
   else
     {
@@ -34208,14 +34208,10 @@ static void vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port, use_
 	    }}}
   else /* not readable write */
     {
-      if (vector_rank(vect) > 1)
+      if (vector_rank(vect) > 1) /* if rank>1, ndims exists */
 	{
-	  if (vector_ndims(vect) > 1)
-	    {
-	      plen = catstrs_direct(buf, "#", pos_int_to_str_direct(sc, vector_ndims(vect)), "d", (const char *)NULL);
-	      port_write_string(port)(sc, buf, plen, port);
-	    }
-	  else port_write_character(port)(sc, '#', port);
+	  plen = catstrs_direct(buf, "#", pos_int_to_str_direct(sc, vector_ndims(vect)), "d", (const char *)NULL);
+	  port_write_string(port)(sc, buf, plen, port);
 	  multivector_to_port(sc, vect, port, len, 0, 0, vector_ndims(vect), use_write, ci);
 	}
       else
@@ -36431,7 +36427,7 @@ static void stack_to_port(s7_scheme *sc, const s7_pointer obj, s7_pointer port, 
 
 static void init_display_functions(void)
 {
-  for (int32_t i = 0; i < 256; i++) display_functions[i] = display_fallback;
+  for (int32_t i = 0; i < NUM_TYPES; i++) display_functions[i] = display_fallback;
   display_functions[T_BACRO] =           macro_to_port;
   display_functions[T_BACRO_STAR] =      macro_to_port;
 #if WITH_GMP
@@ -45879,36 +45875,6 @@ static s7_int hash_map_byte_vector(s7_scheme *sc, s7_pointer table, s7_pointer k
   return(byte_vector_length(key) + byte_vector(key, 0) + byte_vector(key, 1));
 }
 
-#if 0
-static s7_int hash_map_float_vector(s7_scheme *sc, s7_pointer table, s7_pointer key)
-{
-  if (vector_length(key) == 0)
-    return(0);
-  if (vector_length(key) == 1)
-    return(hash_float_location(float_vector(key, 0)));
-  return(vector_length(key) + hash_float_location(float_vector(key, 0)) + hash_float_location(float_vector(key, 1)));
-}
-
-static s7_int hash_map_complex_vector(s7_scheme *sc, s7_pointer table, s7_pointer key)
-{
-  if (vector_length(key) == 0)
-    return(0);
-  if (vector_length(key) == 1)
-    return(hash_complex_location(creal(complex_vector(key, 0))));
-  return(vector_length(key) + hash_complex_location(creal(complex_vector(key, 0))) + hash_complex_location(creal(complex_vector(key, 1))));
-}
-
-static s7_int hash_map_vector(s7_scheme *sc, s7_pointer table, s7_pointer key)
-{
-  if ((vector_length(key) == 0) ||
-      (is_sequence_or_iterator(vector_element(key, 0))))
-    return(vector_length(key));
-  if ((vector_length(key) == 1) ||
-      (is_sequence_or_iterator(vector_element(key, 1))))
-    return(hash_loc(sc, table, vector_element(key, 0)));
-  return(vector_length(key) + hash_loc(sc, table, vector_element(key, 0)) + hash_loc(sc, table, vector_element(key, 1))); /* see above */
-}
-#else
 static s7_int hash_map_float_vector(s7_scheme *sc, s7_pointer table, s7_pointer key)
 {
   s7_int mask;
@@ -45948,7 +45914,6 @@ static s7_int hash_map_vector(s7_scheme *sc, s7_pointer table, s7_pointer key)
   loc2 = hash_loc(sc, table, vector_element(key, 1)) & mask;
   return(vector_length(key) + loc1 + loc2);
 }
-#endif
 
 
 static s7_int hash_map_closure(s7_scheme *sc, s7_pointer table, s7_pointer key)
@@ -100678,58 +100643,81 @@ int main(int argc, char **argv)
  * index            1016    973    967    972    988
  * tmock            1145   1082   1042   1045   1031
  * tvect     3408   2464   1772   1669   1497   1457
- * thook     7651   ----   2590   2030   2046   1732
+ * thook     7651   ----   2590   2030   2046   1731
  * texit     1884   1950   1778   1741   1770   1759
  * tauto                   2562   2048   1729   1760
  * s7test           1831   1818   1829   1830   1849
  * lt        2222   2172   2150   2185   1950   1892
- * dup              3788   2492   2239   2097   2006
+ * dup              3788   2492   2239   2097   2012
  * tread            2421   2419   2408   2405   2241
  * tcopy            5546   2539   2375   2386   2352
  * trclo     8248   2782   2615   2634   2622   2499
  * tload                   3046   2404   2566   2506
- * tmat             3042   2524   2578   2590   2514
+ * tmat             3042   2524   2578   2590   2527
  * fbench    2933   2583   2460   2430   2478   2536
  * tsort     3683   3104   2856   2804   2858   2858
  * titer     4550   3349   3070   2985   2966   2917
  * tio              3752   3683   3620   3583   3127
- * tbit      3836   3305   3245   3261   3264   3189
+ * tbit      3836   3305   3245   3261   3264   3184
  * tobj             3970   3828   3577   3508   3434
  * teq              4045   3536   3486   3544   3556
  * tmac             4373   ----   4193   4188   4024
  * tcomplex         3650   3583   3625   3679   4030
  * tcase            4793   4439   4430   4439   4376
  * tmap             8774   4489   4541   4586   4380
- * tlet      11.0   6974   5609   5980   5965   4466
+ * tlet      11.0   6974   5609   5980   5965   4470
  * tfft             7729   4755   4476   4536   4538
- * tshoot           5447   5183   5055   5034   4829
+ * tshoot           5447   5183   5055   5034   4833
  * tstar            6705   5834   5278   5177   5055
- * tform            5348   5307   5316   5084   5056
- * tstr      10.0   6342   5488   5162   5180   5250
- * tnum             6013   5433   5396   5409   5408
+ * tform            5348   5307   5316   5084   5065
+ * tstr      10.0   6342   5488   5162   5180   5259
+ * tnum             6013   5433   5396   5409   5402
  * tlist     9219   7546   6558   6240   6300   5770
  * trec      19.6   6980   6599   6656   6658   6015
- * tari      15.0   12.7   6827   6543   6278   6111
+ * tari      15.0   12.7   6827   6543   6278   6112
  * tgsl             7802   6373   6282   6208   6208
  * tset                           6260   6364   6278
  * tleft     12.2   9753   7537   7331   7331   6393
- * tmisc                          7614   7115   7132
+ * tmisc                          7614   7115   7130
  * tgc              10.4   7763   7579   7617   7619
  * tclo             8025   7645   8809   7770   7627
- * tlamb                          8003   7941   7900
- * thash            11.7   9734   9479   9526   9278
- * cb        12.9   11.0   9658   9564   9609   9648
+ * tlamb                          8003   7941   7905
+ * thash            11.7   9734   9479   9526   9283
+ * cb        12.9   11.0   9658   9564   9609   9657
  * tmap-hash                                    10.3
  * tgen             11.4   12.0   12.1   12.2   12.4
  * tall      15.9   15.6   15.6   15.6   15.1   15.1
- * timp             24.4   20.0   19.6   19.7   15.6
+ * timp             24.4   20.0   19.6   19.7   15.5
  * tmv              21.9   21.1   20.7   20.6   16.6
- * calls            37.5   37.0   37.5   37.1   37.2
- * sg                      55.9   55.8   55.4   55.4
+ * calls            37.5   37.0   37.5   37.1   37.1
+ * sg                      55.9   55.8   55.4   55.3
  * tbig            175.8  156.5  148.1  146.2  145.5
  * ------------------------------------------------------------
  *
+ * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
+ * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
+ *
+ * use optn pointers for if branches (also on existing cases -- many ops can be removed)
+ *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
+ *   extend oprec_i* and also to oprec_p[air]* where base p is protected but locals need not be?
+ *   tc_if_a_z_la et al in tc_cond et al need code merge
+ *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
+ *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
+ *
  * terr: catch+errors, tchar? tcase? tsetter: integer? et al as setter?
+ *
  * c4a|b tcomplex
- * random wrappers [tlet]
+ * remove displayer from port_functions, file_display->s7test+syntax_to_port
+ * see comment at 30335 -- is this true? remember_file_name 30410?? (why remember?)
+ * s7test doesn't hit the file_read* functions, nor do t*.scm (max_size_for_string_port=10M)
+ *   g_close_input|output_function_port not hit
+ *   vector_to_port rank>1? complex_vector_to_port len>1000
+ *   ~& in format? g_format_nr?
+ *   list_set_p_pip (unchecked is called)
+ *   make_vdims dims>1, s7_vector_to_list for all types, float_vector_p_d[hash84], make_int_vector_p_ii (tbig/map=hash)
+ *     complex_vector_ref_p_pi_wrapped (tcomplex), float_vector_set_p_pip (ari)
+ *     s7_double float_vector_ref_d_7piii (says "uncallable?") -- no hits, float_vector_set_p_pip_direct(sort, big)
+ *     float_vector_set_p_ppp errors etc (sg), int_vector_set_p_pip_direct(vect), int_vector_set_p_ppp(shoot)
+ *     byte_vector_set_i_7pii_direct(vect), byte_vector_set_p_pip_direct(no hits), byte_vector_set_i_7piii(vect)
+ *   cull_weak_hash_table (gc), catch_barrier_function(no hits), format_to_error_port(no hits), op_error_hook_quit(no hits)
  */
