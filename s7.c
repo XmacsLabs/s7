@@ -30332,7 +30332,6 @@ static s7_pointer read_file(s7_scheme *sc, FILE *fp, const char *name, s7_int ma
   port_port(port) = (port_t *)block_data(b);
   port_set_closed(port, false);
   port_set_string_or_function(port, sc->nil);
-  /* if we're constantly opening files, and each open saves the file name in permanent memory, we gradually core-up */
   port_filename_length(port) = safe_strlen(name);
   port_set_filename(sc, port, name, port_filename_length(port));
   port_line_number(port) = 1;  /* first line is numbered 1 */
@@ -36427,7 +36426,7 @@ static void stack_to_port(s7_scheme *sc, const s7_pointer obj, s7_pointer port, 
 
 static void init_display_functions(void)
 {
-  for (int32_t i = 0; i < NUM_TYPES; i++) display_functions[i] = display_fallback;
+  for (int32_t i = 0; i < 256; i++) display_functions[i] = display_fallback;
   display_functions[T_BACRO] =           macro_to_port;
   display_functions[T_BACRO_STAR] =      macro_to_port;
 #if WITH_GMP
@@ -52912,14 +52911,22 @@ static s7_pointer port_to_let(s7_scheme *sc, s7_pointer obj) /* note the underba
       (port_data(obj)) &&
       (port_data_size(obj) > 0))
     {
-      s7_varlet(sc, let, sc->size_symbol, make_integer(sc, port_data_size(obj)));
-      s7_varlet(sc, let, sc->position_symbol, make_integer(sc, port_position(obj)));
+      s7_int pos = port_position(obj), size = port_data_size(obj);
+      s7_varlet(sc, let, sc->size_symbol, make_integer(sc, size));
+      s7_varlet(sc, let, sc->position_symbol, make_integer(sc, pos));
       /* I think port_data need not be null-terminated, but s7_make_string assumes it is:
        *   both valgrind and lib*san complain about the uninitialized data during strlen.
+       *   This field is confusing; perhaps show a window around the current data position?
        */
-      s7_varlet(sc, let, sc->data_symbol,
-		make_string_with_length(sc, (const char *)port_data(obj), ((port_position(obj)) > 16) ? 16 : port_position(obj))); /* sc->print_length? */
-    }
+      {
+	const char *data = (const char *)port_data(obj);
+	char data_str[8], str[24];
+	int32_t i, bytes, lim = (size > 16) ? 16 : size;
+	for (i = 0; i < lim; i++) data_str[i] = data[i];
+	data_str[i] = '\0';
+	bytes = snprintf(str, 24, "%s%s", data_str, (size > 16) ? "..." : "");
+	s7_varlet(sc, let, sc->data_symbol, make_string_with_length(sc, str, bytes));
+      }}
   if (is_function_port(obj))
     s7_varlet(sc, let, sc->function_symbol, port_string_or_function(obj));
   s7_gc_unprotect_at(sc, gc_loc);
@@ -54207,7 +54214,7 @@ static bool catch_eval_function(s7_scheme *sc, s7_int catch_loc, s7_pointer type
 
 static bool catch_barrier_function(s7_scheme *sc, s7_int catch_loc, s7_pointer type, s7_pointer info, bool *reset_hook)
 { /* can this happen? is it doing the right thing? read/eval/call_begin_hook push_stack op_barrier but only s7_read includes a port (this is not hit in s7test.scm) */
-  if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
+  if (SHOW_EVAL_OPS || S7_DEBUGGING) fprintf(stderr, "catcher: %s\n", __func__);
   if (is_input_port(stack_args(sc->stack, catch_loc)))
     {
       if (current_input_port(sc) == stack_args(sc->stack, catch_loc))
@@ -66503,7 +66510,7 @@ static s7_pointer opt_p_ppc_slot_set(opt_info *o) {slot_set_value(o->v[2].p, o->
 static s7_pointer opt_p_pps_slot_set(opt_info *o) {slot_set_value(o->v[2].p, slot_value(o->v[4].p)); return(slot_value(o->v[4].p));}
 static s7_pointer opt_p_ppf_slot_set(opt_info *o) {slot_set_value(o->v[2].p, o->v[5].fp(o->v[4].o1)); return(slot_value(o->v[2].p));}
 
-static bool use_ppc_slot_set(s7_scheme *sc, opt_info *opc, s7_pointer let, s7_pointer symbol, s7_pointer value)
+static bool use_ppc_slot_set(s7_scheme *sc, opt_info *opc, s7_pointer let, s7_pointer symbol, s7_pointer value) /* timp tmisc */
 {
   s7_pointer slot = lookup_slot_with_let(sc, symbol, let);
   if ((is_slot(slot)) && (!is_immutable(slot)))
@@ -66516,7 +66523,7 @@ static bool use_ppc_slot_set(s7_scheme *sc, opt_info *opc, s7_pointer let, s7_po
   return(false);
 }
 
-static bool use_pps_slot_set(s7_scheme *sc, opt_info *opc, s7_pointer let, s7_pointer symbol, s7_pointer val_slot)
+static bool use_pps_slot_set(s7_scheme *sc, opt_info *opc, s7_pointer let, s7_pointer symbol, s7_pointer val_slot) /* timp tref */
 {
   s7_pointer slot = lookup_slot_with_let(sc, symbol, let);
   if ((is_slot(slot)) && (!is_immutable(slot)))
@@ -66529,7 +66536,7 @@ static bool use_pps_slot_set(s7_scheme *sc, opt_info *opc, s7_pointer let, s7_po
   return(false);
 }
 
-static bool use_ppf_slot_set(s7_scheme *sc, opt_info *opc, s7_pointer let, s7_pointer symbol)
+static bool use_ppf_slot_set(s7_scheme *sc, opt_info *opc, s7_pointer let, s7_pointer symbol) /* timp */
 {
   s7_pointer slot = lookup_slot_with_let(sc, symbol, let);
   if ((is_slot(slot)) && (!is_immutable(slot)))
@@ -96859,7 +96866,12 @@ static s7_pointer memory_usage(s7_scheme *sc)
   add_slot_unchecked_with_id(sc, mu_let,
 			     make_symbol(sc, "format-ports-allocated/free/inuse", 33),
 			     list_3(sc, make_integer(sc, sc->format_ports_allocated), make_integer(sc, i), make_integer(sc, sc->format_ports_allocated - i)));
+  for (i = 0, len = 0; i < sc->file_names_top; i++) len += string_length(sc->file_names[i]);
+  add_slot_unchecked_with_id(sc, mu_let, 
+			     make_symbol(sc, "file-names", 10),
+			     cons(sc, make_integer(sc, sc->file_names_top), make_integer(sc, len)));
 #endif
+
   /* continuations (sketchy!) */
   gp = sc->continuations;
   for (i = 0, len = 0; i < gp->loc; i++)
@@ -100707,17 +100719,16 @@ int main(int argc, char **argv)
  * terr: catch+errors, tchar? tcase? tsetter: integer? et al as setter?
  *
  * c4a|b tcomplex
- * remove displayer from port_functions, file_display->s7test+syntax_to_port
- * see comment at 30335 -- is this true? remember_file_name 30410?? (why remember?)
- * s7test doesn't hit the file_read* functions, nor do t*.scm (max_size_for_string_port=10M)
+ * s7test coverage:
  *   g_close_input|output_function_port not hit
  *   vector_to_port rank>1? complex_vector_to_port len>1000
- *   ~& in format? g_format_nr?
+ *   g_format_nr?(not hit, probably do_body_p problem)
  *   list_set_p_pip (unchecked is called)
  *   make_vdims dims>1, s7_vector_to_list for all types, float_vector_p_d[hash84], make_int_vector_p_ii (tbig/map=hash)
  *     complex_vector_ref_p_pi_wrapped (tcomplex), float_vector_set_p_pip (ari)
- *     s7_double float_vector_ref_d_7piii (says "uncallable?") -- no hits, float_vector_set_p_pip_direct(sort, big)
+ *     s7_double float_vector_ref_d_7piii (says "uncallable?") -- no hits(t832--probably is uncallable!), float_vector_set_p_pip_direct(sort, big)
  *     float_vector_set_p_ppp errors etc (sg), int_vector_set_p_pip_direct(vect), int_vector_set_p_ppp(shoot)
  *     byte_vector_set_i_7pii_direct(vect), byte_vector_set_p_pip_direct(no hits), byte_vector_set_i_7piii(vect)
- *   cull_weak_hash_table (gc), catch_barrier_function(no hits), format_to_error_port(no hits), op_error_hook_quit(no hits)
+ *     g_map_closure+complex-vector, lots of splice_in_values cases unhit
+ *   cull_weak_hash_table (gc), catch_barrier_function(no hits), op_error_hook_quit(no hits)
  */
