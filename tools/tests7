@@ -131,7 +131,7 @@ repl s7test.scm
 echo ' '
 echo '-------- max-string-input --------'
 echo ' '
-gcc s7.c -c -I. -DMAX_SIZE_FOR_STRING_PORT=1024 -DDEFAULT_PRINT_LENGTH=8 -g3 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -DMAX_SIZE_FOR_FILE_TO_STRING_PORT_CONVERSION=128 -DDEFAULT_PRINT_LENGTH=8 -g3 -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 repl -e '(define full-s7test #t)' s7test.scm
 
@@ -246,6 +246,6 @@ threads
 echo ' '
 echo '-------- clang --------'
 echo ' '
-clang s7.c -c -I. -g3 -Wall -Wno-array-bounds -Wno-parentheses -Wextra -Wno-unused-parameter
-clang -o repl repl.c -I. -g3 s7.o -ldl -lm -Wl,-export-dynamic
+clang s7.c -c -I. -O -g -Wall -Wextra -Wno-unused-parameter
+clang -o repl repl.c -I. -O2 -g s7.o -ldl -lm -Wl,-export-dynamic
 repl s7test.scm

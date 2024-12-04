@@ -2170,13 +2170,14 @@ int main(int argc, char **argv)
     p = s7_set_current_output_port(sc, s7_open_output_function(sc, my_print));
     p1 = s7_open_input_function(sc, my_read);
     gc_loc = s7_gc_protect(sc, p1);
-
     s7_display(sc, s7_make_character(sc, '3'), s7_current_output_port(sc));
     if (last_c != '3')
       {fprintf(stderr, "%d: last_c: %c, c: %c\n", __LINE__, last_c, '3');}
     last_c = s7_character(s7_read_char(sc, p1));
     if (last_c != '0')
       {fprintf(stderr, "%d: last_c: %c\n", __LINE__, last_c);}
+    s7_close_input_port(sc, p1);
+    s7_close_output_port(sc, s7_current_output_port(sc));
     s7_set_current_output_port(sc, p);
     s7_gc_unprotect_at(sc, gc_loc);
   }

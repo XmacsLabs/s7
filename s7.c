@@ -6878,7 +6878,7 @@ static void free_port_data(s7_scheme *sc, s7_pointer s1)
   port_needs_free(s1) = false;
 }
 
-static void close_input_function(s7_scheme *sc, s7_pointer p);
+static void close_input_function_port(s7_scheme *sc, s7_pointer p);
 
 static void process_input_port(s7_scheme *sc, s7_pointer s1)
 {
@@ -6893,7 +6893,7 @@ static void process_input_port(s7_scheme *sc, s7_pointer s1)
 	    }}
       else
 	if (is_function_port(s1))
-	  close_input_function(sc, s1);
+	  close_input_function_port(sc, s1);
     }
   if (port_needs_free(s1))
     free_port_data(sc, s1);
@@ -9343,7 +9343,7 @@ static /* inline */ s7_pointer add_symbol_to_small_symbol_set(s7_scheme *sc, s7_
 
 static /* inline */ void clear_small_symbol_set(s7_scheme *sc)
 {
-  if (sc->small_symbol_tag == MAX_SMALL_SYMBOL_TAG) /* 2^32 - 1 */
+  if (sc->small_symbol_tag == MAX_SMALL_SYMBOL_TAG) /* 2^32 - 1, much slower than checking for 0 but that indicates wrap-around which seems unclean */
     {
       for (int32_t i = 0; i < SYMBOL_TABLE_SIZE; i++) /* clear old small_symbol_tags */
 	for (s7_pointer p = vector_element(sc->symbol_table, i); is_not_null(p); p = cdr(p))
@@ -30436,13 +30436,14 @@ static int32_t remember_file_name(s7_scheme *sc, const char *file)
 }
 
 
-#ifndef MAX_SIZE_FOR_STRING_PORT
-  #define MAX_SIZE_FOR_STRING_PORT 10000000
+#ifndef MAX_SIZE_FOR_FILE_TO_STRING_PORT_CONVERSION
+  #define MAX_SIZE_FOR_FILE_TO_STRING_PORT_CONVERSION 10000000
+  /* I'd add this to *s7* but it doesn't make much difference unless you're reading a large text file */
 #endif
 
 static s7_pointer make_input_file(s7_scheme *sc, const char *name, FILE *fp)
 {
-  return(read_file(sc, fp, name, MAX_SIZE_FOR_STRING_PORT, "open"));
+  return(read_file(sc, fp, name, MAX_SIZE_FOR_FILE_TO_STRING_PORT_CONVERSION, "open"));
 }
 
 
@@ -30903,7 +30904,7 @@ static s7_pointer g_closed_input_function_port(s7_scheme *sc, s7_pointer unused_
   return(NULL);
 }
 
-static void close_input_function(s7_scheme *sc, s7_pointer p)
+static void close_input_function_port(s7_scheme *sc, s7_pointer p)
 {
   port_port(p)->pf = &closed_port_functions;
   port_set_string_or_function(p, sc->closed_input_function); /* from s7_make_function so it is GC-protected */
@@ -30911,7 +30912,7 @@ static void close_input_function(s7_scheme *sc, s7_pointer p)
 }
 
 static const port_functions_t input_function_functions =
-  {function_read_char, input_write_char, input_write_string, NULL, NULL, NULL, NULL, function_read_line, input_display, close_input_function};
+  {function_read_char, input_write_char, input_write_string, NULL, NULL, NULL, NULL, function_read_line, input_display, close_input_function_port};
 
 static void function_port_set_defaults(s7_pointer x)
 {
@@ -30985,7 +30986,7 @@ static s7_pointer g_closed_output_function_port(s7_scheme *sc, s7_pointer unused
   return(NULL);
 }
 
-static void close_output_function(s7_scheme *sc, s7_pointer p)
+static void close_output_function_port(s7_scheme *sc, s7_pointer p)
 {
   port_port(p)->pf = &closed_port_functions;
   port_set_string_or_function(p, sc->closed_output_function);
@@ -30993,7 +30994,7 @@ static void close_output_function(s7_scheme *sc, s7_pointer p)
 }
 
 static const port_functions_t output_function_functions =
-  {output_read_char, function_write_char, function_write_string, NULL, NULL, NULL, NULL, output_read_line, function_display, close_output_function};
+  {output_read_char, function_write_char, function_write_string, NULL, NULL, NULL, NULL, output_read_line, function_display, close_output_function_port};
 
 s7_pointer s7_open_output_function(s7_scheme *sc, void (*function)(s7_scheme *sc, uint8_t c, s7_pointer port))
 {
@@ -34452,7 +34453,6 @@ static char *complex_to_string_base_10(s7_scheme *sc, s7_complex obj, s7_int wid
 static void complex_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port, use_write_t use_write, shared_info_t *unused_ci)
 {
   #define CV_BUFSIZE 1024 /* some floats can take around 312 bytes */
-  /* char buf[CV_BUFSIZE]; */
   s7_int i, plen;
   bool too_long;
   const s7_complex *els = complex_vector_complexs(vect);
@@ -100674,7 +100674,7 @@ int main(int argc, char **argv)
  * tobj             3970   3828   3577   3508   3434
  * teq              4045   3536   3486   3544   3556
  * tmac             4373   ----   4193   4188   4024
- * tcomplex         3650   3583   3625   3679   4030
+ * tcomplex         3869   3804   3844   3888   4215
  * tcase            4793   4439   4430   4439   4376
  * tmap             8774   4489   4541   4586   4380
  * tlet      11.0   6974   5609   5980   5965   4470
@@ -100718,17 +100718,13 @@ int main(int argc, char **argv)
  *
  * terr: catch+errors, tchar? tcase? tsetter: integer? et al as setter?
  *
- * c4a|b tcomplex
  * s7test coverage:
- *   g_close_input|output_function_port not hit
- *   vector_to_port rank>1? complex_vector_to_port len>1000
  *   g_format_nr?(not hit, probably do_body_p problem)
  *   list_set_p_pip (unchecked is called)
- *   make_vdims dims>1, s7_vector_to_list for all types, float_vector_p_d[hash84], make_int_vector_p_ii (tbig/map=hash)
+ *   make_vdims dims>1, float_vector_p_d[hash84], make_int_vector_p_ii (tbig/map=hash)
  *     complex_vector_ref_p_pi_wrapped (tcomplex), float_vector_set_p_pip (ari)
  *     s7_double float_vector_ref_d_7piii (says "uncallable?") -- no hits(t832--probably is uncallable!), float_vector_set_p_pip_direct(sort, big)
  *     float_vector_set_p_ppp errors etc (sg), int_vector_set_p_pip_direct(vect), int_vector_set_p_ppp(shoot)
  *     byte_vector_set_i_7pii_direct(vect), byte_vector_set_p_pip_direct(no hits), byte_vector_set_i_7piii(vect)
- *     g_map_closure+complex-vector, lots of splice_in_values cases unhit
- *   cull_weak_hash_table (gc), catch_barrier_function(no hits), op_error_hook_quit(no hits)
+ *   lots of splice_in_values cases unhit, cull_weak_hash_table (gc), op_error_hook_quit(no hits)
  */
