@@ -33067,7 +33067,11 @@ or #t; in the latter case s7 chooses an appropriate value."
 	      iterator_carrier(iter) = carrier;
 	      set_has_carrier(iter);
 	      if ((is_let(seq)) && (seq != sc->starlet))
-		iterator_next(iter) = let_iterate_carried;
+		{
+		  s7_pointer p = find_make_iterator_method(sc, seq, iter); /* mock-hash-table for example */
+		  if (p) iter = p;                                         /*   (iterate (make-iterator (mock-hash-table 'b 2) (list #f))) */
+		  if (iterator_next(iter) == let_iterate_uncarried) iterator_next(iter) = let_iterate_carried;
+		}
 	    }}}
   return(iter);
 }
@@ -58287,8 +58291,9 @@ static s7_pointer fx_add_aa(s7_scheme *sc, s7_pointer arg)
   sc->value = x1;
   x2 = fx_call(sc, opt3_pair(arg));
   if (is_t_real(x1)) {if (is_t_real(x2)) return(make_real(sc, real(x1) + real(x2)));}
-  else if ((is_t_integer(x1)) && (is_t_integer(x2))) return(make_integer(sc, integer(x1) + integer(x2)));
-  /* maybe use add_if_overflow_to_real_or_big_integer, but that seems unnecessary currently */
+  else 
+    if ((is_t_integer(x1)) && (is_t_integer(x2))) /* (define (func) (let ((f (lambda (a) a))) (f (+ (*s7* 'most-positive-fixnum) (*))))) (func) */
+      return(add_if_overflow_to_real_or_big_integer(sc, integer(x1), integer(x2)));
   return(add_p_pp(sc, x1, x2));
 }
 
@@ -71831,6 +71836,7 @@ static s7_pointer splice_in_values(s7_scheme *sc, s7_pointer args)
 
     case OP_ANY_CLOSURE_NP_1: case OP_ANY_CLOSURE_NP_2:
       sc->code = pop_op_stack(sc);
+      /* to s7test some rainy day: (fop24 (fop24-1 x) (fop24-1 (+ x 1)) x x (values x x)) (128 128) */
       error_nr(sc, sc->wrong_number_of_args_symbol,
 	       set_elist_3(sc, too_many_arguments_string, closure_name(sc, sc->code), set_ulist_1(sc, sc->value_symbol, args)));
 
@@ -100708,6 +100714,7 @@ int main(int argc, char **argv)
  *
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
+ * t718
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
@@ -100715,16 +100722,4 @@ int main(int argc, char **argv)
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
- *
- * terr: catch+errors, tchar? tcase? tsetter: integer? et al as setter?
- *
- * s7test coverage:
- *   g_format_nr?(not hit, probably do_body_p problem)
- *   list_set_p_pip (unchecked is called)
- *   make_vdims dims>1, float_vector_p_d[hash84], make_int_vector_p_ii (tbig/map=hash)
- *     complex_vector_ref_p_pi_wrapped (tcomplex), float_vector_set_p_pip (ari)
- *     s7_double float_vector_ref_d_7piii (says "uncallable?") -- no hits(t832--probably is uncallable!), float_vector_set_p_pip_direct(sort, big)
- *     float_vector_set_p_ppp errors etc (sg), int_vector_set_p_pip_direct(vect), int_vector_set_p_ppp(shoot)
- *     byte_vector_set_i_7pii_direct(vect), byte_vector_set_p_pip_direct(no hits), byte_vector_set_i_7piii(vect)
- *   lots of splice_in_values cases unhit, cull_weak_hash_table (gc), op_error_hook_quit(no hits)
  */
