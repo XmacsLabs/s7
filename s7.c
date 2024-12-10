@@ -52924,7 +52924,7 @@ static s7_pointer port_to_let(s7_scheme *sc, s7_pointer obj) /* note the underba
        */
       {
 	const char *data = (const char *)port_data(obj);
-	char data_str[8], str[24];
+	char data_str[24], str[24];
 	int32_t i, bytes, lim = (size > 16) ? 16 : size;
 	for (i = 0; i < lim; i++) data_str[i] = data[i];
 	data_str[i] = '\0';
@@ -58835,6 +58835,7 @@ static s7_pointer fx_safe_closure_s_to_add1(s7_scheme *sc, s7_pointer arg)
 {
   s7_pointer p = lookup(sc, opt2_sym(arg));
   if ((!WITH_GMP) && (is_t_integer(p))) return(make_integer(sc, integer(p) + 1));
+      /* better but slower: return(add_if_overflow_to_real_or_big_integer(sc, integer(p), 1)) */
   return(g_add_x1_1(sc, p, 1));
 }
 
@@ -81156,7 +81157,7 @@ static void op_define_constant1(s7_scheme *sc)
 static inline void define_funchecked(s7_scheme *sc)
 {
   s7_pointer new_func, code = cdr(sc->code);
-  sc->value = caar(code); /* func name */
+  s7_pointer func_name = caar(code);
 
   new_cell(sc, new_func, T_CLOSURE | ((!s7_is_proper_list(sc, cdar(code))) ? T_COPY_ARGS : 0));
   closure_set_args(new_func, cdar(code));
@@ -81171,13 +81172,28 @@ static inline void define_funchecked(s7_scheme *sc)
       set_safe_closure(new_func);
       if (is_very_safe_closure_body(cdr(code)))
 	set_very_safe_closure(new_func);
-      make_funclet(sc, new_func, sc->value, sc->curlet);
+      make_funclet(sc, new_func, func_name, sc->curlet);
     }
   else closure_set_let(new_func, sc->curlet);  /* unsafe closures created by other functions do not support *function* */
 
-  if (let_id(sc->curlet) < symbol_id(sc->value))
+  if (let_id(sc->curlet) < symbol_id(func_name))
     sc->let_number++; /* dummy let, force symbol lookup */
-  add_slot_unchecked(sc, sc->curlet, sc->value, new_func, sc->let_number);
+
+  /* see if func_name exists in curlet, reset its value if so */
+  for (s7_pointer slot = let_slots(sc->curlet); tis_slot(slot); slot = next_slot(slot))
+    if (slot_symbol(slot) == func_name)
+      {
+	if (is_immutable_slot(slot))
+	  syntax_error_nr(sc, "define ~S, but it is immutable", 30, func_name);
+	slot_set_value(slot, new_func);
+	symbol_set_local_slot(func_name, sc->let_number, slot);
+	set_local(func_name);
+	sc->value = new_func;
+	return;
+      }
+  
+  /* else add a slot for func_name */
+  add_slot_unchecked(sc, sc->curlet, func_name, new_func, sc->let_number);
   sc->value = new_func;
 }
 
@@ -100657,7 +100673,7 @@ int main(int argc, char **argv)
  * ------------------------------------------------------------
  * tpeak      148    114    108    105    102    109
  * tref      1081    687    463    459    464    412
- * tlimit    3936   5371   5371   5371   5371    784
+ * tlimit    3936   5371   5371   5371   5371    783
  * index            1016    973    967    972    988
  * tmock            1145   1082   1042   1045   1031
  * tvect     3408   2464   1772   1669   1497   1457
@@ -100671,12 +100687,12 @@ int main(int argc, char **argv)
  * tcopy            5546   2539   2375   2386   2352
  * trclo     8248   2782   2615   2634   2622   2499
  * tload                   3046   2404   2566   2506
- * tmat             3042   2524   2578   2590   2527
+ * tmat             3042   2524   2578   2590   2522
  * fbench    2933   2583   2460   2430   2478   2536
  * tsort     3683   3104   2856   2804   2858   2858
  * titer     4550   3349   3070   2985   2966   2917
  * tio              3752   3683   3620   3583   3127
- * tbit      3836   3305   3245   3261   3264   3184
+ * tbit      3836   3305   3245   3261   3264   3181
  * tobj             3970   3828   3577   3508   3434
  * teq              4045   3536   3486   3544   3556
  * tmac             4373   ----   4193   4188   4024
@@ -100686,8 +100702,8 @@ int main(int argc, char **argv)
  * tlet      11.0   6974   5609   5980   5965   4470
  * tfft             7729   4755   4476   4536   4538
  * tshoot           5447   5183   5055   5034   4833
- * tstar            6705   5834   5278   5177   5055
- * tform            5348   5307   5316   5084   5065
+ * tstar            6705   5834   5278   5177   5059
+ * tform            5348   5307   5316   5084   5055
  * tstr      10.0   6342   5488   5162   5180   5259
  * tnum             6013   5433   5396   5409   5402
  * tlist     9219   7546   6558   6240   6300   5770
@@ -100699,7 +100715,7 @@ int main(int argc, char **argv)
  * tmisc                          7614   7115   7130
  * tgc              10.4   7763   7579   7617   7619
  * tclo             8025   7645   8809   7770   7627
- * tlamb                          8003   7941   7905
+ * tlamb                          8003   7941   7920
  * thash            11.7   9734   9479   9526   9283
  * cb        12.9   11.0   9658   9564   9609   9657
  * tmap-hash                                    10.3
@@ -100714,7 +100730,6 @@ int main(int argc, char **argv)
  *
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
- * t718
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
