@@ -140,8 +140,13 @@
 #ifndef SYMBOL_TABLE_SIZE
   #define SYMBOL_TABLE_SIZE 32749
 #endif
-/* names are hashed into the symbol table (a vector) and collisions are chained as lists */
-/* 16381: thash +80 [string_to_symbol_p_p] +40 if 24001, tlet +80 [symbol_p_p], +32 24001 */
+/* names are hashed into the symbol table (a vector) and collisions are chained as lists.
+ *   4129: tlet +530 [symbol_p_pp], thash +565 [make_symbol], max-bin: (3 5),  tlet: (258 3)
+ *  16381: tlet +80  [symbol_p_pp], thash +80  [make_symbol], max-bin: (2 25), tlet: (85 1)
+ *  24001: tlet +33  [symbol_p_pp], thash +50  [make_symbol], max-bin: (2 19), tlet: (56 7)
+ *  32749: (677 symbols if exit.scm)                          max-bin: (2 13), tlet: (40 4)
+ *  72101: tlet -40  [symbol_p_pp], thash -40  [make_symbol], max-bin: (2 11), tlet: (30 5)
+ */
 
 #ifndef INITIAL_STACK_SIZE
   #define INITIAL_STACK_SIZE 4096  /* was 2048 17-Mar-21 */
@@ -953,7 +958,7 @@ typedef struct s7_cell {
       s7_pointer name, global_slot, local_slot;
       s7_int id;                   /* which let last bound the symbol -- for faster symbol lookup */
       uint32_t ctr;                /* how many times has symbol been bound */
-      uint32_t small_symbol_tag;   /* symbol as member of a (small) set (tree-set-memq etc) */
+      uint32_t small_symbol_tag;   /* symbol as member of a (small) set (tree-set-memq etc), assumed to be uint32_t in clear_small_symbol_set */
     } sym;
 
     struct {                       /* syntax */
@@ -9283,7 +9288,7 @@ s7_pointer s7_symbol_set_initial_value(s7_scheme *sc, s7_pointer symbol, s7_poin
 
 
 /* -------- small symbol set -------- */
-#define MAX_SMALL_SYMBOL_TAG (uint32_t)4294967295 /* 2^32 - 1*/
+/* #define MAX_SMALL_SYMBOL_TAG (uint32_t)4294967295 */ /* 2^32 - 1*/
 
 #if S7_DEBUGGING
 enum {SET_IGNORE, SET_BEGIN, SET_END};
@@ -9318,10 +9323,11 @@ static void clear_small_symbol_set_1(s7_scheme *sc, int status, const char *func
     fprintf(stderr, "%s[%d]: small_symbol_set is not running but end requested (started at %s[%d])\n", func, line, sc->small_symbol_set_func, sc->small_symbol_set_line);
   sc->small_symbol_set_state = status;
 
-  if (sc->small_symbol_tag == MAX_SMALL_SYMBOL_TAG)
+  if (sc->small_symbol_tag == 0) /* MAX_SMALL_SYMBOL_TAG -- see comment below */
     {
+      s7_pointer *els = vector_elements(sc->symbol_table);
       for (int32_t i = 0; i < SYMBOL_TABLE_SIZE; i++) /* clear old small_symbol_tags */
-	for (s7_pointer p = vector_element(sc->symbol_table, i); is_not_null(p); p = cdr(p))
+	for (s7_pointer p = els[i]; is_not_null(p); p = cdr(p))
 	  set_small_symbol_tag(car(p), 0);
       sc->small_symbol_tag = 1;
     }
@@ -9343,10 +9349,11 @@ static /* inline */ s7_pointer add_symbol_to_small_symbol_set(s7_scheme *sc, s7_
 
 static /* inline */ void clear_small_symbol_set(s7_scheme *sc)
 {
-  if (sc->small_symbol_tag == MAX_SMALL_SYMBOL_TAG) /* 2^32 - 1, much slower than checking for 0 but that indicates wrap-around which seems unclean */
+  if (sc->small_symbol_tag == 0) /* or MAX_SMALL_SYMBOL_TAG == 2^32 - 1, but that's much slower than checking for 0 -- unsigned wrap around is defined in C */
     {
+      s7_pointer *els = vector_elements(sc->symbol_table);
       for (int32_t i = 0; i < SYMBOL_TABLE_SIZE; i++) /* clear old small_symbol_tags */
-	for (s7_pointer p = vector_element(sc->symbol_table, i); is_not_null(p); p = cdr(p))
+	for (s7_pointer p = els[i]; is_not_null(p); p = cdr(p))
 	  set_small_symbol_tag(car(p), 0);
       sc->small_symbol_tag = 1;
     }
@@ -81176,7 +81183,7 @@ static inline void define_funchecked(s7_scheme *sc)
     }
   else closure_set_let(new_func, sc->curlet);  /* unsafe closures created by other functions do not support *function* */
 
-  if (let_id(sc->curlet) < symbol_id(func_name))
+  if (let_id(sc->curlet) < symbol_id(func_name)) /* TODO: if rootlet, set global_value? */
     sc->let_number++; /* dummy let, force symbol lookup */
 
   /* see if func_name exists in curlet, reset its value if so */
@@ -96598,7 +96605,7 @@ static s7_pointer make_starlet(s7_scheme *sc)  /* *s7* is semipermanent -- 20-Ma
 static void add_symbol_table(s7_scheme *sc, s7_pointer mu_let)
 {
   /* check the symbol table, counting gensyms etc */
-  s7_int syms = 0, gens = 0, keys = 0, mx_list = 0;
+  s7_int syms = 0, gens = 0, keys = 0, mx_list = 0, mxs = 0;
   s7_pointer *els = vector_elements(sc->symbol_table);
   for (s7_int i = 0; i < SYMBOL_TABLE_SIZE; i++)
     {
@@ -96610,13 +96617,14 @@ static void add_symbol_table(s7_scheme *sc, s7_pointer mu_let)
 	  if (is_gensym(car(x))) gens++;
 	  if (is_keyword(car(x))) keys++;
 	}
-      if (k > mx_list) mx_list = k;
+      if (k > mx_list) {mx_list = k; mxs = 1;}
+      else if (k == mx_list) mxs++;
     }
   add_slot_unchecked_with_id(sc, mu_let, sc->symbol_table_symbol,
 			     s7_inlet(sc,
 			       s7_list(sc, 10,
 				     sc->size_symbol, make_integer(sc, SYMBOL_TABLE_SIZE),
-				     make_symbol(sc, "max-bin", 7), make_integer(sc, mx_list),
+				     make_symbol(sc, "max-bin", 7), cons(sc, make_integer(sc, mx_list), make_integer(sc, mxs)),
 				     make_symbol(sc, "symbols", 7), cons(sc, make_integer(sc, syms), make_integer(sc, syms - gens - keys)),
 				     make_symbol(sc, "gensyms", 7), make_integer(sc, gens),
 				     make_symbol(sc, "keys", 4),    make_integer(sc, keys))));
@@ -100091,7 +100099,7 @@ s7_scheme *s7_init(void)
   sc->baffle_ctr = 0;
   sc->map_call_ctr = 0;
   sc->big_symbol_tag = 0;
-  sc->small_symbol_tag = 0;
+  sc->small_symbol_tag = 1;
 #if S7_DEBUGGING
   sc->big_symbol_set_state = SET_IGNORE;
   sc->small_symbol_set_state = SET_IGNORE;
@@ -100730,6 +100738,7 @@ int main(int argc, char **argv)
  *
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
+ * add_slot_unchecked[9456]: let+slot mismatch, add_slot_unchecked[9456]: setting rootlet slots!
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
