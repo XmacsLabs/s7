@@ -3229,6 +3229,7 @@ static void symbol_set_id(s7_pointer p, s7_int id)
 #define local_value(p)                 slot_value(local_slot(T_Sym(p)))
 #define unchecked_local_value(p)       local_slot(p)->object.slt.val
 #define global_value(p)                slot_value(global_slot(T_Sym(p)))
+#define set_global_value(p, Val)       slot_set_value(global_slot(T_Sym(p)), Val)
 
 #define keyword_symbol(p)              symbol_info(T_Key(p))->nx.ksym        /* keyword only, so does not collide with documentation */
 #define keyword_symbol_unchecked(p)    symbol_info(p)->nx.ksym
@@ -9288,7 +9289,6 @@ s7_pointer s7_symbol_set_initial_value(s7_scheme *sc, s7_pointer symbol, s7_poin
 
 
 /* -------- small symbol set -------- */
-/* #define MAX_SMALL_SYMBOL_TAG (uint32_t)4294967295 */ /* 2^32 - 1*/
 
 #if S7_DEBUGGING
 enum {SET_IGNORE, SET_BEGIN, SET_END};
@@ -9323,7 +9323,7 @@ static void clear_small_symbol_set_1(s7_scheme *sc, int status, const char *func
     fprintf(stderr, "%s[%d]: small_symbol_set is not running but end requested (started at %s[%d])\n", func, line, sc->small_symbol_set_func, sc->small_symbol_set_line);
   sc->small_symbol_set_state = status;
 
-  if (sc->small_symbol_tag == 0) /* MAX_SMALL_SYMBOL_TAG -- see comment below */
+  if (sc->small_symbol_tag == 0) /* see comment below */
     {
       s7_pointer *els = vector_elements(sc->symbol_table);
       for (int32_t i = 0; i < SYMBOL_TABLE_SIZE; i++) /* clear old small_symbol_tags */
@@ -9349,7 +9349,7 @@ static /* inline */ s7_pointer add_symbol_to_small_symbol_set(s7_scheme *sc, s7_
 
 static /* inline */ void clear_small_symbol_set(s7_scheme *sc)
 {
-  if (sc->small_symbol_tag == 0) /* or MAX_SMALL_SYMBOL_TAG == 2^32 - 1, but that's much slower than checking for 0 -- unsigned wrap around is defined in C */
+  if (sc->small_symbol_tag == 0) /* or 2^32 - 1, but that's much slower than checking for 0 -- unsigned wrap around is defined in C */
     {
       s7_pointer *els = vector_elements(sc->symbol_table);
       for (int32_t i = 0; i < SYMBOL_TABLE_SIZE; i++) /* clear old small_symbol_tags */
@@ -10005,7 +10005,7 @@ static void append_let(s7_scheme *sc, s7_pointer new_e, s7_pointer old_e)
       {
 	s7_pointer sym = slot_symbol(x), val = slot_value(x);
 	if (is_slot(global_slot(sym)))
-	  slot_set_value(global_slot(sym), val);
+	  set_global_value(sym, val);
 	else s7_make_slot(sc, sc->rootlet, sym, val);
       }
   else
@@ -10051,7 +10051,7 @@ s7_pointer s7_varlet(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointe
   if (let == sc->rootlet)
     {
       if (is_slot(global_slot(symbol)))
-	slot_set_value(global_slot(symbol), value);
+	set_global_value(symbol, value);
       else s7_make_slot(sc, sc->rootlet, symbol, value);
     }
   else
@@ -10185,7 +10185,7 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
 	  if (is_immutable(global_slot(sym)))
 	    immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->cutlet_symbol, sym));
 	  symbol_set_id(sym, the_un_id);
-	  slot_set_value(global_slot(sym), sc->undefined);
+	  set_global_value(sym, sc->undefined);
 	  /* here we need to at least clear bits: syntactic binder clean-symbol(?) etc, maybe also locally */
 	}
       else
@@ -33052,7 +33052,12 @@ or #t; in the latter case s7 chooses an appropriate value."
 	      break;
 	    case T_LET:
 	      iterator_carrier(iter) = cons(sc, sc->F, sc->F);
-	      iterator_next(iter) = let_iterate_carried;
+	      if (seq != sc->starlet)
+		{
+		  s7_pointer p = find_make_iterator_method(sc, seq, iter); /* (iterate (make-iterator (mock-string #\h #\i) #t)) */
+		  if (p) iter = p;
+		  if (iterator_next(iter) == let_iterate_uncarried) iterator_next(iter) = let_iterate_carried;
+		}
 	      break;
 	    default:
 	      return(iter);
@@ -81183,7 +81188,7 @@ static inline void define_funchecked(s7_scheme *sc)
     }
   else closure_set_let(new_func, sc->curlet);  /* unsafe closures created by other functions do not support *function* */
 
-  if (let_id(sc->curlet) < symbol_id(func_name)) /* TODO: if rootlet, set global_value? */
+  if (let_id(sc->curlet) < symbol_id(func_name))
     sc->let_number++; /* dummy let, force symbol lookup */
 
   /* see if func_name exists in curlet, reset its value if so */
@@ -81194,13 +81199,16 @@ static inline void define_funchecked(s7_scheme *sc)
 	  syntax_error_nr(sc, "define ~S, but it is immutable", 30, func_name);
 	slot_set_value(slot, new_func);
 	symbol_set_local_slot(func_name, sc->let_number, slot);
+	if (sc->curlet == sc->rootlet) set_global_value(func_name, new_func);
 	set_local(func_name);
 	sc->value = new_func;
 	return;
       }
   
   /* else add a slot for func_name */
-  add_slot_unchecked(sc, sc->curlet, func_name, new_func, sc->let_number);
+  if (sc->curlet == sc->rootlet) /* (let () (define (func) (with-let (rootlet) (define (f x) (+ x 1)))) (func) (func)) */
+    s7_define(sc, sc->rootlet, func_name, new_func);
+  else add_slot_unchecked(sc, sc->curlet, func_name, new_func, sc->let_number);
   sc->value = new_func;
 }
 
@@ -81589,6 +81597,10 @@ static s7_pointer fx_with_let_s(s7_scheme *sc, s7_pointer arg)
       if (!is_let(e))
 	error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "with-let takes an environment argument: ~A", 42), car(code)));
     }
+  /* TODO: e here if mock-hash can be (for example) (inlet 'value (hash-table 'b 2) 'mock-type mock-hash-table?)
+   *   mock-hash has let-ref-fallback which calls (#_hash-table-ref (e 'value) sym) -> (e 'value) is a hash-table, so returns #f if not in table
+   *   but if val == #f (sym not found in e??), shouldn't we lookup sym in (let-of e)?
+   */
   val = let_ref(sc, e, sym); /* (with-let e s) -> (let-ref e s), "s" unevalled? */
   if (val == sc->undefined)  /* but sym can have the value #<undefined>: (with-let (inlet 'x #<undefined>) x) */
     {
@@ -100738,7 +100750,7 @@ int main(int argc, char **argv)
  *
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
- * add_slot_unchecked[9456]: let+slot mismatch, add_slot_unchecked[9456]: setting rootlet slots!
+ * t718 mock-hash bug
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
