@@ -901,7 +901,7 @@ typedef struct s7_cell {
     } hasher;
 
     struct {                        /* iterators */
-      s7_pointer obj, cur;
+      s7_pointer seq, cur;
       union {
 	s7_int loc;
 	s7_pointer slot;            /* let iterator current slow */
@@ -1051,7 +1051,7 @@ typedef struct s7_cell {
   } object;
 
 #if S7_DEBUGGING
-  int32_t alloc_line, uses, explicit_free_line, gc_line, holders;
+  int32_t alloc_line, uses, explicit_free_line, gc_line, holders, carrier_line;
   s7_int alloc_type, debugger_bits;
   const char *alloc_func, *gc_func, *root;
   s7_pointer holder;
@@ -2466,7 +2466,11 @@ static void init_types(void)
 
 #define T_MARK_SEQ                     T_MID_MUTABLE
 #define has_carrier(p)                 has_mid_type_bit(T_Itr(p), T_MARK_SEQ)
-#define set_has_carrier(p)             set_mid_type_bit(T_Itr(p), T_MARK_SEQ)
+#if S7_DEBUGGING
+  #define set_has_carrier(p)           do {set_mid_type_bit(T_Itr(p), T_MARK_SEQ); p->carrier_line = __LINE__;} while (0)
+#else
+  #define set_has_carrier(p)           set_mid_type_bit(T_Itr(p), T_MARK_SEQ)
+#endif
 /* used in iterators for GC mark of sequence */
 
 #define T_HAS_LOOP_END                 T_MID_MUTABLE
@@ -3470,7 +3474,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #endif
 
 #define is_iterator(p)                 (type(p) == T_ITERATOR)
-#define iterator_sequence(p)           (T_Itr(p))->object.iter.obj
+#define iterator_sequence(p)           (T_Itr(p))->object.iter.seq
 #define iterator_position(p)           (T_Itr_Pos(p))->object.iter.lc.loc
 #define iterator_length(p)             (T_Itr_Len(p))->object.iter.lw.len
 #define iterator_next(p)               (T_Itr(p))->object.iter.next
@@ -7561,7 +7565,13 @@ static void mark_iterator(s7_pointer p)
   set_mark(p);
   gc_mark(iterator_sequence(p));
   if (has_carrier(p))
-    gc_mark(iterator_carrier(p));
+    {
+      if (iterator_carrier(p))
+	gc_mark(iterator_carrier(p));
+#if S7_DEBUGGING
+      else fprintf(stderr, "mark_iterator[%d]: has_carrier set (at line %d), but no carrier!\n", __LINE__, p->carrier_line);
+#endif
+    }
 }
 
 static void mark_input_port(s7_pointer p)
@@ -33056,7 +33066,14 @@ or #t; in the latter case s7 chooses an appropriate value."
 		{
 		  s7_pointer p = find_make_iterator_method(sc, seq, iter); /* (iterate (make-iterator (mock-string #\h #\i) #t)) */
 		  if (p) iter = p;
-		  if (iterator_next(iter) == let_iterate_uncarried) iterator_next(iter) = let_iterate_carried;
+		  if (iterator_next(iter) == let_iterate_uncarried)
+		    iterator_next(iter) = let_iterate_carried;
+		  else
+		    if (!iterator_carrier(iter))
+		      {
+			/* if (S7_DEBUGGING) fprintf(stderr, "%s[%d]: carrier null, %s\n", __func__, __LINE__, display(iterator_sequence(iter))); */
+			return(iter); /* don't set has_carrier because GC will segfault upon gc_mark(iterator_carrier(iter)) */
+		      }
 		}
 	      break;
 	    default:
@@ -33077,13 +33094,19 @@ or #t; in the latter case s7 chooses an appropriate value."
 	  if (seq != sc->rootlet)
 	    {
 	      iterator_carrier(iter) = carrier;
-	      set_has_carrier(iter);
 	      if ((is_let(seq)) && (seq != sc->starlet))
 		{
 		  s7_pointer p = find_make_iterator_method(sc, seq, iter); /* mock-hash-table for example */
 		  if (p) iter = p;                                         /*   (iterate (make-iterator (mock-hash-table 'b 2) (list #f))) */
-		  if (iterator_next(iter) == let_iterate_uncarried) iterator_next(iter) = let_iterate_carried;
-		}
+		  if (iterator_next(iter) == let_iterate_uncarried)
+		    iterator_next(iter) = let_iterate_carried;
+		  else
+		    if (!iterator_carrier(iter))
+		      {
+			/* if (S7_DEBUGGING) fprintf(stderr, "%s[%d]: carrier null, %s\n", __func__, __LINE__, display(iterator_sequence(iter))); */
+			return(iter); /* don't set has_carrier because GC will segfault upon gc_mark(iterator_carrier(iter)) */
+		      }}
+	      set_has_carrier(iter);
 	    }}}
   return(iter);
 }
@@ -81604,9 +81627,9 @@ static s7_pointer fx_with_let_s(s7_scheme *sc, s7_pointer arg)
   val = let_ref(sc, e, sym); /* (with-let e s) -> (let-ref e s), "s" unevalled? */
   if (val == sc->undefined)  /* but sym can have the value #<undefined>: (with-let (inlet 'x #<undefined>) x) */
     {
-      if ((e == sc->starlet) && (is_slot(global_slot(sym)))) /* (let () (define (func) (with-let *s7* letrec*)) (func) (func)), .5 tlet */
+      if (/* (e == sc->starlet) && */ (is_slot(global_slot(sym)))) /* (let () (define (func) (with-let *s7* letrec*)) (func) (func)), .5 tlet */
 	return(global_value(sym));                           /* perhaps the e=*s7* check is not needed */
-      if (is_slot(lookup_slot_with_let(sc, sym, e)))
+      if (is_slot(lookup_slot_with_let(sc, sym, e))) /* check for explicit #<undefined> value! */
 	return(sc->undefined);
       unbound_variable_error_nr(sc, sym);
     }
@@ -100750,7 +100773,7 @@ int main(int argc, char **argv)
  *
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
- * t718 mock-hash bug
+ * t718 mock-hash bug also 81619
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
