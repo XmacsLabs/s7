@@ -1415,7 +1415,7 @@ struct s7_scheme {
              display_2, display_f, dynamic_wind_body, dynamic_wind_init, dynamic_wind_unchecked,
              format_as_objstr, format_f, format_just_control_string, format_no_column, fv_ref_2, fv_ref_3, fv_set_3, fv_set_unchecked, geq_2,
              get_output_string_uncopied, hash_table_2, hash_table_ref_2, int_log2, is_defined_in_rootlet, is_defined_in_unlet, iv_ref_2, iv_ref_3, iv_set_3,
-             list_0, list_1, list_2, list_3, list_4, list_ref_at_0, list_ref_at_1, list_ref_at_2, list_set_i, 
+             list_0, list_1, list_2, list_3, list_4, list_ref_at_0, list_ref_at_1, list_ref_at_2, list_set_i,
              logand_2, logand_ii, logior_ii, logior_2, logxor_2, memq_2, memq_3, memq_4, memq_any, multiply_3,
              outlet_unlet, profile_out, read_char_1, restore_setter, rootlet_ref, simple_char_eq, simple_inlet, simple_list_values, starlet_ref, starlet_set,
              string_append_2, string_c1, string_equal_2, string_equal_2c, string_greater_2, string_less_2, sublet_curlet, substring_uncopied, subtract_1,
@@ -2857,7 +2857,7 @@ static void init_types(void)
 #define is_quoted_pair(p)              ((is_pair(p)) && (is_quote(car(p))))
 #define is_safe_quoted_pair(p)         ((is_pair(p)) && (is_safe_quote(car(p))))
 #define is_unquoted_pair(p)            ((is_pair(p)) && (!is_quote(car(p))))
-#define is_quoted_symbol(p)            ((is_quoted_pair(p)) && (is_symbol(cadr(p))))
+#define is_quoted_symbol(p)            ((is_quoted_pair(p)) && (is_pair(cdr(p))) && (is_symbol(cadr(p))))
 
 /* pair line/file/position */
 #define PAIR_LINE_BITS                 24
@@ -9306,14 +9306,16 @@ enum {SET_IGNORE, SET_BEGIN, SET_END};
 #define symbol_is_in_small_symbol_set(Sc, Sym) symbol_is_in_small_symbol_set_1(Sc, Sym, __func__, __LINE__)
 static bool symbol_is_in_small_symbol_set_1(s7_scheme *sc, s7_pointer sym, const char *func, int line)
 {
-  if (sc->small_symbol_set_state == SET_END) fprintf(stderr, "%s[%d]: small_symbol_set membership test but it's not running\n", func, line);
+  if (sc->small_symbol_set_state == SET_END)
+    fprintf(stderr, "%s[%d]: small_symbol_set membership test but it's not running\n", func, line);
   return(small_symbol_tag(sym) == sc->small_symbol_tag);
 }
 
 #define add_symbol_to_small_symbol_set(Sc, Sym) add_symbol_to_small_symbol_set_1(Sc, Sym, __func__, __LINE__)
 static s7_pointer add_symbol_to_small_symbol_set_1(s7_scheme *sc, s7_pointer sym, const char *func, int line)
 {
-  if (sc->small_symbol_set_state == SET_END) fprintf(stderr, "%s[%d]: small_symbol_set add member but it's not running\n", func, line);
+  if (sc->small_symbol_set_state == SET_END)
+    fprintf(stderr, "%s[%d]: small_symbol_set add member but it's not running\n", func, line);
   set_small_symbol_tag(sym, sc->small_symbol_tag);
   return(sym);
 }
@@ -9325,12 +9327,17 @@ static void clear_small_symbol_set_1(s7_scheme *sc, int status, const char *func
   if (status == SET_BEGIN)
     {
       if (sc->small_symbol_set_state == SET_BEGIN)
-	fprintf(stderr, "%s[%d]: small_symbol_set is running but begin requested (started at %s[%d])\n", func, line, sc->small_symbol_set_func, sc->small_symbol_set_line);
+	{
+	  fprintf(stderr, "%s[%d]: small_symbol_set is running but begin requested (started at %s[%d])\n",
+		  func, line, sc->small_symbol_set_func, sc->small_symbol_set_line);
+	  if (sc->stop_at_error) abort();
+	}
       sc->small_symbol_set_func = func;
       sc->small_symbol_set_line = line;
     }
   if ((status == SET_END) && (sc->small_symbol_set_state == SET_END))
-    fprintf(stderr, "%s[%d]: small_symbol_set is not running but end requested (started at %s[%d])\n", func, line, sc->small_symbol_set_func, sc->small_symbol_set_line);
+    fprintf(stderr, "%s[%d]: small_symbol_set is not running but end requested (started at %s[%d])\n",
+	    func, line, sc->small_symbol_set_func, sc->small_symbol_set_line);
   sc->small_symbol_set_state = status;
 
   if (sc->small_symbol_tag == 0) /* see comment below */
@@ -35405,7 +35412,7 @@ static void internal_slot_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port
 static void let_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *ci)
 {
   /* if outer env points to (say) method list, the object needs to specialize object->string itself */
-  if (has_active_methods(sc, obj))
+  if ((!sc->short_print) && (has_active_methods(sc, obj))) /* short_print 14-Dec-24 from stacktrace (see below) */
     {
       s7_pointer print_func = find_method(sc, obj, sc->object_to_string_symbol);
       if (print_func != sc->undefined)
@@ -58326,7 +58333,7 @@ static s7_pointer fx_add_aa(s7_scheme *sc, s7_pointer arg)
   sc->value = x1;
   x2 = fx_call(sc, opt3_pair(arg));
   if (is_t_real(x1)) {if (is_t_real(x2)) return(make_real(sc, real(x1) + real(x2)));}
-  else 
+  else
     if ((is_t_integer(x1)) && (is_t_integer(x2))) /* (define (func) (let ((f (lambda (a) a))) (f (+ (*s7* 'most-positive-fixnum) (*))))) (func) */
       return(add_if_overflow_to_real_or_big_integer(sc, integer(x1), integer(x2)));
   return(add_p_pp(sc, x1, x2));
@@ -81227,7 +81234,7 @@ static inline void define_funchecked(s7_scheme *sc)
 	sc->value = new_func;
 	return;
       }
-  
+
   /* else add a slot for func_name */
   if (sc->curlet == sc->rootlet) /* (let () (define (func) (with-let (rootlet) (define (f x) (+ x 1)))) (func) (func)) */
     s7_define(sc, sc->rootlet, func_name, new_func);
@@ -96932,7 +96939,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
 			     make_symbol(sc, "format-ports-allocated/free/inuse", 33),
 			     list_3(sc, make_integer(sc, sc->format_ports_allocated), make_integer(sc, i), make_integer(sc, sc->format_ports_allocated - i)));
   for (i = 0, len = 0; i < sc->file_names_top; i++) len += string_length(sc->file_names[i]);
-  add_slot_unchecked_with_id(sc, mu_let, 
+  add_slot_unchecked_with_id(sc, mu_let,
 			     make_symbol(sc, "file-names", 10),
 			     cons(sc, make_integer(sc, sc->file_names_top), make_integer(sc, len)));
 #endif
