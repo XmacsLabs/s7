@@ -26436,10 +26436,6 @@ static s7_pointer ash_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_poin
 }
 #endif
 
-/* TODO: [g_ash_ii], [g_logand_ii] [g_logior_ii], perhaps logxor lognot_i (if arg sig -> int)
- *   g_logbit_ii (sig=int), (logbit (ivref...)...) via op_safe_c_nc? ivref_wrapped  (or reused if in heap?)
- */
-
 
 /* -------------------------------- random-state -------------------------------- */
 /* random numbers.  The simple version used in clm.c is probably adequate, but here I'll use Marsaglia's MWC algorithm.
@@ -81580,10 +81576,39 @@ static void op_finish_expansion(s7_scheme *sc)
 
 
 /* -------------------------------- with-let -------------------------------- */
-static void check_with_let(s7_scheme *sc)
+static s7_pointer fx_with_let_s(s7_scheme *sc, s7_pointer arg)
+{
+  s7_pointer code = cdr(arg);
+  s7_pointer e = lookup_checked(sc, car(code));
+  s7_pointer sym = cadr(code);
+  s7_pointer val;
+  /* fprintf(stderr, "%s\n", display(arg)); */
+  if (!is_let(e))
+    {
+      e = find_let(sc, e);
+      if (!is_let(e))
+	error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "with-let takes an environment argument: ~A", 42), car(code)));
+    }
+  /* e here if mock-hash can be (for example) (inlet 'value (hash-table 'b 2) 'mock-type mock-hash-table?)
+   *   mock-hash has let-ref-fallback which calls (#_hash-table-ref (e 'value) sym) -> (e 'value) is a hash-table, so returns #f if not in table
+   *   we go directly to this function in check_with_let to avoid this ambiguity
+   */
+  val = let_ref(sc, e, sym); /* (with-let e s) -> (let-ref e s), "s" unevalled */
+  if (val == sc->undefined)  /*   but sym can have the value #<undefined>: (with-let (inlet 'x #<undefined>) x) */
+    {
+      if (/* (e == sc->starlet) && */ (is_slot(global_slot(sym)))) /* (let () (define (func) (with-let *s7* letrec*)) (func) (func)), .5 tlet */
+	return(global_value(sym));                           /* perhaps the e=*s7* check is not needed */
+      if (is_slot(lookup_slot_with_let(sc, sym, e)))         /* check for explicit #<undefined> value! */
+	return(sc->undefined);
+      unbound_variable_error_nr(sc, sym);
+    }
+  return(val);
+}
+
+static bool check_with_let(s7_scheme *sc)
 {
   s7_pointer form = cdr(sc->code);
-
+  if (SHOW_EVAL_OPS) fprintf(stderr, "  %s[%d]: op: %s, form: %s\n", __func__, __LINE__, op_names[stack_top_op(sc)], display_truncated(form));
   if (!is_pair(form))                            /* (with-let . "hi") */
     syntax_error_nr(sc, "with-let takes an environment argument: ~A", 42, sc->code);
   if (is_null(cdr(form)))                        /* (with-let e) */
@@ -81593,14 +81618,21 @@ static void check_with_let(s7_scheme *sc)
   if ((sc->safety > 1) && (is_symbol(car(form))) && (is_c_function(initial_value(car(form)))))
     s7_warn(sc, 256, "%s is a strange first argument to with-let\n", display(car(form)));  /* (with-let curlet ...) where they probably meant (with-let (curlet) ...) */
   set_current_code(sc, sc->code);
-
-  pair_set_syntax_op(sc->code, ((is_normal_symbol(car(form))) &&
-				(is_normal_symbol(cadr(form))) && /* (with-let lt a) is not the same as (with-let lt :a) */
-				(is_null(cddr(form)))) ? OP_WITH_LET_S : OP_WITH_LET_UNCHECKED);
+  if ((is_normal_symbol(car(form))) &&
+      (is_normal_symbol(cadr(form))) && /* (with-let lt a) is not the same as (with-let lt :a) */
+      (is_null(cddr(form))))
+    {
+      pair_set_syntax_op(sc->code, OP_WITH_LET_S);
+      sc->value = fx_with_let_s(sc, sc->code);
+      return(false);
+    }
+  else pair_set_syntax_op(sc->code, OP_WITH_LET_UNCHECKED);
+  return(true);
 }
 
 static bool op_with_let_unchecked(s7_scheme *sc)
 {
+  /* fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(sc->code)); */
   sc->code = cdr(sc->code);
   sc->value = car(sc->code);
   if (!is_pair(sc->value))
@@ -81613,34 +81645,6 @@ static bool op_with_let_unchecked(s7_scheme *sc)
   push_stack_no_args(sc, OP_WITH_LET1, cdr(sc->code));
   sc->code = sc->value;   /* eval let arg */
   return(true);
-}
-
-static s7_pointer fx_with_let_s(s7_scheme *sc, s7_pointer arg)
-{
-  s7_pointer code = cdr(arg);
-  s7_pointer e = lookup_checked(sc, car(code));
-  s7_pointer sym = cadr(code);
-  s7_pointer val;
-  if (!is_let(e))
-    {
-      e = find_let(sc, e);
-      if (!is_let(e))
-	error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "with-let takes an environment argument: ~A", 42), car(code)));
-    }
-  /* TODO: e here if mock-hash can be (for example) (inlet 'value (hash-table 'b 2) 'mock-type mock-hash-table?)
-   *   mock-hash has let-ref-fallback which calls (#_hash-table-ref (e 'value) sym) -> (e 'value) is a hash-table, so returns #f if not in table
-   *   but if val == #f (sym not found in e??), shouldn't we lookup sym in (let-of e)?
-   */
-  val = let_ref(sc, e, sym); /* (with-let e s) -> (let-ref e s), "s" unevalled? */
-  if (val == sc->undefined)  /* but sym can have the value #<undefined>: (with-let (inlet 'x #<undefined>) x) */
-    {
-      if (/* (e == sc->starlet) && */ (is_slot(global_slot(sym)))) /* (let () (define (func) (with-let *s7* letrec*)) (func) (func)), .5 tlet */
-	return(global_value(sym));                           /* perhaps the e=*s7* check is not needed */
-      if (is_slot(lookup_slot_with_let(sc, sym, e))) /* check for explicit #<undefined> value! */
-	return(sc->undefined);
-      unbound_variable_error_nr(sc, sym);
-    }
-  return(val);
 }
 
 static void activate_starlet(s7_scheme *sc)
@@ -95875,7 +95879,7 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 	case OP_DEACTIVATE_GOTO:        call_exit_active(sc->args) = false;            continue; /* deactivate the exiter */
 
 	case OP_WITH_LET_S:             sc->value = fx_with_let_s(sc, sc->code); continue;
-	case OP_WITH_LET:               check_with_let(sc);
+	case OP_WITH_LET:               if (!check_with_let(sc)) continue;
 	case OP_WITH_LET_UNCHECKED:     if (op_with_let_unchecked(sc)) goto EVAL;
 	case OP_WITH_LET1:              if (sc->value != sc->curlet) activate_with_let(sc, sc->value); goto BEGIN;
 
@@ -100780,7 +100784,6 @@ int main(int argc, char **argv)
  *
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
- * t718 mock-hash bug also 81619
  *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
