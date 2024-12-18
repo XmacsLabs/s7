@@ -3714,11 +3714,11 @@ static void begin_temp_1(s7_scheme *sc, s7_pointer p, s7_pointer val, const char
     {
       char *s1;
       fprintf(stderr, "%s[%d]: begin_temp %s %d %s\n", func, line,
-	      (p == sc->y) ? "y" : ((p == sc->v) ? "v" : "x"),
+	      (p == sc->y) ? "sc->y" : ((p == sc->v) ? "sc->v" : ((p == sc->x) ? "sc->x" : ((p == sc->temp6) ? "sc->temp6" : "???"))),
 	      (p == sc->y) ? sc->y_line : ((p == sc->v) ? sc->v_line : ((p == sc->x) ? sc->x_line : sc->t_line)),
 	      s1 = s7_object_to_c_string(sc, p));
       free(s1);
-      if (sc->stop_at_error) abort();
+      /* if (sc->stop_at_error) abort(); */ /* this happens when an error interrupts a loop (for-each etc) so end_temp is missed */
     }
   if (p == sc->y) sc->y_line = line; else if (p == sc->v) sc->v_line = line; else if (p == sc->x) sc->x_line = line; else sc->t_line = line;
 }
