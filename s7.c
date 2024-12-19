@@ -33076,8 +33076,7 @@ or #t; in the latter case s7 chooses an appropriate value."
 		      {
 			/* if (S7_DEBUGGING) fprintf(stderr, "%s[%d]: carrier null, %s\n", __func__, __LINE__, display(iterator_sequence(iter))); */
 			return(iter); /* don't set has_carrier because GC will segfault upon gc_mark(iterator_carrier(iter)) */
-		      }
-		}
+		      }}
 	      break;
 	    default:
 	      return(iter);
@@ -54460,6 +54459,10 @@ static no_return void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
 #if S7_DEBUGGING
   sc->small_symbol_set_state = SET_IGNORE;
   sc->big_symbol_set_state = SET_IGNORE;
+  sc->v = sc->unused;
+  sc->x = sc->unused;
+  sc->y = sc->unused;
+  sc->temp6 = sc->unused;
 #endif
   sc->value = info;               /* feeble GC protection (otherwise info is sometimes freed in this function), throw also protects type */
 
@@ -81596,8 +81599,8 @@ static s7_pointer fx_with_let_s(s7_scheme *sc, s7_pointer arg)
   val = let_ref(sc, e, sym); /* (with-let e s) -> (let-ref e s), "s" unevalled */
   if (val == sc->undefined)  /*   but sym can have the value #<undefined>: (with-let (inlet 'x #<undefined>) x) */
     {
-      if (/* (e == sc->starlet) && */ (is_slot(global_slot(sym)))) /* (let () (define (func) (with-let *s7* letrec*)) (func) (func)), .5 tlet */
-	return(global_value(sym));                           /* perhaps the e=*s7* check is not needed */
+      if (is_slot(global_slot(sym)))  /* (let () (define (func) (with-let *s7* letrec*)) (func) (func)), .5 tlet */
+	return(global_value(sym));                           /* used to check also that e=*s7* */
       if (is_slot(lookup_slot_with_let(sc, sym, e)))         /* check for explicit #<undefined> value! */
 	return(sc->undefined);
       unbound_variable_error_nr(sc, sym);
