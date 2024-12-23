@@ -16735,9 +16735,7 @@ static s7_pointer magnitude_p_p(s7_scheme *sc, s7_pointer x)
 	return((nan_payload(real(x)) > 0) ? x : real_NaN);
       return((signbit(real(x))) ? make_real(sc, -real(x)) : x);
 #if WITH_GMP
-    case T_BIG_INTEGER:
-    case T_BIG_RATIO:
-    case T_BIG_REAL:
+    case T_BIG_INTEGER: case T_BIG_RATIO: case T_BIG_REAL:
       return(abs_p_p(sc, x));
     case T_BIG_COMPLEX:
       mpc_abs(sc->mpfr_1, big_complex(x), MPFR_RNDN);
@@ -16840,8 +16838,7 @@ static s7_pointer big_rationalize(s7_scheme *sc, s7_pointer args)
 	out_of_range_error_nr(sc, sc->rationalize_symbol, int_one, pp0, it_is_infinite_string);
       mpfr_set(r->ux, big_real(pp0), MPFR_RNDN);
       break;
-    case T_COMPLEX:
-    case T_BIG_COMPLEX:
+    case T_COMPLEX: case T_BIG_COMPLEX:
       wrong_type_error_nr(sc, sc->rationalize_symbol, 1, pp0, sc->type_names[T_REAL]);
     default:
       return(method_or_bust(sc, pp0, sc->rationalize_symbol, args, sc->type_names[T_REAL], 1));
@@ -16881,8 +16878,7 @@ static s7_pointer big_rationalize(s7_scheme *sc, s7_pointer args)
 	    return(int_zero);
 	  mpfr_set(r->error, big_real(pp1), MPFR_RNDN);
 	  break;
-	case T_COMPLEX:
-	case T_BIG_COMPLEX:
+	case T_COMPLEX:	case T_BIG_COMPLEX:
 	  wrong_type_error_nr(sc, sc->rationalize_symbol, 2, pp1, sc->type_names[T_REAL]);
 	default:
 	  return(method_or_bust(sc, pp1, sc->rationalize_symbol, args, sc->type_names[T_REAL], 2));
@@ -19395,8 +19391,7 @@ static s7_pointer g_gcd(s7_scheme *sc, s7_pointer args)
 	  break;
 
 #if WITH_GMP
-	case T_BIG_INTEGER:
-	case T_BIG_RATIO:
+	case T_BIG_INTEGER: case T_BIG_RATIO:
 	  return(big_gcd(sc, n, d, p));
 #endif
 
@@ -20418,9 +20413,7 @@ static s7_pointer g_add_x1_1(s7_scheme *sc, s7_pointer x, int32_t pos)
       mpz_set_si(sc->mpz_1, 1);
       mpz_add(sc->mpz_1, big_integer(x), sc->mpz_1);
       return(mpz_to_integer(sc, sc->mpz_1));
-    case T_BIG_RATIO:
-    case T_BIG_REAL:
-    case T_BIG_COMPLEX:
+    case T_BIG_RATIO: case T_BIG_REAL: case T_BIG_COMPLEX:
       return(add_p_pp(sc, x, int_one));
 #endif
     default:
@@ -20460,9 +20453,7 @@ static s7_pointer g_add_xi(s7_scheme *sc, s7_pointer x, s7_int y, int32_t loc)
       mpz_set_si(sc->mpz_1, y);
       mpz_add(sc->mpz_1, big_integer(x), sc->mpz_1);
       return(mpz_to_integer(sc, sc->mpz_1));
-    case T_BIG_RATIO:
-    case T_BIG_REAL:
-    case T_BIG_COMPLEX:
+    case T_BIG_RATIO: case T_BIG_REAL: case T_BIG_COMPLEX:
       return(add_p_pp(sc, x, wrap_integer(sc, y)));
 #endif
     default: return(method_or_bust_pp(sc, x, sc->add_symbol, x, make_integer(sc, y), a_number_string, loc));
@@ -21243,9 +21234,7 @@ static s7_pointer g_sub_xi(s7_scheme *sc, s7_pointer x, s7_int y)
       mpz_set_si(sc->mpz_1, y);
       mpz_sub(sc->mpz_1, big_integer(x), sc->mpz_1);
       return(mpz_to_integer(sc, sc->mpz_1));
-    case T_BIG_RATIO:
-    case T_BIG_REAL:
-    case T_BIG_COMPLEX:
+    case T_BIG_RATIO: case T_BIG_REAL: case T_BIG_COMPLEX:
       return(subtract_p_pp(sc, x, wrap_integer(sc, y)));
 #endif
     default: return(method_or_bust_pp(sc, x, sc->subtract_symbol, x, make_integer(sc, y), a_number_string, 1));
@@ -21266,6 +21255,7 @@ static s7_pointer subtract_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7
       if (fn_proc(arg1) == g_add_2) set_fn_direct(arg1, g_add_2_wrapped);
     }
   if ((is_pair(arg2)) && (has_fn(arg2)) && (fn_proc(arg2) == g_multiply_2)) set_fn_direct(arg2, g_multiply_2_wrapped);
+  /* sub_random_i (parallels add_i_random) only occurs in tmap.scm */
   if (arg2 == int_one) return(sc->subtract_x1);
   if (is_t_real(arg1)) return(sc->subtract_f2);
   if (is_t_real(arg2)) return(sc->subtract_2f);
@@ -21814,9 +21804,7 @@ static s7_pointer g_mul_xi(s7_scheme *sc, s7_pointer x, s7_int n, int32_t loc)
     case T_BIG_INTEGER:
       mpz_mul_si(sc->mpz_1, big_integer(x), n);
       return(mpz_to_integer(sc, sc->mpz_1));
-    case T_BIG_RATIO:
-    case T_BIG_REAL:
-    case T_BIG_COMPLEX:
+    case T_BIG_RATIO: case T_BIG_REAL: case T_BIG_COMPLEX:
       return(multiply_p_pp(sc, x, wrap_integer(sc, n)));
 #endif
     default:
@@ -33422,8 +33410,7 @@ static bool collect_shared_info(s7_scheme *sc, shared_info_t *ci, s7_pointer top
 	      }
       break;
 
-    case T_CLOSURE:
-    case T_CLOSURE_STAR:
+    case T_CLOSURE: case T_CLOSURE_STAR:
       if (collect_shared_info(sc, ci, closure_body(top), stop_at_print_length))
 	{
 	  if (peek_shared_ref(ci, top) == 0)
@@ -36965,7 +36952,7 @@ static s7_pointer display_p_p(s7_scheme *sc, s7_pointer x)
   return(object_out(sc, x, current_output_port(sc), P_DISPLAY));
 }
 
-/* display may not be following the spec: (display '("a" #\b)): ("a" #\b), whereas Guile says (a b) */
+/* display may not be following the spec: (display '("a" #\b)): ("a" #\b), whereas Guile says (a b), in s7 write here == display, Guile write == s7 write */
 
 
 /* -------------------------------- call-with-output-string -------------------------------- */
@@ -38328,7 +38315,7 @@ static s7_pointer g_file_mtime(s7_scheme *sc, s7_pointer args)
     file_error_nr(sc, "file-mtime", strerror(errno), string_value(name));
   return(make_integer(sc, (s7_int)(statbuf.st_mtime)));
 }
-#endif
+#endif /* !ms_windows */
 #endif /* with_system_extras */
 
 
@@ -44806,8 +44793,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
       set_car(args, g_vector(sc, data));
       break;
 
-    case T_BYTE_VECTOR:
-    case T_STRING:
+    case T_BYTE_VECTOR: case T_STRING:
       {
 	s7_int i;
 	s7_pointer vec;
@@ -44858,9 +44844,7 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
       }
       break;
 
-    case T_INT_VECTOR:
-    case T_FLOAT_VECTOR:
-    case T_COMPLEX_VECTOR:
+    case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_COMPLEX_VECTOR:
       {
 	s7_int i;
 	s7_pointer vec;
@@ -56457,8 +56441,7 @@ static s7_pointer fx_num_eq_length_i(s7_scheme *sc, s7_pointer arg)
 	return(make_boolean(sc, (is_t_integer(len)) && (integer(len) == ilen)));
       }
 
-    case T_CLOSURE:
-    case T_CLOSURE_STAR:
+    case T_CLOSURE: case T_CLOSURE_STAR:
       if (has_active_methods(sc, val))
 	return(make_boolean(sc, closure_length(sc, val) == ilen));
       /* fall through */
@@ -56493,8 +56476,7 @@ static s7_pointer fx_less_length_i(s7_scheme *sc, s7_pointer arg)
 	return(make_boolean(sc, (is_t_integer(len)) && (integer(len) < ilen)));
       }
 
-    case T_CLOSURE:
-    case T_CLOSURE_STAR:
+    case T_CLOSURE: case T_CLOSURE_STAR:
       if (has_active_methods(sc, val))
 	return(make_boolean(sc, closure_length(sc, val) < ilen));
       /* fall through */
@@ -67042,10 +67024,7 @@ static bool p_implicit_ok(s7_scheme *sc, s7_pointer s_slot, s7_pointer car_x, in
 	  opc->v[3].p_pi_f = t_vector_ref_p_pi_unchecked;
 	  break;
 
-	case T_BYTE_VECTOR:
-	case T_INT_VECTOR:
-	case T_FLOAT_VECTOR:
-	case T_COMPLEX_VECTOR:
+	case T_BYTE_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_COMPLEX_VECTOR:
 	  if (vector_rank(obj) != 1)
 	    return_false(sc, car_x);
 	  opc->v[3].p_pi_f = vector_ref_p_pi_unchecked;
@@ -71422,8 +71401,7 @@ a list of the results.  Its arguments can be lists, vectors, strings, hash-table
 	  }
       break;
 
-    case T_CLOSURE:
-    case T_CLOSURE_STAR:
+    case T_CLOSURE: case T_CLOSURE_STAR:
       {
 	int32_t fargs = (is_closure(f)) ? closure_arity_to_int(sc, f) : closure_star_arity_to_int(sc, f);
 	if ((len == 1) &&
