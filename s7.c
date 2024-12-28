@@ -52759,7 +52759,7 @@ static s7_pointer hash_table_to_let(s7_scheme *sc, s7_pointer obj)
 		biggies++;
 	  if (j > max_len) max_len = j;
 	}
-      s7_varlet(sc, let, make_symbol(sc, "stats:0|1|2|n|max", 17),
+      s7_varlet(sc, let, make_symbol(sc, "hash-stats:0|1|2|n|max", 22),
 		cons(sc, make_integer(sc, zeros),
 		     cons(sc, make_integer(sc, ones),
 			  cons(sc, make_integer(sc, twos),
@@ -98675,9 +98675,13 @@ static void init_features(s7_scheme *sc)
 
 #ifdef __clang__
   s7_provide(sc, "clang");
+  /* clang++ does not compile s7.c */
 #endif
 #ifdef __GNUC__
   s7_provide(sc, "gcc");
+  #if __cplusplus
+    s7_provide(sc, "g++");
+  #endif
 #endif
 #ifdef __TINYC__
   s7_provide(sc, "tcc"); /* appears to be 3-4 times slower than gcc (compilation is at least 10 times faster however) */
@@ -100709,10 +100713,10 @@ int main(int argc, char **argv)
  * ------------------------------------------------------------
  * tpeak      148    114    108    105    102    109
  * tref      1081    687    463    459    464    412
- * tlimit    3936   5371   5371   5371   5371    783    787
- * index            1016    973    967    972    988   1015 [gc]  [990 2048]
+ * tlimit    3936   5371   5371   5371   5371    783
+ * index            1016    973    967    972    988
  * tmock            1145   1082   1042   1045   1031
- * tvect     3408   2464   1772   1669   1497   1457   1696 [opt_when_p_2 opt_dotimes gc]  [1458 if 2048]
+ * tvect     3408   2464   1772   1669   1497   1457
  * thook     7651   ----   2590   2030   2046   1731
  * texit     1884   1950   1778   1741   1770   1759
  * tauto                   2562   2048   1729   1760
@@ -100721,40 +100725,40 @@ int main(int argc, char **argv)
  * dup              3788   2492   2239   2097   2012
  * tread            2421   2419   2408   2405   2241
  * tcopy            5546   2539   2375   2386   2352
- * trclo     8248   2782   2615   2634   2622   2499   2691 [gc, fx_add|subtract_t|u|T|U1 etc]  [2627 if 2048]  [2570 4096]
+ * trclo     8248   2782   2615   2634   2622   2499
  * tload                   3046   2404   2566   2506
  * tmat             3042   2524   2578   2590   2522
  * fbench    2933   2583   2460   2430   2478   2536
  * tsort     3683   3104   2856   2804   2858   2858
  * titer     4550   3349   3070   2985   2966   2917
  * tio              3752   3683   3620   3583   3127
- * tbit      3836   3305   3245   3261   3264   3181   3205 [gc]
+ * tbit      3836   3305   3245   3261   3264   3181
  * tobj             3970   3828   3577   3508   3434
  * teq              4045   3536   3486   3544   3556
  * tmac             4373   ----   4193   4188   4024
- * tcomplex         3869   3804   3844   3888   4215   4227 [gc]
+ * tcomplex         3869   3804   3844   3888   4215
  * tcase            4793   4439   4430   4439   4376
  * tmap             8774   4489   4541   4586   4380
  * tlet      11.0   6974   5609   5980   5965   4470
- * tfft             7729   4755   4476   4536   4538   4703 [gc, various opt_* adds]  [4537 2048]
- * tshoot           5447   5183   5055   5034   4833   4888 [gc, adds]
+ * tfft             7729   4755   4476   4536   4538
+ * tshoot           5447   5183   5055   5034   4833
  * tstar            6705   5834   5278   5177   5059
  * tform            5348   5307   5316   5084   5055
  * tstr      10.0   6342   5488   5162   5180   5259
- * tnum             6013   5433   5396   5409   5402   5492 [gc, op_dox]
+ * tnum             6013   5433   5396   5409   5402
  * tlist     9219   7546   6558   6240   6300   5770
- * trec      19.6   6980   6599   6656   6658   6015   6302 [gc adds]  [6190 2048]  [6132 4096]
+ * trec      19.6   6980   6599   6656   6658   6015
  * tari      15.0   12.7   6827   6543   6278   6112
  * tgsl             7802   6373   6282   6208   6208
  * tset                           6260   6364   6278
  * tleft     12.2   9753   7537   7331   7331   6393
  * tmisc                          7614   7115   7130
- * tgc              10.4   7763   7579   7617   7619   7649?
+ * tgc              10.4   7763   7579   7617   7619
  * tclo             8025   7645   8809   7770   7627
  * tlamb                          8003   7941   7920
  * thash            11.7   9734   9479   9526   9283
- * cb        12.9   11.0   9658   9564   9609   9657   9692 [gc]
- * tmap-hash                                    10.3   10.6 [let_equal_1 fx_random_i_wrapped hash_equal_any etc]  [10.5 2048]
+ * cb        12.9   11.0   9658   9564   9609   9657
+ * tmap-hash                                    10.3
  * tgen             11.4   12.0   12.1   12.2   12.4
  * tall      15.9   15.6   15.6   15.6   15.1   15.1
  * timp             24.4   20.0   19.6   19.7   15.5
