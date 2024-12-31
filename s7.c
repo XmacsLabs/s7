@@ -6268,6 +6268,8 @@ static s7_pointer find_let(s7_scheme *sc, s7_pointer obj)
   return(sc->nil);
 }
 
+s7_pointer s7_function_let(s7_scheme *sc, s7_pointer obj) {return(c_function_let(obj));}
+
 static inline s7_pointer lookup_slot_from(s7_pointer symbol, s7_pointer e);
 
 static s7_pointer find_method(s7_scheme *sc, s7_pointer let, s7_pointer symbol)
@@ -7975,13 +7977,19 @@ static void resize_heap_to(s7_scheme *sc, s7_int size)
 	  (sc->max_heap_size > (sc->heap_size * 4)))
 	sc->heap_size *= 4;          /* *8 if < 1M (or whatever) doesn't make much difference */
       else sc->heap_size *= 2;
+      if ((S7_DEBUGGING) && (sc->heap_size >= sc->max_heap_size)) 
+	fprintf(stderr, "%s[%d]: heap_size: %" ld64 ", max: %" ld64 "\n", __func__, __LINE__, sc->heap_size, sc->max_heap_size);
       if (sc->gc_resize_heap_fraction > .4)
 	sc->gc_resize_heap_fraction *= .95;
     }
   else
-    if (size > sc->heap_size)
-      while (sc->heap_size < size) sc->heap_size *= 2;
-    else return;
+    {
+      if (size > sc->heap_size)
+	while (sc->heap_size < size) sc->heap_size *= 2;
+      else return;
+      if ((S7_DEBUGGING) && (sc->heap_size >= sc->max_heap_size)) 
+	fprintf(stderr, "%s[%d]: heap_size: %" ld64 ", max: %" ld64 "\n", __func__, __LINE__, sc->heap_size, sc->max_heap_size);
+    }
   if (sc->heap_size >= sc->max_heap_size)
     {
       s7_int new_heap_size = 32 * (s7_int)floor(sc->max_heap_size / 32.0);
@@ -7989,13 +7997,21 @@ static void resize_heap_to(s7_scheme *sc, s7_int size)
 	{
 	  s7_warn(sc, 256, "heap size requested is greater than (*s7* 'max-heap-size); trying %" ld64 "\n", new_heap_size);
 	  sc->heap_size = new_heap_size;
+	  if ((S7_DEBUGGING) && (sc->heap_size >= sc->max_heap_size)) 
+	    fprintf(stderr, "%s[%d]: heap_size: %" ld64 ", max: %" ld64 "\n", __func__, __LINE__, sc->heap_size, sc->max_heap_size);
 	}
       else
-	error_nr(sc, make_symbol(sc, "heap-too-big", 12),
-		 set_elist_3(sc, wrap_string(sc, "heap has grown past (*s7* 'max-heap-size): ~D > ~D", 50),
-			     wrap_integer(sc, sc->max_heap_size),
-			     wrap_integer(sc, sc->heap_size)));
+	{
+	  s7_int new_size = sc->heap_size;
+	  sc->heap_size = old_size; /* needed if user catches this error and (for example) runs (*s7* 'memory-usage) in the error handler */
+	  error_nr(sc, make_symbol(sc, "heap-too-big", 12),
+		   set_elist_3(sc, wrap_string(sc, "heap has grown past (*s7* 'max-heap-size): ~D > ~D", 50),
+			       wrap_integer(sc, new_size),
+			       wrap_integer(sc, sc->max_heap_size)));
+	  return;
+	}
     }
+  
   /* do not call new_cell here! */
 #if POINTER_32
   if (((2 * sc->heap_size * sizeof(s7_cell *)) + ((sc->heap_size - old_size) * sizeof(s7_cell))) >= SIZE_MAX)
@@ -8005,6 +8021,8 @@ static void resize_heap_to(s7_scheme *sc, s7_int size)
 	      (2 * sc->heap_size * sizeof(s7_cell *)) + ((sc->heap_size - old_size) * sizeof(s7_cell)),
 	      SIZE_MAX);
       sc->heap_size = old_size + 64000;
+      if ((S7_DEBUGGING) && (sc->heap_size >= sc->max_heap_size)) 
+	fprintf(stderr, "%s[%d]: heap_size: %" ld64 ", max: %" ld64 "\n", __func__, __LINE__, sc->heap_size, sc->max_heap_size);
     }
 #endif
   cp = (s7_cell **)Realloc(sc->heap, sc->heap_size * sizeof(s7_cell *));
@@ -8015,6 +8033,8 @@ static void resize_heap_to(s7_scheme *sc, s7_int size)
       s7_warn(sc, 256, "heap reallocation failed! tried to get %" ld64 " bytes (will retry with a smaller amount)\n",
 	      (s7_int)(sc->heap_size * sizeof(s7_cell *)));
       sc->heap_size = old_size + 64000;
+      if ((S7_DEBUGGING) && (sc->heap_size >= sc->max_heap_size)) 
+	fprintf(stderr, "%s[%d]: heap_size: %" ld64 ", max: %" ld64 "\n", __func__, __LINE__, sc->heap_size, sc->max_heap_size);
       sc->heap = (s7_cell **)Realloc(sc->heap, sc->heap_size * sizeof(s7_cell *));
     }
   sc->free_heap = (s7_cell **)Realloc(sc->free_heap, sc->heap_size * sizeof(s7_cell *));
@@ -47363,6 +47383,14 @@ static s7_pointer make_c_function(s7_scheme *sc, const char *name, s7_function f
   c_function_opt_data(x) = NULL;
   c_function_marker(x) = NULL;
   c_function_set_let(x, sc->rootlet);
+  /* this is not the same as the let in (let (...) (lambda ...)) and can't be used that way.  The first problem is that in "f" (the s7_function above),
+   *   there is no way to tell which "x" (the current c_function object) caused it to be invoked.  The call is of the form (c_function_call(x))(sc, ...).
+   *   Since this usage is very unusual, I don't want to glom up every c_function call with a wrapper that sets/restores the c_function_let.
+   *   The next is that it's easy to call s7_eval_c_string(sc, "(let (...) (lambda ...))" creating a real closure where the let is handled throughout s7.
+   *   The third is that if you're using this style to create generators, use a c-object or iterator to hold the state; the "x" currently is allocated
+   *   in semipermanent memory (see below), so (as throughout c_functions), the assumption is that these are not garbage collected.  c_function_let is
+   *   for *function* (find_let) primarily.
+   */
   return(x);
 }
 
@@ -47562,7 +47590,7 @@ and 'arglist. (define (func x y) (*function* (curlet) 'arglist)) (func 1 2): '(x
 
 
 /* -------------------------------- funclet -------------------------------- */
-s7_pointer s7_funclet(s7_scheme *sc, s7_pointer p) {return((has_closure_let(p)) ? closure_let(p) : sc->rootlet);}
+s7_pointer s7_funclet(s7_scheme *sc, s7_pointer p) {return((has_closure_let(p)) ? closure_let(p) : sc->rootlet);} /* c_function_let(p)?? */
 
 static s7_pointer g_funclet(s7_scheme *sc, s7_pointer args)
 {
@@ -96791,6 +96819,8 @@ static s7_pointer memory_usage(s7_scheme *sc)
   }
 
   /* show how many active cells there are of each type (this is where all the memory_usage cpu time goes) */
+  if ((S7_DEBUGGING) && (sc->heap_size >= sc->max_heap_size)) 
+    fprintf(stderr, "%s[%d]: heap_size: %" ld64 ", max: %" ld64 "\n", __func__, __LINE__, sc->heap_size, sc->max_heap_size);
   for (i = 0; i < NUM_TYPES; i++) ts[i] = 0;
   for (k = 0; k < sc->heap_size; k++)
     ts[unchecked_type(sc->heap[k])]++;
@@ -97526,6 +97556,8 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 
     case SL_HEAP_SIZE:
       iv = s7_integer_clamped_if_gmp(sc, sl_integer_geq_0(sc, sym, val));
+      if ((S7_DEBUGGING) && (iv >= sc->max_heap_size)) 
+	fprintf(stderr, "%s[%d]: iv: %" ld64 ", max: %" ld64 "\n", __func__, __LINE__, iv, sc->max_heap_size);
       if (iv > sc->heap_size)
 	resize_heap_to(sc, iv);
       return(val);
@@ -100777,4 +100809,8 @@ int main(int argc, char **argv)
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
+ *
+ * s7_lambda? define func + var use with-let? does rootlet var take precedence?
+ *   c_function_let replaces rootlet
+ * test resize_heap
  */

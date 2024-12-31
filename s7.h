@@ -1,10 +1,10 @@
 #ifndef S7_H
 #define S7_H
 
-#define S7_VERSION "11.2"
-#define S7_DATE "30-Dec-2024"
+#define S7_VERSION "11.3"
+#define S7_DATE "1-Jan-2025"
 #define S7_MAJOR_VERSION 11
-#define S7_MINOR_VERSION 2
+#define S7_MINOR_VERSION 3
 
 #include <stdint.h>           /* for int64_t */
 
@@ -522,6 +522,7 @@ bool s7_is_aritable(s7_scheme *sc, s7_pointer x, s7_int args);              /* (
 s7_pointer s7_arity(s7_scheme *sc, s7_pointer x);                           /* (arity x) */
 const char *s7_help(s7_scheme *sc, s7_pointer obj);                         /* (help obj) */
 s7_pointer s7_make_continuation(s7_scheme *sc);                             /* call/cc... (see example below) */
+s7_pointer s7_function_let(s7_scheme *sc, s7_pointer obj);                  /* obj is from s7_make_c_function and friends */
 
 const char *s7_documentation(s7_scheme *sc, s7_pointer p);                  /* (documentation x) if any (don't free the string) */
 const char *s7_set_documentation(s7_scheme *sc, s7_pointer p, const char *new_doc);
@@ -942,6 +943,8 @@ bool s7_is_bignum(s7_pointer obj);
  *
  *        s7 changes
  *
+ * --------
+ * 31-Dec:    s7_functino_let as an experiment.
  * 31-Aug:    s7_define_expansion.
  * 26-Aug:    deprecate s7_immutable and add s7_set_immutable with s7_scheme* argument.
  * 16-Aug:    s7 complex vectors.
