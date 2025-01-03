@@ -143,6 +143,13 @@ gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 repl s7test.scm
 
 echo ' '
+echo '-------- have-overflow-checks --------'
+echo ' '
+gcc s7.c -c -I. -DHAVE_OVERFLOW_CHECKS=0 -g3 -ldl -lm -Wl,-export-dynamic
+gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
+repl s7test.scm
+
+echo ' '
 echo '-------- disable-autoload --------'
 echo ' '
 gcc s7.c -c -I. -DDISABLE_AUTOLOAD=1 -g3 -ldl -lm -Wl,-export-dynamic

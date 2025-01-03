@@ -47389,7 +47389,7 @@ static s7_pointer make_c_function(s7_scheme *sc, const char *name, s7_function f
    *   The next is that it's easy to call s7_eval_c_string(sc, "(let (...) (lambda ...))" creating a real closure where the let is handled throughout s7.
    *   The third is that if you're using this style to create generators, use a c-object or iterator to hold the state; the "x" currently is allocated
    *   in semipermanent memory (see below), so (as throughout c_functions), the assumption is that these are not garbage collected.  c_function_let is
-   *   for *function* (find_let) primarily.
+   *   for *function* (find_let) primarily.  Maybe if let is not rootlet (see below), pass heap memory?
    */
   return(x);
 }
@@ -100741,7 +100741,7 @@ int main(int argc, char **argv)
 #endif
 
 /* ------------------------------------------------------------
- *           19.0   21.0   22.0   23.0   24.0   25.0
+ *           19.0   21.0   22.0   23.0   24.0   25.0   25.1
  * ------------------------------------------------------------
  * tpeak      148    114    108    105    102    109
  * tref      1081    687    463    459    464    412
@@ -100810,7 +100810,7 @@ int main(int argc, char **argv)
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
- * s7_lambda? define func + var use with-let? does rootlet var take precedence?
- *   c_function_let replaces rootlet
- * test resize_heap
+ * test resize_heap in s7test (full test?)
+ * check timings for msvc overflow code
+ * tfunc1.c to doc/test s7_function_let
  */
