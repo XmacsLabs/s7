@@ -23281,9 +23281,7 @@ static s7_pointer modulo_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	  if ((n2 > 0) && (n1 > 0) && (n2 > n1)) return(x);
 	  if ((n2 < 0) && (n1 < 0) && (n2 < n1)) return(x);
 	  if (n2 == S7_INT64_MIN)
-	    sole_arg_out_of_range_error_nr(sc, sc->modulo_symbol,
-				       set_elist_3(sc, sc->divide_symbol, x, y),
-				       intermediate_too_large_string);
+	    sole_arg_out_of_range_error_nr(sc, sc->modulo_symbol, set_elist_3(sc, sc->divide_symbol, x, y), intermediate_too_large_string);
 	  /* the problem here is that (modulo 3/2 most-negative-fixnum)
 	   * will segfault with signal SIGFPE, Arithmetic exception, so try to trap it.
 	   */
@@ -23326,7 +23324,7 @@ static s7_pointer modulo_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	    s7_int n1d2 = n1 * d2;
 	    s7_int n2d1 = n2 * d1;
 
-	    if (n2d1 == 1)
+	    if ((n2d1 == 1) || (n2d1 == -1)) /* (modulo 100 -1/2) as above) */
 	      return(int_zero);
 
 	    /* can't use "floor" here (float->int ruins everything) */
@@ -100811,6 +100809,6 @@ int main(int argc, char **argv)
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
  * test resize_heap in s7test (full test?)
- * check timings for msvc overflow code
  * tfunc1.c to doc/test s7_function_let
+ * #2d() inequality if no overflow_checks
  */
