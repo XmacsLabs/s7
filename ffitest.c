@@ -484,6 +484,29 @@ static s7_pointer our_abs(s7_scheme *sc, s7_pointer args)
   return(s7_make_real(sc, (s7_Double)(1.0 + s7_number_to_real(sc, s7_car(args)))));
 }
 
+static s7_pointer make_f1(s7_scheme *sc, s7_pointer args)
+{
+  s7_pointer x = s7_car(args);
+  char buf[256];
+  snprintf(buf, 256, "(let ((x %ld)) (lambda (y) (+ x y)))", s7_integer(x));
+  return(s7_eval_c_string(sc, buf));
+}
+
+static s7_pointer g_f2(s7_scheme *sc, s7_pointer args) /* (f f 12) */
+{
+  s7_pointer let = s7_function_let(sc, s7_car(args));
+  s7_pointer x = s7_symbol_local_value(sc, s7_make_symbol(sc, "x"), let);
+  return(s7_make_integer(sc, s7_integer(x) + s7_integer(s7_cadr(args))));
+}
+
+static s7_pointer make_f2(s7_scheme *sc, s7_pointer args) /* (make-f 1) */
+{
+  s7_pointer let = s7_sublet(sc, s7_curlet(sc), s7_nil(sc));
+  s7_gc_protect(sc, let);
+  s7_define(sc, let, s7_make_symbol(sc, "x"), s7_car(args));
+  return(s7_make_typed_function_with_environment(sc, NULL, g_f2, 2, 0, false, "f", NULL, let));
+}
+
 
 static s7_scheme *cur_sc;
 
@@ -2875,6 +2898,19 @@ int main(int argc, char **argv)
     s2 = s7_object_to_c_string(sc, v);
     if (strcmp(s2, "#(1 2 3)") != 0) {fprintf(stderr, "%d v: %s\n", __LINE__, s1 = s7_object_to_c_string(sc, v)); free(s1);}
     free(s2);
+  }
+
+  {
+    s7_pointer p;
+    s7_define_function(sc, "make-f1", make_f1, 1, 0, false, NULL);
+    p = s7_eval_c_string(sc, "(let ((f1 (make-f1 1)) (f2 (make-f1 2))) (list (f1 3) (f2 3) (f1 4)))");
+    if (!s7_is_equal(sc, p, s7_list(sc, 3, s7_make_integer(sc, 4), s7_make_integer(sc, 5), s7_make_integer(sc, 5))))
+      {fprintf(stderr, "%d: p: %s\n", __LINE__, s1 = s7_object_to_c_string(sc, p)); free(s1);}
+
+    s7_define_function(sc, "make-f2", make_f2, 1, 0, false, NULL);
+    p = s7_eval_c_string(sc, "(let ((f1 (make-f2 1)) (f2 (make-f2 2))) (list (f1 f1 3) (f2 f2 3) (f1 f1 4)))");
+    if (!s7_is_equal(sc, p, s7_list(sc, 3, s7_make_integer(sc, 4), s7_make_integer(sc, 5), s7_make_integer(sc, 5))))
+      {fprintf(stderr, "%d: p: %s\n", __LINE__, s1 = s7_object_to_c_string(sc, p)); free(s1);}
   }
 
   { /* check realloc'd large block handling in s7_free */

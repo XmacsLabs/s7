@@ -47387,7 +47387,8 @@ static s7_pointer make_c_function(s7_scheme *sc, const char *name, s7_function f
    *   The next is that it's easy to call s7_eval_c_string(sc, "(let (...) (lambda ...))" creating a real closure where the let is handled throughout s7.
    *   The third is that if you're using this style to create generators, use a c-object or iterator to hold the state; the "x" currently is allocated
    *   in semipermanent memory (see below), so (as throughout c_functions), the assumption is that these are not garbage collected.  c_function_let is
-   *   for *function* (find_let) primarily.  Maybe if let is not rootlet (see below), pass heap memory?
+   *   for *function* (find_let) primarily.  Maybe if let is not rootlet (see below), pass heap memory?  But then we need to free the function data.
+   *   Also if the let is local, it needs to be GC protected by the caller.
    */
   return(x);
 }
@@ -50032,7 +50033,7 @@ static bool vector_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_
     }
   len = vector_length(x);
   if (len != vector_length(y)) return(false);
-  if (len == 0) return(true);
+  if (len == 0) return(true); /* this is different from vector_equal */
   if (!vector_rank_match(sc, x, y)) return(false);
 
   if (type(x) != type(y))
@@ -100807,8 +100808,4 @@ int main(int argc, char **argv)
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
- *
- * test resize_heap in s7test (full test?)
- * tfunc1.c to doc/test s7_function_let
- * #2d() inequality if no overflow_checks
  */
