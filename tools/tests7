@@ -43,7 +43,7 @@ nrepl s7test.scm
 echo ' '
 echo '-------- with-gmp --------'
 echo ' '
-gcc s7.c -c -I. -g3 -DWITH_GMP=1 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -g3 -DWITH_GMP=1 -Wall -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lgmp -lmpfr -lmpc -lm -ldl -Wl,-export-dynamic
 rm *.so
 repl s7test.scm
@@ -53,21 +53,21 @@ echo ' '
 echo ' '
 echo '-------- with-gmp + g++ --------'
 echo ' '
-g++ s7.c -c -I. -g3 -DWITH_GMP=1 -ldl -lm -Wl,-export-dynamic
+g++ s7.c -c -I. -g3 -DWITH_GMP=1 -Wall -ldl -lm -Wl,-export-dynamic
 g++ -o repl repl.c -g3 -Wall s7.o -I. -lgmp -lmpfr -lmpc -lm -ldl -Wl,-export-dynamic
 repl s7test.scm
 
 echo ' '
 echo '-------- with-gmp precision --------'
 echo ' '
-gcc s7.c -c -I. -g3 -DWITH_GMP=1 -DDEFAULT_BIGNUM_PRECISION=512 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -g3 -DWITH_GMP=1 -DDEFAULT_BIGNUM_PRECISION=512 -Wall -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lgmp -lmpfr -lmpc -lm -ldl -Wl,-export-dynamic
 repl s7test.scm
 
 echo ' '
 echo '-------- libarb/flint --------'
 echo ' '
-gcc s7.c -c -I. -g3 -DWITH_GMP=1 -DDEFAULT_BIGNUM_PRECISION=512 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -g3 -DWITH_GMP=1 -DDEFAULT_BIGNUM_PRECISION=512 -Wall -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lgmp -lmpfr -lmpc -lm -ldl -Wl,-export-dynamic
 gcc -fPIC -c libarb_s7.c
 gcc libarb_s7.o -shared -o libarb_s7.so -L/usr/local/lib -lflint
@@ -77,7 +77,7 @@ rm *.so
 echo ' '
 echo '-------- s7-debugging/system-extras --------'
 echo ' '
-gcc s7.c -c -I. -DS7_DEBUGGING -DWITH_SYSTEM_EXTRAS -g3 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -DS7_DEBUGGING -DWITH_SYSTEM_EXTRAS -g3 -Wall -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 repl s7test.scm
 echo ' '
@@ -86,7 +86,7 @@ repl t101.scm
 echo ' '
 echo '-------- with-pure-s7 --------'
 echo ' '
-gcc s7.c -c -I. -DWITH_PURE_S7 -g3 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -DWITH_PURE_S7 -Wall -g3 -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 repl s7test.scm
 echo ' '
@@ -95,21 +95,21 @@ repl -e '(define full-s7test #t)' s7test.scm
 echo ' '
 echo '-------- with-history --------'
 echo ' '
-gcc s7.c -c -I. -DWITH_HISTORY -g3 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -DWITH_HISTORY -g3 -Wall -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 repl s7test.scm
 
 echo ' '
 echo '-------- with-history size --------'
 echo ' '
-gcc s7.c -c -I. -DWITH_HISTORY -DDEFAULT_HISTORY_SIZE=32 -g3 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -DWITH_HISTORY -DDEFAULT_HISTORY_SIZE=32 -g3 -Wall -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 repl s7test.scm
 
 echo ' '
 echo '-------- initial sizes --------'
 echo ' '
-gcc s7.c -c -I. -g3 -DINITIAL_HEAP_SIZE=32768 -DINITIAL_STACK_SIZE=512 -DINITIAL_PROTECTED_OBJECTS_SIZE=4 -DGC_TEMPS_SIZE=512 -DSYMBOL_TABLE_SIZE=10009 -DNUM_SMALL_INTS=256 -DINITIAL_RECUR_STACK_SIZE=32 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -Wall -g3 -DINITIAL_HEAP_SIZE=32768 -DINITIAL_STACK_SIZE=512 -DINITIAL_PROTECTED_OBJECTS_SIZE=4 -DGC_TEMPS_SIZE=512 -DSYMBOL_TABLE_SIZE=10009 -DNUM_SMALL_INTS=256 -DINITIAL_RECUR_STACK_SIZE=32 -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 repl s7test.scm
 
@@ -125,83 +125,90 @@ repl -e '(define full-s7test #t)' s7test.scm
 echo ' '
 echo '-------- with-main --------'
 echo ' '
-gcc s7.c -o repl -DWITH_MAIN -DUSE_SND=0 -I. -g3 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -o repl -DWITH_MAIN -DUSE_SND=0 -I. -g3 -Wall -ldl -lm -Wl,-export-dynamic
 repl s7test.scm
 
 echo ' '
 echo '-------- max-string-input --------'
 echo ' '
-gcc s7.c -c -I. -DMAX_SIZE_FOR_FILE_TO_STRING_PORT_CONVERSION=128 -DDEFAULT_PRINT_LENGTH=8 -g3 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -DMAX_SIZE_FOR_FILE_TO_STRING_PORT_CONVERSION=128 -DDEFAULT_PRINT_LENGTH=8 -g3 -Wall -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 repl -e '(define full-s7test #t)' s7test.scm
 
 echo ' '
 echo '-------- number-separator --------'
 echo ' '
-gcc s7.c -c -I. -DWITH_NUMBER_SEPARATOR=1 -g3 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -DWITH_NUMBER_SEPARATOR=1 -g3 -Wall -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 repl s7test.scm
 
 echo ' '
 echo '-------- have-overflow-checks --------'
 echo ' '
-gcc s7.c -c -I. -DHAVE_OVERFLOW_CHECKS=0 -g3 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -DHAVE_OVERFLOW_CHECKS=0 -g3 -Wall -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 repl s7test.scm
 
 echo ' '
 echo '-------- disable-autoload --------'
 echo ' '
-gcc s7.c -c -I. -DDISABLE_AUTOLOAD=1 -g3 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -DDISABLE_AUTOLOAD=1 -g3 -Wall -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 repl s7test.scm
 
 echo ' '
 echo '-------- silly stuff --------'
 echo ' '
-gcc s7.c -c -I. -DEXTRA_EXPONENT_MARKERS=1 -DS7_ALIGNED=1 -DWITH_VECTORIZE=0 -DWITH_MULTITHREAD_CHECKS=0 -DWITH_DTOA=0 -g3 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -DEXTRA_EXPONENT_MARKERS=1 -DS7_ALIGNED=1 -DWITH_VECTORIZE=0 -DWITH_MULTITHREAD_CHECKS=0 -DWITH_DTOA=0 -g3 -Wall -ldl -lm -Wl,-export-dynamic
+gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
+repl s7test.scm
+
+echo ' '
+echo '-------- more silly stuff --------'
+echo ' '
+gcc s7.c -c -I. -DWITH_WARNINGS=0 -DGC_TEMPS_SIZE=32 -DGC_TRIGGER_SIZE=32 -g3 -Wall -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 repl s7test.scm
 
 echo ' '
 echo '-------- gc 0.5 --------'
 echo ' '
-gcc s7.c -c -I. -DGC_RESIZE_HEAP_FRACTION=0.5 -DOUTPUT_PORT_DATA_SIZE=128 -g3 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -DGC_RESIZE_HEAP_FRACTION=0.5 -DOUTPUT_PORT_DATA_SIZE=128 -g3 -Wall -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 repl s7test.scm
 
 echo ' '
 echo '-------- gc 0.6 --------'
 echo ' '
-gcc s7.c -c -I. -DGC_RESIZE_HEAP_FRACTION=0.6 -g3 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -DGC_RESIZE_HEAP_FRACTION=0.6 -g3 -Wall -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 repl s7test.scm
 
 echo ' '
 echo '-------- gc 0.7 --------'
 echo ' '
-gcc s7.c -c -I. -DGC_RESIZE_HEAP_FRACTION=0.7 -g3 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -DGC_RESIZE_HEAP_FRACTION=0.7 -g3 -Wall -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 repl s7test.scm
 
 echo ' '
 echo '-------- gc 0.8 --------'
 echo ' '
-gcc s7.c -c -I. -DGC_RESIZE_HEAP_FRACTION=0.8 -g3 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -DGC_RESIZE_HEAP_FRACTION=0.8 -g3 -Wall -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 repl s7test.scm
 
 echo ' '
 echo '-------- disable-file-output --------'
 echo ' '
-gcc s7.c -c -I. -DDISABLE_FILE_OUTPUT=1 -g3 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -DDISABLE_FILE_OUTPUT=1 -g3 -Wall -ldl -lm -Wl,-export-dynamic
 # gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 # repl s7test.scm
 
 echo ' '
 echo '-------- valgrind --------'
 echo ' '
-gcc s7.c -c -I. -g3 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -g3 -Wall -ldl -lm -Wl,-export-dynamic
 gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 valgrind repl s7test.scm
 echo ' '
@@ -231,7 +238,7 @@ repl s7test.scm
 echo ' '
 echo '-------- fsanitize=undefined --------'
 echo ' '
-gcc s7.c -c -I. -g3 -DS7_ALIGNED=1 -ldl -lm -Wl,-export-dynamic -fsanitize=undefined
+gcc s7.c -c -I. -g3 -DS7_ALIGNED=1 -Wall -ldl -lm -Wl,-export-dynamic -fsanitize=undefined
 gcc -o repl repl.c -g3 -Wall s7.o -DS7_ALIGNED=1 -I. -lm -ldl -Wl,-export-dynamic -fsanitize=undefined
 repl -e '(define asan-flags "-fsanitize=undefined")' s7test.scm
 # repl -e '(define asan-flags "-fsanitize=undefined -fno-sanitize-recover")' s7test.scm
@@ -239,14 +246,14 @@ repl -e '(define asan-flags "-fsanitize=undefined")' s7test.scm
 echo ' '
 echo '-------- fsanitize=address --------'
 echo ' '
-gcc s7.c -c -I. -g3 -ldl -lm -Wl,-export-dynamic -fsanitize=address
+gcc s7.c -c -I. -g3 -Wall -ldl -lm -Wl,-export-dynamic -fsanitize=address
 gcc -o repl repl.c -g3 -Wall s7.o -DS7_ALIGNED=1 -I. -lm -ldl -Wl,-export-dynamic -fsanitize=address
 repl -e '(define asan-flags "-fsanitize=address")' s7test.scm
 
 echo ' '
 echo '-------- threads --------'
 echo ' '
-gcc s7.c -c -I. -g3 -ldl -lm -Wl,-export-dynamic
+gcc s7.c -c -I. -g3 -Wall -ldl -lm -Wl,-export-dynamic
 gcc -o threads threads.c s7.o -O -g -Wl,-export-dynamic -pthread -lm -I. -ldl
 threads
 

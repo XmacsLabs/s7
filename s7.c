@@ -1490,7 +1490,10 @@ static s7_pointer wrap_string(s7_scheme *sc, const char *str, s7_int len);
 #endif
 
 #if S7_DEBUGGING || DISABLE_FILE_OUTPUT || POINTER_32
-  static s7_scheme *cur_sc = NULL, *original_cur_sc = NULL;
+  static s7_scheme *cur_sc = NULL;
+#endif
+#if S7_DEBUGGING || ((DISABLE_FILE_OUTPUT || POINTER_32) && (!WITH_GCC))
+  static s7_scheme *original_cur_sc = NULL;
 #endif
 
 static s7_pointer set_elist_1(s7_scheme *sc, s7_pointer x1);
@@ -50033,7 +50036,7 @@ static bool vector_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_
     }
   len = vector_length(x);
   if (len != vector_length(y)) return(false);
-  if (len == 0) return(true); /* this is different from vector_equal */
+  if (len == 0) return(true); /* different from vector_equal, (equal? (make-vector '(0 1)) (make-vector '(1 0))): #f, but #t if equivalent? */
   if (!vector_rank_match(sc, x, y)) return(false);
 
   if (type(x) != type(y))
@@ -56019,23 +56022,6 @@ fx_cddr_any(fx_cddr_u, u_lookup)
 fx_cddr_any(fx_cddr_o, o_lookup)
 
 
-#define fx_add_s1_any(Name, Lookup) \
-  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
-  { \
-    s7_pointer x = Lookup(sc, cadr(arg), arg); \
-    if ((!WITH_GMP) && (is_t_integer(x))) return(make_integer(sc, integer(x) + 1)); \
-    return(g_add_x1_1(sc, x, 1)); /* arg=(+ x 1) */ \
-  }
-
-fx_add_s1_any(fx_add_s1, s_lookup)
-fx_add_s1_any(fx_add_t1, t_lookup)
-fx_add_s1_any(fx_add_u1, u_lookup)
-fx_add_s1_any(fx_add_v1, v_lookup)
-fx_add_s1_any(fx_add_T1, T_lookup)
-fx_add_s1_any(fx_add_U1, U_lookup)
-fx_add_s1_any(fx_add_V1, V_lookup)
-
-
 static s7_pointer fx_num_eq_xi_1(s7_scheme *sc, s7_pointer args, s7_pointer val, s7_int y)
 {
   if ((S7_DEBUGGING) && (is_t_integer(val))) fprintf(stderr, "%s[%d]: %s is an integer\n", __func__, __LINE__, display(val));
@@ -56130,6 +56116,24 @@ static s7_pointer fx_add_fs(s7_scheme *sc, s7_pointer arg) {return(g_add_xf(sc, 
 static s7_pointer fx_add_tf(s7_scheme *sc, s7_pointer arg) {return(g_add_xf(sc, t_lookup(sc, cadr(arg), arg), real(opt2_con(cdr(arg))), 1));}
 static s7_pointer fx_add_ft(s7_scheme *sc, s7_pointer arg) {return(g_add_xf(sc, t_lookup(sc, opt2_sym(cdr(arg)), arg), real(cadr(arg)), 2));}
 
+
+#define fx_add_s1_any(Name, Lookup) \
+  static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
+  { \
+    s7_pointer x = Lookup(sc, cadr(arg), arg); \
+    if ((!WITH_GMP) && (is_t_integer(x))) return(make_integer(sc, integer(x) + 1)); \
+    return(g_add_x1_1(sc, x, 1)); /* arg=(+ x 1) */ \
+  }
+
+fx_add_s1_any(fx_add_s1, s_lookup)
+fx_add_s1_any(fx_add_t1, t_lookup)
+fx_add_s1_any(fx_add_u1, u_lookup)
+fx_add_s1_any(fx_add_v1, v_lookup)
+fx_add_s1_any(fx_add_T1, T_lookup)
+fx_add_s1_any(fx_add_U1, U_lookup)
+fx_add_s1_any(fx_add_V1, V_lookup)
+
+
 #define fx_add_si_any(Name, Lookup) \
   static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
   { \
@@ -56165,6 +56169,11 @@ static s7_pointer fx_add_vu(s7_scheme *sc, s7_pointer arg) {return(add_p_pp(sc, 
     if ((!WITH_GMP) && (is_t_integer(x))) return(make_integer(sc, integer(x) - 1)); \
     return(minus_c1(sc, x)); \
   }
+/* overflow check here slows tleft by about 35 out of ca 750, parallel add case does not check
+ * (define most-negative-fixnum (*s7* 'most-negative-fixnum))
+ * (display (let ((f (lambda () (let ((S (- most-negative-fixnum 1))) S)))) (f))) (newline)
+ * -> 9223372036854775807 or (checked) -9223372036854776000.0
+ */
 
 fx_subtract_s1_any(fx_subtract_s1, s_lookup)
 fx_subtract_s1_any(fx_subtract_t1, t_lookup)
@@ -100742,61 +100751,61 @@ int main(int argc, char **argv)
 /* ------------------------------------------------------------
  *           19.0   21.0   22.0   23.0   24.0   25.0   25.1
  * ------------------------------------------------------------
- * tpeak      148    114    108    105    102    109
- * tref      1081    687    463    459    464    412
- * tlimit    3936   5371   5371   5371   5371    783
- * index            1016    973    967    972    988
- * tmock            1145   1082   1042   1045   1031
- * tvect     3408   2464   1772   1669   1497   1457
- * thook     7651   ----   2590   2030   2046   1731
- * texit     1884   1950   1778   1741   1770   1759
- * tauto                   2562   2048   1729   1760
- * s7test           1831   1818   1829   1830   1849
- * lt        2222   2172   2150   2185   1950   1892
- * dup              3788   2492   2239   2097   2012
- * tread            2421   2419   2408   2405   2241
- * tcopy            5546   2539   2375   2386   2352
- * trclo     8248   2782   2615   2634   2622   2499
- * tload                   3046   2404   2566   2506
- * tmat             3042   2524   2578   2590   2522
- * fbench    2933   2583   2460   2430   2478   2536
- * tsort     3683   3104   2856   2804   2858   2858
- * titer     4550   3349   3070   2985   2966   2917
- * tio              3752   3683   3620   3583   3127
- * tbit      3836   3305   3245   3261   3264   3181
- * tobj             3970   3828   3577   3508   3434
- * teq              4045   3536   3486   3544   3556
- * tmac             4373   ----   4193   4188   4024
- * tcomplex         3869   3804   3844   3888   4215
- * tcase            4793   4439   4430   4439   4376
- * tmap             8774   4489   4541   4586   4380
- * tlet      11.0   6974   5609   5980   5965   4470
- * tfft             7729   4755   4476   4536   4538
- * tshoot           5447   5183   5055   5034   4833
- * tstar            6705   5834   5278   5177   5059
- * tform            5348   5307   5316   5084   5055
- * tstr      10.0   6342   5488   5162   5180   5259
- * tnum             6013   5433   5396   5409   5402
- * tlist     9219   7546   6558   6240   6300   5770
- * trec      19.6   6980   6599   6656   6658   6015
- * tari      15.0   12.7   6827   6543   6278   6112
- * tgsl             7802   6373   6282   6208   6208
- * tset                           6260   6364   6278
- * tleft     12.2   9753   7537   7331   7331   6393
- * tmisc                          7614   7115   7130
- * tgc              10.4   7763   7579   7617   7619
- * tclo             8025   7645   8809   7770   7627
- * tlamb                          8003   7941   7920
- * thash            11.7   9734   9479   9526   9283
- * cb        12.9   11.0   9658   9564   9609   9657
- * tmap-hash                                    10.3
- * tgen             11.4   12.0   12.1   12.2   12.4
- * tall      15.9   15.6   15.6   15.6   15.1   15.1
- * timp             24.4   20.0   19.6   19.7   15.5
- * tmv              21.9   21.1   20.7   20.6   16.6
- * calls            37.5   37.0   37.5   37.1   37.1
- * sg                      55.9   55.8   55.4   55.3
- * tbig            175.8  156.5  148.1  146.2  145.5
+ * tpeak      148    114    108    105    102    109    109
+ * tref      1081    687    463    459    464    412    412
+ * tlimit    3936   5371   5371   5371   5371    783    783
+ * index            1016    973    967    972    988    988
+ * tmock            1145   1082   1042   1045   1031   1031
+ * tvect     3408   2464   1772   1669   1497   1457   1457
+ * thook     7651   ----   2590   2030   2046   1731   1731
+ * texit     1884   1950   1778   1741   1770   1759   1759
+ * tauto                   2562   2048   1729   1760   1760
+ * s7test           1831   1818   1829   1830   1849   1876
+ * lt        2222   2172   2150   2185   1950   1892   1892
+ * dup              3788   2492   2239   2097   2012   2004
+ * tread            2421   2419   2408   2405   2241   2241
+ * tcopy            5546   2539   2375   2386   2352   2352
+ * trclo     8248   2782   2615   2634   2622   2499   2499
+ * tload                   3046   2404   2566   2506   2506
+ * tmat             3042   2524   2578   2590   2522   2514
+ * fbench    2933   2583   2460   2430   2478   2536   2536
+ * tsort     3683   3104   2856   2804   2858   2858   2858
+ * titer     4550   3349   3070   2985   2966   2917   2917
+ * tio              3752   3683   3620   3583   3127   3127
+ * tbit      3836   3305   3245   3261   3264   3181   3181
+ * tobj             3970   3828   3577   3508   3434   3434
+ * teq              4045   3536   3486   3544   3556   3556
+ * tmac             4373   ----   4193   4188   4024   4024
+ * tcomplex         3869   3804   3844   3888   4215   4215
+ * tcase            4793   4439   4430   4439   4376   4376
+ * tmap             8774   4489   4541   4586   4380   4380
+ * tlet      11.0   6974   5609   5980   5965   4470   4470
+ * tfft             7729   4755   4476   4536   4538   4538
+ * tshoot           5447   5183   5055   5034   4833   4833
+ * tstar            6705   5834   5278   5177   5059   5059
+ * tform            5348   5307   5316   5084   5055   5063
+ * tstr      10.0   6342   5488   5162   5180   5259   5259
+ * tnum             6013   5433   5396   5409   5402   5402
+ * tlist     9219   7546   6558   6240   6300   5770   5770
+ * trec      19.6   6980   6599   6656   6658   6015   6015
+ * tari      15.0   12.7   6827   6543   6278   6112   6112
+ * tgsl             7802   6373   6282   6208   6208   6208
+ * tset                           6260   6364   6278   6278
+ * tleft     12.2   9753   7537   7331   7331   6393   6393 [6431 if overflow check]
+ * tmisc                          7614   7115   7130   7130
+ * tgc              10.4   7763   7579   7617   7619   7649
+ * tclo             8025   7645   8809   7770   7627   7633
+ * tlamb                          8003   7941   7920   7939
+ * thash            11.7   9734   9479   9526   9283   9283
+ * cb        12.9   11.0   9658   9564   9609   9657   9657
+ * tmap-hash                                    10.3   10.3
+ * tgen             11.4   12.0   12.1   12.2   12.4   12.4
+ * tall      15.9   15.6   15.6   15.6   15.1   15.1   15.1
+ * timp             24.4   20.0   19.6   19.7   15.5   15.5
+ * tmv              21.9   21.1   20.7   20.6   16.6   16.6
+ * calls            37.5   37.0   37.5   37.1   37.1   37.1
+ * sg                      55.9   55.8   55.4   55.3   55.3
+ * tbig            175.8  156.5  148.1  146.2  145.5  145.5
  * ------------------------------------------------------------
  *
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible

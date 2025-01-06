@@ -31,7 +31,7 @@
       (unless (hash-table-ref H int)
 	(hash-table-set! H int int)))
     (when debugging (format *stderr* "ref-int: (~A ~{~A~^ ~})~%"
-			    (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max))))) ; ref-int: (6384 10000 0 0 1)
+			    (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max))))) ; ref-int: (6384 10000 0 0 1)
 
 ;(ref-int)
 
@@ -48,7 +48,7 @@
 	(unless (hash-table-ref H rat)
 	  (hash-table-set! H rat rat)))
       (when debugging (format *stderr* "ref-rat: (~A ~{~A~^ ~})~%"
-			      (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max)))))) ; ref-rat: (16308 36 9 31 2128)
+			      (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max)))))) ; ref-rat: (16308 36 9 31 2128)
 
 ;(ref-rat)
 
@@ -65,7 +65,7 @@
 	(unless (hash-table-ref H rat)
 	  (hash-table-set! H rat rat)))
       (when debugging (format *stderr* "ref-rat1: (~A ~{~A~^ ~})~%"
-			      (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max)))))) ; ref-rat1: (12516 1849 637 1382 14)
+			      (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max)))))) ; ref-rat1: (12516 1849 637 1382 14)
 
 ;(ref-rat1)
 
@@ -82,7 +82,7 @@
 	(unless (hash-table-ref H float)
 	  (hash-table-set! H float float)))
       (when debugging (format *stderr* "ref-float: (~A ~{~A~^ ~})~%"
-			      (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max)))))) ; ref-float: (15384 2 2 996 21)
+			      (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max)))))) ; ref-float: (15384 2 2 996 21)
 
 ;(ref-float)
 
@@ -99,7 +99,7 @@
 	(unless (hash-table-ref H c)
 	  (hash-table-set! H c c)))
       (when debugging (format *stderr* "ref-complex: (~A ~{~A~^ ~})~%"
-			      (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max)))))) ; ref-complex: (16374 0 0 10 1065), (14685 199 202 1298 25)
+			      (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max)))))) ; ref-complex: (16374 0 0 10 1065), (14685 199 202 1298 25)
 
 ;(ref-complex)
 
@@ -113,7 +113,7 @@
       (unless (hash-table-ref H str)
 	(hash-table-set! H str str)))
     (when debugging (format *stderr* "ref-string: (~A ~{~A~^ ~})~%"
-			    (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max))))) ; ref-string: (12795 1412 686 1491 18)
+			    (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max))))) ; ref-string: (12795 1412 686 1491 18)
 
 ;(ref-string)
 
@@ -127,7 +127,7 @@
       (unless (hash-table-ref H str)
 	(hash-table-set! H str str)))
     (when debugging (format *stderr* "ref-string1: (~A ~{~A~^ ~})~%"
-			    (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max))))) ; ref-string1: (9114 5128 1663 479 6)
+			    (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max))))) ; ref-string1: (9114 5128 1663 479 6)
 
 ;(ref-string1)
 
@@ -140,7 +140,7 @@
       (unless (hash-table-ref H str)
 	(hash-table-set! H str str)))
     (when debugging (format *stderr* "ref-string2: (~A ~{~A~^ ~})~%"
-			    (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max))))) ; ref-string2: (16374 1 0 9 1111)
+			    (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max))))) ; ref-string2: (16374 1 0 9 1111)
 
 ;(ref-string2)
 
@@ -159,7 +159,7 @@
 	(unless (hash-table-ref H str)
 	  (hash-table-set! H str 1)))
       (when debugging (format *stderr* "ref-string3: (~A ~{~A~^ ~})~%"
-			      (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max)))))) ; ref-string3: (785 112 47 80 26): (675 786 111 48 79 26)
+			      (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max)))))) ; ref-string3: (785 112 47 80 26): (675 786 111 48 79 26)
 
 ;(ref-string3)
 
@@ -173,7 +173,7 @@
       (unless (hash-table-ref H str)
 	(hash-table-set! H str str)))
     (when debugging (format *stderr* "ref-ci-string: (~A ~{~A~^ ~})~%"
-			    (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max))))) ; ref-ci-string: (16036 0 0 348 42)
+			    (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max))))) ; ref-ci-string: (16036 0 0 348 42)
 
 ;(ref-ci-string)
 
@@ -191,7 +191,7 @@
       (unless (hash-table-ref H sym)
 	(hash-table-set! H sym sym)))
     (when debugging (format *stderr* "ref-sym: (~A ~{~A~^ ~})~%"
-			    (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max))))) ; ref-sym: (6412 9945 27 0 2)
+			    (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max))))) ; ref-sym: (6412 9945 27 0 2)
 
 ;(ref-sym)
 
@@ -206,7 +206,7 @@
 	(unless (hash-table-ref H sym)
 	  (hash-table-set! H sym 1)))
       (when debugging (format *stderr* "ref-sym1: (~A ~{~A~^ ~})~%"
-			      (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max)))))) ; ref-sym1: (493 409 111 11 3)
+			      (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max)))))) ; ref-sym1: (493 409 111 11 3)
 
 ;(ref-sym1)
 
@@ -223,7 +223,7 @@
       (unless (hash-table-ref H p)
 	(hash-table-set! H p p)))
     (when debugging (format *stderr* "ref-pair: (~A ~{~A~^ ~})~%"
-			    (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max))))))
+			    (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max))))))
     ;; ref-pair: (16284 0 0 100 100): (10000 16185 2 2 195 100): (9953 14600 212 177 1395 21)
 
 ;(ref-pair)
@@ -241,7 +241,7 @@
 	(unless (hash-table-ref H p)
 	  (hash-table-set! H p p)))
       (when debugging (format *stderr* "ref-pair1: (~A ~{~A~^ ~})~%"
-			      (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max)))))) ; ref-pair1: (9404 9039 5561 1529 255 5)
+			      (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max)))))) ; ref-pair1: (9404 9039 5561 1529 255 5)
 
 ;(ref-pair1)
 
@@ -258,7 +258,7 @@
 	(unless (hash-table-ref H p)
 	  (hash-table-set! H p p)))
       (when debugging (format *stderr* "ref-iv: (~A ~{~A~^ ~})~%"
-			      (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max)))))) ; ref-iv: (9407 14335 121 210 1718 12)
+			      (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max)))))) ; ref-iv: (9407 14335 121 210 1718 12)
 
 ;(ref-iv)
 
@@ -275,7 +275,7 @@
 	(unless (hash-table-ref H p)
 	  (hash-table-set! H p p)))
       (when debugging (format *stderr* "ref-bv: (~A ~{~A~^ ~})~%"
-			      (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max)))))) ; ref-bv: (8156 15794 11 8 571 25)
+			      (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max)))))) ; ref-bv: (8156 15794 11 8 571 25)
 
 ;(ref-bv)
 
@@ -292,7 +292,7 @@
 	(unless (hash-table-ref H p)
 	  (hash-table-set! H p p)))
       (when debugging (format *stderr* "ref-v: (~A ~{~A~^ ~})~%"
-			      (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max)))))) ; ref-v: (9433 14334 111 229 1710 13)
+			      (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max)))))) ; ref-v: (9433 14334 111 229 1710 13)
 
 ;(ref-v)
 
@@ -309,7 +309,7 @@
 	(unless (hash-table-ref H float)
 	  (hash-table-set! H float float)))
       (when debugging (format *stderr* "ref-fv: (~A ~{~A~^ ~})~%"
-			      (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max)))))) ; ref-fv: (9895 14340 113 172 1759 14)
+			      (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max)))))) ; ref-fv: (9895 14340 113 172 1759 14)
 
 ;(ref-fv)
 
@@ -322,7 +322,7 @@
       (unless (hash-table-ref H p)
 	(hash-table-set! H p p)))
     (when debugging (format *stderr* "ref-let: (~A ~{~A~^ ~})~%"
-			    (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max))))) ; ref-let: (6384 10000 0 0 1)
+			    (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max))))) ; ref-let: (6384 10000 0 0 1)
 
 ;(ref-let)
 
@@ -339,7 +339,7 @@
 	(unless (hash-table-ref H p)
 	  (hash-table-set! H p p)))
       (when debugging (format *stderr* "ref-let1: (~A ~{~A~^ ~})~%"
-			      (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max)))))) ; ref-let1: (14573 208 204 1399 19)
+			      (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max)))))) ; ref-let1: (14573 208 204 1399 19)
 
 ;(ref-let1)
 
@@ -352,7 +352,7 @@
       (unless (hash-table-ref H c)
 	(hash-table-set! H c c)))
     (when debugging (format *stderr* "ref-char: (~A ~{~A~^ ~})~%"
-			    (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max))))) ; (768 256 0 0 1)
+			    (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max))))) ; (768 256 0 0 1)
 
 ;(ref-char)
 
@@ -369,7 +369,7 @@
       (unless (hash-table-ref H p)
 	(hash-table-set! H p p)))
     (when debugging (format *stderr* "ref-hash: (~A ~{~A~^ ~})~%"
-			    (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max)))))) ; ref-hash: (16383 0 0 1 6317): (6350 10034 6350 0 0 1)
+			    (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max)))))) ; ref-hash: (16383 0 0 1 6317): (6350 10034 6350 0 0 1)
 
 ;(ref-hash)
 
@@ -386,7 +386,7 @@
       (unless (hash-table-ref H p)
 	(hash-table-set! H p p)))
     (when debugging (format *stderr* "ref-hash1: (~A ~{~A~^ ~})~%"
-			    (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max)))))) ; ref-hash1: (16383 0 0 1 6282): (10000 9135 5105 1657 487 8)
+			    (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max)))))) ; ref-hash1: (16383 0 0 1 6282): (10000 9135 5105 1657 487 8)
 
 ;(ref-hash1)
 
@@ -403,7 +403,7 @@
       (unless (hash-table-ref H p)
 	(hash-table-set! H p p)))
     (when debugging (format *stderr* "ref-c-pointer: (~A ~{~A~^ ~})~%"
-			    (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max)))))) ; ref-c-pointer: (12794 778 962 1850 10): (9994 9033 5222 1696 433 6)
+			    (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max)))))) ; ref-c-pointer: (12794 778 962 1850 10): (9994 9033 5222 1696 433 6)
 
 ;(ref-c-pointer)
 
@@ -428,7 +428,7 @@
       (unless (hash-table-ref H p)
 	(hash-table-set! H p p)))
     (when debugging (format *stderr* "ref-iterator: (~A ~{~A~^ ~})~%"
-			    (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max)))))) ; ref-iterator: (9982 13546 2146 395 297 87)
+			    (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max)))))) ; ref-iterator: (9982 13546 2146 395 297 87)
 
 ;(ref-iterator)
 
@@ -448,7 +448,7 @@
       (unless (hash-table-ref H str)
 	(hash-table-set! H str str)))
     (when debugging (format *stderr* "ref-undefined: (~A ~{~A~^ ~})~%"
-			    (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max))))) ; ref-undefined: (10000 16372 0 0 12 862): (9999 15542 3 5 834 2443)
+			    (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max))))) ; ref-undefined: (10000 16372 0 0 12 862): (9999 15542 3 5 834 2443)
 
 ;(ref-undefined)
 
@@ -474,7 +474,7 @@
 	(unless (hash-table-ref H f)
 	  (hash-table-set! H f 1)))
       (when debugging (format *stderr* "ref-c-func: (~A ~{~A~^ ~})~%"
-			      (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max)))))) ; ref-c-func: (442 632 342 50 0 2)
+			      (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max)))))) ; ref-c-func: (442 632 342 50 0 2)
 
 ;(ref-c-func)
 
@@ -488,7 +488,7 @@
 	(unless (hash-table-ref H int)
 	  (hash-table-set! H int int)))
       (when debugging (format *stderr* "ref-big-int: (~A ~{~A~^ ~})~%"
-			      (hash-table-entries H) ((object->let H) 'stats:0|1|2|n|max))))) ; ref-big-int: (10000 6384 10000 0 0 1)
+			      (hash-table-entries H) ((object->let H) 'hash-stats:0|1|2|n|max))))) ; ref-big-int: (10000 6384 10000 0 0 1)
 
   ;(ref-big-int)
   )
