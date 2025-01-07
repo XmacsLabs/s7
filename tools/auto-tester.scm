@@ -1,6 +1,6 @@
 ;;; this is an extension of tauto.scm, an auto-tester
 
-(define with-mock-data #t)
+(define with-mock-data #f)
 ;(set! (*s7* 'profile) 1)
 (when (provided? 'number-separator) (set! (*s7* 'number-separator) #\,))
 ;(set! (*s7* 'gc-stats) 4) ; stack-stats
@@ -759,9 +759,9 @@
 (define-constant a1 (immutable! (let ((H (make-hash-table 8 #f (cons real? integer?)))) (set! (H +nan.0) 1) H)))
 (define-constant a2 (immutable! (inlet :a (hash-table 'b 1))))
 (define-constant a3 (openlet (immutable! (inlet :a 1))))
-(define-constant a4 (subvector #i2d((1 2) (3 4))))
-(define-constant a5 (subvector #i2d((1 2) (3 4)) 0 4 '(4)))
-(define-constant a6 (subvector #i2d((1 2) (3 4)) 1 3 '(2 1)))
+(define-constant a4 (subvector #i2d((1 2) (3 4))))            ; #i(1 2 3 4)
+(define-constant a5 (subvector #i2d((1 2) (3 4)) 0 4 '(4)))   ; #i(1 2 3 4)
+(define-constant a6 (subvector #i2d((1 2) (3 4)) 1 3 '(2 1))) ; #i2d((2) (3))
 
 (define int-var 1)
 (define float-var 1.0)
@@ -846,7 +846,8 @@
 			  'atanh 'modulo 'make-polar 'gcd 'angle 'remainder 'quotient 'lcm
 			  'char-whitespace? 'assoc 'procedure? 'char<?
 			  'inexact->exact 'vector->list 'boolean? 'undefined? 'unspecified?
-			  'caar (if with-bignums '* 'ash) 'list-tail 'symbol->string 'string->symbol 'exact->inexact
+			  'caar (if with-bignums '+ 'ash) ; overflow memory else?
+			  'list-tail 'symbol->string 'string->symbol 'exact->inexact
 			  'object->string 'char>? 'symbol->value ;'symbol-initial-value -- needs GC protection normally
 			  'cadar 'integer-decode-float 'string-copy 'cdddr 'logand 'cadddr
 			  'with-input-from-string 'substring 'string->list 'char-upper-case?
@@ -975,7 +976,7 @@
 			  'sequence? 'directory? 'hash-table-entries
 			  'arity 'logbit?
 			  'random-state? 'throw 'float-vector-set! 'make-iterator 'complex 'complex-vector-set!
-			  'let-ref 'int-vector 'aritable? 'gensym? 'syntax? 'iterator-at-end? 'let?
+			  'let-ref 'int-vector 'aritable? 'gensym? 'syntax? 'iterator-at-end? 'let? 'gensym
 			  'subvector 'float-vector 'iterator-sequence 'getenv 'float-vector-ref 'complex-vector 'complex-vector-ref
 			  'cyclic-sequences 'let->list
 
@@ -1067,6 +1068,13 @@
 		    "(bignum +inf.0)" "(bignum +nan.0)" "(bignum -inf.0)" "(bignum 0+i)" "(bignum 0.0)" "(bignum 0-i)"
 		    "(expt 2 -32)" "1/2+1/3i"
 		    "=>"
+
+		    (reader-cond
+		     (with-bignums
+		      "85070591730234615856620279821087277056" "11538170533094188269009/1311738121"
+		      "85070591730234615856620279821087277056.11538170533094188269009"
+		      "85070591730234615856620279821087277056.0+11538170533094188269009.0i"))
+
 		    "\"ho\"" ":ho" "ho:" "'ho" "(list 1)" "(list 1 2)" "(cons 1 2)" "()" "(list (list 1 2))" "(list (list 1))" "(list ())"
 		    "#f" "#t" "()" "#()" "\"\"" ; ":write" -- not this because sr2 calls write and this can be an arg to sublet redefining write
 		    "'(1 2 . 3)" "'(1 . 2)" "'(1 2 3 . 4)"
@@ -1075,6 +1083,7 @@
 		    "cons" "\"ra\"" "''2" "'a" "_!asdf!_" "let-ref-fallback"
 
 		    "#\\a" "#\\A" "#\\x" ;"\"str1\"" "\"STR1\"" "#\\0" "0+." ".0-" ;"#\\"
+		    "#\\newpine"
 		    "(make-hook)" "(make-hook '__x__)"
 		    "1+i" "0+i" "(ash 1 43)"  "(fib 8)" "(fibr 8)" "(fibf 8.0)"
 		    "(integer->char 255)" "(string (integer->char 255))" "(string #\\null)" "(byte-vector 0)"
@@ -1338,7 +1347,7 @@
 		    ;"(*s7* 'gc-freed)" "(*s7* 'gc-total-freed)" "(*s7* 'free-heap-size)" ; variable
 		    ;"(copy (*s7* 'gc-protected-objects))"  ; access + element set => not protected! perhaps copy it?
 		    ;"(begin (let? (*s7* 'memory-usage)))" ; slow
-		    "(*s7* 'most-negative-fixnum)" "(*s7* 'most-positive-fixnum)"
+		    ;"(*s7* 'most-negative-fixnum)" "(*s7* 'most-positive-fixnum)"
 		    "(*s7* 'rootlet-size)"
 		    ;"(begin (list? (*s7* 'stack)))" "(begin (integer? (*s7* 'stack-size)))" ; variable, and stack can contain e.g. #<unused>
 		    "(*s7* 'version)"
@@ -1346,9 +1355,9 @@
 		    "(begin (list? (*s7* 'catches)))"
 		    "(begin (integer? (*s7* 'stack-top)))"
 		    ;(reader-cond ((provided? 'debugging) "(when ((*s7* 'heap-size) < (ash 1 21)) (heap-analyze) (heap-scan 47))")) ;(+ 1 (random 47))))"))
-		    
+
 		    "(begin (define (f x) (+ x 1)) (define (g x) (f x)) (define (f x) (+ x 2)) (g 1))"
-#|
+;#|
 		    "(*s7* 'accept-all-keyword-arguments)"
 		    "(*s7* 'autoloading?)"
 		    "(*s7* 'bignum-precision)"
@@ -1412,7 +1421,7 @@
 		    "(*s7* 'undefined-constant-warnings)"
 		    "(*s7* 'undefined-identifier-warnings)"
 		    "(*s7* 'version)"
-|#
+;|#
 		    #f #f #f ; cyclic here (see get-arg)
 		    ))
 

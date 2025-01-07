@@ -5748,7 +5748,6 @@ static void set_opt2_1(s7_scheme *sc, s7_pointer p, s7_pointer x, uint64_t role,
       fprintf(stderr, "%s[%d]: overwrite has_fn: %s %s\n", func, line, opt2_role_name(role), display_truncated(p));
       if (sc->stop_at_error) abort();
     }
-  /* fprintf(stderr, "%s[%d]: set opt2 %p %s\n", func, line, p, opt2_role_name(role)); */
   p->object.cons.o2.opt2 = x;
   base_opt2(p, role);
 }
@@ -7980,7 +7979,7 @@ static void resize_heap_to(s7_scheme *sc, s7_int size)
 	  (sc->max_heap_size > (sc->heap_size * 4)))
 	sc->heap_size *= 4;          /* *8 if < 1M (or whatever) doesn't make much difference */
       else sc->heap_size *= 2;
-      if ((S7_DEBUGGING) && (sc->heap_size >= sc->max_heap_size)) 
+      if ((S7_DEBUGGING) && (sc->heap_size >= sc->max_heap_size))
 	fprintf(stderr, "%s[%d]: heap_size: %" ld64 ", max: %" ld64 "\n", __func__, __LINE__, sc->heap_size, sc->max_heap_size);
       if (sc->gc_resize_heap_fraction > .4)
 	sc->gc_resize_heap_fraction *= .95;
@@ -7990,7 +7989,7 @@ static void resize_heap_to(s7_scheme *sc, s7_int size)
       if (size > sc->heap_size)
 	while (sc->heap_size < size) sc->heap_size *= 2;
       else return;
-      if ((S7_DEBUGGING) && (sc->heap_size >= sc->max_heap_size)) 
+      if ((S7_DEBUGGING) && (sc->heap_size >= sc->max_heap_size))
 	fprintf(stderr, "%s[%d]: heap_size: %" ld64 ", max: %" ld64 "\n", __func__, __LINE__, sc->heap_size, sc->max_heap_size);
     }
   if (sc->heap_size >= sc->max_heap_size)
@@ -8000,7 +7999,7 @@ static void resize_heap_to(s7_scheme *sc, s7_int size)
 	{
 	  s7_warn(sc, 256, "heap size requested is greater than (*s7* 'max-heap-size); trying %" ld64 "\n", new_heap_size);
 	  sc->heap_size = new_heap_size;
-	  if ((S7_DEBUGGING) && (sc->heap_size >= sc->max_heap_size)) 
+	  if ((S7_DEBUGGING) && (sc->heap_size >= sc->max_heap_size))
 	    fprintf(stderr, "%s[%d]: heap_size: %" ld64 ", max: %" ld64 "\n", __func__, __LINE__, sc->heap_size, sc->max_heap_size);
 	}
       else
@@ -8014,7 +8013,7 @@ static void resize_heap_to(s7_scheme *sc, s7_int size)
 	  return;
 	}
     }
-  
+
   /* do not call new_cell here! */
 #if POINTER_32
   if (((2 * sc->heap_size * sizeof(s7_cell *)) + ((sc->heap_size - old_size) * sizeof(s7_cell))) >= SIZE_MAX)
@@ -8024,7 +8023,7 @@ static void resize_heap_to(s7_scheme *sc, s7_int size)
 	      (2 * sc->heap_size * sizeof(s7_cell *)) + ((sc->heap_size - old_size) * sizeof(s7_cell)),
 	      SIZE_MAX);
       sc->heap_size = old_size + 64000;
-      if ((S7_DEBUGGING) && (sc->heap_size >= sc->max_heap_size)) 
+      if ((S7_DEBUGGING) && (sc->heap_size >= sc->max_heap_size))
 	fprintf(stderr, "%s[%d]: heap_size: %" ld64 ", max: %" ld64 "\n", __func__, __LINE__, sc->heap_size, sc->max_heap_size);
     }
 #endif
@@ -8036,7 +8035,7 @@ static void resize_heap_to(s7_scheme *sc, s7_int size)
       s7_warn(sc, 256, "heap reallocation failed! tried to get %" ld64 " bytes (will retry with a smaller amount)\n",
 	      (s7_int)(sc->heap_size * sizeof(s7_cell *)));
       sc->heap_size = old_size + 64000;
-      if ((S7_DEBUGGING) && (sc->heap_size >= sc->max_heap_size)) 
+      if ((S7_DEBUGGING) && (sc->heap_size >= sc->max_heap_size))
 	fprintf(stderr, "%s[%d]: heap_size: %" ld64 ", max: %" ld64 "\n", __func__, __LINE__, sc->heap_size, sc->max_heap_size);
       sc->heap = (s7_cell **)Realloc(sc->heap, sc->heap_size * sizeof(s7_cell *));
     }
@@ -8072,11 +8071,6 @@ static void resize_heap_to(s7_scheme *sc, s7_int size)
 		   sc->heap_size, old_free, old_size, sc->gc_resize_heap_fraction);
     }
 }
-
-#define GC_STRINGS_DEBUGGING ((S7_DEBUGGING) && (false))
-#if GC_STRINGS_DEBUGGING
-  static void describe_gc_strings(s7_scheme *sc);
-#endif
 
 #define resize_heap(Sc) resize_heap_to(Sc, 0)
 
@@ -8116,18 +8110,6 @@ static s7_pointer g_gc(s7_scheme *sc, s7_pointer args)
 Evaluation produces a surprising amount of garbage, so don't leave the GC off for very long!"
   #define Q_gc s7_make_signature(sc, 2, sc->T, sc->is_boolean_symbol)
 
-  /* g_gc can't be called in a situation where these lists matter -- oops, gc called in scheme can be using these! and maybe elist... */
-#if 0
-  set_mlist_1(sc, sc->unused);
-  set_mlist_2(sc, sc->unused, sc->unused);
-  set_plist_1(sc, sc->unused);
-  set_plist_2(sc, sc->unused, sc->unused);
-  set_plist_3(sc, sc->unused, sc->unused, sc->unused);
-  set_car(sc->plist_4, sc->unused);
-  set_qlist_2(sc, sc->unused, sc->unused);
-  set_car(sc->qlist_3, sc->unused);
-  set_ulist_1(sc, sc->unused, sc->unused);
-#endif
   set_elist_1(sc, sc->unused);
   set_elist_2(sc, sc->unused, sc->unused);
   set_elist_3(sc, sc->unused, sc->unused, sc->unused);
@@ -9408,11 +9390,6 @@ static /* inline */ void clear_small_symbol_set(s7_scheme *sc)
 /* -------- big symbol set -------- */
 #define symbol_is_in_big_symbol_set(Sc, Sym) (big_symbol_tag(Sym) == Sc->big_symbol_tag)
 #define clear_big_symbol_set(Sc) Sc->big_symbol_tag++
-
-#if 0
-#define begin_big_symbol_set(Sc) Sc->big_symbol_tag++
-#define end_big_symbol_set(Sc)
-#endif
 
 static s7_pointer add_symbol_to_big_symbol_set(s7_scheme *sc, s7_pointer sym)
 {
@@ -27643,7 +27620,6 @@ static s7_pointer wrap_string(s7_scheme *sc, const char *str, s7_int len)
   /* if (safe_strlen(str) < len) {fprintf(stderr, "wrap_string \"%s\" length should be %" ld64 " not %" ld64 "\n", str, safe_strlen(str), len); gdb_break();} */
   sc->string_wrapper_allocs++;
 #endif
-  /* fprintf(stderr, "%s %" ld64"\n", str, sc->string_wrapper_allocs); */
   sc->string_wrappers = cdr(sc->string_wrappers);
   string_value(x) = (char *)str;
   string_length(x) = len;
@@ -81600,7 +81576,6 @@ static s7_pointer fx_with_let_s(s7_scheme *sc, s7_pointer arg)
   s7_pointer e = lookup_checked(sc, car(code));
   s7_pointer sym = cadr(code);
   s7_pointer val;
-  /* fprintf(stderr, "%s\n", display(arg)); */
   if (!is_let(e))
     {
       e = find_let(sc, e);
@@ -81650,7 +81625,6 @@ static bool check_with_let(s7_scheme *sc)
 
 static bool op_with_let_unchecked(s7_scheme *sc)
 {
-  /* fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(sc->code)); */
   sc->code = cdr(sc->code);
   sc->value = car(sc->code);
   if (!is_pair(sc->value))
@@ -96575,35 +96549,6 @@ static s7_pointer g_is_op_stack(s7_scheme *sc, s7_pointer args)
   #define Q_is_op_stack s7_make_signature(sc, 1, sc->is_boolean_symbol)
   return(make_boolean(sc, (sc->op_stack < sc->op_stack_now)));
 }
-
-#if GC_STRINGS_DEBUGGING
-static void describe_gc_strings(s7_scheme *sc)
-{
-  gc_list_t *gp = sc->strings;
-  fprintf(stderr, "--------------------------------------------------------------------------------\n");
-  s7_heap_analyze(sc);
-  fprintf(stderr, "strings: %" ld64 "\n", gp->loc);
-  /* s7_heap_scan(sc, T_STRING); */
-
-  for (s7_int i = 0; i < gp->loc; i++)
-    {
-      s7_pointer x = gp->list[i];
-      fprintf(stderr, "\"%s\" %p: holder: %p%s%s%s\"%s\", holders: %d, root: %s %d %d, %d %d\n",
-	      string_value(x), x,
-	      x->holder,
-	      (x->holder) ? " " : "",
-	      (x->holder) ? s7_type_names[type(x->holder)] : "",
-	      (x->holder) ? " " : "",
-	      ((x->holder) && (is_slot(x->holder))) ? symbol_name(slot_symbol(x->holder)) : "",
-	      x->holders, x->root,
-	      is_marked(x), in_heap(x),
-	      (x->holder) ? is_marked(x->holder) : -1, (x->holder) ? in_heap(x->holder) : -1);
-      if (i > 100) break;
-    }
-  fprintf(stderr, "--------------------------------------------------------------------------------\n");
-  gdb_break();
-}
-#endif
 #endif
 
 
@@ -96827,7 +96772,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
   }
 
   /* show how many active cells there are of each type (this is where all the memory_usage cpu time goes) */
-  if ((S7_DEBUGGING) && (sc->heap_size >= sc->max_heap_size)) 
+  if ((S7_DEBUGGING) && (sc->heap_size >= sc->max_heap_size))
     fprintf(stderr, "%s[%d]: heap_size: %" ld64 ", max: %" ld64 "\n", __func__, __LINE__, sc->heap_size, sc->max_heap_size);
   for (i = 0; i < NUM_TYPES; i++) ts[i] = 0;
   for (k = 0; k < sc->heap_size; k++)
@@ -97564,7 +97509,7 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 
     case SL_HEAP_SIZE:
       iv = s7_integer_clamped_if_gmp(sc, sl_integer_geq_0(sc, sym, val));
-      if ((S7_DEBUGGING) && (iv >= sc->max_heap_size)) 
+      if ((S7_DEBUGGING) && (iv >= sc->max_heap_size))
 	fprintf(stderr, "%s[%d]: iv: %" ld64 ", max: %" ld64 "\n", __func__, __LINE__, iv, sc->max_heap_size);
       if (iv > sc->heap_size)
 	resize_heap_to(sc, iv);
