@@ -3324,17 +3324,18 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define is_syntax_or_qq(p)	       ((is_syntax(p)) || ((p) == sc->quasiquote_function)) /* qq is from s7_define_macro -> T_C_MACRO */
 
 #define let_id(p)                      (T_Let(p))->object.envr.id
-#define let_set_id(p, Id)              (T_Let(p))->object.envr.id = Id
 #define is_let(p)                      (type(p) == T_LET)
 #define is_let_unchecked(p)            (unchecked_type(p) == T_LET)
 #define let_slots(p)                   T_Sln((T_Let(p))->object.envr.slots)
 #define let_outlet(p)                  T_Out((T_Let(p))->object.envr.nxt)
 #define let_set_outlet(p, ol)          (T_Let(p))->object.envr.nxt = T_Out(ol)
 #if S7_DEBUGGING
+  #define let_set_id(p, Id)            do {(T_Let(p))->object.envr.id = Id; if ((p == sc->rootlet) && (Id != -1)) fprintf(stderr, "%s[%d]: rootlet id: %" ld64 "\n", __func__, __LINE__, (s7_int)Id);} while (0)
   #define let_set_slots(p, Slot)       check_let_set_slots(sc, p, Slot, __func__, __LINE__)
   #define C_Let(p, role)               check_let_ref(p, role, __func__, __LINE__)
   #define S_Let(p, role)               check_let_set(p, role, __func__, __LINE__)
 #else
+  #define let_set_id(p, Id)            (T_Let(p))->object.envr.id = Id
   #define let_set_slots(p, Slot)       (T_Let(p))->object.envr.slots = T_Sln(Slot)
   #define C_Let(p, role)               p
   #define S_Let(p, role)               p
@@ -5453,7 +5454,7 @@ static void print_gc_info(s7_scheme *sc, s7_pointer obj, const char *func, int32
 	full_type(obj) = free_type;
 	if (obj->explicit_free_line > 0)
 	  snprintf(fline, 128, ", freed at %d, ", obj->explicit_free_line);
-	fprintf(stderr, "%s%p is free (%s[%d], alloc type: %s %" ld64 " #x%" ld64 " (%s)), alloc: %s[%d], %sgc: %s[%d], gc: %d%s",
+	fprintf(stderr, "%s%p is free (%s[%d], alloc type: %s %" ld64 " #x%" ld64 " (%s)), alloc: %s[%d], %sgc: %s[%d], uses: %d%s",
 		bold_text, obj, func, line, s7_type_names[obj->alloc_type & 0xff], obj->alloc_type, obj->alloc_type,
 		bits, obj->alloc_func, obj->alloc_line,
 		(obj->explicit_free_line > 0) ? fline : "", obj->gc_func, obj->gc_line,	obj->uses, unbold_text);
@@ -8337,7 +8338,10 @@ static void resize_op_stack(s7_scheme *sc)
       if (sc->stop_at_error) abort();
     }
 #else
-    error_nr(sc, make_symbol(sc, "stack-too-big", 13), set_elist_1(sc, wrap_string(sc, "op stack has grown past (*s7* 'max-stack-size)", 46)));
+    error_nr(sc, make_symbol(sc, "stack-too-big", 13),
+	     set_elist_3(sc, wrap_string(sc, "op stack has grown past (*s7* 'max-stack-size): ~D > ~D", 55), 
+			 wrap_integer(sc, (s7_int)new_size),
+			 wrap_integer(sc, (s7_int)sc->max_stack_size)));
 #endif
   sc->op_stack = (s7_pointer *)Realloc((void *)(sc->op_stack), new_size * sizeof(s7_pointer));
   for (uint32_t i = sc->op_stack_size; i < new_size; i++) sc->op_stack[i] = sc->unused;
@@ -8655,7 +8659,9 @@ static void resize_stack(s7_scheme *sc)
     s7_warn(sc, 128, "stack grows to %u\n", new_size);
   if (new_size > sc->max_stack_size)
     error_nr(sc, make_symbol(sc, "stack-too-big", 13),
-	     set_elist_1(sc, wrap_string(sc, "stack has grown past (*s7* 'max-stack-size)", 43)));
+	     set_elist_3(sc, wrap_string(sc, "stack has grown past (*s7* 'max-stack-size): ~D > ~D", 52),
+			 wrap_integer(sc, new_size),
+			 wrap_integer(sc, sc->max_stack_size)));
   /* error needs to follow realloc, else error -> catchers in error_nr -> let_temp* -> eval_done -> stack_resize -> infinite loop */
 }
 #endif
@@ -29093,7 +29099,9 @@ static void resize_port_data_for_port_string(s7_scheme *sc, s7_pointer pt, s7_in
   if (new_size < loc) return;
   if (new_size > sc->max_port_data_size)
     error_nr(sc, make_symbol(sc, "port-too-big", 12),
-	     set_elist_1(sc, wrap_string(sc, "port data size has grown past (*s7* 'max-port-data-size)", 56)));
+	     set_elist_3(sc, wrap_string(sc, "port data size has grown past (*s7* 'max-port-data-size): ~D > ~D", 65),
+			 wrap_integer(sc, new_size),
+			 wrap_integer(sc, sc->max_port_data_size)));
   liberate(sc, port_data_block(pt));  /* reallocate has an irrelevant memcpy */
   nb = inline_mallocate(sc, new_size);
   port_data_block(pt) = nb;
@@ -29841,7 +29849,9 @@ static void resize_port_data(s7_scheme *sc, s7_pointer pt, s7_int new_size)
   if (new_size < loc) return;
   if (new_size > sc->max_port_data_size)
     error_nr(sc, make_symbol(sc, "port-too-big", 12),
-	     set_elist_1(sc, wrap_string(sc, "port data size has grown past (*s7* 'max-port-data-size)", 56)));
+	     set_elist_3(sc, wrap_string(sc, "port data size has grown past (*s7* 'max-port-data-size): ~D > ~D", 65),
+			 wrap_integer(sc, new_size),
+			 wrap_integer(sc, sc->max_port_data_size)));
   nb = reallocate(sc, port_data_block(pt), new_size);
   port_data_block(pt) = nb;
   port_data(pt) = (uint8_t *)(block_data(nb));
@@ -96966,6 +96976,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
     for (b = sc->block_lists[TOP_BLOCK_LIST], k = 0; b; b = block_next(b), k++)
       len += (sizeof(block_t) + block_size(b));
     sc->y = cons(sc, make_integer(sc, k), sc->y);
+    sc->y = proper_list_reverse_in_place(sc, sc->y);
 #if S7_DEBUGGING
     num_blocks += k;
     set_car(ff, make_integer(sc, sc->blocks_freed[TOP_BLOCK_LIST]));
@@ -96976,7 +96987,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
 			       list_3(sc, make_integer(sc, sc->blocks_allocated), make_integer(sc, num_blocks), make_integer(sc, sc->blocks_allocated - num_blocks)));
     add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "free-lists", 10),
 			       s7_inlet(sc, cons(sc, cons(sc, make_symbol(sc, "bytes", 5), kmg(sc, len)),
-						 list_4(sc, cons(sc, make_symbol(sc, "bins", 4), proper_list_reverse_in_place(sc, sc->y)),
+						 list_4(sc, cons(sc, make_symbol(sc, "bins", 4), sc->y),
 							cons(sc, make_symbol(sc, "allocs", 6), allocs),
 							cons(sc, make_symbol(sc, "frees", 5), frees),
 							cons(sc, make_symbol(sc, "borrows", 7), borrows)))));
@@ -96992,7 +97003,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
 #else
     add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "free-lists", 10),
 			       s7_inlet(sc, list_2(sc, cons(sc, make_symbol(sc, "bytes", 5), kmg(sc, len)),
-						   cons(sc, make_symbol(sc, "bins", 4), proper_list_reverse_in_place(sc, sc->y)))));
+						   cons(sc, make_symbol(sc, "bins", 4), sc->y))));
 #endif
     end_temp(sc->y);
     add_slot_unchecked_with_id(sc, mu_let,
@@ -97547,8 +97558,17 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       sc->make_function = val;
       return(val);
 
-    case SL_MAX_FORMAT_LENGTH:     sc->max_format_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));     return(val);
-    case SL_MAX_HEAP_SIZE:         sc->max_heap_size = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));         return(val);
+    case SL_MAX_FORMAT_LENGTH:
+      sc->max_format_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
+      return(val);
+
+    case SL_MAX_HEAP_SIZE:
+      iv = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
+      if (iv < sc->heap_size)  /* heap can't be made smaller currently */
+	starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it can't be less than the current heap size", 43));
+      sc->max_heap_size = iv;
+      return(val);
+
     case SL_MAX_LIST_LENGTH:       sc->max_list_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));       return(val);
     case SL_MAX_PORT_DATA_SIZE:    sc->max_port_data_size = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));    return(val);
 
@@ -100762,4 +100782,6 @@ int main(int argc, char **argv)
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
+ *
+ * closure_let is often rootlet but then let_slots(closure_let()) is NULL?? associated with debug.scm/(*s7* 'debug)?
  */
