@@ -97520,8 +97520,10 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 
     case SL_HEAP_SIZE:
       iv = s7_integer_clamped_if_gmp(sc, sl_integer_geq_0(sc, sym, val));
-      if ((S7_DEBUGGING) && (iv >= sc->max_heap_size))
-	fprintf(stderr, "%s[%d]: iv: %" ld64 ", max: %" ld64 "\n", __func__, __LINE__, iv, sc->max_heap_size);
+      if (iv < sc->heap_size)  /* heap can't be made smaller currently */
+	starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it can't be less than the current heap size", 43));
+      if (iv > sc->max_heap_size)
+	starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it can't be greater than (*s7* 'max-heap-size)", 46));
       if (iv > sc->heap_size)
 	resize_heap_to(sc, iv);
       return(val);
