@@ -989,7 +989,7 @@ typedef struct s7_cell {
 
     struct {                        /* special stuff like #<unspecified> */
       s7_pointer car, cdr;          /* unique_car|cdr, for sc->nil these are sc->unspecified for faster assoc etc */
-      s7_int unused_let_id;         /* let_id(sc->nil) is -1, so this needs to align with envr.id above, only used by sc->nil, so free elsewhere */
+      s7_int unused_let_id;
       const char *name;
       s7_int len;
     } unq;
@@ -3330,7 +3330,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define let_outlet(p)                  T_Out((T_Let(p))->object.envr.nxt)
 #define let_set_outlet(p, ol)          (T_Let(p))->object.envr.nxt = T_Out(ol)
 #if S7_DEBUGGING
-  #define let_set_id(p, Id)            do {(T_Let(p))->object.envr.id = Id; if ((p == sc->rootlet) && (Id != -1)) fprintf(stderr, "%s[%d]: rootlet id: %" ld64 "\n", __func__, __LINE__, (s7_int)Id);} while (0)
+  #define let_set_id(p, Id)            do {(T_Let(p))->object.envr.id = Id; if ((p == sc->rootlet) && (Id != -1)) {fprintf(stderr, "%s[%d]: rootlet id: %" ld64 "\n", __func__, __LINE__, (s7_int)Id); if (sc->stop_at_error) abort();}} while (0)
   #define let_set_slots(p, Slot)       check_let_set_slots(sc, p, Slot, __func__, __LINE__)
   #define C_Let(p, role)               check_let_ref(p, role, __func__, __LINE__)
   #define S_Let(p, role)               check_let_set(p, role, __func__, __LINE__)
@@ -9616,7 +9616,7 @@ static inline void make_let_with_five_slots(s7_scheme *sc, s7_pointer func, s7_p
 static s7_pointer update_let_with_slot(s7_scheme *sc, s7_pointer let, s7_pointer val)
 {
   s7_pointer slot = let_slots(let);
-  uint64_t id = ++sc->let_number;
+  s7_int id = ++sc->let_number;
   let_set_id(let, id);
   update_slot(slot, val, id);
   return(let);
@@ -9625,7 +9625,7 @@ static s7_pointer update_let_with_slot(s7_scheme *sc, s7_pointer let, s7_pointer
 static s7_pointer update_let_with_two_slots(s7_scheme *sc, s7_pointer let, s7_pointer val1, s7_pointer val2)
 {
   s7_pointer slot = let_slots(let);
-  uint64_t id = ++sc->let_number;
+  s7_int id = ++sc->let_number;
   let_set_id(let, id);
   update_slot(slot, val1, id); slot = next_slot(slot);
   update_slot(slot, val2, id);
@@ -9635,7 +9635,7 @@ static s7_pointer update_let_with_two_slots(s7_scheme *sc, s7_pointer let, s7_po
 static s7_pointer update_let_with_three_slots(s7_scheme *sc, s7_pointer let, s7_pointer val1, s7_pointer val2, s7_pointer val3)
 {
   s7_pointer slot = let_slots(let);
-  uint64_t id = ++sc->let_number;
+  s7_int id = ++sc->let_number;
   let_set_id(let, id);
   update_slot(slot, val1, id); slot = next_slot(slot);
   update_slot(slot, val2, id); slot = next_slot(slot);
@@ -9646,7 +9646,7 @@ static s7_pointer update_let_with_three_slots(s7_scheme *sc, s7_pointer let, s7_
 static s7_pointer update_let_with_four_slots(s7_scheme *sc, s7_pointer let, s7_pointer val1, s7_pointer val2, s7_pointer val3, s7_pointer val4)
 {
   s7_pointer slot = let_slots(let);
-  uint64_t id = ++sc->let_number;
+  s7_int id = ++sc->let_number;
   let_set_id(let, id);
   update_slot(slot, val1, id); slot = next_slot(slot);
   update_slot(slot, val2, id); slot = next_slot(slot);
@@ -11388,6 +11388,7 @@ static s7_pointer collect_parameters(s7_scheme *sc, s7_pointer lst, s7_pointer e
 
 typedef enum {OPT_F, OPT_T, OPT_OOPS} opt_t;
 static opt_t optimize(s7_scheme *sc, s7_pointer code, int32_t hop, s7_pointer e);
+static bool tree_is_cyclic(s7_scheme *sc, s7_pointer tree);
 
 static void clear_all_optimizations(s7_scheme *sc, s7_pointer p)
 {
@@ -11396,6 +11397,7 @@ static void clear_all_optimizations(s7_scheme *sc, s7_pointer p)
    */
   if (is_pair(p))
     {
+      /* if ((S7_DEBUGGING) && (tree_is_cyclic(sc, p) == 0)) {fprintf(stderr, "%s[%d]: tree is cyclic\n", __func__, __LINE__); if (sc->stop_at_error) abort();} */
       if ((is_optimized(p)) &&
  	  (((optimize_op(p) >= FIRST_UNHOPPABLE_OP) ||  /* avoid clearing hop ops, fx_function and op_unknown* need to be cleared */
 	    (!op_has_hop(p)))))
@@ -48100,7 +48102,8 @@ static s7_pointer g_dynamic_wind_unchecked(s7_scheme *sc, s7_pointer args)
   dynamic_wind_in(p) = closure_or_f(sc, car(args));
   dynamic_wind_body(p) = cadr(args);
   dynamic_wind_out(p) = closure_or_f(sc, caddr(args));
-
+  push_stack(sc, OP_DYNAMIC_WIND, sc->nil, p);             /* args will be the saved result, code = s7_dynwind_t obj */
+                                                           /*   do this push_stack early to protect p from allocations in make_baffled_closure */
   inp = dynamic_wind_in(p);
   if ((is_any_closure(inp)) && (!is_safe_closure(inp)))    /* wrap this use of inp in a with-baffle */
     dynamic_wind_in(p) = make_baffled_closure(sc, inp);
@@ -48112,7 +48115,6 @@ static s7_pointer g_dynamic_wind_unchecked(s7_scheme *sc, s7_pointer args)
   /* since we don't care about the in and out results, and they are thunks, if the body is not a pair,
    *   or is a quoted thing, we just ignore that function.
    */
-  push_stack(sc, OP_DYNAMIC_WIND, sc->nil, p);             /* args will be the saved result, code = s7_dynwind_t obj */
   if (inp != sc->F)
     {
       dynamic_wind_state(p) = DWIND_INIT;
@@ -79258,7 +79260,7 @@ static void op_let_na_old(s7_scheme *sc)
 {
   s7_pointer let = opt3_let(cdr(sc->code));
   s7_pointer slot = let_slots(let);
-  uint64_t id = ++sc->let_number;
+  s7_int id = ++sc->let_number;
   sc->args = let;
   let_set_id(let, id);
   let_set_outlet(let, sc->curlet);
@@ -88486,7 +88488,7 @@ static void op_safe_closure_ns(s7_scheme *sc)
   s7_pointer args = cdr(sc->code);
   s7_pointer f = opt1_lambda(sc->code);
   s7_pointer let = closure_let(f);
-  uint64_t id = ++sc->let_number;
+  s7_int id = ++sc->let_number;
   let_set_id(let, id);
   for (s7_pointer x = let_slots(let); tis_slot(x); x = next_slot(x), args = cdr(args))
     {
@@ -88512,7 +88514,7 @@ static inline void op_safe_closure_3a(s7_scheme *sc)
 static void op_safe_closure_na(s7_scheme *sc)
 {
   s7_pointer let;
-  uint64_t id;
+  s7_int id;
 
   sc->args = safe_list_if_possible(sc, opt3_arglen(cdr(sc->code)));
   for (s7_pointer args = cdr(sc->code), p = sc->args; is_pair(args); args = cdr(args), p = cdr(p))
@@ -91880,7 +91882,7 @@ static void op_any_closure_np(s7_scheme *sc)
 static void op_any_closure_np_end(s7_scheme *sc)
 {
   s7_pointer x, z, f;
-  uint64_t id;
+  s7_int id;
 
   sc->args = proper_list_reverse_in_place(sc, sc->args); /* needed in either case -- closure_args(f) is not reversed */
   sc->code = pop_op_stack(sc);
@@ -93204,7 +93206,7 @@ static bool op_read_quote(s7_scheme *sc) /* '<datum> -> (#_quote <datum) in s7, 
   /* can't check for sc->value = sc->nil here because we want ''() to be different from '() */
   if ((sc->safety > IMMUTABLE_VECTOR_SAFETY) &&
       ((is_pair(sc->value)) || (is_any_vector(sc->value)) || (is_string(sc->value))))
-    set_immutable_pair(sc->value);
+    set_immutable(sc->value);
   sc->value = list_2(sc, (sc->symbol_quote) ? sc->quote_symbol : sc->quote_function, sc->value);
   return(stack_top_op(sc) != OP_READ_LIST);
 }
@@ -96662,7 +96664,7 @@ static s7_pointer kmg(s7_scheme *sc, s7_int bytes)
       if (bytes < 1000000000)
 	len = snprintf((char *)block_data(b), 128, "%.1fM", bytes / 1000000.0);
       else len = snprintf((char *)block_data(b), 128, "%.1fG", bytes / 1000000000.0);
-  return(cons(sc, make_integer(sc, bytes), block_to_string(sc, b, len)));
+  return(cons(sc, sc->temp8 = make_integer(sc, bytes), block_to_string(sc, b, len)));
 }
 
 static void add_gc_list_sizes(s7_scheme *sc, s7_pointer mu_let)
@@ -96722,6 +96724,8 @@ static s7_pointer memory_usage(s7_scheme *sc)
 
   s7_pointer mu_let = s7_inlet(sc, sc->nil);
   s7_int gc_loc = gc_protect_1(sc, mu_let);
+
+  check_free_heap_size(sc, 1024);
 
 #if !_WIN32 /* (!MS_WINDOWS) */
   getrusage(RUSAGE_SELF, &info);
@@ -97153,7 +97157,7 @@ static s7_pointer starlet(s7_scheme *sc, s7_int choice)
     case SL_MUFFLE_WARNINGS:               return(make_boolean(sc, sc->muffle_warnings));
     case SL_NUMBER_SEPARATOR:              return(chars[(int)(sc->number_separator)]);
     case SL_OPENLETS:                      return(make_boolean(sc, sc->has_openlets));
-    case SL_OUTPUT_PORT_DATA_SIZE:    return(make_integer(sc, sc->output_file_port_data_size));
+    case SL_OUTPUT_PORT_DATA_SIZE:         return(make_integer(sc, sc->output_file_port_data_size));
     case SL_PRINT_LENGTH:                  return(make_integer(sc, sc->print_length));
     case SL_PROFILE:                       return(make_integer(sc, sc->profile));
     case SL_PROFILE_INFO:                  return(profile_info_out(sc));
@@ -97560,15 +97564,13 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       sc->make_function = val;
       return(val);
 
-    case SL_MAX_FORMAT_LENGTH:
-      sc->max_format_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
-      return(val);
+    case SL_MAX_FORMAT_LENGTH:     sc->max_format_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));     return(val);
 
     case SL_MAX_HEAP_SIZE:
       iv = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
       if (iv < sc->heap_size)  /* heap can't be made smaller currently */
 	starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it can't be less than the current heap size", 43));
-      sc->max_heap_size = iv;
+      else sc->max_heap_size = iv; /* else needed??? */
       return(val);
 
     case SL_MAX_LIST_LENGTH:       sc->max_list_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));       return(val);
@@ -100786,4 +100788,7 @@ int main(int argc, char **argv)
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
  * closure_let is often rootlet but then let_slots(closure_let()) is NULL?? associated with debug.scm/(*s7* 'debug)?
+ * trace clear_all_optimizations case: safety==0?
+ * s7test + safety=1/2/-1, t725+debug=2 at start [s7test+debug=2 runs to the end, so this is a t725 oddity]
+ * (*s7* 'debug) values are not documented (it says "see debug.scm" which has no explicit info)
  */

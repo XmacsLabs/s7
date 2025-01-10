@@ -17,6 +17,8 @@ s7 is a Scheme interpreter.
 
 [mailing list archive] (https://cm-mail.stanford.edu/pipermail/cmdist/)
 
+[searchable cmdist archive] (https://www.mail-archive.com/cmdist@ccrma.stanford.edu)
+
 [svn site (Snd)] (https://sourceforge.net/p/snd/svn1/)
 
 [scheme-for-max] (https://github.com/iainctduncan/scheme-for-max) and [scheme-for-pd](https://github.com/iainctduncan/scheme-for-pd) (Iain Duncan)
