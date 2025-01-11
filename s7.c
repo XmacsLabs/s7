@@ -1184,7 +1184,7 @@ struct s7_scheme {
   s7_int let_number;
   unsigned char number_separator;
   s7_double default_rationalize_error, equivalent_float_epsilon, hash_table_float_epsilon;
-  s7_int default_hash_table_length, initial_string_port_length, print_length, objstr_max_len, history_size, true_history_size, output_file_port_data_size;
+  s7_int default_hash_table_length, initial_string_port_length, print_length, objstr_max_len, history_size, true_history_size, output_port_data_size;
   s7_int max_vector_length, max_string_length, max_list_length, max_vector_dimensions, max_format_length, max_port_data_size, rec_loc, rec_len, show_stack_limit;
   s7_pointer stacktrace_defaults, symbol_printer, make_function, do_body_p;
 
@@ -5917,7 +5917,7 @@ static s7_pointer check_null_sym(s7_scheme *sc, s7_pointer p, s7_pointer sym, in
       s7_pointer slot = symbol_to_local_slot(sc, sym, sc->curlet);
       char *s = describe_type_bits(sc, sym);
       fprintf(stderr, "%s%s[%d]: %s unbound%s\n", bold_text, func, line, symbol_name(sym), unbold_text);
-      fprintf(stderr, "  symbol_id: %" ld64 ", let_id: %" ld64 ", bits: %s", symbol_id(sym), let_id(sc->curlet), s);
+      fprintf(stderr, "  symbol_id: %" ld64 ", let_id: %" ld64 ", %s", symbol_id(sym), let_id(sc->curlet), s);
       free(s);
       if (is_slot(slot)) fprintf(stderr, ", slot: %s", display(slot));
       fprintf(stderr, "\n");
@@ -11388,7 +11388,7 @@ static s7_pointer collect_parameters(s7_scheme *sc, s7_pointer lst, s7_pointer e
 
 typedef enum {OPT_F, OPT_T, OPT_OOPS} opt_t;
 static opt_t optimize(s7_scheme *sc, s7_pointer code, int32_t hop, s7_pointer e);
-static bool tree_is_cyclic(s7_scheme *sc, s7_pointer tree);
+/* static bool tree_is_cyclic(s7_scheme *sc, s7_pointer tree); */
 
 static void clear_all_optimizations(s7_scheme *sc, s7_pointer p)
 {
@@ -11589,8 +11589,13 @@ static s7_pointer make_closure(s7_scheme *sc, s7_pointer args, s7_pointer code, 
   closure_set_body(x, code);                /* in case add_trace or make-function triggers GC, new func (x) needs some legit body for mark_closure */
   if (sc->make_function != sc->F)
     {
+      s7_pointer body;
       gc_protect_via_stack(sc, x);          /* GC protect func during (*s7* 'make-function) */
-      closure_set_body(x, sl_make_function(sc, args, code));
+      body = sl_make_function(sc, args, code);
+      if (!is_pair(body))
+	error_nr(sc, sc->wrong_type_arg_symbol, 
+		 set_elist_2(sc, wrap_string(sc, "(*s7* 'make-function) returned ~S as the new function body, but it should be a pair", 83), body));
+      closure_set_body(x, body);
       unstack_gc_protect(sc);
     }
   if (sc->debug_or_profile)
@@ -29886,11 +29891,15 @@ static void function_write_char(s7_scheme *sc, uint8_t c, s7_pointer port)
   memcpy((void *)sc, (void *)(sc->stack_end), 3 * sizeof(s7_pointer)); /* code/let/args */
 }
 
+#ifndef OUTPUT_PORT_DATA_SIZE
+  #define OUTPUT_PORT_DATA_SIZE 2048
+#endif
+
 static Inline void inline_file_write_char(s7_scheme *sc, uint8_t c, s7_pointer port)
 {
-  if (port_position(port) == sc->output_file_port_data_size)
+  if (port_position(port) == sc->output_port_data_size)
     {
-      fwrite((void *)(port_data(port)), 1, sc->output_file_port_data_size, port_file(port));
+      fwrite((void *)(port_data(port)), 1, sc->output_port_data_size, port_file(port));
       port_position(port) = 0;
     }
   port_data(port)[port_position(port)++] = c;
@@ -29972,7 +29981,7 @@ static void string_write_string(s7_scheme *sc, const char *str, s7_int len, s7_p
 static void file_write_string(s7_scheme *sc, const char *str, s7_int len, s7_pointer pt)
 {
   s7_int new_len = port_position(pt) + len;
-  if (new_len >= sc->output_file_port_data_size)
+  if (new_len >= sc->output_port_data_size)
     {
       if (port_position(pt) > 0)
 	{
@@ -30675,8 +30684,8 @@ s7_pointer s7_open_output_file(s7_scheme *sc, const char *name, const char *mode
   port_file(x) = fp;
   port_needs_free(x) = true;  /* hmm -- I think these are freed via s7_close_output_port -> close_output_port */
   port_position(x) = 0;
-  port_data_size(x) = sc->output_file_port_data_size;
-  block = mallocate(sc, sc->output_file_port_data_size);
+  port_data_size(x) = sc->output_port_data_size;
+  block = mallocate(sc, sc->output_port_data_size);
   port_data_block(x) = block;
   port_data(x) = (uint8_t *)(block_data(block));
   port_port(x)->pf = &output_file_functions;
@@ -33904,10 +33913,11 @@ static /* inline */ void symbol_to_port(s7_scheme *sc, s7_pointer obj, s7_pointe
 	  s7_pointer res;
 	  sc->symbol_printer = sc->F; /* avoid infinite recursion, but what if error in printer so this is not restored? */
 	  res = s7_call(sc, printer, set_plist_1(sc, obj)); /* res should be a string */
-	  sc->symbol_printer = printer;
 	  if (!is_string(res))
 	    error_nr(sc, sc->wrong_type_arg_symbol,
 		     set_elist_2(sc, wrap_string(sc, "(*s7* 'symbol-printer) should return a string: ~S", 49), res));
+	  /* if we restore symbol-printer before the error, and the printer function stupidly returned the bad symbol, infinite loop */
+	  sc->symbol_printer = printer;
 	  port_write_string(port)(sc, string_value(res), string_length(res), port);
 	}
       else
@@ -91642,15 +91652,16 @@ static void op_cl_fa(s7_scheme *sc)
 
 static inline void op_map_for_each_fa(s7_scheme *sc)
 {
-  s7_pointer f = cddr(sc->code), code = sc->code;
-  sc->value = fx_call(sc, f);
+  s7_pointer code = sc->code;
+  sc->value = fx_call(sc, cddr(code));
   if (is_null(sc->value))
     sc->value = (fn_proc_unchecked(code)) ? sc->unspecified : sc->nil;
   else
     {
       sc->code = opt3_pair(code); /* cdadr(code); */
-      f = make_closure_gc_checked(sc, car(sc->code), cdr(sc->code), T_CLOSURE, 1); /* arity=1 checked in optimizer */
-      sc->value = (fn_proc_unchecked(code)) ? g_for_each_closure(sc, f, sc->value) : g_map_closure(sc, f, sc->value);
+      sc->temp8 = make_closure_gc_checked(sc, car(sc->code), cdr(sc->code), T_CLOSURE, 1); /* arity=1 checked in optimizer */
+      sc->value = (fn_proc_unchecked(code)) ? g_for_each_closure(sc, sc->temp8, sc->value) : g_map_closure(sc, sc->temp8, sc->value);
+      sc->temp8 = sc->unused;
     }
 }
 
@@ -91664,8 +91675,9 @@ static void op_map_for_each_faa(s7_scheme *sc)
   else
     {
       sc->code = opt3_pair(code); /* cdadr(code); */
-      f = make_closure_gc_checked(sc, car(sc->code), cdr(sc->code), T_CLOSURE, 2); /* arity=2 checked in optimizer */
-      sc->value = (fn_proc_unchecked(code)) ? g_for_each_closure_2(sc, f, sc->value, sc->args) : g_map_closure_2(sc, f, sc->value, sc->args);
+      sc->temp8 = make_closure_gc_checked(sc, car(sc->code), cdr(sc->code), T_CLOSURE, 2); /* arity=2 checked in optimizer */
+      sc->value = (fn_proc_unchecked(code)) ? g_for_each_closure_2(sc, sc->temp8, sc->value, sc->args) : g_map_closure_2(sc, sc->temp8, sc->value, sc->args);
+      sc->temp8 = sc->unused;
     }
 }
 
@@ -96664,7 +96676,7 @@ static s7_pointer kmg(s7_scheme *sc, s7_int bytes)
       if (bytes < 1000000000)
 	len = snprintf((char *)block_data(b), 128, "%.1fM", bytes / 1000000.0);
       else len = snprintf((char *)block_data(b), 128, "%.1fG", bytes / 1000000000.0);
-  return(cons(sc, sc->temp8 = make_integer(sc, bytes), block_to_string(sc, b, len)));
+  return(cons(sc, make_integer(sc, bytes), block_to_string(sc, b, len)));
 }
 
 static void add_gc_list_sizes(s7_scheme *sc, s7_pointer mu_let)
@@ -96786,7 +96798,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
   }
 
   /* show how many active cells there are of each type (this is where all the memory_usage cpu time goes) */
-  if ((S7_DEBUGGING) && (sc->heap_size >= sc->max_heap_size))
+  if ((S7_DEBUGGING) && (sc->heap_size > sc->max_heap_size))
     fprintf(stderr, "%s[%d]: heap_size: %" ld64 ", max: %" ld64 "\n", __func__, __LINE__, sc->heap_size, sc->max_heap_size);
   for (i = 0; i < NUM_TYPES; i++) ts[i] = 0;
   for (k = 0; k < sc->heap_size; k++)
@@ -97157,7 +97169,7 @@ static s7_pointer starlet(s7_scheme *sc, s7_int choice)
     case SL_MUFFLE_WARNINGS:               return(make_boolean(sc, sc->muffle_warnings));
     case SL_NUMBER_SEPARATOR:              return(chars[(int)(sc->number_separator)]);
     case SL_OPENLETS:                      return(make_boolean(sc, sc->has_openlets));
-    case SL_OUTPUT_PORT_DATA_SIZE:         return(make_integer(sc, sc->output_file_port_data_size));
+    case SL_OUTPUT_PORT_DATA_SIZE:         return(make_integer(sc, sc->output_port_data_size));
     case SL_PRINT_LENGTH:                  return(make_integer(sc, sc->print_length));
     case SL_PROFILE:                       return(make_integer(sc, sc->profile));
     case SL_PROFILE_INFO:                  return(profile_info_out(sc));
@@ -97556,7 +97568,7 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       sl_unsettable_error_nr(sc, sym);
 
     case SL_MAKE_FUNCTION:
-      if ((!is_any_closure(val)) && (val != sc->F))
+      if ((!is_any_closure(val)) && (val != sc->F)) /* is_any_closure: lambda or lambda* (not macros) */
 	starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "a Scheme function or #f", 23));
       if ((val != sc->F) && (!s7_is_aritable(sc, val, 2)))
 	error_nr(sc, sc->wrong_type_arg_symbol,
@@ -97574,7 +97586,15 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       return(val);
 
     case SL_MAX_LIST_LENGTH:       sc->max_list_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));       return(val);
-    case SL_MAX_PORT_DATA_SIZE:    sc->max_port_data_size = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));    return(val);
+
+    case SL_MAX_PORT_DATA_SIZE:
+      iv = s7_integer_clamped_if_gmp(sc, sl_integer_geq_0(sc, sym, val));
+      if (iv < OUTPUT_PORT_DATA_SIZE)
+	error_nr(sc, sc->out_of_range_symbol,
+		 set_elist_3(sc, wrap_string(sc, "(set! (*s7* 'max-port-data-size) ~S): new value should be less than the initial port data size: ~D", 98),
+			     val, wrap_integer(sc, OUTPUT_PORT_DATA_SIZE)));
+      sc->max_port_data_size = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
+      return(val);
 
     case SL_MAX_STACK_SIZE:
       iv = s7_integer_clamped_if_gmp(sc, sl_integer_geq_0(sc, sym, val));
@@ -97606,8 +97626,8 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       return(val);
 
     case SL_OUTPUT_PORT_DATA_SIZE:
-      /* the name is (*s7* 'output-port-data-size) but it affects sc->output_file_port_data_size, and can be confused with inital-string-port-length! */
-      sc->output_file_port_data_size = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
+      /* the name is (*s7* 'output-port-data-size) but it affects sc->output_port_data_size, and can be confused with inital-string-port-length! */
+      sc->output_port_data_size = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
       return(val);
     case SL_PRINT_LENGTH: /* for pairs and vectors this affects how many elements are printed -- confusing */
       sc->print_length = s7_integer_clamped_if_gmp(sc, sl_integer_geq_0(sc, sym, val));
@@ -97644,7 +97664,7 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
     case SL_SYMBOL_PRINTER:
       if (val != sc->F)
 	{
-	  if (!is_any_procedure(val))
+	  if (!is_any_procedure(val)) /* is_any_procedure includes macros? */
 	    error_nr(sc, sc->wrong_type_arg_symbol,
 		     set_elist_4(sc, wrap_string(sc, "(set! (*s7* '~A) ~S): new value is ~A but should be a function or #f", 68),
 				 sym, val, object_type_name(sc, val)));
@@ -100031,10 +100051,7 @@ s7_scheme *s7_init(void)
    */
 
   sc->max_port_data_size = (1LL << 45);
-#ifndef OUTPUT_FILE_PORT_DATA_SIZE
-  #define OUTPUT_FILE_PORT_DATA_SIZE 2048
-#endif
-  sc->output_file_port_data_size = OUTPUT_FILE_PORT_DATA_SIZE;
+  sc->output_port_data_size = OUTPUT_PORT_DATA_SIZE;
 
   /* this has to precede s7_make_* allocations */
   sc->protected_setters_size = INITIAL_PROTECTED_OBJECTS_SIZE;
@@ -100789,6 +100806,9 @@ int main(int argc, char **argv)
  *
  * closure_let is often rootlet but then let_slots(closure_let()) is NULL?? associated with debug.scm/(*s7* 'debug)?
  * trace clear_all_optimizations case: safety==0?
- * s7test + safety=1/2/-1, t725+debug=2 at start [s7test+debug=2 runs to the end, so this is a t725 oddity]
+ * s7test + safety=1/2/-1, t725+debug=2 at start [s7test+debug=2 runs to the end, so this is a t725 oddity], t101 + *s7*?
  * (*s7* 'debug) values are not documented (it says "see debug.scm" which has no explicit info)
+ * tree_has_definers loop, t718
+ * need print-symbol and make-function to be not-macros (lambda* ok?)
+ * fx_cons_ss opt2_sym
  */
