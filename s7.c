@@ -33911,8 +33911,8 @@ static /* inline */ void symbol_to_port(s7_scheme *sc, s7_pointer obj, s7_pointe
 	{
 	  s7_pointer printer = sc->symbol_printer;
 	  s7_pointer res;
-	  sc->symbol_printer = sc->F; /* avoid infinite recursion, but what if error in printer so this is not restored? */
-	  res = s7_call(sc, printer, set_plist_1(sc, obj)); /* res should be a string */
+	  sc->symbol_printer = sc->F; /* avoid infinite recursion */
+	  res = s7_call(sc, printer, set_plist_1(sc, obj));
 	  if (!is_string(res))
 	    error_nr(sc, sc->wrong_type_arg_symbol,
 		     set_elist_2(sc, wrap_string(sc, "(*s7* 'symbol-printer) should return a string: ~S", 49), res));
@@ -46342,7 +46342,7 @@ in the table; it is a cons, defaulting to (cons #t #t) which means any types are
       if (size <= 0)                      /* we need s7_int here to catch (make-hash-table most-negative-fixnum) etc */
 	out_of_range_error_nr(sc, caller, int_one, p, wrap_string(sc, "it should be a positive integer", 31));
       if ((size > sc->max_vector_length) ||
-	  (size >= (1LL << 32LL)))
+	  (size >= (1LL << 32LL))) /* s7test tests >= */
 	out_of_range_error_nr(sc, caller, int_one, p, it_is_too_large_string);
 
       if (is_not_null(cdr(args)))
@@ -56662,7 +56662,7 @@ static s7_pointer fx_vref_ot(s7_scheme *sc, s7_pointer arg) {return(vector_ref_p
 static s7_pointer fx_vref_gt(s7_scheme *sc, s7_pointer arg) {return(vector_ref_p_pp(sc, lookup_global(sc, cadr(arg)), t_lookup(sc, opt2_sym(cdr(arg)), arg)));}
 static s7_pointer fx_sref_ss(s7_scheme *sc, s7_pointer arg) {return(string_ref_p_pp(sc, lookup(sc, cadr(arg)), lookup(sc, opt2_sym(cdr(arg)))));}
 static s7_pointer fx_sref_su(s7_scheme *sc, s7_pointer arg) {return(string_ref_p_pp(sc, lookup(sc, cadr(arg)), u_lookup(sc, opt2_sym(cdr(arg)), arg)));}
-static s7_pointer fx_cons_ss(s7_scheme *sc, s7_pointer arg) {return(cons(sc, lookup(sc, cadr(arg)), lookup(sc, opt2_sym(cdr(arg)))));}
+static s7_pointer fx_cons_ss(s7_scheme *sc, s7_pointer arg) {return(cons(sc, lookup(sc, cadr(arg)), lookup(sc, caddr(arg))));}
 static s7_pointer fx_cons_st(s7_scheme *sc, s7_pointer arg) {return(cons(sc, s_lookup(sc, cadr(arg), arg), t_lookup(sc, opt2_sym(cdr(arg)), arg)));}
 static s7_pointer fx_cons_ts(s7_scheme *sc, s7_pointer arg) {return(cons(sc, t_lookup(sc, cadr(arg), arg), lookup(sc, opt2_sym(cdr(arg)))));}
 static s7_pointer fx_cons_tu(s7_scheme *sc, s7_pointer arg) {return(cons(sc, t_lookup(sc, cadr(arg), arg), u_lookup(sc, opt2_sym(cdr(arg)), arg)));}
@@ -97479,7 +97479,16 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       return(sl_set_debug(sc, sym, val));
 
     case SL_DEFAULT_HASH_TABLE_LENGTH:
-      sc->default_hash_table_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
+      iv = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val)); /* protect against this being 9223372036854775807, then being used as a hash-table's size */
+      if (iv > sc->max_vector_length)       /* these range limits are from g_make_hash_table */
+	error_nr(sc, sc->out_of_range_symbol,
+		 set_elist_3(sc, wrap_string(sc, "(set! (*s7* 'default-hash-table-length) ~D), which is greater than (*s7* 'max-vector-length), ~D", 96),
+			     val, wrap_integer(sc, sc->max_vector_length)));
+      if (iv >= (1LL << 32LL)) /* why this?? */
+	error_nr(sc, sc->out_of_range_symbol,
+		 set_elist_3(sc, wrap_string(sc, "(set! (*s7* 'default-hash-table-length) ~D), which is >= ~D", 59),
+			     val, wrap_integer(sc, 1LL << 32LL)));
+      sc->default_hash_table_length = iv;
       return(val);
 
     case SL_DEFAULT_RANDOM_STATE:
@@ -97561,7 +97570,12 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 #endif
       return(val);
 
-    case SL_INITIAL_STRING_PORT_LENGTH: sc->initial_string_port_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val)); return(val);
+    case SL_INITIAL_STRING_PORT_LENGTH:
+      iv = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val)); return(val);
+      if (iv > 1048576) /* just a guess, some joker might try setting this to (*s7* 'most-positive-fixnum)... */
+	starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it doesn't need to be this big", 30));
+      sc->initial_string_port_length = iv;
+      return(val);
 
     case SL_MAJOR_VERSION:
     case SL_MINOR_VERSION:
