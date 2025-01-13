@@ -11390,14 +11390,25 @@ typedef enum {OPT_F, OPT_T, OPT_OOPS} opt_t;
 static opt_t optimize(s7_scheme *sc, s7_pointer code, int32_t hop, s7_pointer e);
 /* static bool tree_is_cyclic(s7_scheme *sc, s7_pointer tree); */
 
+#if S7_DEBUGGING
+  static s7_int clear_counts = 0;
+#endif
+
 static void clear_all_optimizations(s7_scheme *sc, s7_pointer p)
 {
   /* I believe that we would not have been optimized to begin with if the tree were circular,
    *   and this tree is supposed to be a function call + args -- a circular list here is a bug.
    */
+#if S7_DEBUGGING
+  clear_counts++;
+  if (clear_counts > 10000)
+    {
+      fprintf(stderr, "infinite recursion? (%d)\n", sc->safety);
+      abort();
+    }
+#endif
   if (is_pair(p))
     {
-      /* if ((S7_DEBUGGING) && (tree_is_cyclic(sc, p) == 0)) {fprintf(stderr, "%s[%d]: tree is cyclic\n", __func__, __LINE__); if (sc->stop_at_error) abort();} */
       if ((is_optimized(p)) &&
  	  (((optimize_op(p) >= FIRST_UNHOPPABLE_OP) ||  /* avoid clearing hop ops, fx_function and op_unknown* need to be cleared */
 	    (!op_has_hop(p)))))
@@ -11511,7 +11522,12 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool named)
   clear_big_symbol_set(sc);
   if ((!is_either_bacro(mac)) &&
       (optimize(sc, body, 1, collect_parameters(sc, closure_args(mac), sc->nil)) == OPT_OOPS))
+    {
+#if S7_DEBUGGING
+      clear_counts = 0;
+#endif
     clear_all_optimizations(sc, body);
+    }
   clear_big_symbol_set(sc);
 
   if (sc->debug > 1) /* no profile here */
@@ -40062,7 +40078,13 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
       if (!s7_is_aritable(sc, eq_func, 2))
 	wrong_type_error_nr(sc, sc->assoc_symbol, 3, eq_func, an_eq_func_string);
       if (is_null(x)) return(sc->F);
-      if ((is_any_macro(eq_func)) && (!is_c_macro(eq_func))) clear_all_optimizations(sc, closure_body(eq_func));
+      if ((is_any_macro(eq_func)) && (!is_c_macro(eq_func))) 
+	{
+#if S7_DEBUGGING
+      clear_counts = 0;
+#endif
+	clear_all_optimizations(sc, closure_body(eq_func));
+	}
       y = list_1(sc, copy_proper_list(sc, args));
       set_opt1_fast(y, x);
       set_opt2_slow(y, x);
@@ -40478,7 +40500,13 @@ member uses equal?  If 'func' is a function of 2 arguments, it is used for the c
       if (!s7_is_aritable(sc, eq_func, 2))
 	wrong_type_error_nr(sc, sc->member_symbol, 3, eq_func, an_eq_func_string);
       if (is_null(x)) return(sc->F);
-      if ((is_any_macro(eq_func)) && (!is_c_macro(eq_func))) clear_all_optimizations(sc, closure_body(eq_func));
+      if ((is_any_macro(eq_func)) && (!is_c_macro(eq_func))) 
+	{
+#if S7_DEBUGGING
+      clear_counts = 0;
+#endif
+	clear_all_optimizations(sc, closure_body(eq_func));
+	}
       y = list_1(sc, copy_proper_list(sc, args)); /* this could probably be handled with a counter cell (cdr here is unused) */
       set_opt1_fast(y, x);
       set_opt2_slow(y, x);
@@ -44647,8 +44675,13 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
     wrong_type_error_nr(sc, sc->sort_symbol, 2, lessp, a_normal_procedure_string);
   if (!s7_is_aritable(sc, lessp, 2))
     wrong_type_error_nr(sc, sc->sort_symbol, 2, lessp, an_eq_func_string);
-  if ((is_any_macro(lessp)) && (!is_c_macro(lessp))) clear_all_optimizations(sc, closure_body(lessp));
-
+  if ((is_any_macro(lessp)) && (!is_c_macro(lessp)))
+    {
+#if S7_DEBUGGING
+      clear_counts = 0;
+#endif
+    clear_all_optimizations(sc, closure_body(lessp));
+    }
   sort_func = NULL;
   sc->sort_f = NULL;
 
@@ -55589,8 +55622,12 @@ pass (rootlet):\n\
     }
   else
     if (is_optimized(sc->code))
+      {
+#if S7_DEBUGGING
+      clear_counts = 0;
+#endif
       clear_all_optimizations(sc, sc->code); /* clears "unsafe" ops, not all ops */
-
+      }
   set_current_code(sc, sc->code);
   if (stack_top(sc) < 12)
     push_stack_op(sc, OP_BARRIER);
@@ -77990,7 +78027,12 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
       else lst = sc->nil;
 
       if (optimize(sc, body, 1, cleared_pars = collect_parameters(sc, pars, lst)) == OPT_OOPS)
+	{
+#if S7_DEBUGGING
+      clear_counts = 0;
+#endif
 	clear_all_optimizations(sc, body);
+	}
       else
 	if (result >= RECUR_BODY)
 	  {
@@ -78080,7 +78122,12 @@ static int32_t check_lambda(s7_scheme *sc, s7_pointer form, bool opt)
 		   /* ((sc->op_stack_now > sc->op_stack) && (is_c_function((*(sc->op_stack_now - 1)))) && (is_scope_safe((*(sc->op_stack_now - 1))))) ? 1 : 0, */
 		   /* this works except when someone resets outlet(curlet) after defining a local function! */
 		   collect_parameters(sc, car(code), sc->nil)) == OPT_OOPS)
+	{
+#if S7_DEBUGGING
+      clear_counts = 0;
+#endif
 	clear_all_optimizations(sc, body);
+	}
     }
   clear_big_symbol_set(sc);
   pair_set_syntax_op(form, OP_LAMBDA_UNCHECKED);
@@ -78120,7 +78167,12 @@ static void check_lambda_star(s7_scheme *sc)
       (stack_top_op(sc) != OP_DEFINE1))
     {
       if (optimize(sc, cdr(code), 0, collect_parameters(sc, car(code), sc->nil)) == OPT_OOPS)
+	{
+#if S7_DEBUGGING
+      clear_counts = 0;
+#endif
 	clear_all_optimizations(sc, cdr(code));
+	}
     }
   else optimize_lambda(sc, false, sc->unused, car(code), cdr(code));
   clear_big_symbol_set(sc);
@@ -86836,7 +86888,12 @@ static void apply_vector(s7_scheme *sc)                    /* -------- vector as
 {
   /* sc->code is the vector, sc->args is the list of indices */
   if (is_null(sc->args))                  /* (#2d((1 2) (3 4))) */
-    wrong_number_of_arguments_error_nr(sc, "implicit vector-ref needs an index argument: (~A)", 49, sc->code);
+    {
+      if (vector_length(sc->code) == 0)                    /* ("") */
+	error_nr(sc, make_symbol(sc, "inapplicable-vector", 19),
+		 set_elist_2(sc, wrap_string(sc, "(~S) can't be treated as an implicit vector application", 55), sc->code));
+      wrong_number_of_arguments_error_nr(sc, "implicit vector-ref needs an index argument: (~A)", 49, sc->code);
+    }
   if ((is_null(cdr(sc->args))) &&
       (s7_is_integer(car(sc->args))) &&
       (vector_rank(sc->code) == 1))
@@ -86853,8 +86910,13 @@ static void apply_vector(s7_scheme *sc)                    /* -------- vector as
 static void apply_string(s7_scheme *sc)                    /* -------- string as applicable object -------- */
 {
   if (!is_pair(sc->args))
-    error_nr(sc, sc->wrong_number_of_args_symbol,
-	     set_elist_3(sc, wrap_string(sc, "impicit string-ref needs an index argument: (~S~{~^ ~S~})", 57), sc->code, sc->args));
+    {
+      if (string_length(sc->code) == 0)                    /* ("") */
+	error_nr(sc, make_symbol(sc, "inapplicable-string", 19),
+		 set_elist_2(sc, wrap_string(sc, "(~S) can't be treated as an implicit string application", 55), sc->code));
+      error_nr(sc, sc->wrong_number_of_args_symbol,        /* (a string") */
+	       set_elist_3(sc, wrap_string(sc, "impicit string-ref needs an index argument: (~S~{~^ ~S~})", 57), sc->code, sc->args));
+    }
   if (!is_null(cdr(sc->args)))
     error_nr(sc, sc->wrong_number_of_args_symbol,
 	     set_elist_3(sc, wrap_string(sc, "string ref: too many indices: (~S~{~^ ~S~})", 43), sc->code, sc->args));
@@ -96074,6 +96136,9 @@ static s7_pointer eval(s7_scheme *sc, opcode_t first_op)
 
       /* this code is reached from OP_CLEAR_OPTS and many others where the optimization has turned out to be incorrect, search for !c_function_is_ok -> break */
       if ((S7_DEBUGGING) && (tree_is_cyclic(sc, sc->code))) fprintf(stderr, "%s[%d]: cyclic %s\n", __func__, __LINE__, display(sc->code)); /* never hit? */
+#if S7_DEBUGGING
+      clear_counts = 0;
+#endif
       clear_all_optimizations(sc, sc->code);
 
     UNOPT:
@@ -97678,7 +97743,7 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
     case SL_SYMBOL_PRINTER:
       if (val != sc->F)
 	{
-	  if (!is_any_procedure(val)) /* is_any_procedure includes macros? */
+	  if (!is_any_closure(val))
 	    error_nr(sc, sc->wrong_type_arg_symbol,
 		     set_elist_4(sc, wrap_string(sc, "(set! (*s7* '~A) ~S): new value is ~A but should be a function or #f", 68),
 				 sym, val, object_type_name(sc, val)));
@@ -100819,10 +100884,10 @@ int main(int argc, char **argv)
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
  * closure_let is often rootlet but then let_slots(closure_let()) is NULL?? associated with debug.scm/(*s7* 'debug)?
- * trace clear_all_optimizations case: safety==0?
+ * trace clear_all_optimizations case
  * s7test + safety=1/2/-1, t725+debug=2 at start [s7test+debug=2 runs to the end, so this is a t725 oddity], t101 + *s7*?
  * (*s7* 'debug) values are not documented (it says "see debug.scm" which has no explicit info)
+ *   first guess: 0: off, 3: trace?? 1 and 2 are used in s7test -- this is a mess
  * tree_has_definers loop, t718
- * need print-symbol and make-function to be not-macros (lambda* ok?)
- * fx_cons_ss opt2_sym
+ * fx_cons_ss opt2_sym, opt2_con -> opt1|3? (t718)
  */
