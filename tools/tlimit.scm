@@ -558,3 +558,5 @@
 	      (format p ")) (f))~%")))))
   
   (report-time "vars + 3-arg func" 3 str))
+
+(exit)
