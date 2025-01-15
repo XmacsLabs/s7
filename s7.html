@@ -5825,8 +5825,7 @@ most-positive-fixnum          if not using gmp, the most positive integer ("fixn
 most-negative-fixnum          as above, but negative
 number-separator              #\null
 symbol-quote?                 #f, so in (quote x) "quote" is a #_quote (a c-function); set to #t to get quote as a symbol
-symbol-printer                #f, a function to print symbols whose names contain unusual character
-make-function                 #f, a function that is called when a new function is created
+symbol-printer                #f, a function to print symbols whose names contain unusual characters
 
 safety                        0 (see below)
 undefined-identifier-warnings #f
@@ -5967,8 +5966,6 @@ list will have the entry 'number-separator if s7 was compiled with WITH_NUMBER_S
 
 <p>(*s7* 'symbol-printer) is invoked by object-&gt;string when it has to print a symbol whose
 name can normally only be handled by the <a href="#weirdsymbols">symbol</a> function.
-(*s7* 'make-function) is a function called when a Scheme function is created.  It is aimed
-at argument type checks and so on.  See s7test.scm for examples.
 </p>
 
 
