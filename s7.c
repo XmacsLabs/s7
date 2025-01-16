@@ -3797,10 +3797,10 @@ static void set_type_1(s7_pointer p, uint64_t f, const char *func, int32_t line)
   p->explicit_free_line = 0;
   p->uses++;
   if (((f) & TYPE_MASK) == T_FREE)
-    fprintf(stderr, "%d: set free, %p type to %" ld64 "\n", __LINE__, p, (s7_int)(f));
+    fprintf(stderr, "%d: set free, %p type to #x%" PRIx64 "\n", __LINE__, p, (s7_int)(f));
   else
     if (((f) & TYPE_MASK) >= NUM_TYPES)
-      fprintf(stderr, "%d: set invalid type, %p type to %" ld64 "\n", __LINE__, p, (s7_int)(f));
+      fprintf(stderr, "%d: set invalid type, %p type to #x%" PRIx64 "\n", __LINE__, p, (s7_int)(f));
     else
       {
 	if (((full_type(p) & T_IMMUTABLE) != 0) && ((full_type(p) != (uint64_t)(f))))
@@ -4016,13 +4016,14 @@ static void try_to_call_gc(s7_scheme *sc);
    */
 #else
 
+#define FINIT NULL /* or sc->unused */
 #define new_cell(Sc, Obj, Type)						\
   do {									\
     if (Sc->gc_in_progress) fprintf(stderr, "%s[%d]: new_cell during GC\n", __func__, __LINE__); \
     if (Sc->free_heap_top <= Sc->free_heap_trigger) try_to_call_gc(Sc); \
     Obj = (*(--(Sc->free_heap_top)));					\
     Obj->debugger_bits = 0; Obj->gc_func = NULL; Obj->gc_line = 0;	\
-    Obj->object.cons.opt1 = Sc->unused; Obj->object.cons.o2.opt2 = Sc->unused; Obj->object.cons.o3.opt3 = Sc->unused; \
+    Obj->object.cons.car = FINIT; Obj->object.cons.cdr = FINIT; Obj->object.cons.opt1 = FINIT; Obj->object.cons.o2.opt2 = FINIT; Obj->object.cons.o3.opt3 = FINIT; \
     set_full_type(Obj, Type);						\
   } while (0)
 
@@ -4032,7 +4033,7 @@ static void try_to_call_gc(s7_scheme *sc);
     Obj = (*(--(Sc->free_heap_top)));					\
     if (Sc->free_heap_top < Sc->free_heap) {fprintf(stderr, "%s[%d]: free heap exhausted\n", __func__, __LINE__); abort();}\
     Obj->debugger_bits = 0; Obj->gc_func = NULL; Obj->gc_line = 0;	\
-    Obj->object.cons.opt1 = Sc->unused; Obj->object.cons.o2.opt2 = Sc->unused; Obj->object.cons.o3.opt3 = Sc->unused; \
+    Obj->object.cons.car = FINIT; Obj->object.cons.cdr = FINIT; Obj->object.cons.opt1 = FINIT; Obj->object.cons.o2.opt2 = FINIT; Obj->object.cons.o3.opt3 = FINIT; \
     set_full_type(Obj, Type);						\
     } while (0)
 #endif
@@ -5620,7 +5621,7 @@ static const char *opt3_role_name(uint64_t role)
 static void show_opt1_bits(s7_pointer p, const char *func, int32_t line, uint64_t role)
 {
   char *bits = show_debugger_bits(p);
-  fprintf(stderr, "%s%s[%d]%s: opt1: %p->%p wants %s, debugger bits are %" ld64 "%s but expects %" ld64,
+  fprintf(stderr, "%s%s[%d]%s: opt1: %p->%p wants %s, debugger bits are #x%" PRIx64 "%s but expects #x%" PRIx64,
 	  bold_text, func, line, unbold_text,
 	  p, p->object.cons.opt1, opt1_role_name(role), p->debugger_bits, bits, (s7_int)role);
   free(bits);
@@ -5677,7 +5678,7 @@ static void set_opt1_hash_1(s7_pointer p, uint64_t x)
 static void show_opt2_bits(s7_pointer p, const char *func, int32_t line, uint64_t role)
 {
   char *bits = show_debugger_bits(p);
-  fprintf(stderr, "%s%s[%d]%s: %s opt2: %p->%p wants %s, debugger bits are %" ld64 "%s but expects %" ld64 " %s",
+  fprintf(stderr, "%s%s[%d]%s: %s opt2: %p->%p wants %s, debugger bits are #x%" PRIx64 "%s but expects #x%" PRIx64 " %s",
 	  bold_text, func, line, unbold_text,
 	  display(p), p, p->object.cons.o2.opt2, opt2_role_name(role), p->debugger_bits, bits, (s7_int)role, opt2_role_name(role));
   free(bits);
@@ -5781,7 +5782,7 @@ static void set_opt2_name_1(s7_pointer p, const char *str)
 static void show_opt3_bits(s7_pointer p, const char *func, int32_t line, uint64_t role)
 {
   char *bits = show_debugger_bits(p);
-  fprintf(stderr, "%s%s[%d]%s: opt3: %s %" ld64 "%s", bold_text, func, line, unbold_text, opt3_role_name(role), p->debugger_bits, bits);
+  fprintf(stderr, "%s%s[%d]%s: opt3: %s #x%" PRIx64 "%s", bold_text, func, line, unbold_text, opt3_role_name(role), p->debugger_bits, bits);
   free(bits);
 }
 
@@ -11391,10 +11392,21 @@ typedef enum {OPT_F, OPT_T, OPT_OOPS} opt_t;
 static opt_t optimize(s7_scheme *sc, s7_pointer code, int32_t hop, s7_pointer e);
 static bool tree_is_cyclic(s7_scheme *sc, s7_pointer tree);
 
-static void clear_all_optimizations_1(s7_scheme *sc, s7_pointer p)
+#if S7_DEBUGGING
+  static void clear_all_optimizations_1(s7_scheme *sc, s7_pointer p, s7_int count)
+#else
+  static void clear_all_optimizations_1(s7_scheme *sc, s7_pointer p)
+#endif
 {
   if (is_pair(p))
     {
+#if S7_DEBUGGING
+      if (count > 10000)
+	{
+	  fprintf(stderr, "infinite recursion? %s\n", display(p));
+	  if (sc->stop_at_error) abort();
+	}
+#endif
       if ((is_optimized(p)) &&
  	  (((optimize_op(p) >= FIRST_UNHOPPABLE_OP) ||  /* avoid clearing hop ops, fx_function and op_unknown* need to be cleared */
 	    (!op_has_hop(p)))))
@@ -11402,15 +11414,24 @@ static void clear_all_optimizations_1(s7_scheme *sc, s7_pointer p)
 	  clear_optimized(p);     /* includes T_SYNTACTIC */
 	  clear_optimize_op(p);
 	}
+#if S7_DEBUGGING
+      clear_all_optimizations_1(sc, cdr(p), count + 1);
+      clear_all_optimizations_1(sc, car(p), count + 1);
+#else
       clear_all_optimizations_1(sc, cdr(p));
       clear_all_optimizations_1(sc, car(p));
+#endif
     }
 }
 
 static void clear_all_optimizations(s7_scheme *sc, s7_pointer p)
 {
   if ((sc->safety == NO_SAFETY) || (!tree_is_cyclic(sc, p)))
+#if S7_DEBUGGING
+    clear_all_optimizations_1(sc, p, 0);
+#else
     clear_all_optimizations_1(sc, p);
+#endif
 }
 
 static s7_pointer add_trace(s7_scheme *sc, s7_pointer code)
@@ -40466,7 +40487,9 @@ member uses equal?  If 'func' is a function of 2 arguments, it is used for the c
       y = list_1(sc, copy_proper_list(sc, args)); /* this could probably be handled with a counter cell (cdr here is unused) */
       set_opt1_fast(y, x);
       set_opt2_slow(y, x);
+      begin_temp(sc->x, y);
       push_stack(sc, OP_MEMBER_IF, list_1(sc, y), eq_func);
+      end_temp(sc->x);
       if (needs_copied_args(eq_func))
 	push_stack(sc, OP_APPLY, list_2_unchecked(sc, car(args), car(x)), eq_func);
       else
@@ -40482,7 +40505,7 @@ member uses equal?  If 'func' is a function of 2 arguments, it is used for the c
   if (is_simple(obj))
     return(s7_memq(sc, obj, x));
   /* the only things that aren't simply == here are c_object, string, number, vector, hash-table, pair, and c_pointer, but all the other cases are unlikely */
-  if (is_number(obj))
+  if (is_number(obj))  
     return(memv_number(sc, obj, x));
   return(member(sc, obj, x));
 }
@@ -56093,9 +56116,9 @@ static s7_pointer fx_add_i_random(s7_scheme *sc, s7_pointer arg)
 #endif
 
 static s7_pointer fx_add_sf(s7_scheme *sc, s7_pointer arg) {return(g_add_xf(sc, lookup(sc, cadr(arg)), real(opt1_con(cdr(arg))), 1));}
-static s7_pointer fx_add_fs(s7_scheme *sc, s7_pointer arg) {return(g_add_xf(sc, lookup(sc, opt2_sym(cdr(arg))), real(cadr(arg)), 2));}
+static s7_pointer fx_add_fs(s7_scheme *sc, s7_pointer arg) {return(g_add_xf(sc, lookup(sc, caddr(arg)), real(cadr(arg)), 2));}
 static s7_pointer fx_add_tf(s7_scheme *sc, s7_pointer arg) {return(g_add_xf(sc, t_lookup(sc, cadr(arg), arg), real(opt1_con(cdr(arg))), 1));}
-static s7_pointer fx_add_ft(s7_scheme *sc, s7_pointer arg) {return(g_add_xf(sc, t_lookup(sc, opt2_sym(cdr(arg)), arg), real(cadr(arg)), 2));}
+static s7_pointer fx_add_ft(s7_scheme *sc, s7_pointer arg) {return(g_add_xf(sc, t_lookup(sc, caddr(arg), arg), real(cadr(arg)), 2));}
 
 
 #define fx_add_s1_any(Name, Lookup) \
@@ -56212,7 +56235,7 @@ fx_subtract_ss_any(fx_subtract_us, u_lookup, s_lookup)
 static s7_pointer fx_subtract_fs(s7_scheme *sc, s7_pointer arg)
 {
   s7_double n = real(cadr(arg));
-  s7_pointer x = lookup(sc, opt2_sym(cdr(arg))); /* caddr(arg) */
+  s7_pointer x = lookup(sc, caddr(arg));
   switch (type(x))
     {
     case T_INTEGER: return(make_real(sc, n - integer(x)));
@@ -56600,8 +56623,8 @@ fx_char_eq_sc_any(fx_char_eq_tc, t_lookup)
 #define fx_c_cs_any(Name, Lookup) \
   static s7_pointer Name(s7_scheme *sc, s7_pointer arg) \
   { \
-    set_car(sc->t2_1, opt1_con(cdr(arg))); /* cadr(arg) or cadadr */ \
-    set_car(sc->t2_2, Lookup(sc, opt2_sym(cdr(arg)), arg)); /* caddr(arg) */ \
+    set_car(sc->t2_1, opt1_con(cdr(arg)));                  /* cadr(arg) or cadadr */ \
+    set_car(sc->t2_2, Lookup(sc, caddr(arg), arg)); \
     return(fn_proc(arg)(sc, sc->t2_1)); \
   }
 
@@ -56612,11 +56635,11 @@ fx_c_cs_any(fx_c_cu, u_lookup)
 
 static s7_pointer fx_c_ct_direct(s7_scheme *sc, s7_pointer arg)
 {
-  return(((s7_p_pp_t)opt3_direct(cdr(arg)))(sc, opt1_con(cdr(arg)), t_lookup(sc, opt2_sym(cdr(arg)), arg)));
+  return(((s7_p_pp_t)opt3_direct(cdr(arg)))(sc, opt1_con(cdr(arg)), t_lookup(sc, caddr(arg), arg)));
 }
 
-static s7_pointer fx_cons_cs(s7_scheme *sc, s7_pointer arg) {return(cons(sc, opt1_con(cdr(arg)), lookup(sc, opt2_sym(cdr(arg)))));}
-static s7_pointer fx_cons_ct(s7_scheme *sc, s7_pointer arg) {return(cons(sc, opt1_con(cdr(arg)), t_lookup(sc, opt2_sym(cdr(arg)), arg)));}
+static s7_pointer fx_cons_cs(s7_scheme *sc, s7_pointer arg) {return(cons(sc, opt1_con(cdr(arg)), lookup(sc, caddr(arg))));}
+static s7_pointer fx_cons_ct(s7_scheme *sc, s7_pointer arg) {return(cons(sc, opt1_con(cdr(arg)), t_lookup(sc, caddr(arg), arg)));}
 
 
 #define fx_c_ss_any(Name, Lookup1, Lookup2) \
@@ -56668,14 +56691,14 @@ fx_c_ss_direct_any(fx_c_tU_direct, t_lookup, U_lookup)
 static s7_pointer fx_multiply_ss(s7_scheme *sc, s7_pointer arg) {return(multiply_p_pp(sc, lookup(sc, cadr(arg)), lookup(sc, opt1_sym(cdr(arg)))));}
 static s7_pointer fx_multiply_ts(s7_scheme *sc, s7_pointer arg) {return(multiply_p_pp(sc, t_lookup(sc, cadr(arg), arg), lookup(sc, opt1_sym(cdr(arg)))));}
 /* static s7_pointer fx_multiply_Ts(s7_scheme *sc, s7_pointer arg) {return(multiply_p_pp(sc, T_lookup(sc, cadr(arg), arg), lookup(sc, opt1_sym(cdr(arg)))));} */
-static s7_pointer fx_multiply_fs(s7_scheme *sc, s7_pointer arg) {return(g_mul_xf(sc, lookup(sc, opt2_sym(cdr(arg))), real(cadr(arg)), 2));}
+static s7_pointer fx_multiply_fs(s7_scheme *sc, s7_pointer arg) {return(g_mul_xf(sc, lookup(sc, caddr(arg)), real(cadr(arg)), 2));}
 static s7_pointer fx_multiply_sf(s7_scheme *sc, s7_pointer arg) {return(g_mul_xf(sc, lookup(sc, cadr(arg)), real(opt1_con(cdr(arg))), 1));}
 static s7_pointer fx_multiply_tf(s7_scheme *sc, s7_pointer arg) {return(g_mul_xf(sc, t_lookup(sc, cadr(arg), arg), real(opt1_con(cdr(arg))), 1));}
 static s7_pointer fx_multiply_si(s7_scheme *sc, s7_pointer arg) {return(g_mul_xi(sc, lookup(sc, cadr(arg)), integer(opt1_con(cdr(arg))), 1));}
 static s7_pointer fx_multiply_ti(s7_scheme *sc, s7_pointer arg) {return(g_mul_xi(sc, t_lookup(sc, cadr(arg), arg), integer(opt1_con(cdr(arg))), 1));}
 static s7_pointer fx_multiply_ui(s7_scheme *sc, s7_pointer arg) {return(g_mul_xi(sc, u_lookup(sc, cadr(arg), arg), integer(opt1_con(cdr(arg))), 1));}
-static s7_pointer fx_multiply_is(s7_scheme *sc, s7_pointer arg) {return(g_mul_xi(sc, lookup(sc, opt2_sym(cdr(arg))), integer(cadr(arg)), 2));}
-static s7_pointer fx_multiply_it(s7_scheme *sc, s7_pointer arg) {return(g_mul_xi(sc, t_lookup(sc, opt2_sym(cdr(arg)), arg), integer(cadr(arg)), 2));}
+static s7_pointer fx_multiply_is(s7_scheme *sc, s7_pointer arg) {return(g_mul_xi(sc, lookup(sc, caddr(arg)), integer(cadr(arg)), 2));}
+static s7_pointer fx_multiply_it(s7_scheme *sc, s7_pointer arg) {return(g_mul_xi(sc, t_lookup(sc, caddr(arg), arg), integer(cadr(arg)), 2));}
 static s7_pointer fx_multiply_tu(s7_scheme *sc, s7_pointer arg) {return(multiply_p_pp(sc, t_lookup(sc, cadr(arg), arg), u_lookup(sc, opt1_sym(cdr(arg)), arg)));}
 
 static inline s7_pointer fx_sqr_1(s7_scheme *sc, s7_pointer x)
@@ -59440,7 +59463,7 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 	      if ((car(arg) == sc->subtract_symbol) && (is_t_real(cadr(arg)))) return(fx_subtract_fs);
 	      if ((car(arg) == sc->num_eq_symbol) && (cadr(arg) == int_zero))
 		{
-		  set_opt3_sym(arg, caddr(arg)); /* opt3_location is in use, but the num_eq is ok, so only symbol might care about that info? (or use cdr(arg)) */
+		  set_opt3_sym(arg, caddr(arg)); /* opt3_location is in use, but the num_eq is ok, so only symbol might care about that info? */
 		  return(fx_num_eq_0s);
 		}
 	      if (car(arg) == sc->multiply_symbol)
@@ -73997,8 +74020,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 		    }
 		  else
 		    {
-		      set_opt1_con(cdr(expr), arg1);
-		      set_opt2_sym(cdr(expr), arg2);
+		      set_opt1_con(cdr(expr), arg1);   /* set_opt2_sym(cdr(expr), arg2); */
 		      set_optimize_op(expr, hop + OP_SAFE_C_CS);
 		    }
 	      set_optimized(expr);
@@ -74046,8 +74068,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 			}
 		      else
 			{
-			  set_opt1_con(cdr(expr), arg1);
-			  set_opt2_sym(cdr(expr), arg2);
+			  set_opt1_con(cdr(expr), arg1);   /* set_opt2_sym(cdr(expr), arg2); */
 			  set_optimize_op(expr, hop + OP_SAFE_C_CS);
 			}}
 		  return(OPT_T);
@@ -74174,8 +74195,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 		    }
 		  else
 		    {
-		      set_opt1_con(cdr(expr), cadr(arg1));
-		      set_opt2_sym(cdr(expr), arg2);
+		      set_opt1_con(cdr(expr), cadr(arg1));   /* set_opt2_sym(cdr(expr), arg2); */
 		      set_optimize_op(expr, hop + OP_SAFE_C_CS);
 		    }
 		  choose_c_function(sc, expr, func, 2);
@@ -79544,19 +79564,18 @@ static /* inline */ bool op_let_star1(s7_scheme *sc)
       s7_pointer name = car(sc->code), body = cddr(sc->code), args = cadr(sc->code);
       /* now we need to declare the new function (in the outer let) -- must delay this because init might reference same-name outer func */
       /*   but the let name might be shadowed by a variable: (let* x ((x 1))...) so the name's symbol_id can be incorrect */
+      begin_temp(sc->x, make_closure_unchecked(sc, args, body, T_CLOSURE_STAR, (is_null(args)) ? 0 : CLOSURE_ARITY_NOT_SET));
       if (symbol_id(name) > let_id(let_outlet(sc->curlet)))
 	{
 	  s7_int cur_id = symbol_id(name);
 	  s7_pointer cur_slot = local_slot(name);
 	  symbol_set_id_unchecked(name, let_id(let_outlet(sc->curlet)));
-	  add_slot_checked(sc, let_outlet(sc->curlet), name,
-			   make_closure_unchecked(sc, args, body, T_CLOSURE_STAR, (is_null(args)) ? 0 : CLOSURE_ARITY_NOT_SET));
+	  add_slot_checked(sc, let_outlet(sc->curlet), name, sc->x);
 	  symbol_set_id_unchecked(name, cur_id);
 	  set_local_slot(name, cur_slot);
 	}
-      else add_slot_checked(sc, let_outlet(sc->curlet), name,
-			    make_closure_unchecked(sc, args, body, T_CLOSURE_STAR, (is_null(args)) ? 0 : CLOSURE_ARITY_NOT_SET));
-
+      else add_slot_checked(sc, let_outlet(sc->curlet), name, sc->x);
+      end_temp(sc->x);
       sc->code = body;
     }
   else sc->code = T_Pair(cdr(sc->code));
@@ -93659,10 +93678,8 @@ static bool op_unknown_gg(s7_scheme *sc)
 	    {
 	      set_optimize_op(code, (s2) ? OP_SAFE_C_CS : OP_SAFE_C_NC);
 	      if (s2)
-		{
-		  set_opt1_con(cdr(code), (is_pair(cadr(code))) ? cadadr(code) : cadr(code));
-		  set_opt2_sym(cdr(code), caddr(code));
-		}}}
+		set_opt1_con(cdr(code), (is_pair(cadr(code))) ? cadadr(code) : cadr(code)); /* set_opt2_sym(cdr(code), caddr(code)); */
+	    }}
       else
 	{
 	  set_optimize_op(code, (is_semisafe(f)) ? OP_CL_NA : OP_C_NA);
@@ -96738,7 +96755,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
   s7_pointer mu_let = s7_inlet(sc, sc->nil);
   s7_int gc_loc = gc_protect_1(sc, mu_let);
 
-  check_free_heap_size(sc, 1024);
+  check_free_heap_size(sc, 2048);
 
 #if !_WIN32 /* (!MS_WINDOWS) */
   getrusage(RUSAGE_SELF, &info);
@@ -100810,5 +100827,4 @@ int main(int argc, char **argv)
  * s7test + safety=1/2/-1, t725+debug=2 at start [s7test+debug=2 runs to the end, so this is a t725 oddity], t101 + *s7*?
  * (*s7* 'debug) values are not documented (it says "see debug.scm" which has no explicit info)
  *   first guess: 0: off, 3: trace?? 1 and 2 are used in s7test -- this is a mess
- * fx_cons_cs opt2_sym, opt2_con -> opt1|3? (t718)
  */

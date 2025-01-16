@@ -2,7 +2,7 @@
 #define S7_H
 
 #define S7_VERSION "11.3"
-#define S7_DATE "16-Jan-2025"
+#define S7_DATE "17-Jan-2025"
 #define S7_MAJOR_VERSION 11
 #define S7_MINOR_VERSION 3
 
@@ -944,7 +944,7 @@ bool s7_is_bignum(s7_pointer obj);
  *        s7 changes
  *
  * --------
- * 31-Dec:    s7_functino_let as an experiment.
+ * 31-Dec:    s7_function_let as an experiment.
  * 31-Aug:    s7_define_expansion.
  * 26-Aug:    deprecate s7_immutable and add s7_set_immutable with s7_scheme* argument.
  * 16-Aug:    s7 complex vectors.
