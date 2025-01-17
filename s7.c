@@ -4199,7 +4199,7 @@ static Sentinel size_t catstrs_direct(char *dst, const char *s1, ...)
 
 static char *pos_int_to_str(s7_scheme *sc, s7_int num, s7_int *len, char endc)
 {
-  char *p = (char *)(sc->int_to_str3 + INT_TO_STR_SIZE - 1);
+  char *p = (char *)(sc->int_to_str3 + INT_TO_STR_SIZE - 1); /* str[31] */
   char *op = p;
   *p-- = '\0';
   if (endc != '\0') *p-- = endc;
@@ -11393,17 +11393,18 @@ static opt_t optimize(s7_scheme *sc, s7_pointer code, int32_t hop, s7_pointer e)
 static bool tree_is_cyclic(s7_scheme *sc, s7_pointer tree);
 
 #if S7_DEBUGGING
+  s7_pointer cleared = NULL;
   static void clear_all_optimizations_1(s7_scheme *sc, s7_pointer p, s7_int count)
 #else
   static void clear_all_optimizations_1(s7_scheme *sc, s7_pointer p)
 #endif
 {
-  if (is_pair(p))
+  if (is_unquoted_pair(p))
     {
 #if S7_DEBUGGING
       if (count > 10000)
 	{
-	  fprintf(stderr, "infinite recursion? %s\n", display(p));
+	  fprintf(stderr, "infinite recursion? %s %s %d %d\n", display(p), display(cleared), tree_is_cyclic(sc, p), tree_is_cyclic(sc, cleared));
 	  if (sc->stop_at_error) abort();
 	}
 #endif
@@ -11426,9 +11427,12 @@ static bool tree_is_cyclic(s7_scheme *sc, s7_pointer tree);
 
 static void clear_all_optimizations(s7_scheme *sc, s7_pointer p)
 {
-  if ((sc->safety == NO_SAFETY) || (!tree_is_cyclic(sc, p)))
+  if (!tree_is_cyclic(sc, p)) /* not necessary? */
 #if S7_DEBUGGING
-    clear_all_optimizations_1(sc, p, 0);
+    {
+      cleared = p;
+      clear_all_optimizations_1(sc, p, 0);
+    }
 #else
     clear_all_optimizations_1(sc, p);
 #endif
@@ -28230,9 +28234,11 @@ static inline s7_pointer string_append_1(s7_scheme *sc, s7_pointer s1, s7_pointe
 	error_nr(sc, sc->out_of_range_symbol,
 		 set_elist_4(sc, wrap_string(sc, "~S new string length, ~D, is larger than (*s7* 'max-string-length): ~D", 70),
 			     sc->string_append_symbol, wrap_integer(sc, len), wrap_integer(sc, sc->max_string_length)));
+      begin_temp(sc->x, s2); /* or temp6 if this collides */
       newstr = make_empty_string(sc, len, '\0'); /* len+1 0-terminated */
       memcpy(string_value(newstr), string_value(s1), pos);
       memcpy((char *)(string_value(newstr) + pos), string_value(s2), string_length(s2));
+      end_temp(sc->x);
       return(newstr);
     }
   return(g_string_append_1(sc, list_2(sc, s1, s2), sc->string_append_symbol));
@@ -97025,7 +97031,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
 							cons(sc, make_symbol(sc, "allocs", 6), allocs),
 							cons(sc, make_symbol(sc, "frees", 5), frees),
 							cons(sc, make_symbol(sc, "borrows", 7), borrows)))));
-    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "wrappers", 8),
+    add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "wrapper-uses", 12),
 			       s7_inlet(sc, s7_list(sc, 7,
 						    cons(sc, make_symbol(sc, "strings", 7), make_integer(sc, sc->string_wrapper_allocs)),
 						    cons(sc, make_symbol(sc, "integers", 8), make_integer(sc, sc->integer_wrapper_allocs)),
@@ -100827,4 +100833,6 @@ int main(int argc, char **argv)
  * s7test + safety=1/2/-1, t725+debug=2 at start [s7test+debug=2 runs to the end, so this is a t725 oddity], t101 + *s7*?
  * (*s7* 'debug) values are not documented (it says "see debug.scm" which has no explicit info)
  *   first guess: 0: off, 3: trace?? 1 and 2 are used in s7test -- this is a mess
+ * how can there be 55000 output ports sc->output_port_stack[_loc]?
+ * t718 (swap add immutable check?), infinite loop in pair_fill
  */
