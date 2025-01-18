@@ -4201,6 +4201,7 @@ static char *pos_int_to_str(s7_scheme *sc, s7_int num, s7_int *len, char endc)
 {
   char *p = (char *)(sc->int_to_str3 + INT_TO_STR_SIZE - 1); /* str[31] */
   char *op = p;
+  if ((S7_DEBUGGING) && (num < 0)) {fprintf(stderr, "%s[%d]: num=%" ld64, __func__, __LINE__, num); if (sc->stop_at_error) abort();}
   *p-- = '\0';
   if (endc != '\0') *p-- = endc;
   do {*p-- = "0123456789"[num % 10]; num /= 10;} while (num);
@@ -4211,6 +4212,7 @@ static char *pos_int_to_str(s7_scheme *sc, s7_int num, s7_int *len, char endc)
 static char *pos_int_to_str_direct(s7_scheme *sc, s7_int num)
 {
   char *p = (char *)(sc->int_to_str4 + INT_TO_STR_SIZE - 1);
+  if ((S7_DEBUGGING) && (num < 0)) {fprintf(stderr, "%s[%d]: num=%" ld64, __func__, __LINE__, num); if (sc->stop_at_error) abort();}
   *p-- = '\0';
   do {*p-- = "0123456789"[num % 10]; num /= 10;} while (num);
   return((char *)(p + 1));
@@ -11388,26 +11390,10 @@ static s7_pointer collect_parameters(s7_scheme *sc, s7_pointer lst, s7_pointer e
   return(p);
 }
 
-typedef enum {OPT_F, OPT_T, OPT_OOPS} opt_t;
-static opt_t optimize(s7_scheme *sc, s7_pointer code, int32_t hop, s7_pointer e);
-static bool tree_is_cyclic(s7_scheme *sc, s7_pointer tree);
-
-#if S7_DEBUGGING
-  s7_pointer cleared = NULL;
-  static void clear_all_optimizations_1(s7_scheme *sc, s7_pointer p, s7_int count)
-#else
-  static void clear_all_optimizations_1(s7_scheme *sc, s7_pointer p)
-#endif
+static void clear_all_optimizations(s7_scheme *sc, s7_pointer p)
 {
   if (is_unquoted_pair(p))
     {
-#if S7_DEBUGGING
-      if (count > 10000)
-	{
-	  fprintf(stderr, "infinite recursion? %s %s %d %d\n", display(p), display(cleared), tree_is_cyclic(sc, p), tree_is_cyclic(sc, cleared));
-	  if (sc->stop_at_error) abort();
-	}
-#endif
       if ((is_optimized(p)) &&
  	  (((optimize_op(p) >= FIRST_UNHOPPABLE_OP) ||  /* avoid clearing hop ops, fx_function and op_unknown* need to be cleared */
 	    (!op_has_hop(p)))))
@@ -11415,27 +11401,9 @@ static bool tree_is_cyclic(s7_scheme *sc, s7_pointer tree);
 	  clear_optimized(p);     /* includes T_SYNTACTIC */
 	  clear_optimize_op(p);
 	}
-#if S7_DEBUGGING
-      clear_all_optimizations_1(sc, cdr(p), count + 1);
-      clear_all_optimizations_1(sc, car(p), count + 1);
-#else
-      clear_all_optimizations_1(sc, cdr(p));
-      clear_all_optimizations_1(sc, car(p));
-#endif
+      clear_all_optimizations(sc, cdr(p));
+      clear_all_optimizations(sc, car(p));
     }
-}
-
-static void clear_all_optimizations(s7_scheme *sc, s7_pointer p)
-{
-  if (!tree_is_cyclic(sc, p)) /* not necessary? */
-#if S7_DEBUGGING
-    {
-      cleared = p;
-      clear_all_optimizations_1(sc, p, 0);
-    }
-#else
-    clear_all_optimizations_1(sc, p);
-#endif
 }
 
 static s7_pointer add_trace(s7_scheme *sc, s7_pointer code)
@@ -11482,6 +11450,9 @@ static s7_pointer cur_op_to_caller(s7_scheme *sc, opcode_t op)
   if (S7_DEBUGGING) fprintf(stderr, "%s[%d]: %s?\n", __func__, __LINE__, op_names[op]);
   return(NULL);
 }
+
+typedef enum {OPT_F, OPT_T, OPT_OOPS} opt_t;
+static opt_t optimize(s7_scheme *sc, s7_pointer code, int32_t hop, s7_pointer e);
 
 static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool named)
 {
@@ -54506,9 +54477,10 @@ static no_return void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
   slot_set_value(sc->error_history, sc->cur_code);
   if (sc->cur_code != sc->history_sink)
     {
+      int32_t i = 0;
       sc->cur_code = (sc->using_history1) ? sc->eval_history2 : sc->eval_history1;
       sc->using_history1 = (!sc->using_history1);
-      pair_fill(sc, set_plist_2(sc, sc->cur_code, sc->nil));
+      for (s7_pointer p = sc->cur_code; i < sc->history_size; i++, p = cdr(p)) car(p) = sc->nil;
     }
 #endif
   if (is_pair(cur_code)) /* not redundant */
@@ -96942,15 +96914,22 @@ static s7_pointer memory_usage(s7_scheme *sc)
 			     make_symbol(sc, "input-string-ports", 18),
 			     cons(sc, make_integer(sc, sc->input_string_ports->loc), make_integer(sc, len)));
 
-  gp = sc->output_ports;
-  for (i = 0, len = 0; i < gp->loc; i++)
-    {
-      s7_pointer v = gp->list[i];
-      if (port_data(v)) len += port_data_size(v);
-    }
-  add_slot_unchecked_with_id(sc, mu_let,
-			     make_symbol(sc, "output-ports", 12),
-			     cons(sc, make_integer(sc, sc->output_ports->loc), make_integer(sc, len)));
+  {
+    int32_t files = 0, strings = 0, functions = 0, unknowns = 0;
+    gp = sc->output_ports;
+    for (i = 0, len = 0; i < gp->loc; i++)
+      {
+	s7_pointer v = gp->list[i];
+	if (port_data(v)) len += port_data_size(v);
+	if (is_string_port(v)) strings++; else if (is_file_port(v)) files++; else if (is_function_port(v)) functions++; else unknowns++;
+      }
+    add_slot_unchecked_with_id(sc, mu_let,
+			       make_symbol(sc, "output-ports", 12),
+			       list_3(sc, cons(sc, make_integer(sc, sc->output_ports->loc), make_integer(sc, len)),
+				      make_symbol(sc, "string/file/func/?", 18),
+				      list_4(sc, make_integer(sc, strings), make_integer(sc, files), make_integer(sc, functions), make_integer(sc, unknowns))));
+  }
+
 #if S7_DEBUGGING
   i = 0;
   for (s7_pointer p = sc->format_ports; p; i++, p = (s7_pointer)port_next(p));
@@ -100833,6 +100812,5 @@ int main(int argc, char **argv)
  * s7test + safety=1/2/-1, t725+debug=2 at start [s7test+debug=2 runs to the end, so this is a t725 oddity], t101 + *s7*?
  * (*s7* 'debug) values are not documented (it says "see debug.scm" which has no explicit info)
  *   first guess: 0: off, 3: trace?? 1 and 2 are used in s7test -- this is a mess
- * how can there be 55000 output ports sc->output_port_stack[_loc]?
- * t718 (swap add immutable check?), infinite loop in pair_fill
+ * how can there be 55000 output ports [does open_output_function get called?] collect data on types/sizes
  */

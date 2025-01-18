@@ -359,6 +359,12 @@
 			
 			((not (or (symbol? b) (pair? b)))
 			 (error 'wrong-type-arg "can't (swap! ~A ~A): ~A is not a symbol or a pair" a b b))
+
+			((and (symbol? a) (immutable? a))
+			 (error 'wrong-type-args "can't (swap! ~A ~A): ~A is immutable" a b a))
+			
+			((and (symbol? b) (immutable? b))
+			 (error 'wrong-type-args "can't (swap! ~A ~A): ~A is immutable" a b b))
 			
 			((and (or (symbol? a) (hash-table? a) (let? a) (no-pairs? (cdr a)))
 			      (or (symbol? b) (hash-table? b) (let? b) (no-pairs? (cdr b))))
