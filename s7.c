@@ -12934,8 +12934,13 @@ static inline s7_pointer make_simple_ratio(s7_scheme *sc, s7_int num, s7_int den
     return(make_integer(sc, num));
   if (den == -1)
     return(make_integer(sc, -num));
-  if ((den == S7_INT64_MIN) && ((num & 1) != 0))
-    return(make_real(sc, (long_double)num / (long_double)den));
+  if (den == S7_INT64_MIN)
+    {
+      if ((num & 1) != 0)
+	return(make_real(sc, (long_double)num / (long_double)den));
+      num /= 2;
+      den /= 2; /* otherwise -den below -> S7_INT_MIN! */
+    }
   new_cell(sc, x, T_RATIO);
   if (den < 0) /* this is noticeably faster in callgrind than using (den < 0) ? ... twice */
     {
@@ -12947,6 +12952,7 @@ static inline s7_pointer make_simple_ratio(s7_scheme *sc, s7_int num, s7_int den
       set_numerator(x, num);
       set_denominator(x, den);
     }
+  if ((S7_DEBUGGING) && (denominator(x) < 0)) {fprintf(stderr, " %s[%d]: den == %" ld64 "?\n", __func__, __LINE__, denominator(x)); if (sc->stop_at_error) abort();}
   return(x);
 }
 
@@ -14198,6 +14204,7 @@ static s7_pointer make_ratio(s7_scheme *sc, s7_int a, s7_int b)
 
   new_cell(sc, x, T_RATIO);
   set_numerator(x, a);
+  if ((S7_DEBUGGING) && (b < 0)) {fprintf(stderr, " %s[%d]: b == %" ld64 "?\n", __func__, __LINE__, b); if (sc->stop_at_error) abort();}
   set_denominator(x, b);
   return(x);
 }
@@ -96915,19 +96922,25 @@ static s7_pointer memory_usage(s7_scheme *sc)
 			     cons(sc, make_integer(sc, sc->input_string_ports->loc), make_integer(sc, len)));
 
   {
-    int32_t files = 0, strings = 0, functions = 0, unknowns = 0;
+    int32_t files = 0, strings = 0, closed_strings = 0, functions = 0, unknowns = 0;
     gp = sc->output_ports;
     for (i = 0, len = 0; i < gp->loc; i++)
       {
 	s7_pointer v = gp->list[i];
 	if (port_data(v)) len += port_data_size(v);
-	if (is_string_port(v)) strings++; else if (is_file_port(v)) files++; else if (is_function_port(v)) functions++; else unknowns++;
+	if (is_string_port(v)) 
+	  {
+	    strings++;
+	    if (port_is_closed(v)) closed_strings++;
+	  }
+	else if (is_file_port(v)) files++; else if (is_function_port(v)) functions++; else unknowns++;
       }
     add_slot_unchecked_with_id(sc, mu_let,
 			       make_symbol(sc, "output-ports", 12),
 			       list_3(sc, cons(sc, make_integer(sc, sc->output_ports->loc), make_integer(sc, len)),
 				      make_symbol(sc, "string/file/func/?", 18),
-				      list_4(sc, make_integer(sc, strings), make_integer(sc, files), make_integer(sc, functions), make_integer(sc, unknowns))));
+				      list_4(sc, cons(sc, make_integer(sc, strings), make_integer(sc, closed_strings)), 
+					     make_integer(sc, files), make_integer(sc, functions), make_integer(sc, unknowns))));
   }
 
 #if S7_DEBUGGING
@@ -97562,11 +97575,11 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       return(make_boolean(sc, s7_set_history_enabled(sc, s7_boolean(sc, val))));
 
     case SL_HISTORY_SIZE:
-      iv = s7_integer_clamped_if_gmp(sc, sl_integer_geq_0(sc, sym, val));
 #if WITH_HISTORY
+      iv = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val)); /* was geq?!? */
       sl_set_history_size(sc, iv);
 #else
-      sc->history_size = iv;
+      sc->history_size = s7_integer_clamped_if_gmp(sc, sl_integer_geq_0(sc, sym, val));
 #endif
       return(val);
 
@@ -100813,4 +100826,7 @@ int main(int argc, char **argv)
  * (*s7* 'debug) values are not documented (it says "see debug.scm" which has no explicit info)
  *   first guess: 0: off, 3: trace?? 1 and 2 are used in s7test -- this is a mess
  * how can there be 55000 output ports [does open_output_function get called?] collect data on types/sizes
+ *   I think they're all closed string ports -- who is holding them? t836 -- nothing obvious
+ *   s7_heap_analyze -> s7_heap_scan(35) or (heap-analyze) (heap-scan 35)
+ * dynamic-unwind in t725
  */
