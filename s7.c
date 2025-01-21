@@ -8343,7 +8343,7 @@ static void resize_op_stack(s7_scheme *sc)
     }
 #else
     error_nr(sc, make_symbol(sc, "stack-too-big", 13),
-	     set_elist_3(sc, wrap_string(sc, "op stack has grown past (*s7* 'max-stack-size): ~D > ~D", 55), 
+	     set_elist_3(sc, wrap_string(sc, "op stack has grown past (*s7* 'max-stack-size): ~D > ~D", 55),
 			 wrap_integer(sc, (s7_int)new_size),
 			 wrap_integer(sc, (s7_int)sc->max_stack_size)));
 #endif
@@ -13346,8 +13346,7 @@ static s7_pointer s7_number_to_big_real(s7_scheme *sc, s7_pointer p)
       break;
     case T_RATIO:
       /* here we can't use fraction(number(p)) even though that uses long_double division because
-       *   there are lots of s7_int ratios that will still look the same.
-       *   We have to do the actual bignum divide by hand.
+       *   there are lots of s7_int ratios that will still look the same. We have to do the bignum divide by hand.
        */
       mpq_set_si(sc->mpq_1, numerator(p), denominator(p));
       mpfr_set_q(big_real(x), sc->mpq_1, MPFR_RNDN);
@@ -37304,8 +37303,10 @@ static s7_int format_n_arg(s7_scheme *sc, const char *str, format_data_t *fdat, 
   if (n < 0)
     format_error_nr(sc, "~N value is negative?", 21, str, args, fdat);
   if (n > sc->max_format_length)
-    format_error_nr(sc, "~N value is too big", 19, str, args, fdat);
-
+    { /* desperation -- we need some string that will stay around long enough to be reported */
+      int bytes = snprintf(sc->strbuf, sc->strbuf_size, "~N value is too big; (*s7* 'max-format-length) is %" ld64, sc->max_format_length);
+      format_error_nr(sc, sc->strbuf, bytes, str, args, fdat);
+    }
   fdat->args = cdr(fdat->args);    /* I don't think fdat->ctr should be incremented here -- it's for (*s7* 'print-length) etc */
   return(n);
 }
@@ -37322,9 +37323,11 @@ static s7_int format_numeric_arg(s7_scheme *sc, const char *str, s7_int str_len,
     }
   if (width > sc->max_format_length)
     {
+      int bytes;
       if (str[old_i - 1] != ',')
-	format_error_nr(sc, "width is too big", 16, str, fdat->args, fdat);
-      format_error_nr(sc, "precision is too big", 20, str, fdat->args, fdat);
+	bytes = snprintf(sc->strbuf, sc->strbuf_size, "width is too big; (*s7* 'max-format-length) is %" ld64, sc->max_format_length);
+      else bytes = snprintf(sc->strbuf, sc->strbuf_size, "precision is too big; (*s7* 'max-format-length) is %" ld64, sc->max_format_length);
+      format_error_nr(sc, sc->strbuf, bytes, str, fdat->args, fdat);
     }
   return(width);
 }
@@ -40049,7 +40052,7 @@ If 'func' is a function of 2 arguments, it is used for the comparison instead of
       if (!s7_is_aritable(sc, eq_func, 2))
 	wrong_type_error_nr(sc, sc->assoc_symbol, 3, eq_func, an_eq_func_string);
       if (is_null(x)) return(sc->F);
-      if ((is_any_macro(eq_func)) && (!is_c_macro(eq_func))) 
+      if ((is_any_macro(eq_func)) && (!is_c_macro(eq_func)))
 	clear_all_optimizations(sc, closure_body(eq_func));
       y = list_1(sc, copy_proper_list(sc, args));
       set_opt1_fast(y, x);
@@ -40466,7 +40469,7 @@ member uses equal?  If 'func' is a function of 2 arguments, it is used for the c
       if (!s7_is_aritable(sc, eq_func, 2))
 	wrong_type_error_nr(sc, sc->member_symbol, 3, eq_func, an_eq_func_string);
       if (is_null(x)) return(sc->F);
-      if ((is_any_macro(eq_func)) && (!is_c_macro(eq_func))) 
+      if ((is_any_macro(eq_func)) && (!is_c_macro(eq_func)))
 	clear_all_optimizations(sc, closure_body(eq_func));
       y = list_1(sc, copy_proper_list(sc, args)); /* this could probably be handled with a counter cell (cdr here is unused) */
       set_opt1_fast(y, x);
@@ -40489,7 +40492,7 @@ member uses equal?  If 'func' is a function of 2 arguments, it is used for the c
   if (is_simple(obj))
     return(s7_memq(sc, obj, x));
   /* the only things that aren't simply == here are c_object, string, number, vector, hash-table, pair, and c_pointer, but all the other cases are unlikely */
-  if (is_number(obj))  
+  if (is_number(obj))
     return(memv_number(sc, obj, x));
   return(member(sc, obj, x));
 }
@@ -96928,7 +96931,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
       {
 	s7_pointer v = gp->list[i];
 	if (port_data(v)) len += port_data_size(v);
-	if (is_string_port(v)) 
+	if (is_string_port(v))
 	  {
 	    strings++;
 	    if (port_is_closed(v)) closed_strings++;
@@ -96939,7 +96942,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
 			       make_symbol(sc, "output-ports", 12),
 			       list_3(sc, cons(sc, make_integer(sc, sc->output_ports->loc), make_integer(sc, len)),
 				      make_symbol(sc, "string/file/func/?", 18),
-				      list_4(sc, cons(sc, make_integer(sc, strings), make_integer(sc, closed_strings)), 
+				      list_4(sc, cons(sc, make_integer(sc, strings), make_integer(sc, closed_strings)),
 					     make_integer(sc, files), make_integer(sc, functions), make_integer(sc, unknowns))));
   }
 
@@ -97525,7 +97528,8 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       sc->is_expanding = s7_boolean(sc, val);
       return(val);
 
-    case SL_FILE_NAMES: case SL_FILENAMES: sl_unsettable_error_nr(sc, sym);
+    case SL_FILE_NAMES: case SL_FILENAMES:
+      sl_unsettable_error_nr(sc, sym);
 
     case SL_FLOAT_FORMAT_PRECISION: /* float-format-precision should not be huge => hangs in snprintf -- what's a reasonable limit here? */
       iv = s7_integer_clamped_if_gmp(sc, sl_integer_geq_0(sc, sym, val));
@@ -97594,7 +97598,9 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
     case SL_MINOR_VERSION:
       sl_unsettable_error_nr(sc, sym);
 
-    case SL_MAX_FORMAT_LENGTH:     sc->max_format_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));     return(val);
+    case SL_MAX_FORMAT_LENGTH:
+      sc->max_format_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
+      return(val);
 
     case SL_MAX_HEAP_SIZE:
       iv = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
@@ -97603,7 +97609,9 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       else sc->max_heap_size = iv; /* else needed??? */
       return(val);
 
-    case SL_MAX_LIST_LENGTH:       sc->max_list_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));       return(val);
+    case SL_MAX_LIST_LENGTH:
+      sc->max_list_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
+      return(val);
 
     case SL_MAX_PORT_DATA_SIZE:
       iv = s7_integer_clamped_if_gmp(sc, sl_integer_geq_0(sc, sym, val));
@@ -97617,13 +97625,23 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
     case SL_MAX_STACK_SIZE:
       iv = s7_integer_clamped_if_gmp(sc, sl_integer_geq_0(sc, sym, val));
       if (iv < INITIAL_STACK_SIZE)
-	starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should be greater than the initial stack size", 48));
+	error_nr(sc, sc->out_of_range_symbol,
+		 set_elist_3(sc, wrap_string(sc, "(set! (*s7* 'max-stack-size) ~S): new value should not be less than the initial stack size: ~D", 94),
+			     val, wrap_integer(sc, INITIAL_STACK_SIZE)));
       sc->max_stack_size = (uint32_t)iv;
       return(val);
 
-    case SL_MAX_STRING_LENGTH:     sc->max_string_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));     return(val);
-    case SL_MAX_VECTOR_DIMENSIONS: sc->max_vector_dimensions = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val)); return(val);
-    case SL_MAX_VECTOR_LENGTH:     sc->max_vector_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));     return(val);
+    case SL_MAX_STRING_LENGTH:
+      sc->max_string_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
+      return(val);
+
+    case SL_MAX_VECTOR_DIMENSIONS:
+      sc->max_vector_dimensions = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
+      return(val);
+
+    case SL_MAX_VECTOR_LENGTH:
+      sc->max_vector_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
+      return(val);
 
     case SL_MEMORY_USAGE:
     case SL_MOST_NEGATIVE_FIXNUM:
@@ -97647,6 +97665,7 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       /* the name is (*s7* 'output-port-data-size) but it affects sc->output_port_data_size, and can be confused with inital-string-port-length! */
       sc->output_port_data_size = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
       return(val);
+
     case SL_PRINT_LENGTH: /* for pairs and vectors this affects how many elements are printed -- confusing */
       sc->print_length = s7_integer_clamped_if_gmp(sc, sl_integer_geq_0(sc, sym, val));
       return(val);
@@ -100763,7 +100782,7 @@ int main(int argc, char **argv)
  * thook     7651   ----   2590   2030   2046   1731   1731
  * texit     1884   1950   1778   1741   1770   1759   1759
  * tauto                   2562   2048   1729   1760   1760
- * s7test           1831   1818   1829   1830   1849   1876
+ * s7test           1831   1818   1829   1830   1849   1863
  * lt        2222   2172   2150   2185   1950   1892   1892
  * dup              3788   2492   2239   2097   2012   2004
  * tread            2421   2419   2408   2405   2241   2241
@@ -100796,9 +100815,9 @@ int main(int argc, char **argv)
  * tset                           6260   6364   6278   6278
  * tleft     12.2   9753   7537   7331   7331   6393   6393 [6431 if overflow check]
  * tmisc                          7614   7115   7130   7130
- * tgc              10.4   7763   7579   7617   7619   7649
  * tclo             8025   7645   8809   7770   7627   7633
- * tlamb                          8003   7941   7920   7939
+ * tgc              10.4   7763   7579   7617   7619   7649
+ * tlamb                          8003   7941   7920   7931
  * thash            11.7   9734   9479   9526   9283   9283
  * cb        12.9   11.0   9658   9564   9609   9657   9657
  * tmap-hash                                    10.3   10.3
@@ -100821,12 +100840,8 @@ int main(int argc, char **argv)
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
- * closure_let is often rootlet but then let_slots(closure_let()) is NULL?? associated with debug.scm/(*s7* 'debug)?
  * s7test + safety=1/2/-1, t725+debug=2 at start [s7test+debug=2 runs to the end, so this is a t725 oddity], t101 + *s7*?
  * (*s7* 'debug) values are not documented (it says "see debug.scm" which has no explicit info)
  *   first guess: 0: off, 3: trace?? 1 and 2 are used in s7test -- this is a mess
- * how can there be 55000 output ports [does open_output_function get called?] collect data on types/sizes
- *   I think they're all closed string ports -- who is holding them? t836 -- nothing obvious
- *   s7_heap_analyze -> s7_heap_scan(35) or (heap-analyze) (heap-scan 35)
- * dynamic-unwind in t725
+ * dynamic-unwind in t725 dies quickly
  */

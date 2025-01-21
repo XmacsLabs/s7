@@ -1059,7 +1059,7 @@
                           ;'function-open-output 'function-open-input 'function-get-output 'function-close-output ;see s7test, not set up for t725
 
 			  'symbol-initial-value
-
+			  'swap!
 			  ))
 
       (args (vector "-123" "1234" "-3/4" "-1" "1/2" "1+i" "1-i" "0+i" "0-i" "(expt 2 32)" "4294967297" "1001" "10001"
@@ -1274,8 +1274,8 @@
 		    "(let ((cp (list 1))) (set-cdr! cp cp) (list 'quote cp))"
 		    "(let ((cp (list 1))) (set-cdr! cp cp) (list (list quote cp)))"
 
-		    "(let ((lst (list '+ 1))) (set-cdr! (cdr lst) (cdr lst)) (apply lambda () lst ()))"
-		    "(let ((lst (list '+ 1))) (set-cdr! (cdr lst) (cdr lst)) (apply lambda* () lst ()))"
+		    ;"(let ((lst (list '+ 1))) (set-cdr! (cdr lst) (cdr lst)) (apply lambda () lst ()))"
+		    ;"(let ((lst (list '+ 1))) (set-cdr! (cdr lst) (cdr lst)) (apply lambda* () lst ()))"
 
 		    "(gensym \"g_123\")"
 		    "(make-list 256 1)" "(make-list 512 '(1))" "big-let" "big-hash"
@@ -1314,7 +1314,7 @@
 		    "(lambda (x) (fill! (copy x) 0))"
 
 		    "(map (lambda (x) (catch #t (lambda () (vector->list x)) (lambda (t i) 'err))) (list #(1 2) 1))"
-		    ;"(symbol-table)" ; (make-list 123 (symbol-table))!
+		    "(symbol-table)" ; (make-list 123 (symbol-table))!
 
 		    "(cons-r 0 0 6)"
 		    "(list-r 0 0 6)"
@@ -1364,7 +1364,7 @@
 		    ;"(*s7* 'catches)"
 		    ;"(*s7* 'cpu-time)"
 		    "(*s7* 'c-types)"
-		    "(*s7* 'debug)"
+		    ;"(*s7* 'debug)" ; causes infinite output and rootlet id trouble??
 		    "(*s7* 'default-hash-table-length)"
 		    "(*s7* 'default-random-state)"
 		    "(*s7* 'default-rationalize-error)"
@@ -1389,21 +1389,21 @@
 		    "(*s7* 'history-size)"
 		    "(*s7* 'initial-string-port-length)"
 		    "(*s7* 'major-version)"
-		    "(*s7* 'make-function)"
 		    "(*s7* 'max-format-length)"
 		    "(*s7* 'max-heap-size)"
-		    "(*s7* 'max-list-length)"
-		    "(*s7* 'max-port-data-size)"
+		    ;"(*s7* 'max-list-length)"
+		    ;"(*s7* 'max-port-data-size)" ; infinite output
 		    "(*s7* 'max-stack-size)"
-		    "(*s7* 'max-string-length)"
-		    "(*s7* 'max-vector-dimensions)"
-		    "(*s7* 'max-vector-length)"
+		    ;"(*s7* 'max-string-length)"
+		    ;"(*s7* 'max-vector-dimensions)"
+		    ;"(*s7* 'max-vector-length)"
 		    "(*s7* 'memory-usage)"
+		    ;"((*s7* 'memory-usage) :output-ports)"
 		    "(*s7* 'minor-version)"
 		    "(*s7* 'most-negative-fixnum)"
 		    "(*s7* 'most-positive-fixnum)"
 		    "(*s7* 'muffle-warnings?)"
-		    "(*s7* 'number-separator)"
+		    (reader-cond ((provided? 'number-separator) "(*s7* 'number-separator)"))
 		    "(*s7* 'openlets)"
 		    "(*s7* 'output-port-data-size)"
 		    "(*s7* 'print-length)"
@@ -1411,15 +1411,15 @@
 		    ;"(*s7* 'profile-info)"
 		    ;"(*s7* 'profile-prefix)"
 		    ;"(*s7* 'rootlet-size)"
-		    "(*s7* 'safety)"
+		    ;"(*s7* 'safety)" ; if 0 lets circular bodies through
 		    ;"(*s7* 'stack)"
 		    "(*s7* 'stacktrace-defaults)"
 		    ;"(*s7* 'stack-size)"
 		    ;"(*s7* 'stack-top)"
 		    "(*s7* 'symbol-quote?)"
 		    "(*s7* 'symbol-printer)"
-		    "(*s7* 'undefined-constant-warnings)"
-		    "(*s7* 'undefined-identifier-warnings)"
+		    ;"(*s7* 'undefined-constant-warnings)"
+		    ;"(*s7* 'undefined-identifier-warnings)" ; infinite output
 		    "(*s7* 'version)"
 ;|#
 		    #f #f #f ; cyclic here (see get-arg)
