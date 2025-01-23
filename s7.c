@@ -53423,7 +53423,7 @@ s7_pointer s7_stacktrace(s7_scheme *sc)
 
 static s7_pointer g_stacktrace(s7_scheme *sc, s7_pointer args)
 {
-  #define H_stacktrace "(stacktrace (max-frames 30) (code-cols 50) (total-cols 80) (note-col 50) as-comment) returns \
+  #define H_stacktrace "(stacktrace (max-frames 30) (code-cols 45) (total-cols 80) (note-col 45) as-comment) returns \
 a stacktrace as a string.  Each line has two portions, the code being evaluated and a note giving \
 the value of local variables in that code.  The first argument sets how many lines are displayed. \
 The next three arguments set the length and layout of those lines.  'as-comment' if #t causes each \
@@ -53432,8 +53432,14 @@ line to be preceded by a semicolon."
                          sc->is_string_symbol, sc->is_integer_symbol, sc->is_integer_symbol, \
                          sc->is_integer_symbol, sc->is_integer_symbol, sc->is_boolean_symbol)
 
-  s7_int max_frames = 30, code_cols = 50, total_cols = 80, notes_start_col = 50;
-  bool as_comment = false;
+  s7_int max_frames = s7_integer_clamped_if_gmp(sc, car(sc->stacktrace_defaults));
+  s7_int code_cols = s7_integer_clamped_if_gmp(sc, cadr(sc->stacktrace_defaults));
+  s7_int total_cols = s7_integer_clamped_if_gmp(sc, caddr(sc->stacktrace_defaults));
+  s7_int notes_start_col = s7_integer_clamped_if_gmp(sc, cadddr(sc->stacktrace_defaults));
+  bool as_comment = s7_boolean(sc, s7_list_ref(sc, sc->stacktrace_defaults, 4));
+
+  /* was: s7_int max_frames = 3; code_cols = 50, total_cols = 80, notes_start_col = 50; bool as_comment = false; */
+  /* now: 30, 45, 80, 45, #f and applied here as well as in s7_stacktrace, 22-Jan-25 */
 
   if (!is_null(args))
     {
@@ -53449,7 +53455,7 @@ line to be preceded by a semicolon."
 	    wrong_type_error_nr(sc, sc->stacktrace_symbol, 2, car(args), sc->type_names[T_INTEGER]);
 	  code_cols = s7_integer_clamped_if_gmp(sc, car(args));
 	  if ((code_cols <= 8) || (code_cols > 1024))
-	    code_cols = 50;
+	    code_cols = 45;
 	  args = cdr(args);
 	  if (!is_null(args))
 	    {
@@ -53465,7 +53471,7 @@ line to be preceded by a semicolon."
 		    wrong_type_error_nr(sc, sc->stacktrace_symbol, 4, car(args), sc->type_names[T_INTEGER]);
 		  notes_start_col = s7_integer_clamped_if_gmp(sc, car(args));
 		  if ((notes_start_col <= 0) || (notes_start_col > S7_INT32_MAX))
-		    notes_start_col = 50;
+		    notes_start_col = 45;
 		  args = cdr(args);
 		  if (!is_null(args))
 		    {
@@ -96591,13 +96597,6 @@ static no_return void starlet_wrong_type_error_nr(s7_scheme *sc, s7_pointer call
 		       caller, arg, object_type_name(sc, arg), typ));
 }
 
-static no_return void sl_stacktrace_wrong_type_error_nr(s7_scheme *sc, s7_pointer caller, s7_int num, s7_pointer arg, s7_pointer typ, s7_pointer val)
-{
-  set_elist_7(sc, wrap_string(sc, "(set! (*s7* '~A) '~S): the ~:D list element ~S is ~A but should be ~A", 69),
-	      caller, val, wrap_integer(sc, num), arg, object_type_name(sc, arg), typ);
-  error_nr(sc, sc->wrong_type_arg_symbol, sc->elist_7);
-}
-
 static no_return void starlet_out_of_range_error_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer descr)
 {
   error_nr(sc, sc->out_of_range_symbol,
@@ -97294,7 +97293,7 @@ static s7_pointer sl_integer_geq_0(s7_scheme *sc, s7_pointer sym, s7_pointer val
 static void sl_set_history_size(s7_scheme *sc, s7_int iv)
 {
   s7_pointer p1, p2;
-  if (iv > MAX_HISTORY_SIZE) iv = MAX_HISTORY_SIZE;
+  if (iv > MAX_HISTORY_SIZE) iv = MAX_HISTORY_SIZE; /* if 1M, tests can be slow -- assume user wants one such test */
   if (iv > sc->true_history_size)
     {
       /* splice in the new cells, reattach the circles */
@@ -97340,22 +97339,57 @@ static s7_pointer set_bignum_precision(s7_scheme *sc, int32_t precision)
 }
 #endif
 
+static no_return void sl_stacktrace_wrong_type_error_nr(s7_scheme *sc, s7_int num, s7_pointer arg, s7_pointer typ, s7_pointer val)
+{
+  set_elist_6(sc, wrap_string(sc, "(set! (*s7* 'stacktrace-defaults) '~S): the ~:D list element ~S is ~A but should be ~A", 86),
+	      val, wrap_integer(sc, num), arg, object_type_name(sc, arg), typ);
+  error_nr(sc, sc->wrong_type_arg_symbol, sc->elist_6);
+}
+
+static no_return void sl_stacktrace_out_of_range_error_nr(s7_scheme *sc, s7_pointer accessor, s7_pointer lst, s7_pointer arg, s7_pointer descr)
+{
+  error_nr(sc, sc->out_of_range_symbol,
+	   set_elist_5(sc, wrap_string(sc, "(set! (*s7* 'stacktrace-defaults) '~S): ~S => ~S is out of range (~A)", 69), lst, accessor, arg, descr));
+}
+
 static s7_pointer sl_set_stacktrace_defaults(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 {
+  s7_int i, code_cols;
   if (!is_pair(val))
     starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_PAIR]);
   if (s7_list_length(sc, val) != 5)
     starlet_wrong_type_error_nr(sc, sym, val, wrap_string(sc, "a list with 5 entries", 21));
-  if (!is_t_integer(car(val)))
-    sl_stacktrace_wrong_type_error_nr(sc, sym, 1, car(val), wrap_string(sc, "an integer (stack frames)", 25), val);
-  if (!is_t_integer(cadr(val)))
-    sl_stacktrace_wrong_type_error_nr(sc, sym, 2, cadr(val), wrap_string(sc, "an integer (cols-for-data)", 26), val);
-  if (!is_t_integer(caddr(val)))
-    sl_stacktrace_wrong_type_error_nr(sc, sym, 3, caddr(val), wrap_string(sc, "an integer (line length)", 24), val);
-  if (!is_t_integer(cadddr(val)))
-    sl_stacktrace_wrong_type_error_nr(sc, sym, 4, cadddr(val), wrap_string(sc, "an integer (comment position)", 29), val);
-  if (!is_boolean(s7_list_ref(sc, val, 4)))
-    sl_stacktrace_wrong_type_error_nr(sc, sym, 5, s7_list_ref(sc, val, 4), wrap_string(sc, "a boolean (treat-data-as-comment)", 33), val);
+
+  if (!s7_is_integer(car(val)))          /* max_frames, default 30 */
+    sl_stacktrace_wrong_type_error_nr(sc, 1, car(val), wrap_string(sc, "an integer (max stack frames)", 29), val);
+  i = s7_integer_clamped_if_gmp(sc, car(val));
+  if ((i <= 0) || (i > S7_INT32_MAX)) /* keep these in sync with g_stacktrace */
+    sl_stacktrace_out_of_range_error_nr(sc, sc->car_symbol, val, car(val), wrap_string(sc, "should be 0 < max-frames <= 2^32", 32));
+
+  if (!s7_is_integer(cadr(val)))         /* code_cols, default 45 */
+    sl_stacktrace_wrong_type_error_nr(sc, 2, cadr(val), wrap_string(sc, "an integer (code columns)", 25), val);
+  code_cols = s7_integer_clamped_if_gmp(sc, cadr(val));
+  if ((code_cols <= 8) || (code_cols > 1024))
+    sl_stacktrace_out_of_range_error_nr(sc, sc->cadr_symbol, val, cadr(val), wrap_string(sc, "should be 8 < code-columns <= 1024", 34));
+
+  if (!s7_is_integer(caddr(val)))        /* total_cols, default 80 */
+    sl_stacktrace_wrong_type_error_nr(sc, 3, caddr(val), wrap_string(sc, "an integer (total columns)", 26), val);
+  i = s7_integer_clamped_if_gmp(sc, caddr(val));
+  if ((i <= code_cols) || (i > S7_INT32_MAX))
+    {
+      int bytes = snprintf(sc->strbuf, sc->strbuf_size, "should be %" ld64 " < total-columns <= 2^32", code_cols);
+      sl_stacktrace_out_of_range_error_nr(sc, sc->caddr_symbol, val, caddr(val), wrap_string(sc, sc->strbuf, bytes));
+    }
+
+  if (!s7_is_integer(cadddr(val)))       /* notes_start_col, default max(45, code_cols) */
+    sl_stacktrace_wrong_type_error_nr(sc, 4, cadddr(val), wrap_string(sc, "an integer (comment position)", 29), val);
+  i = s7_integer_clamped_if_gmp(sc, cadddr(val));
+  if ((i <= 0) || (i > S7_INT32_MAX))
+    sl_stacktrace_out_of_range_error_nr(sc, sc->cadddr_symbol, val, cadddr(val), wrap_string(sc, "should be 0 < comment-position <= 2^32", 38));
+
+  if (!is_boolean(s7_list_ref(sc, val, 4)))  /* as_comment, default #f */
+    sl_stacktrace_wrong_type_error_nr(sc, 5, s7_list_ref(sc, val, 4), wrap_string(sc, "a boolean (output-as-comment)", 29), val);
+
   sc->stacktrace_defaults = copy_proper_list(sc, val);
   return(val);
 }
@@ -97561,7 +97595,7 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       return(val);
 
     case SL_HEAP_SIZE:
-      iv = s7_integer_clamped_if_gmp(sc, sl_integer_geq_0(sc, sym, val));
+      iv = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
       if (iv < sc->heap_size)  /* heap can't be made smaller currently */
 	starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it can't be less than the current heap size", 43));
       if (iv > sc->max_heap_size)
@@ -97614,7 +97648,7 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       return(val);
 
     case SL_MAX_PORT_DATA_SIZE:
-      iv = s7_integer_clamped_if_gmp(sc, sl_integer_geq_0(sc, sym, val));
+      iv = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
       if (iv < OUTPUT_PORT_DATA_SIZE)
 	error_nr(sc, sc->out_of_range_symbol,
 		 set_elist_3(sc, wrap_string(sc, "(set! (*s7* 'max-port-data-size) ~S): new value should be less than the initial port data size: ~D", 98),
@@ -97623,7 +97657,7 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       return(val);
 
     case SL_MAX_STACK_SIZE:
-      iv = s7_integer_clamped_if_gmp(sc, sl_integer_geq_0(sc, sym, val));
+      iv = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
       if (iv < INITIAL_STACK_SIZE)
 	error_nr(sc, sc->out_of_range_symbol,
 		 set_elist_3(sc, wrap_string(sc, "(set! (*s7* 'max-stack-size) ~S): new value should not be less than the initial stack size: ~D", 94),
@@ -99835,7 +99869,7 @@ static void init_rootlet(s7_scheme *sc)
   s7_autoload(sc, make_symbol(sc, "libutf8proc.scm", 15), s7_make_semipermanent_string(sc, "libutf8proc.scm"));
 
   sc->require_symbol = s7_define_macro(sc, "require", g_require, 1, 0, true, H_require);
-  sc->stacktrace_defaults = s7_list(sc, 5, int_three, small_int(45), small_int(80), small_int(45), sc->T); /* assume NUM_SMALL_INTS >= NUM_CHARS == 256 */
+  sc->stacktrace_defaults = s7_list(sc, 5, small_int(30), small_int(45), small_int(80), small_int(45), sc->F); /* was 3 45 80 45 #t but applied only to C call */
 
   /* -------- *#readers* -------- */
   sym = s7_define_variable_with_documentation(sc, "*#readers*", sc->nil, "list of current reader macros");
@@ -100840,8 +100874,5 @@ int main(int argc, char **argv)
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
- * s7test + safety=1/2/-1, t725+debug=2 at start [s7test+debug=2 runs to the end, so this is a t725 oddity], t101 + *s7*?
- * (*s7* 'debug) values are not documented (it says "see debug.scm" which has no explicit info)
- *   first guess: 0: off, 3: trace?? 1 and 2 are used in s7test -- this is a mess
- * dynamic-unwind in t725 dies quickly
+ * t718
  */
