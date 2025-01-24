@@ -84,10 +84,10 @@ set logging overwrite on
 set logging redirect on
 set logging enabled on
 if $argc == 1
-  bt full $arg0
+  bt $arg0
 end
 if $argc == 0
-  bt full
+  bt
 end
 set logging enabled off
 print s7_decode_bt(cur_sc)

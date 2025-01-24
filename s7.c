@@ -39016,8 +39016,12 @@ static s7_pointer list_ref_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7
 static inline s7_pointer list_ref_p_pi_unchecked(s7_scheme *sc, s7_pointer p1, s7_int i1)
 {
   s7_pointer p = p1;
-  if ((i1 < 0) || (i1 > sc->max_list_length))
-    out_of_range_error_nr(sc, sc->list_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
+  if (i1 < 0)
+    out_of_range_error_nr(sc, sc->list_ref_symbol, int_two, wrap_integer(sc, i1), it_is_negative_string);
+  if (i1 > sc->max_list_length)
+    error_nr(sc, sc->out_of_range_symbol,
+	     set_elist_3(sc, wrap_string(sc, "list-ref index ~D is too large, (*s7* 'max-list-length) is ~D", 61),
+			 wrap_integer(sc, i1), wrap_integer(sc, sc->max_list_length)));
   for (s7_int i = 0; ((is_pair(p)) && (i < i1)); i++, p = cdr(p));
   if (!is_pair(p))
     {
@@ -39077,8 +39081,13 @@ static s7_pointer g_list_set_1(s7_scheme *sc, s7_pointer lst, s7_pointer args, i
   if (!s7_is_integer(ind))
     return(method_or_bust(sc, ind, sc->list_set_symbol, set_ulist_1(sc, lst, args), sc->type_names[T_INTEGER], 2));
   index = s7_integer_clamped_if_gmp(sc, ind);
-  if ((index < 0) || (index > sc->max_list_length))
-    out_of_range_error_nr(sc, sc->list_set_symbol, wrap_integer(sc, arg_num), ind, (index < 0) ? it_is_negative_string : it_is_too_large_string);
+
+  if (index < 0)
+    out_of_range_error_nr(sc, sc->list_set_symbol, wrap_integer(sc, arg_num), ind, it_is_negative_string);
+  if (index > sc->max_list_length) /* (list-set! (list 1 2 3) (ash 1 61) 0) */
+    error_nr(sc, sc->out_of_range_symbol,
+	     set_elist_4(sc, wrap_string(sc, "list-set! ~:D argument ~D is too large, (*s7* 'max-list-length) is ~D", 69),
+			 wrap_integer(sc, arg_num), ind, wrap_integer(sc, sc->max_list_length)));
 
   for (s7_int i = 0; (i < index) && is_pair(p); i++, p = cdr(p)) {}
   if (!is_pair(p))
@@ -39100,11 +39109,20 @@ static s7_pointer g_list_set_1(s7_scheme *sc, s7_pointer lst, s7_pointer args, i
 
 static s7_pointer g_list_set(s7_scheme *sc, s7_pointer args) {return(g_list_set_1(sc, car(args), cdr(args), 2));}
 
+static void list_set_index_check(s7_scheme *sc, s7_int i1)
+{
+  if (i1 < 0)
+    out_of_range_error_nr(sc, sc->list_set_symbol, int_two, wrap_integer(sc, i1), it_is_negative_string);
+  if (i1 > sc->max_list_length)
+    error_nr(sc, sc->out_of_range_symbol,
+	     set_elist_3(sc, wrap_string(sc, "list-set! index ~D is too large, (*s7* 'max-list-length) is ~D", 62),
+			 wrap_integer(sc, i1), wrap_integer(sc, sc->max_list_length)));
+}
+
 static inline s7_pointer list_set_p_pip_unchecked(s7_scheme *sc, s7_pointer p1, s7_int i1, s7_pointer p2)
 {
   s7_pointer p = p1;
-  if ((i1 < 0) || (i1 > sc->max_list_length))
-    out_of_range_error_nr(sc, sc->list_set_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
+  list_set_index_check(sc, i1);
   for (s7_int i = 0; ((is_pair(p)) && (i < i1)); i++, p = cdr(p));
   if (!is_pair(p))
     {
@@ -39121,8 +39139,7 @@ static s7_pointer list_increment_p_pip_unchecked(opt_info *o)
   s7_scheme *sc = o->sc;
   s7_pointer p = slot_value(o->v[2].p), p1, p2;
   s7_int index = integer(p);
-  if ((index < 0) || (index > sc->max_list_length))
-    out_of_range_error_nr(sc, sc->list_set_symbol, int_two, p, (index < 0) ? it_is_negative_string : it_is_too_large_string);
+  list_set_index_check(sc, index);
   p1 = slot_value(o->v[1].p);
   p = p1;
   for (s7_int i = 0; ((is_pair(p)) && (i < index)); i++, p = cdr(p));
@@ -39153,8 +39170,7 @@ static s7_pointer g_list_set_i(s7_scheme *sc, s7_pointer args)
     return(mutable_method_or_bust(sc, lst, sc->list_set_symbol, args, sc->type_names[T_PAIR], 1));
 
   index = s7_integer_clamped_if_gmp(sc, cadr(args));
-  if ((index < 0) || (index > sc->max_list_length))
-    out_of_range_error_nr(sc, sc->list_set_symbol, int_two, wrap_integer(sc, index), (index < 0) ? it_is_negative_string : it_is_too_large_string);
+  list_set_index_check(sc, index);
 
   for (s7_int i = 0; (i < index) && is_pair(p); i++, p = cdr(p)) {}
   if (!is_pair(p))
@@ -39189,8 +39205,13 @@ static s7_pointer list_tail_p_pp(s7_scheme *sc, s7_pointer lst, s7_pointer p)
 
   if (!is_list(lst)) /* (list-tail () 0) -> () */
     return(method_or_bust_pp(sc, lst, sc->list_tail_symbol, lst, p, a_list_string, 1));
-  if ((index < 0) || (index > sc->max_list_length))
-    out_of_range_error_nr(sc, sc->list_tail_symbol, int_two, wrap_integer(sc, index), (index < 0) ? it_is_negative_string : it_is_too_large_string);
+  if (index < 0)
+    out_of_range_error_nr(sc, sc->list_tail_symbol, int_two, wrap_integer(sc, index), it_is_negative_string);
+  if (index > sc->max_list_length)
+    error_nr(sc, sc->out_of_range_symbol,
+	     set_elist_3(sc, wrap_string(sc, "list-tail index ~D is too large, (*s7* 'max-list-length) is ~D", 62),
+			 wrap_integer(sc, index), wrap_integer(sc, sc->max_list_length)));
+
   for (i = 0; (i < index) && (is_pair(lst)); i++, lst = cdr(lst)) {}
   if (i < index)
     out_of_range_error_nr(sc, sc->list_tail_symbol, int_two, wrap_integer(sc, index), it_is_too_large_string);
@@ -39304,6 +39325,7 @@ static s7_pointer g_set_cdr(s7_scheme *sc, s7_pointer args)
   s7_pointer p = car(args);
   if (!is_mutable_pair(p)) return(mutable_method_or_bust(sc, p, sc->set_cdr_symbol, args, sc->type_names[T_PAIR], 1));
   set_cdr(p, cadr(args));
+  /* (define (func) (set-cdr! ((lambda (x) (values x x)) (list-values 1)))) (func) (func) ; hung in fx_c_nc, need both func calls and list-value */
   return(cdr(p));
 }
 
@@ -53761,7 +53783,7 @@ static s7_pointer dynamic_unwind(s7_scheme *sc, s7_pointer func, s7_pointer args
   return(s7_apply_function(sc, func, set_plist_2(sc, args, sc->value))); /* s7_apply_function returns sc->value */
 }
 
-static s7_pointer g_dynamic_unwind(s7_scheme *sc, s7_pointer args)
+static s7_pointer g_dynamic_unwind(s7_scheme *sc, s7_pointer args) /* not fool-proof!! */
 {
   #define H_dynamic_unwind "(dynamic-unwind func arg) pushes func and arg on the stack, then (func arg) is called when the stack unwinds."
   #define Q_dynamic_unwind s7_make_signature(sc, 4, sc->is_procedure_symbol, sc->is_procedure_symbol, sc->T, sc->is_boolean_symbol)
@@ -72239,12 +72261,12 @@ static s7_pointer g_list_values(s7_scheme *sc, s7_pointer args)
       check_free_heap_size(sc, 8192);
       if (sc->safety > NO_SAFETY)
 	{
-	  if (!tree_is_cyclic(sc, args)) /* we're copying to clear optimizations I think, and a cyclic list here can't be optimized */
+	  if (!tree_is_cyclic(sc, args))  /* we're copying to clear optimizations I think, and a cyclic list here can't be optimized */
 	    args = cons_unchecked(sc,     /* since list-values is a safe function, args can be immutable, which should not be passed through the copy */
 				  (is_unquoted_pair(car(args))) ? copy_tree_with_type(sc, car(args)) : car(args),
 				  (is_unquoted_pair(cdr(args))) ? copy_tree_with_type(sc, cdr(args)) : cdr(args));
 	}
-      else args = copy_tree(sc, args);      /* not copy_any_list here -- see comment below */
+      else args = copy_tree(sc, args);    /* not copy_any_list here -- see comment below */
       end_temp(sc->temp6);
       return(args);
     }
@@ -84132,7 +84154,7 @@ static /* inline */ bool do_tree_has_definers(s7_scheme *sc, s7_pointer tree)
 	      else return(true);
 	    }}
       else
-	if (is_pair(pp))
+	if (is_pair(pp)) /* TODO: unquoted_pair ?? */
 	  {
 	    if (do_tree_has_definers(sc, pp))
 	      return(true);
@@ -96590,19 +96612,6 @@ static s7_pointer g_is_op_stack(s7_scheme *sc, s7_pointer args)
 
 /* -------------------------------- *s7* let -------------------------------- */
 
-static no_return void starlet_wrong_type_error_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer typ)
-{
-  error_nr(sc, sc->wrong_type_arg_symbol,
-	   set_elist_5(sc, wrap_string(sc, "(set! (*s7* '~A) ~S): new value is ~A but should be ~A", 54),
-		       caller, arg, object_type_name(sc, arg), typ));
-}
-
-static no_return void starlet_out_of_range_error_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer descr)
-{
-  error_nr(sc, sc->out_of_range_symbol,
-	   set_elist_4(sc, wrap_string(sc, "(set! (*s7* '~A) ~S): new value is out of range (~A)", 52), caller, arg, descr));
-}
-
 static s7_int starlet_length(void) {return(SL_NUM_FIELDS - 1);}
 
 static s7_pointer g_starlet_set_fallback(s7_scheme *sc, s7_pointer args)
@@ -97268,6 +97277,19 @@ static s7_pointer starlet_make_iterator(s7_scheme *sc, s7_pointer iter)
   return(iter);
 }
 
+static no_return void starlet_wrong_type_error_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer typ)
+{
+  error_nr(sc, sc->wrong_type_arg_symbol,
+	   set_elist_5(sc, wrap_string(sc, "(set! (*s7* '~A) ~S): new value is ~A but should be ~A", 54),
+		       caller, arg, object_type_name(sc, arg), typ));
+}
+
+static no_return void starlet_out_of_range_error_nr(s7_scheme *sc, s7_pointer caller, s7_pointer arg, s7_pointer descr)
+{
+  error_nr(sc, sc->out_of_range_symbol,
+	   set_elist_4(sc, wrap_string(sc, "(set! (*s7* '~A) ~S): new value is out of range (~A)", 52), caller, arg, descr));
+}
+
 static s7_pointer sl_real_geq_0(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 {
   if (!is_real(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_REAL]);
@@ -97845,7 +97867,7 @@ static const char *decoded_name(s7_scheme *sc, const s7_pointer p)
   if (p == current_input_port(sc))  return("current-input-port");
   if (p == current_output_port(sc)) return("current-output-port");
   if (p == current_error_port(sc))  return("current-error_port");
-  if ((is_let(p)) && (is_unlet(p))) return("unlet");
+  if ((s7_is_valid(sc, p)) && (is_let(p)) && (is_unlet(p))) return("unlet");
   {
     s7_pointer wrapper;
     int32_t i;
@@ -100873,6 +100895,4 @@ int main(int argc, char **argv)
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
- *
- * t718
  */
