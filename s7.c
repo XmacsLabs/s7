@@ -29688,7 +29688,12 @@ static s7_pointer g_close_output_port(s7_scheme *sc, s7_pointer args)
 
 /* -------- read character functions -------- */
 
-static int32_t file_read_char(s7_scheme *sc, s7_pointer port) {return(fgetc(port_file(port)));}
+static int32_t file_read_char(s7_scheme *sc, s7_pointer port) 
+{
+  int32_t c = fgetc(port_file(port));
+  if (c == (int32_t)'\n') port_line_number(port)++;
+  return(c);
+}
 
 static int32_t function_read_char(s7_scheme *sc, s7_pointer port)
 {
@@ -29708,7 +29713,11 @@ static int32_t function_read_char(s7_scheme *sc, s7_pointer port)
 
 static int32_t string_read_char(s7_scheme *sc, s7_pointer port)
 {
-  return((port_data_size(port) <= port_position(port)) ? EOF : (uint8_t)port_data(port)[port_position(port)++]); /* port_string_length is 0 if no port string */
+  uint8_t c;
+  if (port_data_size(port) <= port_position(port)) return(EOF);
+  c = (uint8_t)port_data(port)[port_position(port)++]; /* port_string_length is 0 if no port string, port_data is uint8_t* */
+  if (c == (uint8_t)'\n') port_line_number(port)++;
+  return(c);
 }
 
 static int32_t output_read_char(s7_scheme *sc, s7_pointer port) /* not reachable I think */
@@ -53793,8 +53802,8 @@ static s7_pointer g_dynamic_unwind(s7_scheme *sc, s7_pointer args) /* not fool-p
   if (is_pair(cddr(args))) dw_call = (caddr(args));
   if (!is_boolean(dw_call))
     wrong_type_error_nr(sc, sc->dynamic_unwind_symbol, 2, dw_call, a_boolean_string);
-  if (((is_closure(func)) && (closure_arity_to_int(sc, func) == 2)) ||
-      ((is_c_function(func)) && (c_function_is_aritable(func, 2))) ||
+  if (((is_closure(func)) && (closure_arity_to_int(sc, func) == 2))           ||
+      ((is_c_function(func)) && (c_function_is_aritable(func, 2)))            ||
       ((is_closure_star(func)) && (closure_star_arity_to_int(sc, func) == 2)) ||
       ((is_c_function_star(func)) && (c_function_max_args(func) == 2)))
     swap_stack(sc, OP_DYNAMIC_UNWIND, func, copy_proper_list(sc, cdr(args)));
@@ -97867,7 +97876,7 @@ static const char *decoded_name(s7_scheme *sc, const s7_pointer p)
   if (p == current_input_port(sc))  return("current-input-port");
   if (p == current_output_port(sc)) return("current-output-port");
   if (p == current_error_port(sc))  return("current-error_port");
-  if ((s7_is_valid(sc, p)) && (is_let(p)) && (is_unlet(p))) return("unlet");
+  if ((is_let(p)) && (is_unlet(p))) return("unlet");
   {
     s7_pointer wrapper;
     int32_t i;
@@ -100895,4 +100904,6 @@ int main(int argc, char **argv)
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
+ *
+ * test read-char|line|string?+line-number (also read and perhaps read-byte), also write-char et al, and s7test, t837.scm
  */
