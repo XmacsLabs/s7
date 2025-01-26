@@ -29224,8 +29224,7 @@ static s7_pointer g_port_file(s7_scheme *sc, s7_pointer args)
 /* -------------------------------- port-line-number -------------------------------- */
 static s7_pointer port_line_number_p_p(s7_scheme *sc, s7_pointer x)
 {
-  if ((!is_input_port(x)) ||
-      (port_is_closed(x)))
+  if (!is_input_port(x)) /* used to check port_is_closed? */
     return(method_or_bust_p(sc, x, sc->port_line_number_symbol, an_input_port_string));
   return(make_integer(sc, port_line_number(x)));
 }
@@ -29691,7 +29690,7 @@ static s7_pointer g_close_output_port(s7_scheme *sc, s7_pointer args)
 static int32_t file_read_char(s7_scheme *sc, s7_pointer port) 
 {
   int32_t c = fgetc(port_file(port));
-  if (c == (int32_t)'\n') port_line_number(port)++;
+  if ((c == (int32_t)'\n') && (!is_loader_port(port))) port_line_number(port)++;
   return(c);
 }
 
@@ -29716,7 +29715,7 @@ static int32_t string_read_char(s7_scheme *sc, s7_pointer port)
   uint8_t c;
   if (port_data_size(port) <= port_position(port)) return(EOF);
   c = (uint8_t)port_data(port)[port_position(port)++]; /* port_string_length is 0 if no port string, port_data is uint8_t* */
-  if (c == (uint8_t)'\n') port_line_number(port)++;
+  if ((c == (uint8_t)'\n') && (!is_loader_port(port))) port_line_number(port)++;
   return(c);
 }
 
@@ -31180,6 +31179,7 @@ static s7_pointer write_char_p_p(s7_scheme *sc, s7_pointer c)
  * (with-output-to-string (lambda () (display #\space))) -> " "
  * is this correct?  It's what Guile does.  write-char is actually display-char.
  */
+/* should write-char, write, write-string, display, and newline count newlines for port-line-number?  Currently we only accept input ports */
 
 
 /* -------------------------------- peek-char -------------------------------- */
@@ -31323,7 +31323,9 @@ static s7_pointer g_read_string(s7_scheme *sc, s7_pointer args)
 {
   /* read-chars would be a better name -- read-string could mean CL-style read-from-string (like eval-string)
    *   similarly read-bytes could return a byte-vector (rather than r7rs's read-bytevector)
-   *   and write-string -> write-chars, write-bytevector -> write-bytes
+   *   and write-string -> write-chars, write-bytevector -> write-bytes.
+   * should this worry about newlines?  read-char and read-line keep port-line-number up to date,
+   *   but here we'd need to scan the new string via strchr -- is it worth the bother?
    */
   #define H_read_string "(read-string k port) reads k characters from port into a new string and returns it."
   #define Q_read_string s7_make_signature(sc, 3, \
@@ -72880,6 +72882,7 @@ static void init_choosers(s7_scheme *sc)
 
 
 /* ---------------- *unbound-variable-hook* ---------------- */
+#if !DISABLE_AUTOLOAD
 static s7_pointer loaded_library(s7_scheme *sc, const char *file)
 {
   for (s7_pointer p = global_value(sc->libraries_symbol); is_pair(p); p = cdr(p))
@@ -72887,6 +72890,7 @@ static s7_pointer loaded_library(s7_scheme *sc, const char *file)
       return(cdar(p));
   return(sc->nil);
 }
+#endif
 
 static void pair_set_current_input_location(s7_scheme *sc, s7_pointer p)
 {
@@ -100904,6 +100908,4 @@ int main(int argc, char **argv)
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
- *
- * test read-char|line|string?+line-number (also read and perhaps read-byte), also write-char et al, and s7test, t837.scm
  */
