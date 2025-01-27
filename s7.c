@@ -473,7 +473,7 @@
 #define ld64 PRId64
 #define p64 PRIdPTR
 
-#define MAX_FLOAT_FORMAT_PRECISION 128
+#define MAX_FLOAT_FORMAT_PRECISION 128 /* does this make any sense? 53 bits in mantissa: 16 digits, are the extra digits just garbage? */
 
 /* types */
 enum {T_FREE = 0,
@@ -8016,8 +8016,7 @@ static void resize_heap_to(s7_scheme *sc, s7_int size)
 			       wrap_integer(sc, new_size),
 			       wrap_integer(sc, sc->max_heap_size)));
 	  return;
-	}
-    }
+	}}
 
   /* do not call new_cell here! */
 #if POINTER_32
@@ -39120,7 +39119,7 @@ static s7_pointer g_list_set_1(s7_scheme *sc, s7_pointer lst, s7_pointer args, i
 
 static s7_pointer g_list_set(s7_scheme *sc, s7_pointer args) {return(g_list_set_1(sc, car(args), cdr(args), 2));}
 
-static void list_set_index_check(s7_scheme *sc, s7_int i1)
+static inline void list_set_index_check(s7_scheme *sc, s7_int i1)
 {
   if (i1 < 0)
     out_of_range_error_nr(sc, sc->list_set_symbol, int_two, wrap_integer(sc, i1), it_is_negative_string);
@@ -97600,7 +97599,7 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
     case SL_FILE_NAMES: case SL_FILENAMES:
       sl_unsettable_error_nr(sc, sym);
 
-    case SL_FLOAT_FORMAT_PRECISION: /* float-format-precision should not be huge => hangs in snprintf -- what's a reasonable limit here? */
+    case SL_FLOAT_FORMAT_PRECISION: /* float-format-precision should not be huge => hangs in snprintf -- limit by bits in mantissa? */
       iv = s7_integer_clamped_if_gmp(sc, sl_integer_geq_0(sc, sym, val));
       sc->float_format_precision = (iv < MAX_FLOAT_FORMAT_PRECISION) ? iv : MAX_FLOAT_FORMAT_PRECISION;
       return(val);
@@ -100840,63 +100839,63 @@ int main(int argc, char **argv)
 #endif
 
 /* ------------------------------------------------------------
- *           19.0   21.0   22.0   23.0   24.0   25.0   25.1
+ *             19.0   21.0   22.0   23.0   24.0   25.0   25.1
  * ------------------------------------------------------------
- * tpeak      148    114    108    105    102    109    109
- * tref      1081    687    463    459    464    412    412
- * tlimit    3936   5371   5371   5371   5371    783    783
- * index            1016    973    967    972    988    988
- * tmock            1145   1082   1042   1045   1031   1031
- * tvect     3408   2464   1772   1669   1497   1457   1457
- * thook     7651   ----   2590   2030   2046   1731   1731
- * texit     1884   1950   1778   1741   1770   1759   1759
- * tauto                   2562   2048   1729   1760   1760
- * s7test           1831   1818   1829   1830   1849   1863
- * lt        2222   2172   2150   2185   1950   1892   1892
- * dup              3788   2492   2239   2097   2012   2004
- * tread            2421   2419   2408   2405   2241   2241
- * tcopy            5546   2539   2375   2386   2352   2352
- * trclo     8248   2782   2615   2634   2622   2499   2499
- * tload                   3046   2404   2566   2506   2500
- * tmat             3042   2524   2578   2590   2522   2522
- * fbench    2933   2583   2460   2430   2478   2536   2536
- * tsort     3683   3104   2856   2804   2858   2858   2858
- * titer     4550   3349   3070   2985   2966   2917   2917
- * tio              3752   3683   3620   3583   3127   3127
- * tbit      3836   3305   3245   3261   3264   3181   3181
- * tobj             3970   3828   3577   3508   3434   3434
- * teq              4045   3536   3486   3544   3556   3573
- * tmac             4373   ----   4193   4188   4024   4024
- * tcomplex         3869   3804   3844   3888   4215   4215
- * tcase            4793   4439   4430   4439   4376   4383
- * tmap             8774   4489   4541   4586   4380   4380
- * tlet      11.0   6974   5609   5980   5965   4470   4470
- * tfft             7729   4755   4476   4536   4538   4538
- * tshoot           5447   5183   5055   5034   4833   4833
- * tstar            6705   5834   5278   5177   5059   5059
- * tform            5348   5307   5316   5084   5055   5071
- * tstr      10.0   6342   5488   5162   5180   5259   5259
- * tnum             6013   5433   5396   5409   5402   5402
- * tlist     9219   7546   6558   6240   6300   5770   5770
- * trec      19.6   6980   6599   6656   6658   6015   6015
- * tari      15.0   12.7   6827   6543   6278   6112   6112
- * tgsl             7802   6373   6282   6208   6208   6213
- * tset                           6260   6364   6278   6278
- * tleft     12.2   9753   7537   7331   7331   6393   6393 [6431 if overflow check]
- * tmisc                          7614   7115   7130   7130
- * tclo             8025   7645   8809   7770   7627   7633
- * tgc              10.4   7763   7579   7617   7619   7649
- * tlamb                          8003   7941   7920   7931
- * thash            11.7   9734   9479   9526   9283   9283
- * cb        12.9   11.0   9658   9564   9609   9657   9657
- * tmap-hash                                    10.3   10.3
- * tgen             11.4   12.0   12.1   12.2   12.4   12.4
- * tall      15.9   15.6   15.6   15.6   15.1   15.1   15.1
- * timp             24.4   20.0   19.6   19.7   15.5   15.5
- * tmv              21.9   21.1   20.7   20.6   16.6   16.6
- * calls            37.5   37.0   37.5   37.1   37.1   37.0
- * sg                      55.9   55.8   55.4   55.3   55.2
- * tbig            175.8  156.5  148.1  146.2  145.5  145.4
+ * tpeak        148    114    108    105    102    109    109
+ * tref        1081    687    463    459    464    412    413
+ * tlimit      3936   5371   5371   5371   5371    783    784
+ * index              1016    973    967    972    988    991
+ * tmock              1145   1082   1042   1045   1031   1031
+ * tvect       3408   2464   1772   1669   1497   1457   1457
+ * thook       7651   ----   2590   2030   2046   1731   1733
+ * texit       1884   1950   1778   1741   1770   1759   1759
+ * tauto                     2562   2048   1729   1760   1766
+ * s7test             1831   1818   1829   1830   1849   1873
+ * lt          2222   2172   2150   2185   1950   1892   1895
+ * dup                3788   2492   2239   2097   2012   2004
+ * tread              2421   2419   2408   2405   2241   2248
+ * tcopy              5546   2539   2375   2386   2352   2352
+ * trclo       8248   2782   2615   2634   2622   2499   2499
+ * tload                     3046   2404   2566   2506   2500
+ * tmat               3042   2524   2578   2590   2522   2522
+ * fbench      2933   2583   2460   2430   2478   2536   2536
+ * tsort       3683   3104   2856   2804   2858   2858   2858
+ * titer       4550   3349   3070   2985   2966   2917   2917
+ * tio                3752   3683   3620   3583   3127   3135 [string_read_char 5]
+ * tbit        3836   3305   3245   3261   3264   3181   3181
+ * tobj               3970   3828   3577   3508   3434   3434
+ * teq                4045   3536   3486   3544   3556   3573
+ * tmac               4373   ----   4193   4188   4024   4026
+ * tcomplex           3869   3804   3844   3888   4215   4216
+ * tcase              4793   4439   4430   4439   4376   4383
+ * tmap               8774   4489   4541   4586   4380   4380
+ * tlet        11.0   6974   5609   5980   5965   4470   4470
+ * tfft               7729   4755   4476   4536   4538   4540
+ * tshoot             5447   5183   5055   5034   4833   4837
+ * tstar              6705   5834   5278   5177   5059   5059
+ * tform              5348   5307   5316   5084   5055   5075 [format_numeric_arg]
+ * concordance 10.0   6342   5488   5162   5180   5259   5272 [string_read_char]
+ * tnum               6013   5433   5396   5409   5402   5406
+ * tlist       9219   7546   6558   6240   6300   5770   5770  5911 [list_set_index_check 76, etc][5794 if inlined]
+ * trec        19.6   6980   6599   6656   6658   6015   6015
+ * tari        15.0   12.7   6827   6543   6278   6112   6112
+ * tgsl               7802   6373   6282   6208   6208   6213
+ * tset                             6260   6364   6278   6278
+ * tleft       12.2   9753   7537   7331   7331   6393   6393 [6431 if overflow check]
+ * tmisc                            7614   7115   7130   7137
+ * tclo               8025   7645   8809   7770   7627   7640
+ * tgc                10.4   7763   7579   7617   7619   7649
+ * tlamb                            8003   7941   7920   7927
+ * thash              11.7   9734   9479   9526   9283   9286
+ * cb          12.9   11.0   9658   9564   9609   9657   9664 [string_read_char]
+ * tmap-hash                                      10.3   10.3
+ * tgen               11.4   12.0   12.1   12.2   12.4   12.4
+ * tall        15.9   15.6   15.6   15.6   15.1   15.1   15.1
+ * timp               24.4   20.0   19.6   19.7   15.5   15.5
+ * tmv                21.9   21.1   20.7   20.6   16.6   16.6
+ * calls              37.5   37.0   37.5   37.1   37.1   37.0
+ * sg                        55.9   55.8   55.4   55.3   55.2
+ * tbig              175.8  156.5  148.1  146.2  145.5  145.4
  * ------------------------------------------------------------
  *
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
@@ -100908,4 +100907,6 @@ int main(int argc, char **argv)
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
+ *
+ * _nr in list_set_error?
  */
