@@ -29686,7 +29686,7 @@ static s7_pointer g_close_output_port(s7_scheme *sc, s7_pointer args)
 
 /* -------- read character functions -------- */
 
-static int32_t file_read_char(s7_scheme *sc, s7_pointer port) 
+static int32_t file_read_char(s7_scheme *sc, s7_pointer port)
 {
   int32_t c = fgetc(port_file(port));
   if ((c == (int32_t)'\n') && (!is_loader_port(port))) port_line_number(port)++;
@@ -37342,6 +37342,14 @@ static s7_int format_numeric_arg(s7_scheme *sc, const char *str, s7_int str_len,
   return(width);
 }
 
+static format_data_t *make_fdat(s7_scheme *sc)
+{
+  format_data_t *fdat;
+  fdat = (format_data_t *)Calloc(1, sizeof(format_data_t)); /* not Malloc here! */
+  fdat->curly_arg = sc->nil;
+  return(fdat);
+}
+
 static format_data_t *open_format_data(s7_scheme *sc)
 {
   format_data_t *fdat;
@@ -37350,27 +37358,26 @@ static format_data_t *open_format_data(s7_scheme *sc)
     {
       int32_t new_num_fdats = sc->format_depth * 2;
       sc->fdats = (format_data_t **)Realloc(sc->fdats, sizeof(format_data_t *) * new_num_fdats);
-      for (int32_t k = sc->num_fdats; k < new_num_fdats; k++) sc->fdats[k] = NULL;
+      for (int32_t k = sc->num_fdats; k < new_num_fdats; k++) sc->fdats[k] = make_fdat(sc);
       sc->num_fdats = new_num_fdats;
     }
   fdat = sc->fdats[sc->format_depth];
-  if (!fdat)
+  if (fdat->port)
     {
-      fdat = (format_data_t *)Malloc(sizeof(format_data_t));
-      sc->fdats[sc->format_depth] = fdat;
-      fdat->curly_len = 0;
-      fdat->curly_str = NULL;
-      fdat->ctr = 0;
+      /* happens a lot in tform */
+      close_format_port(sc, fdat->port);
+      fdat->port = NULL;
     }
-  else
+#if 0
+  /* I think this can't happen -- objout with methods off can't trigger an error (see below) */
+  if (fdat->strport)
     {
-      if (fdat->port)
-	close_format_port(sc, fdat->port);
-      if (fdat->strport)
-	close_format_port(sc, fdat->strport);
+      close_format_port(sc, fdat->strport);
+      fdat->strport = NULL;
     }
-  fdat->port = NULL;
-  fdat->strport = NULL;
+#else
+  if ((S7_DEBUGGING) && (fdat->strport)) {fprintf(stderr, "fdat->strport open\n"); if (sc->stop_at_error) abort();}
+#endif
   fdat->loc = 0;
   fdat->curly_arg = sc->nil;
   return(fdat);
@@ -39092,7 +39099,7 @@ static s7_pointer g_list_set_1(s7_scheme *sc, s7_pointer lst, s7_pointer args, i
     return(method_or_bust(sc, ind, sc->list_set_symbol, set_ulist_1(sc, lst, args), sc->type_names[T_INTEGER], 2));
   index = s7_integer_clamped_if_gmp(sc, ind);
 
-  if (index < 0)
+  if (index < 0) /* arg_num used here so can't use list_set_index_check */
     out_of_range_error_nr(sc, sc->list_set_symbol, wrap_integer(sc, arg_num), ind, it_is_negative_string);
   if (index > sc->max_list_length) /* (list-set! (list 1 2 3) (ash 1 61) 0) */
     error_nr(sc, sc->out_of_range_symbol,
@@ -39119,20 +39126,19 @@ static s7_pointer g_list_set_1(s7_scheme *sc, s7_pointer lst, s7_pointer args, i
 
 static s7_pointer g_list_set(s7_scheme *sc, s7_pointer args) {return(g_list_set_1(sc, car(args), cdr(args), 2));}
 
-static inline void list_set_index_check(s7_scheme *sc, s7_int i1)
+static no_return void list_set_index_check_nr(s7_scheme *sc, s7_int i1)
 {
   if (i1 < 0)
     out_of_range_error_nr(sc, sc->list_set_symbol, int_two, wrap_integer(sc, i1), it_is_negative_string);
-  if (i1 > sc->max_list_length)
-    error_nr(sc, sc->out_of_range_symbol,
-	     set_elist_3(sc, wrap_string(sc, "list-set! index ~D is too large, (*s7* 'max-list-length) is ~D", 62),
-			 wrap_integer(sc, i1), wrap_integer(sc, sc->max_list_length)));
+  error_nr(sc, sc->out_of_range_symbol,
+	   set_elist_3(sc, wrap_string(sc, "list-set! index ~D is too large, (*s7* 'max-list-length) is ~D", 62),
+		       wrap_integer(sc, i1), wrap_integer(sc, sc->max_list_length)));
 }
 
 static inline s7_pointer list_set_p_pip_unchecked(s7_scheme *sc, s7_pointer p1, s7_int i1, s7_pointer p2)
 {
   s7_pointer p = p1;
-  list_set_index_check(sc, i1);
+  if ((i1 < 0) || (i1 > sc->max_list_length)) list_set_index_check_nr(sc, i1);
   for (s7_int i = 0; ((is_pair(p)) && (i < i1)); i++, p = cdr(p));
   if (!is_pair(p))
     {
@@ -39149,7 +39155,7 @@ static s7_pointer list_increment_p_pip_unchecked(opt_info *o)
   s7_scheme *sc = o->sc;
   s7_pointer p = slot_value(o->v[2].p), p1, p2;
   s7_int index = integer(p);
-  list_set_index_check(sc, index);
+  if ((index < 0) || (index > sc->max_list_length)) list_set_index_check_nr(sc, index);
   p1 = slot_value(o->v[1].p);
   p = p1;
   for (s7_int i = 0; ((is_pair(p)) && (i < index)); i++, p = cdr(p));
@@ -39180,7 +39186,7 @@ static s7_pointer g_list_set_i(s7_scheme *sc, s7_pointer args)
     return(mutable_method_or_bust(sc, lst, sc->list_set_symbol, args, sc->type_names[T_PAIR], 1));
 
   index = s7_integer_clamped_if_gmp(sc, cadr(args));
-  list_set_index_check(sc, index);
+  if ((index < 0) || (index > sc->max_list_length)) list_set_index_check_nr(sc, index);
 
   for (s7_int i = 0; (i < index) && is_pair(p); i++, p = cdr(p)) {}
   if (!is_pair(p))
@@ -100277,8 +100283,9 @@ s7_scheme *s7_init(void)
   sc->is_mutable_symbol = make_symbol(sc, "mutable?", 8);
   sc->file__symbol = make_symbol(sc, "FILE*", 5);
   sc->circle_info = make_shared_info(sc);
-  sc->fdats = (format_data_t **)Calloc(8, sizeof(format_data_t *));
+  sc->fdats = (format_data_t **)Malloc(8 * sizeof(format_data_t *));
   sc->num_fdats = 8;
+  for (int32_t k = 0; k < 8; k++) sc->fdats[k] = make_fdat(sc);
   sc->mlist_1 = semipermanent_list(sc, 1);
   sc->mlist_2 = semipermanent_list(sc, 2);
   sc->plist_1 = semipermanent_list(sc, 1);
@@ -100873,10 +100880,10 @@ int main(int argc, char **argv)
  * tfft               7729   4755   4476   4536   4538   4540
  * tshoot             5447   5183   5055   5034   4833   4837
  * tstar              6705   5834   5278   5177   5059   5059
- * tform              5348   5307   5316   5084   5055   5075 [format_numeric_arg]
+ * tform              5348   5307   5316   5084   5055   4998
  * concordance 10.0   6342   5488   5162   5180   5259   5272 [string_read_char]
  * tnum               6013   5433   5396   5409   5402   5406
- * tlist       9219   7546   6558   6240   6300   5770   5770  5911 [list_set_index_check 76, etc][5794 if inlined]
+ * tlist       9219   7546   6558   6240   6300   5770   5784
  * trec        19.6   6980   6599   6656   6658   6015   6015
  * tari        15.0   12.7   6827   6543   6278   6112   6112
  * tgsl               7802   6373   6282   6208   6208   6213
@@ -100908,5 +100915,5 @@ int main(int argc, char **argv)
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
- * _nr in list_set_error?
+ * format_nesting via strchr? (tform), preset precision when float_choice made
  */
