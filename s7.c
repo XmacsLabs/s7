@@ -14952,7 +14952,7 @@ static char *number_to_string_base_10(s7_scheme *sc, s7_pointer obj, s7_int widt
 	{
 #if WITH_DTOA
 	  if ((float_choice == 'g') &&
-	      (precision == WRITE_REAL_PRECISION))
+	      (precision == WRITE_REAL_PRECISION)) /* set to 6 in format! need ~,16G to hit this code */
 	    {
 	      /* (number->string 0.0000001) is sensitive to (*s7* 'float-format-precision) and inconsistent: either 1e-7 or 0.0000001
 	       *    because fpconv_dtoa has some complicated decision about 'g' vs 'f' -- not sure if this is a bug.
@@ -37259,20 +37259,20 @@ static void format_ordinal_number(s7_scheme *sc, format_data_t *fdat, s7_pointer
   fdat->ctr++;
 }
 
-static s7_int format_nesting(const char *str, char opener, char closer, s7_int start, s7_int end) /* start=i, end=str_len-1 */
+static s7_int format_nesting(const char *str, s7_int start, s7_int end)   /* start=i, end=str_len-1, assume ~{...~} */
 {
   s7_int nesting = 1;
   for (s7_int k = start + 2; k < end; k++)
     if (str[k] == '~')
       {
-	if (str[k + 1] == closer)
+	if (str[k + 1] == '}')
 	  {
 	    nesting--;
 	    if (nesting == 0)
 	      return(k - start - 1);
 	  }
 	else
-	  if (str[k + 1] == opener)
+	  if (str[k + 1] == '{')
 	    nesting++;
       }
   return(-1);
@@ -37529,9 +37529,10 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 
 		if ((is_pair(car(fdat->args))) &&               /* any sequence is possible here */
 		    (s7_list_length(sc, car(fdat->args)) < 0))  /* (format #f "~{~a~e~}" (cons 1 2)) */
+		  /* we can't use !s7_is_proper_list(sc, car(fdat->args)) because cyclic lists are ok here */
 		  format_error_nr(sc, "~{ argument is a dotted list", 28, str, args, fdat);
 
-		curly_len = format_nesting(str, '{', '}', i, str_len - 1);
+		curly_len = format_nesting(str, i, str_len - 1);
 
 		if (curly_len == -1)
 		  format_error_nr(sc, "'{' directive, but no matching '}'", 34, str, args, fdat);
@@ -100828,7 +100829,7 @@ int main(int argc, char **argv)
 
 /* in Linux:  gcc s7.c -o repl -DWITH_MAIN -I. -O2 -g -ldl -lm -Wl,-export-dynamic ; also need libc.scm cload.scm repl.scm to get a decent repl
  * in *BSD:   gcc s7.c -o repl -DWITH_MAIN -I. -O2 -g -lm -Wl,-export-dynamic
- * in OSX:    gcc s7.c -o repl -DWITH_MAIN -I. -O2 -g -lm
+ * in OSX:    clang s7.c -o repl -DWITH_MAIN -I. -O2 -g -lm
  * in msys2:  gcc s7.c -o s7 -DWITH_MAIN -I. -O2 -g -ldl -lm -Wl,-export-all-symbols,--out-implib,s7.lib
  * for tcc:   tcc -o s7 s7.c -I. -lm -DWITH_MAIN -ldl -rdynamic -DWITH_C_LOADER
  * according to callgrind, clang is noticeably slower than gcc
@@ -100840,6 +100841,7 @@ int main(int argc, char **argv)
  *
  * valgrind --leak-check=full --show-reachable=no --suppressions=/home/bil/cl/free.supp repl s7test.scm
  * addr2line -e repl 0xd7237 -> s7.c:29697
+
  * 24-Aug-24: cloc: blank 9043 comment 3880 code 86759, [gmp: 5619, s7_debugging: 2867 see search,scm] -> 78273 lines of code normally
  */
 #endif
@@ -100868,7 +100870,7 @@ int main(int argc, char **argv)
  * fbench      2933   2583   2460   2430   2478   2536   2536
  * tsort       3683   3104   2856   2804   2858   2858   2858
  * titer       4550   3349   3070   2985   2966   2917   2917
- * tio                3752   3683   3620   3583   3127   3135 [string_read_char 5]
+ * tio                3752   3683   3620   3583   3127   3135
  * tbit        3836   3305   3245   3261   3264   3181   3181
  * tobj               3970   3828   3577   3508   3434   3434
  * teq                4045   3536   3486   3544   3556   3573
@@ -100880,21 +100882,21 @@ int main(int argc, char **argv)
  * tfft               7729   4755   4476   4536   4538   4540
  * tshoot             5447   5183   5055   5034   4833   4837
  * tstar              6705   5834   5278   5177   5059   5059
- * tform              5348   5307   5316   5084   5055   4998
- * concordance 10.0   6342   5488   5162   5180   5259   5272 [string_read_char]
+ * concordance 10.0   6342   5488   5162   5180   5259   5272
  * tnum               6013   5433   5396   5409   5402   5406
  * tlist       9219   7546   6558   6240   6300   5770   5784
  * trec        19.6   6980   6599   6656   6658   6015   6015
  * tari        15.0   12.7   6827   6543   6278   6112   6112
  * tgsl               7802   6373   6282   6208   6208   6213
  * tset                             6260   6364   6278   6278
- * tleft       12.2   9753   7537   7331   7331   6393   6393 [6431 if overflow check]
+ * tleft       12.2   9753   7537   7331   7331   6393   6393
  * tmisc                            7614   7115   7130   7137
  * tclo               8025   7645   8809   7770   7627   7640
  * tgc                10.4   7763   7579   7617   7619   7649
  * tlamb                            8003   7941   7920   7927
  * thash              11.7   9734   9479   9526   9283   9286
- * cb          12.9   11.0   9658   9564   9609   9657   9664 [string_read_char]
+ * tform                     10.0   9992   9961   9626   9455
+ * cb          12.9   11.0   9658   9564   9609   9657   9664
  * tmap-hash                                      10.3   10.3
  * tgen               11.4   12.0   12.1   12.2   12.4   12.4
  * tall        15.9   15.6   15.6   15.6   15.1   15.1   15.1
@@ -100914,6 +100916,4 @@ int main(int argc, char **argv)
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
- *
- * format_nesting via strchr? (tform), preset precision when float_choice made
  */

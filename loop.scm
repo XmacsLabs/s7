@@ -514,6 +514,11 @@
         (and (member typ1 l2) (member typ2 l2))
         (and (member typ1 l3) (member typ2 l3)))))
 
+(define (last-pair l)
+  (if (pair? (cdr l))
+      (last-pair (cdr l))
+      l))
+
 (define (parse-accumulation forms clauses ops)
   ;; forms is (<op> form ...)
   ;; where <op> is collect append nconc

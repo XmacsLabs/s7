@@ -126,7 +126,7 @@
       (get-output-string op #t))
     (close-output-port op)))
 
-(test-chars)
+;(test-chars)
 
 (define (f)
   (do ((i 0 (+ i 1)))
@@ -138,20 +138,15 @@
     (format #f "~19,'xf" 3.14)
     (format #f "~{~{~~~{~D~| ~}~| ~}~}" '(((1 2) (3 4))))
     (format #f "~10,'\\T~&~20Tasdf~&")
-    (reader-cond
-     ((<= (*s7* 'major-version) 9)
-      (format #f "~D~*~Ctwo~P ~O ~X ~B ~,3E ~1,4F ~N,G" 23 32 #\a 2 95 95 9 pi pi 3 pi))
-     (#t 
-      (format #f "~:D~*~Ctwo~P ~O ~X ~B ~,3E ~1,4F ~N,G" 23 32 #\a 2 95 95 9 pi pi 3 pi)))
+    (format #f "~D~*~Ctwo~P ~O ~X ~B ~,3E ~1,4F ~N,G" 23 32 #\a 2 95 95 9 pi pi 3 pi)
     ))
-(f)
+;(f)
 
-(exit)
 
 ;;; --------------------------------------------------------------------------------
-;;; these tests are not currently used
+;;; these tests are not currently used, callgrind stats based on size = 1000000
 
-(define size 1000000)
+(define size 500000)
 
 (define (f1) ; [116] -> [78] (fixed c_function_chooser) -> [54] opt_p_call_cc
   (let ((str ""))
@@ -307,6 +302,98 @@
  10,503,772  ./string/../sysdeps/x86_64/multiarch/strchr-avx2.S:__strchr_avx2 [/usr/lib/x86_64-linux-gnu/libc.
 |#
 
+(define (f6a) ; 918
+  (let ((res "")
+	(size2 (/ size 2)))
+    (do ((i 0 (+ i 1)))
+	((= i size2) res)
+      (set! res (format #f "~F" pi)))))
+
+;(unless (string=? (f6a) "3.141593") (format *stderr* "f6a: ~S~%" (f6a)))
+
+#|
+254,500,000  ./stdio-common/./stdio-common/printf_fp.c:__printf_fp_buffer_1.constprop.0.isra.0 [/usr/lib/x86_64-linux-gnu/libc.so.6]
+103,037,242  s7.c:format_to_port_1 [/home/bil/motif-snd/repl]
+ 97,524,056  ./stdio-common/./stdio-common/vfprintf-internal.c:__printf_buffer [/usr/lib/x86_64-linux-gnu/libc.so.6]
+ 84,000,000  ./stdlib/../sysdeps/x86_64/mul_1.S:__mpn_mul_1 [/usr/lib/x86_64-linux-gnu/libc.so.6]
+ 36,519,357  ./stdio-common/./stdio-common/Xprintf_buffer_write.c:__printf_buffer_write [/usr/lib/x86_64-linux-gnu/libc.so.6]
+ 33,000,012  s7.c:number_to_string_base_10.isra.0 [/home/bil/motif-snd/repl]
+ 32,500,000  s7.c:format_number [/home/bil/motif-snd/repl]
+ 27,500,000  ./stdio-common/./stdio-common/printf_fp.c:__printf_fp_l_buffer [/usr/lib/x86_64-linux-gnu/libc.so.6]
+ 25,000,000  ./stdio-common/./stdio-common/printf_fp.c:hack_digit [/usr/lib/x86_64-linux-gnu/libc.so.6]
+ 19,507,657  ./debug/./debug/snprintf_chk.c:__snprintf_chk [/usr/lib/x86_64-linux-gnu/libc.so.6]
+ 19,009,424  ./string/../sysdeps/x86_64/multiarch/strchr-avx2.S:__strchrnul_avx2 [/usr/lib/x86_64-linux-gnu/libc.so.6]
+ 14,705,606  s7.c:gc.isra.0 [/home/bil/motif-snd/repl]
+|#
+
+(define (f6b) ; 598
+  (let ((res "")
+	(size2 (/ size 2)))
+    (do ((i 0 (+ i 1)))
+	((= i size2) res)
+      (set! res (format #f "~,16G" pi))))) ; 16=write_real_precision
+
+;(unless (string=? (f6b) "3.141592653589793") (format *stderr* "f6b: ~S~%" (f6b)))
+
+#|
+290,000,012  s7.c:number_to_string_base_10.isra.0 [/home/bil/motif-snd/repl]
+114,036,766  s7.c:format_to_port_1 [/home/bil/motif-snd/repl]
+ 43,500,000  s7.c:dtoa_multiply.isra.0 [/home/bil/motif-snd/repl]
+ 30,500,000  s7.c:format_number [/home/bil/motif-snd/repl]
+ 26,500,000  s7.c:format_numeric_arg [/home/bil/motif-snd/repl]
+ 20,163,329  ./string/../sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S:__memcpy_avx_unaligned_erms [/usr/lib/x86_64-linux-gnu/libc.so.6]
+ 14,705,113  s7.c:gc.isra.0 [/home/bil/motif-snd/repl]
+ 14,500,000  s7.c:g_format_no_column [/home/bil/motif-snd/repl]
+ 12,500,000  s7.c:string_write_string [/home/bil/motif-snd/repl]
+  7,950,981  s7.c:opt_dotimes [/home/bil/motif-snd/repl]
+  7,500,000  s7.c:opt_p_call_ccs [/home/bil/motif-snd/repl]
+  4,500,000  s7.c:opt_set_p_p_f [/home/bil/motif-snd/repl]
+|#
+
+(define (f6c) ; 436
+  (let ((res "")
+	(size2 (/ size 2)))
+    (do ((i 0 (+ i 1)))
+	((= i size2) res)
+      (set! res (number->string pi)))))
+
+;(unless (string=? (f6c) "3.141592653589793") (format *stderr* "f6c: ~S~%" (f6c)))
+
+#|
+290,000,012  s7.c:number_to_string_base_10.isra.0 [/home/bil/motif-snd/repl]
+ 43,500,000  s7.c:dtoa_multiply.isra.0 [/home/bil/motif-snd/repl]
+ 38,289,362  s7.c:number_to_string_p_p [/home/bil/motif-snd/repl]
+ 20,163,183  ./string/../sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S:__memcpy_avx_unaligned_erms [/usr/lib/x86_64-linux-gnu/libc.so.6]
+ 14,705,178  s7.c:gc.isra.0 [/home/bil/motif-snd/repl]
+  7,950,981  s7.c:opt_dotimes [/home/bil/motif-snd/repl]
+  4,500,000  s7.c:opt_set_p_p_f [/home/bil/motif-snd/repl]
+  3,500,000  s7.c:opt_p_p_s [/home/bil/motif-snd/repl]
+|#
+
+(define (f6d) ; 567
+  (let ((res "")
+	(size2 (/ size 2)))
+    (do ((i 0 (+ i 1)))
+	((= i size2) res)
+      (set! res (format #f "~A" (number->string pi))))))
+
+;(unless (string=? (f6d) "3.141592653589793") (format *stderr* "f6d: ~S~%" (f6d)))
+
+#|
+290,000,012  s7.c:number_to_string_base_10.isra.0 [/home/bil/motif-snd/repl]
+ 43,500,000  s7.c:dtoa_multiply.isra.0 [/home/bil/motif-snd/repl]
+ 38,026,806  s7.c:number_to_string_p_p [/home/bil/motif-snd/repl]
+ 33,815,277  s7.c:s7_object_to_string [/home/bil/motif-snd/repl]
+ 25,673,295  s7.c:gc.isra.0 [/home/bil/motif-snd/repl]
+ 25,663,099  ./string/../sysdeps/x86_64/multiarch/memmove-vec-unaligned-erms.S:__memcpy_avx_unaligned_erms [/usr/lib/x86_64-linux-gnu/libc.so.6]
+ 23,000,000  s7.c:string_to_port [/home/bil/motif-snd/repl]
+ 18,000,075  s7.c:block_to_string [/home/bil/motif-snd/repl]
+ 18,000,000  s7.c:opt_p_call_ppp [/home/bil/motif-snd/repl]
+ 12,500,000  s7.c:string_write_string [/home/bil/motif-snd/repl]
+  7,951,065  s7.c:opt_dotimes [/home/bil/motif-snd/repl]
+  4,500,000  s7.c:g_format_as_objstr [/home/bil/motif-snd/repl]
+  4,500,000  s7.c:opt_set_p_p_f [/home/bil/motif-snd/repl]
+|#
 
 (define (f7) ; [362]
   (let ((res "")
@@ -558,12 +645,18 @@
 
 
 (define (test-all)
+  (test-chars)
+  (f)
   (unless (string=? (f1) "just a bare string!") (format *stderr* "f1: ~S~%" (f1)))
   (unless (string=? (f2) "asdf") (format *stderr* "f2: ~S~%" (f2)))
   (unless (string=? (f3) "str: asdf") (format *stderr* "f3: ~S~%" (f3)))
   (unless (string=? (f4) "str: asdf a") (format *stderr* "f4: ~S~%" (f4)))
   (unless (string=? (f5) "(1 2 3)") (format *stderr* "f5: ~S~%" (f5)))
   (unless (string=? (f6) "3.1416") (format *stderr* "f6: ~S~%" (f6)))
+  (unless (string=? (f6a) "3.141593") (format *stderr* "f6a: ~S~%" (f6a)))
+  (unless (string=? (f6b) "3.141592653589793") (format *stderr* "f6b: ~S~%" (f6b)))
+  (unless (string=? (f6c) "3.141592653589793") (format *stderr* "f6c: ~S~%" (f6c)))
+  (unless (string=? (f6d) "3.141592653589793") (format *stderr* "f6d: ~S~%" (f6d)))
   (unless (string=? (f7) "3 is third") (format *stderr* "f7: ~S~%" (f7)))
   (unless (string=? (f8) "                1234") (format *stderr* "f8: ~S~%" (f8)))
   (unless (string=? (f9) "                    1234") (format *stderr* "f9: ~S~%" (f9)))
@@ -574,7 +667,7 @@
   (unless (string=? (f15) "100:   a") (format *stderr* "f15: ~S~%" (f15)))
   )
 
-;(test-all) ; [6556]
+(test-all) ; 9455
 
 (when (> (*s7* 'profile) 0)
   (show-profile 200))

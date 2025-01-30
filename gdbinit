@@ -78,20 +78,3 @@ end
 document s7bt
 print a C backtrace with s7 objects decoded as much as possible
 end
-
-define s7btfull
-set logging overwrite on
-set logging redirect on
-set logging enabled on
-if $argc == 1
-  bt $arg0
-end
-if $argc == 0
-  bt
-end
-set logging enabled off
-print s7_decode_bt(cur_sc)
-end
-document s7btfull
-print a full C backtrace with s7 objects decoded as much as possible
-end

@@ -120,7 +120,6 @@
 	 (list "repl" "tfft.scm")
 	 (list "repl" "tshoot.scm")
 	 (list "repl" "tstar.scm")
-	 (list "repl" "tform.scm")
 	 (list "repl" "concordance.scm")
 	 (list "repl" "tnum.scm")
 	 (list "repl" "tlist.scm")
@@ -134,6 +133,7 @@
 	 (list "repl" "tgc.scm")
 	 (list "repl" "tlamb.scm")
 	 (list "repl" "thash.scm")
+	 (list "repl" "tform.scm")
 	 (list "repl" "cb.scm")
 	 (list "repl" "tmap-hash.scm")
 	 (list "snd -noinit" "tgen.scm")    ; repl here + cload sndlib was slower
