@@ -1085,6 +1085,9 @@ typedef struct {
   s7_int loc, curly_len, ctr;
   char *curly_str;
   s7_pointer args, orig_str, curly_arg, port, strport;
+#if S7_DEBUGGING
+  char *last_strport_expr;
+#endif
 } format_data_t;
 
 typedef struct gc_obj_t {
@@ -31317,13 +31320,15 @@ static s7_pointer read_line_p_p(s7_scheme *sc, s7_pointer port)
 
 
 /* -------------------------------- read-string -------------------------------- */
+#define READ_STRING_LINE_NUMBERS 0 /* 1 adds port-line-number support to read-string, doubling the time it takes */
+
 static s7_pointer g_read_string(s7_scheme *sc, s7_pointer args)
 {
   /* read-chars would be a better name -- read-string could mean CL-style read-from-string (like eval-string)
    *   similarly read-bytes could return a byte-vector (rather than r7rs's read-bytevector)
    *   and write-string -> write-chars, write-bytevector -> write-bytes.
    * should this worry about newlines?  read-char and read-line keep port-line-number up to date,
-   *   but here we'd need to scan the new string via strchr -- is it worth the bother?
+   *   but here we'd need to scan the new string (via strchr?) or xor with \n\n\n\n... up to 8-at-a-time, and count zeros.
    */
   #define H_read_string "(read-string k port) reads k characters from port into a new string and returns it."
   #define Q_read_string s7_make_signature(sc, 3, \
@@ -31342,7 +31347,6 @@ static s7_pointer g_read_string(s7_scheme *sc, s7_pointer args)
     error_nr(sc, sc->out_of_range_symbol,
 	     set_elist_3(sc, wrap_string(sc, "read-string first argument ~D is greater than (*s7* 'max-string-length), ~D", 75),
 			 wrap_integer(sc, nchars), wrap_integer(sc, sc->max_string_length)));
-
   if (!is_null(cdr(args)))
     port = cadr(args);
   else
@@ -31369,13 +31373,19 @@ static s7_pointer g_read_string(s7_scheme *sc, s7_pointer args)
       string_length(s) = len;
       str[len] = '\0';
       port_position(port) += len;
+#if READ_STRING_LINE_NUMBERS
+      for (s7_int i = 0; i < len; i++) if (str[i] == '\n') port_line_number(port)++;
+#endif
       return(s);
     }
   if (is_file_port(port))
     {
-      size_t len = fread((void *)str, 1, nchars, port_file(port));
+      s7_int len = (s7_int)fread((void *)str, 1, nchars, port_file(port));
       str[len] = '\0';
       string_length(s) = len;
+#if READ_STRING_LINE_NUMBERS
+      for (s7_int i = 0; i < len; i++) if (str[i] == '\n') port_line_number(port)++;
+#endif
       return(s);
     }
   for (s7_int i = 0; i < nchars; i++)
@@ -31389,6 +31399,9 @@ static s7_pointer g_read_string(s7_scheme *sc, s7_pointer args)
 	  return(s);
 	}
       str[i] = (uint8_t)c;
+#if READ_STRING_LINE_NUMBERS
+      if (c == '\n') port_line_number(port)++;
+#endif
     }
   return(s);
 }
@@ -37346,6 +37359,9 @@ static format_data_t *make_fdat(s7_scheme *sc)
   format_data_t *fdat;
   fdat = (format_data_t *)Calloc(1, sizeof(format_data_t)); /* not Malloc here! */
   fdat->curly_arg = sc->nil;
+#if S7_DEBUGGING
+  fdat->last_strport_expr = NULL;
+#endif
   return(fdat);
 }
 
@@ -37368,14 +37384,20 @@ static format_data_t *open_format_data(s7_scheme *sc)
       fdat->port = NULL;
     }
 #if 0
-  /* I think this can't happen -- objout with methods off can't trigger an error (see below) */
+  /* can happen but requires a lot of effort, only fdat->curly_arg is GC protected?  */
   if (fdat->strport)
     {
       close_format_port(sc, fdat->strport);
       fdat->strport = NULL;
     }
 #else
-  if ((S7_DEBUGGING) && (fdat->strport)) {fprintf(stderr, "fdat->strport open\n"); if (sc->stop_at_error) abort();}
+#if S7_DEBUGGING
+  if (fdat->strport)
+    {
+      fprintf(stderr, "fdat->strport open, %s\n", fdat->last_strport_expr); 
+      if (sc->stop_at_error) abort();
+    }
+#endif
 #endif
   fdat->loc = 0;
   fdat->curly_arg = sc->nil;
@@ -37631,6 +37653,13 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		      {
 			strport = open_format_port(sc);
 			fdat->strport = strport;
+#if S7_DEBUGGING
+			if (fdat->last_strport_expr) {free(fdat->last_strport_expr); fdat->last_strport_expr = NULL;}
+			{
+			  s7_pointer str = s7_name_to_value(sc, "estr");
+			  if (is_string(str)) fdat->last_strport_expr = copy_string_with_length(string_value(str), string_length(str));
+			}
+#endif
 		      }
 		    else strport = port;
 		    if (use_write == P_READABLE)
@@ -84151,6 +84180,10 @@ static bool do_vector_has_definers(s7_pointer v)
   return(false);
 }
 
+#if S7_DEBUGGING
+  static s7_int dodef_ctr = 0;
+#endif
+
 static /* inline */ bool do_tree_has_definers(s7_scheme *sc, s7_pointer tree)
 {
   /* we can't be very fancy here because quote gloms up everything: (cond '(define x 0) ...) etc, and the tree here can
@@ -84161,6 +84194,10 @@ static /* inline */ bool do_tree_has_definers(s7_scheme *sc, s7_pointer tree)
   for (s7_pointer p = tree; is_pair(p); p = cdr(p))
     {
       s7_pointer pp = car(p);
+#if S7_DEBUGGING
+      dodef_ctr++;
+      if (dodef_ctr > 10000) {fprintf(stderr, "loop in %s?\n", __func__); abort();}
+#endif
       if (is_symbol(pp))
 	{
 	  if (is_definer(pp))
@@ -84357,6 +84394,9 @@ static s7_pointer check_do(s7_scheme *sc)
       return(sc->nil);
     }
 
+#if S7_DEBUGGING
+  dodef_ctr = 0;
+#endif
   if (do_tree_has_definers(sc, form))           /* we don't want definers in body, vars, or end test */
     return(fxify_step_exprs(sc, code));
 
@@ -97696,7 +97736,7 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       iv = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
       if (iv < OUTPUT_PORT_DATA_SIZE)
 	error_nr(sc, sc->out_of_range_symbol,
-		 set_elist_3(sc, wrap_string(sc, "(set! (*s7* 'max-port-data-size) ~S): new value should be less than the initial port data size: ~D", 98),
+		 set_elist_3(sc, wrap_string(sc, "(set! (*s7* 'max-port-data-size) ~S): new value should not be less than the initial port data size: ~D", 102),
 			     val, wrap_integer(sc, OUTPUT_PORT_DATA_SIZE)));
       sc->max_port_data_size = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
       return(val);
@@ -100922,4 +100962,7 @@ int main(int argc, char **argv)
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
  * some oddities: why cons in memuse printout, input-string-ports 18795
+ * do_tree_has_definers still segfaults on infinite loop: start repls again
+ * fdat->strport: need fdat-local last-estr?
+ * are keywords independently in symbol-table? -- (symbol ":aaa") will place the keyword in the symbol-table -- I don't see the straight symbol
  */
