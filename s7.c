@@ -1085,9 +1085,6 @@ typedef struct {
   s7_int loc, curly_len, ctr;
   char *curly_str;
   s7_pointer args, orig_str, curly_arg, port, strport;
-#if S7_DEBUGGING
-  char *last_strport_expr;
-#endif
 } format_data_t;
 
 typedef struct gc_obj_t {
@@ -4131,7 +4128,10 @@ static inline s7_int safe_strlen(const char *str) /* this is safer than strlen, 
 static char *copy_string_with_length(const char *str, s7_int len)
 {
   char *newstr;
-  if ((S7_DEBUGGING) && ((len <= 0) || (!str))) fprintf(stderr, "%s[%d]: len: %" ld64 ", str: %s\n", __func__, __LINE__, len, str);
+#if S7_DEBUGGING
+  if ((len <= 0) || (!str))
+    {fprintf(stderr, "%s[%d]: len: %" ld64 ", str: %s\n", __func__, __LINE__, len, str); if (cur_sc->stop_at_error) abort();}
+#endif
   if (len > (1LL << 48)) return(NULL); /* squelch an idiotic warning */
   newstr = (char *)Malloc(len + 1);
   memcpy((void *)newstr, (const void *)str, len); /* we check len != 0 above -- 24-Jan-22 */
@@ -5038,7 +5038,7 @@ static void init_never_unheaped(void)
   never_unheaped[T_RANDOM_STATE] = true;
   never_unheaped[T_SLOT] = true;
   never_unheaped[T_STACK] = true;
-  never_unheaped[T_UNUSED] = true;
+  /* never_unheaped[T_UNUSED] = true; */ /* confused? sc->unused is never in the heap */
   never_unheaped[T_VECTOR] = true;
 }
 
@@ -37359,9 +37359,6 @@ static format_data_t *make_fdat(s7_scheme *sc)
   format_data_t *fdat;
   fdat = (format_data_t *)Calloc(1, sizeof(format_data_t)); /* not Malloc here! */
   fdat->curly_arg = sc->nil;
-#if S7_DEBUGGING
-  fdat->last_strport_expr = NULL;
-#endif
   return(fdat);
 }
 
@@ -37377,27 +37374,20 @@ static format_data_t *open_format_data(s7_scheme *sc)
       sc->num_fdats = new_num_fdats;
     }
   fdat = sc->fdats[sc->format_depth];
-  if (fdat->port)
+#if 1
+  if (fdat->port) /* happens a lot in tform */
     {
-      /* happens a lot in tform */
       close_format_port(sc, fdat->port);
       fdat->port = NULL;
     }
+#endif
 #if 0
-  /* can happen but requires a lot of effort, only fdat->curly_arg is GC protected?  */
+  /* can happen but requires a lot of effort and is never repeatable! only fdat->curly_arg is GC protected?  */
   if (fdat->strport)
     {
       close_format_port(sc, fdat->strport);
       fdat->strport = NULL;
     }
-#else
-#if S7_DEBUGGING
-  if (fdat->strport)
-    {
-      fprintf(stderr, "fdat->strport open, %s\n", fdat->last_strport_expr); 
-      if (sc->stop_at_error) abort();
-    }
-#endif
 #endif
   fdat->loc = 0;
   fdat->curly_arg = sc->nil;
@@ -37653,13 +37643,6 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		      {
 			strport = open_format_port(sc);
 			fdat->strport = strport;
-#if S7_DEBUGGING
-			if (fdat->last_strport_expr) {free(fdat->last_strport_expr); fdat->last_strport_expr = NULL;}
-			{
-			  s7_pointer str = s7_name_to_value(sc, "estr");
-			  if (is_string(str)) fdat->last_strport_expr = copy_string_with_length(string_value(str), string_length(str));
-			}
-#endif
 		      }
 		    else strport = port;
 		    if (use_write == P_READABLE)
@@ -100939,7 +100922,7 @@ int main(int argc, char **argv)
  * tgc                10.4   7763   7579   7617   7619   7649
  * tlamb                            8003   7941   7920   7927
  * thash              11.7   9734   9479   9526   9283   9286
- * tform                     10.0   9992   9961   9626   9455
+ * tform                     10.0   9992   9961   9626   9455 [9400 if no fdat->port check]
  * cb          12.9   11.0   9658   9564   9609   9657   9664
  * tmap-hash                                      10.3   10.3
  * tgen               11.4   12.0   12.1   12.2   12.4   12.4
@@ -100961,8 +100944,7 @@ int main(int argc, char **argv)
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
- * some oddities: why cons in memuse printout, input-string-ports 18795
- * do_tree_has_definers still segfaults on infinite loop: start repls again
- * fdat->strport: need fdat-local last-estr?
+ * why cons in memuse printout
+ * do_tree_has_definers still segfaults on infinite loop
  * are keywords independently in symbol-table? -- (symbol ":aaa") will place the keyword in the symbol-table -- I don't see the straight symbol
  */
