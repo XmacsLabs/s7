@@ -1184,8 +1184,8 @@ struct s7_scheme {
   s7_int let_number;
   unsigned char number_separator;
   s7_double default_rationalize_error, equivalent_float_epsilon, hash_table_float_epsilon;
-  s7_int default_hash_table_length, initial_string_port_length, print_length, objstr_max_len, history_size, true_history_size, output_port_data_size;
-  s7_int max_vector_length, max_string_length, max_list_length, max_vector_dimensions, max_format_length, max_port_data_size, rec_loc, rec_len, show_stack_limit;
+  s7_int default_hash_table_length, initial_string_port_length, print_length, objstr_max_len, history_size, true_history_size, output_file_port_data_size;
+  s7_int max_vector_length, max_string_length, max_list_length, max_vector_dimensions, max_format_length, max_string_port_data_size, rec_loc, rec_len, show_stack_limit;
   s7_pointer stacktrace_defaults, symbol_printer, do_body_p;
 
   s7_pointer rec_stack, rec_testp, rec_f1p, rec_f2p, rec_f3p, rec_f4p, rec_f5p, rec_f6p, rec_f7p, rec_f8p;
@@ -4691,9 +4691,9 @@ typedef enum {SL_NO_FIELD=0, SL_ACCEPT_ALL_KEYWORD_ARGUMENTS, SL_AUTOLOADING, SL
 	      SL_GC_PROTECTED_OBJECTS, SL_GC_RESIZE_HEAP_BY_4_FRACTION, SL_GC_RESIZE_HEAP_FRACTION, SL_GC_STATS, SL_GC_TEMPS_SIZE,
 	      SL_GC_TOTAL_FREED, SL_HASH_TABLE_FLOAT_EPSILON, SL_HEAP_SIZE, SL_HISTORY, SL_HISTORY_ENABLED, SL_HISTORY_SIZE,
 	      SL_INITIAL_STRING_PORT_LENGTH, SL_MAJOR_VERSION, SL_MAX_FORMAT_LENGTH, SL_MAX_HEAP_SIZE, SL_MAX_LIST_LENGTH,
-	      SL_MAX_PORT_DATA_SIZE, SL_MAX_STACK_SIZE, SL_MAX_STRING_LENGTH, SL_MAX_VECTOR_DIMENSIONS, SL_MAX_VECTOR_LENGTH,
+	      SL_MAX_STACK_SIZE, SL_MAX_STRING_LENGTH, SL_MAX_STRING_PORT_DATA_SIZE, SL_MAX_VECTOR_DIMENSIONS, SL_MAX_VECTOR_LENGTH,
 	      SL_MEMORY_USAGE, SL_MINOR_VERSION, SL_MOST_NEGATIVE_FIXNUM, SL_MOST_POSITIVE_FIXNUM, SL_MUFFLE_WARNINGS,
-	      SL_NUMBER_SEPARATOR, SL_OPENLETS, SL_OUTPUT_PORT_DATA_SIZE, SL_PRINT_LENGTH, SL_PROFILE, SL_PROFILE_INFO,
+	      SL_NUMBER_SEPARATOR, SL_OPENLETS, SL_OUTPUT_FILE_PORT_DATA_SIZE, SL_PRINT_LENGTH, SL_PROFILE, SL_PROFILE_INFO,
 	      SL_PROFILE_PREFIX, SL_ROOTLET_SIZE, SL_SAFETY, SL_STACK, SL_STACKTRACE_DEFAULTS, SL_STACK_SIZE, SL_STACK_TOP,
 	      SL_SYMBOL_QUOTE, SL_SYMBOL_PRINTER, SL_UNDEFINED_CONSTANT_WARNINGS, SL_UNDEFINED_IDENTIFIER_WARNINGS, SL_VERSION,
 	      SL_NUM_FIELDS} starlet_t;
@@ -4705,9 +4705,9 @@ static const char *starlet_names[SL_NUM_FIELDS] =
    "gc-protected-objects", "gc-resize-heap-by-4-fraction", "gc-resize-heap-fraction", "gc-stats", "gc-temps-size",
    "gc-total-freed", "hash-table-float-epsilon", "heap-size", "history", "history-enabled", "history-size",
    "initial-string-port-length", "major-version", "max-format-length", "max-heap-size", "max-list-length",
-   "max-port-data-size", "max-stack-size", "max-string-length", "max-vector-dimensions", "max-vector-length",
+   "max-stack-size", "max-string-length", "max-string-port-data-size", "max-vector-dimensions", "max-vector-length",
    "memory-usage", "minor-version", "most-negative-fixnum", "most-positive-fixnum", "muffle-warnings?",
-   "number-separator", "openlets", "output-port-data-size", "print-length", "profile", "profile-info",
+   "number-separator", "openlets", "output-file-port-data-size", "print-length", "profile", "profile-info",
    "profile-prefix", "rootlet-size", "safety", "stack", "stacktrace-defaults", "stack-size", "stack-top",
    "symbol-quote?", "symbol-printer", "undefined-constant-warnings", "undefined-identifier-warnings", "version"};
 
@@ -10575,6 +10575,7 @@ static s7_pointer g_let_to_list(s7_scheme *sc, s7_pointer args)
     }
   return(s7_let_to_list(sc, let));
 }
+/* *s7* in gdb: p display(s7_let_to_list(sc, sc->starlet)) */
 #endif
 
 
@@ -29083,17 +29084,17 @@ static s7_pointer g_port_string(s7_scheme *sc, s7_pointer args)
   return(make_string_with_length(sc, (const char *)port_data(port), port_data_size(port))); /* max_string_length? */
 }
 
-static void resize_port_data_for_port_string(s7_scheme *sc, s7_pointer pt, s7_int new_size)
+static void resize_string_port_data(s7_scheme *sc, s7_pointer pt, s7_int new_size)
 {
   s7_int loc = port_data_size(pt);
   block_t *nb;
 
   if (new_size < loc) return;
-  if (new_size > sc->max_port_data_size)
+  if (new_size > sc->max_string_port_data_size)
     error_nr(sc, make_symbol(sc, "port-too-big", 12),
 	     set_elist_3(sc, wrap_string(sc, "port data size has grown past (*s7* 'max-port-data-size): ~D > ~D", 65),
 			 wrap_integer(sc, new_size),
-			 wrap_integer(sc, sc->max_port_data_size)));
+			 wrap_integer(sc, sc->max_string_port_data_size)));
   liberate(sc, port_data_block(pt));  /* reallocate has an irrelevant memcpy */
   nb = inline_mallocate(sc, new_size);
   port_data_block(pt) = nb;
@@ -29127,7 +29128,7 @@ static s7_pointer set_output_port_string(s7_scheme *sc, s7_pointer port, s7_poin
     wrong_type_error_nr(sc, wrap_string(sc, "set! port-string", 16), 1, port, wrap_string(sc, "an open port", 12));
   str_len = string_length(str);
   if (port_data_size(port) <= str_len)  /* sc->initial_string_port_length is 128 */
-    resize_port_data_for_port_string(sc, port, str_len * 2);
+    resize_string_port_data(sc, port, str_len * 2);
   memcpy((void *)port_data(port), (const void *)string_value(str), str_len);
   port_position(port) = str_len;
   port_data(port)[str_len] = '\0';
@@ -29847,11 +29848,11 @@ static void resize_port_data(s7_scheme *sc, s7_pointer pt, s7_int new_size)
   block_t *nb;
 
   if (new_size < loc) return;
-  if (new_size > sc->max_port_data_size)
+  if (new_size > sc->max_string_port_data_size)
     error_nr(sc, make_symbol(sc, "port-too-big", 12),
 	     set_elist_3(sc, wrap_string(sc, "port data size has grown past (*s7* 'max-port-data-size): ~D > ~D", 65),
 			 wrap_integer(sc, new_size),
-			 wrap_integer(sc, sc->max_port_data_size)));
+			 wrap_integer(sc, sc->max_string_port_data_size)));
   nb = reallocate(sc, port_data_block(pt), new_size);
   port_data_block(pt) = nb;
   port_data(pt) = (uint8_t *)(block_data(nb));
@@ -29884,15 +29885,15 @@ static void function_write_char(s7_scheme *sc, uint8_t c, s7_pointer port)
   memcpy((void *)sc, (void *)(sc->stack_end), 3 * sizeof(s7_pointer)); /* code/let/args */
 }
 
-#ifndef OUTPUT_PORT_DATA_SIZE
-  #define OUTPUT_PORT_DATA_SIZE 2048
+#ifndef OUTPUT_FILE_PORT_DATA_SIZE
+  #define OUTPUT_FILE_PORT_DATA_SIZE 2048
 #endif
 
 static Inline void inline_file_write_char(s7_scheme *sc, uint8_t c, s7_pointer port)
 {
-  if (port_position(port) == sc->output_port_data_size)
+  if (port_position(port) == sc->output_file_port_data_size)
     {
-      fwrite((void *)(port_data(port)), 1, sc->output_port_data_size, port_file(port));
+      fwrite((void *)(port_data(port)), 1, sc->output_file_port_data_size, port_file(port));
       port_position(port) = 0;
     }
   port_data(port)[port_position(port)++] = c;
@@ -29974,7 +29975,7 @@ static void string_write_string(s7_scheme *sc, const char *str, s7_int len, s7_p
 static void file_write_string(s7_scheme *sc, const char *str, s7_int len, s7_pointer pt)
 {
   s7_int new_len = port_position(pt) + len;
-  if (new_len >= sc->output_port_data_size)
+  if (new_len >= sc->output_file_port_data_size)
     {
       if (port_position(pt) > 0)
 	{
@@ -30677,8 +30678,8 @@ s7_pointer s7_open_output_file(s7_scheme *sc, const char *name, const char *mode
   port_file(x) = fp;
   port_needs_free(x) = true;  /* hmm -- I think these are freed via s7_close_output_port -> close_output_port */
   port_position(x) = 0;
-  port_data_size(x) = sc->output_port_data_size;
-  block = mallocate(sc, sc->output_port_data_size);
+  port_data_size(x) = sc->output_file_port_data_size;
+  block = mallocate(sc, sc->output_file_port_data_size);
   port_data_block(x) = block;
   port_data(x) = (uint8_t *)(block_data(block));
   port_port(x)->pf = &output_file_functions;
@@ -51427,7 +51428,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
       }
 
     case T_LET:
-      if (source == sc->starlet) /* *s7* */
+      if (source == sc->starlet) /* *s7* */ /* TODO: shouldn't this use starlet_iterate? */
 	{
 	  s7_pointer iter = s7_make_iterator(sc, sc->starlet);
 	  s7_int gc_loc = gc_protect_1(sc, iter);
@@ -54376,8 +54377,10 @@ static bool catch_let_temp_unwind_function(s7_scheme *sc, s7_int catch_loc, s7_p
 
 static bool catch_let_temp_s7_unwind_function(s7_scheme *sc, s7_int catch_loc, s7_pointer type, s7_pointer info, bool *reset_hook)
 {
+  s7_pointer symbol = T_Sym(stack_code(sc->stack, catch_loc));
   if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
-  starlet_set_1(sc, T_Sym(stack_code(sc->stack, catch_loc)), stack_args(sc->stack, catch_loc));
+  if (starlet_symbol_id(symbol) != SL_NO_FIELD) /* we could be unwinding from an error that the symbol is not defined in *s7*! */
+    starlet_set_1(sc, symbol, stack_args(sc->stack, catch_loc));
   return(false);
 }
 
@@ -97231,7 +97234,7 @@ static s7_pointer starlet(s7_scheme *sc, s7_int choice)
     case SL_MAX_FORMAT_LENGTH:             return(make_integer(sc, sc->max_format_length));
     case SL_MAX_HEAP_SIZE:                 return(make_integer(sc, sc->max_heap_size));
     case SL_MAX_LIST_LENGTH:               return(make_integer(sc, sc->max_list_length));
-    case SL_MAX_PORT_DATA_SIZE:            return(make_integer(sc, sc->max_port_data_size));
+    case SL_MAX_STRING_PORT_DATA_SIZE:     return(make_integer(sc, sc->max_string_port_data_size));
     case SL_MAX_STACK_SIZE:                return(make_integer(sc, sc->max_stack_size));
     case SL_MAX_STRING_LENGTH:             return(make_integer(sc, sc->max_string_length));
     case SL_MAX_VECTOR_DIMENSIONS:         return(make_integer(sc, sc->max_vector_dimensions));
@@ -97242,7 +97245,7 @@ static s7_pointer starlet(s7_scheme *sc, s7_int choice)
     case SL_MUFFLE_WARNINGS:               return(make_boolean(sc, sc->muffle_warnings));
     case SL_NUMBER_SEPARATOR:              return(chars[(int)(sc->number_separator)]);
     case SL_OPENLETS:                      return(make_boolean(sc, sc->has_openlets));
-    case SL_OUTPUT_PORT_DATA_SIZE:         return(make_integer(sc, sc->output_port_data_size));
+    case SL_OUTPUT_FILE_PORT_DATA_SIZE:    return(make_integer(sc, sc->output_file_port_data_size));
     case SL_PRINT_LENGTH:                  return(make_integer(sc, sc->print_length));
     case SL_PROFILE:                       return(make_integer(sc, sc->profile));
     case SL_PROFILE_INFO:                  return(profile_info_out(sc));
@@ -97337,11 +97340,24 @@ static no_return void starlet_out_of_range_error_nr(s7_scheme *sc, s7_pointer ca
 	   set_elist_4(sc, wrap_string(sc, "(set! (*s7* '~A) ~S): new value is out of range (~A)", 52), caller, arg, descr));
 }
 
-static s7_pointer sl_real_geq_0(s7_scheme *sc, s7_pointer sym, s7_pointer val)
+static s7_double sl_real_geq_0(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 {
+  s7_double fv;
   if (!is_real(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_REAL]);
-  if (s7_real(val) < 0.0) starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should not be negative", 25));
-  return(val);
+  fv = s7_real(val);
+  if (is_NaN(fv)) starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it can't be nan?", 16));
+  if (fv < 0.0) starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should not be negative", 25));
+  return(fv);
+}
+
+static s7_double sl_real_gt_0(s7_scheme *sc, s7_pointer sym, s7_pointer val)
+{
+  s7_double fv;
+  if (!is_real(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_REAL]);
+  fv = s7_real(val);
+  if (is_NaN(fv)) starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it can't be nan?", 16));
+  if (fv <= 0.0) starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should be positive", 21));
+  return(fv);
 }
 
 static s7_pointer sl_integer_gt_0(s7_scheme *sc, s7_pointer sym, s7_pointer val)
@@ -97618,11 +97634,11 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       return(val);
 
     case SL_DEFAULT_RATIONALIZE_ERROR:
-      sc->default_rationalize_error = s7_real(sl_real_geq_0(sc, sym, val));
+      sc->default_rationalize_error = sl_real_geq_0(sc, sym, val);
       return(val);
 
     case SL_EQUIVALENT_FLOAT_EPSILON:
-      sc->equivalent_float_epsilon = s7_real(sl_real_geq_0(sc, sym, val));
+      sc->equivalent_float_epsilon = sl_real_geq_0(sc, sym, val);
       return(val);
 
     case SL_EXPANSIONS:
@@ -97648,10 +97664,10 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       sc->gc_temps_size = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
       return(val);
     case SL_GC_RESIZE_HEAP_FRACTION:
-      sc->gc_resize_heap_fraction = s7_real(sl_real_geq_0(sc, sym, val));
+      sc->gc_resize_heap_fraction = sl_real_gt_0(sc, sym, val);
       return(val);
     case SL_GC_RESIZE_HEAP_BY_4_FRACTION:
-      sc->gc_resize_heap_by_4_fraction = s7_real(sl_real_geq_0(sc, sym, val));
+      sc->gc_resize_heap_by_4_fraction = sl_real_gt_0(sc, sym, val);
       return(val);
     case SL_GC_STATS:
       return(sl_set_gc_stats(sc, sym, val));
@@ -97659,7 +97675,7 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       return(sl_set_gc_info(sc, sym, val));
 
     case SL_HASH_TABLE_FLOAT_EPSILON:
-      sc->hash_table_float_epsilon = s7_real(sl_real_geq_0(sc, sym, val));
+      sc->hash_table_float_epsilon = sl_real_geq_0(sc, sym, val);
       return(val);
 
     case SL_HEAP_SIZE:
@@ -97672,7 +97688,7 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 	resize_heap_to(sc, iv);
       return(val);
 
-    case SL_HISTORY:               /* (set! (*s7* 'history) val) */
+    case SL_HISTORY:               /* (set! (*s7* 'history) val) -- when does this seem like a good idea? */
       replace_current_code(sc, val);
       return(val);
 
@@ -97715,13 +97731,13 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       sc->max_list_length = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
       return(val);
 
-    case SL_MAX_PORT_DATA_SIZE:
+    case SL_MAX_STRING_PORT_DATA_SIZE:
       iv = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
-      if (iv < OUTPUT_PORT_DATA_SIZE)
+      if (iv < sc->initial_string_port_length)
 	error_nr(sc, sc->out_of_range_symbol,
-		 set_elist_3(sc, wrap_string(sc, "(set! (*s7* 'max-port-data-size) ~S): new value should not be less than the initial port data size: ~D", 102),
-			     val, wrap_integer(sc, OUTPUT_PORT_DATA_SIZE)));
-      sc->max_port_data_size = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
+		 set_elist_3(sc, wrap_string(sc, "(set! (*s7* 'max-string-port-data-size) ~S): new value should not be less than the initial string port length: ~D", 113),
+			     val, wrap_integer(sc, sc->initial_string_port_length)));
+      sc->max_string_port_data_size = iv;
       return(val);
 
     case SL_MAX_STACK_SIZE:
@@ -97763,9 +97779,8 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       sc->has_openlets = s7_boolean(sc, val);
       return(val);
 
-    case SL_OUTPUT_PORT_DATA_SIZE:
-      /* the name is (*s7* 'output-port-data-size) but it affects sc->output_port_data_size, and can be confused with inital-string-port-length! */
-      sc->output_port_data_size = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
+    case SL_OUTPUT_FILE_PORT_DATA_SIZE:
+      sc->output_file_port_data_size = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
       return(val);
 
     case SL_PRINT_LENGTH: /* for pairs and vectors this affects how many elements are printed -- confusing */
@@ -100189,8 +100204,8 @@ s7_scheme *s7_init(void)
    *   maybe a circular list (vector?) for tmps
    */
 
-  sc->max_port_data_size = (1LL << 45);
-  sc->output_port_data_size = OUTPUT_PORT_DATA_SIZE;
+  sc->max_string_port_data_size = (1LL << 45);
+  sc->output_file_port_data_size = OUTPUT_FILE_PORT_DATA_SIZE;
 
   /* this has to precede s7_make_* allocations */
   sc->protected_setters_size = INITIAL_PROTECTED_OBJECTS_SIZE;
@@ -100944,7 +100959,11 @@ int main(int argc, char **argv)
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
- * why cons in memuse printout
  * do_tree_has_definers still segfaults on infinite loop
  * are keywords independently in symbol-table? -- (symbol ":aaa") will place the keyword in the symbol-table -- I don't see the straight symbol
+ * *s7* in gdb: p display(s7_let_to_list(sc, sc->starlet)): (output-file-port-data-size . 3) (max-format-length . 2)
+ *   filenames contains random stuff, not loaded scm files -- need forget_file if error?
+ *   tests for (hash-table-float-epsilon . 21.0) et al
+ *   more examples in t718 and starlet_iterate/let_equal bug
+ *   we have initial-string-port-length but max-string-port-data-size -- which? probably length, are these needed?
  */

@@ -138,7 +138,7 @@
 
 (set! (*s7* 'max-stack-size) (* 4 32768))
 (set! (*s7* 'max-heap-size) (ash 1 23)) ; 16M = 1.4Gbytes?
-(set! (*s7* 'max-port-data-size) (ash 1 28))
+(set! (*s7* 'max-string-port-data-size) (ash 1 28))
 (set! (*s7* 'print-length) 4096)
 (set! (*s7* 'max-string-length) 500000)
 (set! (*s7* 'max-list-length) 10000)
@@ -1392,7 +1392,7 @@
 		    "(*s7* 'max-format-length)"
 		    "(*s7* 'max-heap-size)"
 		    ;"(*s7* 'max-list-length)"
-		    ;"(*s7* 'max-port-data-size)" ; infinite output
+		    ;"(*s7* 'max-string-port-data-size)" ; infinite output
 		    "(*s7* 'max-stack-size)"
 		    ;"(*s7* 'max-string-length)"
 		    ;"(*s7* 'max-vector-dimensions)"
@@ -1405,7 +1405,7 @@
 		    "(*s7* 'muffle-warnings?)"
 		    (reader-cond ((provided? 'number-separator) "(*s7* 'number-separator)"))
 		    "(*s7* 'openlets)"
-		    "(*s7* 'output-port-data-size)"
+		    "(*s7* 'output-file-port-data-size)"
 		    "(*s7* 'print-length)"
 		    ;"(*s7* 'profile)"
 		    ;"(*s7* 'profile-info)"
