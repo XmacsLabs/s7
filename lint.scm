@@ -10804,13 +10804,13 @@
 				      '(stack-top stack-size stacktrace-defaults heap-size free-heap-size major-version minor-version
 				        gc-freed gc-protected-objects gc-total-freed gc-info file-names filenames rootlet-size c-types safety
 					undefined-identifier-warnings undefined-constant-warnings gc-stats max-heap-size
-					max-string-port-data-size max-stack-size cpu-time catches stack max-string-length
-					max-format-length max-list-length max-vector-length max-vector-dimensions
+					max-string-port-length max-stack-size cpu-time catches stack max-string-length
+					max-list-length max-vector-length max-vector-dimensions
 					default-hash-table-length initial-string-port-length default-rationalize-error
 					default-random-state equivalent-float-epsilon hash-table-float-epsilon print-length
 					bignum-precision memory-usage float-format-precision history history-enabled
 					history-size profile profile-info profile-prefix autoloading? accept-all-keyword-arguments
-					muffle-warnings? most-positive-fixnum most-negative-fixnum output-file-port-data-size debug version
+					muffle-warnings? most-positive-fixnum most-negative-fixnum output-file-port-length debug version
 					gc-temps-size gc-resize-heap-fraction gc-resize-heap-by-4-fraction openlets expansions?
 					number-separator symbol-quote? symbol-printer make-function))
 			    h)))

@@ -5798,14 +5798,13 @@ minor-version                 an integer (0 in the example above)
 
 print-length                  number of elements to print of a non-string sequence
 max-string-length             maximum size arg to make-string and read-string
-max-format-length             maximum size arg to ~N or the width and precision fields for floats (default=10000)
 max-list-length               maximum size arg to make-list
-max-port-data-size            maximum size of a port data buffer
 max-vector-length             maximum size arg to make-vector and make-hash-table
 max-vector-dimensions         make-vector dimensions limit
 default-hash-table-length     default size for make-hash-table (8, tables resize as needed)
 initial-string-port-length    128, initial size of a input string port's buffer
-output-port-data-size         2048, size of an output port's buffer
+max-string-port-length        maximum size of a port data buffer
+output-file-port-length       2048, size of an output port's buffer
 
 history			      a circular buffer of recent eval entries stored backwards (use set! to add an entry)
 history-size                  eval history buffer size if s7 built WITH_HISTORY=1
@@ -5819,7 +5818,7 @@ default-rationalize-error     1e-12
 equivalent-float-epsilon      1e-15
 hash-table-float-epsilon      1e-12 (currently limited to less than 1e-3).
 bignum-precision              bits for bignum floats (128)
-float-format-precision        digits to print for floats (16)
+float-format-precision        digits to print for floats (16) in object-&gt;string and number-&gt;string
 default-random-state          the default arg for random
 most-positive-fixnum          if not using gmp, the most positive integer ("fixnum" comes from CL)
 most-negative-fixnum          as above, but negative
@@ -5859,7 +5858,7 @@ gc-info                       a list: calls total-time ticks-per-second (see pro
 gc-temps-size                 number of cells just allocated that are protected from the GC (256)
 gc-resize-heap-fraction       when to resize the heap (0.8); these two are aimed at GC experiments
 gc-resize-heap-by-4-fraction  when to get panicky about resizing the heap
-gc-protected-objects          vector of the objects permanently protected from the GC
+gc-protected-objects          vector of objects protected from the GC
 memory-usage                  a let (environment) describing current s7 memory allocations
 </pre>
 
@@ -5878,7 +5877,7 @@ bignum-precision:        DEFAULT_BIGNUM_PRECISION (128)
 history-size:            DEFAULT_HISTORY_SIZE     (8)
 print-length:            DEFAULT_PRINT_LENGTH     (12)
 gc-resize-heap-fraction: GC_RESIZE_HEAP_FRACTION  (0.8)
-output-port-data-size:   OUTPUT_PORT_DATA_SIZE    (2048)
+output-file-port-length: OUTPUT_PORT_DATA_SIZE    (2048)
 
 See also WITH_WARNINGS, S7_ALIGNED, and GC_TRIGGER_SIZE.
 </pre>
@@ -5916,7 +5915,7 @@ how many columns are devoted to code display,
 how many columns are available for a line of data,
 and where to place comments.
 The boolean sets whether the entire output should be displayed as a comment.
-The defaults are '(3 45 80 45 #t).
+The defaults are '(30 50 80 50 #f).
 </p>
 
 <p>This will display s7 memory usage sort of like the top program:
