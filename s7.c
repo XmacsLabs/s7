@@ -8839,7 +8839,6 @@ static /* inline */ s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_in
       ksym = make_symbol(sc, (name[0] == ':') ? (const char *)(name + 1) : name, len - 1);
       keyword_set_symbol(x, ksym);
       set_has_keyword(ksym);
-      /* should ksym be in the symbol table, maybe rather than x? */
       /* the keyword symbol needs to be semipermanent (not a gensym) else we have to laboriously gc-protect it */
       if ((is_gensym(ksym)) &&
 	  (in_heap(ksym)))
@@ -8848,6 +8847,7 @@ static /* inline */ s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_in
       set_global_slot(x, slot);
       set_local_slot(x, slot);
       set_immutable_slot(slot);
+      /* we need to include this keyword in the symbol-table */
     }
   full_type(p) = T_PAIR | T_IMMUTABLE | T_UNHEAP;  /* add x to the symbol table */
   set_car(p, x);
@@ -36044,7 +36044,10 @@ static void iterator_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
       const char *str;
       if ((is_hash_table(iterator_sequence(obj))) && (is_weak_hash_table(iterator_sequence(obj))))
 	str = "weak-hash-table";
-      else str = type_name(sc, iterator_sequence(obj), NO_ARTICLE);
+      else
+	if (iterator_sequence(obj) == sc->starlet)
+	  str = "*s7*";
+	else str = type_name(sc, iterator_sequence(obj), NO_ARTICLE);
       port_write_string(port)(sc, "#<iterator: ", 12, port);
       port_write_string(port)(sc, str, safe_strlen(str), port);
       port_write_character(port)(sc, '>', port);
@@ -50187,7 +50190,15 @@ static bool iterator_equal_1(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_i
     case T_LET:
       if (!is_let(y_seq)) return(false);
       if (x_seq == sc->rootlet)
-	return(iterator_position(x) == iterator_position(y)); /* y_seq must also be sc->rootlet since nexts are the same (rootlet_iterate) */
+	{
+	  if (y_seq != sc->rootlet) return(false);
+	  return(iterator_position(x) == iterator_position(y));
+	}
+      if (x_seq == sc->starlet)
+	{
+	  if (y_seq != sc->starlet) return(false);
+	  return(iterator_position(x) == iterator_position(y));
+	}
       if (equivalent)
 	{
 	  if (!let_equivalent(sc, x_seq, y_seq, ci))
@@ -84178,13 +84189,13 @@ static /* inline */ bool do_tree_has_definers(s7_scheme *sc, s7_pointer tree)
    * but what about ((f...)...) where (f...) returns a macro that defines something? Or (for-each or ...) where for-each and or might be
    * obfuscated and the args might contain a definer?
    */
+#if S7_DEBUGGING
+  dodef_ctr++;  /* cleared before top call below */
+  if (dodef_ctr > 10000) {fprintf(stderr, "loop in %s?\n", __func__); abort();}
+#endif
   for (s7_pointer p = tree; is_pair(p); p = cdr(p))
     {
       s7_pointer pp = car(p);
-#if S7_DEBUGGING
-      dodef_ctr++;
-      if (dodef_ctr > 10000) {fprintf(stderr, "loop in %s?\n", __func__); abort();}
-#endif
       if (is_symbol(pp))
 	{
 	  if (is_definer(pp))
@@ -97356,7 +97367,7 @@ static s7_double sl_real_0_to_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
   if (!is_real(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_REAL]);
   fv = s7_real(val);
   if (is_NaN(fv)) starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it can't be nan?", 16));
-  if (fv <= 0.0) starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should be positive", 21));
+  if (fv <= 0.0) starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should be greater than 0.0", 29));
   if (fv > 1.0) starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should not be greater than 1.0", 33));
   return(fv);
 }
@@ -97364,7 +97375,7 @@ static s7_double sl_real_0_to_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 static s7_pointer sl_integer_gt_0(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 {
   if (!s7_is_integer(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_INTEGER]);
-  if (s7_integer_clamped_if_gmp(sc, val) <= 0) starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should be positive", 21));
+  if (s7_integer_clamped_if_gmp(sc, val) <= 0) starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it should be greater than 0.0", 29));
   return(val);
 }
 
@@ -100959,6 +100970,4 @@ int main(int argc, char **argv)
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
  * do_tree_has_definers still segfaults on infinite recursion
- * segfault in member/equal/s7_iterate t718 -- starlet_iterate/let_equal bug
- * tests for (*s7* 'hash-table-float-epsilon 21.0) et al, is gc-resize-heap-fraction still > 1.0?
  */
