@@ -19476,6 +19476,7 @@ static s7_pointer g_floor(s7_scheme *sc, s7_pointer args)
 }
 
 static s7_int floor_i_i(s7_int i) {return(i);}
+static s7_pointer floor_p_i(s7_scheme *sc, s7_int x) {return(make_integer(sc, x));}
 
 #if !WITH_GMP
 static s7_int floor_i_7d(s7_scheme *sc, s7_double x)
@@ -19499,7 +19500,6 @@ static s7_int floor_i_7p(s7_scheme *sc, s7_pointer p)
   return(s7_integer(method_or_bust_p(sc, p, sc->floor_symbol, sc->type_names[T_REAL])));
 }
 
-static s7_pointer floor_p_i(s7_scheme *sc, s7_int x) {return(make_integer(sc, x));}
 static s7_pointer floor_p_d(s7_scheme *sc, s7_double x) {return(make_integer(sc, floor_i_7d(sc, x)));}
 #endif
 
@@ -19566,6 +19566,7 @@ static s7_pointer g_ceiling(s7_scheme *sc, s7_pointer args)
 }
 
 static s7_int ceiling_i_i(s7_int i) {return(i);}
+static s7_pointer ceiling_p_i(s7_scheme *sc, s7_int x) {return(make_integer(sc, x));}
 
 #if !WITH_GMP
 static s7_int ceiling_i_7d(s7_scheme *sc, s7_double x)
@@ -19586,7 +19587,6 @@ static s7_int ceiling_i_7p(s7_scheme *sc, s7_pointer p)
   return(s7_integer(method_or_bust_p(sc, p, sc->ceiling_symbol, sc->type_names[T_REAL])));
 }
 
-static s7_pointer ceiling_p_i(s7_scheme *sc, s7_int x) {return(make_integer(sc, x));}
 static s7_pointer ceiling_p_d(s7_scheme *sc, s7_double x) {return(make_integer(sc, ceiling_i_7d(sc, x)));}
 #endif
 
@@ -19650,6 +19650,7 @@ static s7_pointer g_truncate(s7_scheme *sc, s7_pointer args)
 }
 
 static s7_int truncate_i_i(s7_int i) {return(i);}
+static s7_pointer truncate_p_i(s7_scheme *sc, s7_int x) {return(make_integer(sc, x));}
 
 #if !WITH_GMP
 static s7_int truncate_i_7d(s7_scheme *sc, s7_double x)
@@ -19663,7 +19664,6 @@ static s7_int truncate_i_7d(s7_scheme *sc, s7_double x)
   return((x > 0.0) ? (s7_int)floor(x) : (s7_int)ceil(x));
 }
 
-static s7_pointer truncate_p_i(s7_scheme *sc, s7_int x) {return(make_integer(sc, x));}
 static s7_pointer truncate_p_d(s7_scheme *sc, s7_double x) {return(make_integer(sc, truncate_i_7d(sc, x)));}
 #endif
 
@@ -19761,6 +19761,7 @@ static s7_pointer g_round(s7_scheme *sc, s7_pointer args)
 /* (round (/ ...)) -> real_divide etc (wrapped) -- round_p_p is called in tbit via fx_c_op_opssqq_s_direct */
 
 static s7_int round_i_i(s7_int i) {return(i);}
+static s7_pointer round_p_i(s7_scheme *sc, s7_int x) {return(make_integer(sc, x));}
 
 #if !WITH_GMP
 static s7_int round_i_7d(s7_scheme *sc, s7_double z)
@@ -19773,7 +19774,6 @@ static s7_int round_i_7d(s7_scheme *sc, s7_double z)
   return((s7_int)r5rs_round(z));
 }
 
-static s7_pointer round_p_i(s7_scheme *sc, s7_int x) {return(make_integer(sc, x));}
 static s7_pointer round_p_d(s7_scheme *sc, s7_double x) {return(make_integer(sc,round_i_7d(sc, x)));}
 #endif
 
