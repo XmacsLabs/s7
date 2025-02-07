@@ -345,7 +345,7 @@
       (test (char-position #\- bigstr3) big-size))))
 (clear-and-gc)
 
-(let-temporarily (((*s7* 'max-format-length) (+ big-size 1)))
+(let-temporarily (((*s7* 'max-string-length) (+ big-size 1)))
   (let ((x (format #f "~NC" big-size #\a))) 
     (test (length x) big-size)
     (test (string-ref x 1000000) #\a)))

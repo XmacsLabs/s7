@@ -6285,7 +6285,7 @@ static inline s7_pointer lookup_slot_from(s7_pointer symbol, s7_pointer e);
 static s7_pointer find_method(s7_scheme *sc, s7_pointer let, s7_pointer symbol)
 {
   s7_pointer slot;
-  if (is_global(symbol)) /* this means the symbol has never been used locally, so how can it be a method? */
+  if (is_global(symbol)) /* this means the symbol has never been bound locally, so how can it be a method? */
     return(sc->undefined);
   slot = lookup_slot_from(symbol, let);
   if (slot != global_slot(symbol))
@@ -16703,6 +16703,7 @@ static s7_pointer g_abs(s7_scheme *sc, s7_pointer args)
 
 static s7_double abs_d_d(s7_double x) {return((signbit(x)) ? (-x) : x);} /* very slow in tcc */
 static s7_int abs_i_i(s7_int x) {return((x < 0) ? (-x) : x);}
+/* TODO: (abs|magnitude -9223372036854775808) won't work here */
 
 
 /* -------------------------------- magnitude -------------------------------- */
@@ -19498,7 +19499,8 @@ static s7_int floor_i_7p(s7_scheme *sc, s7_pointer p)
   return(s7_integer(method_or_bust_p(sc, p, sc->floor_symbol, sc->type_names[T_REAL])));
 }
 
-static s7_pointer floor_p_d(s7_scheme *sc, s7_double x) {return(make_integer(sc,floor_i_7d(sc, x)));}
+static s7_pointer floor_p_i(s7_scheme *sc, s7_int x) {return(make_integer(sc, x));}
+static s7_pointer floor_p_d(s7_scheme *sc, s7_double x) {return(make_integer(sc, floor_i_7d(sc, x)));}
 #endif
 
 
@@ -19584,6 +19586,7 @@ static s7_int ceiling_i_7p(s7_scheme *sc, s7_pointer p)
   return(s7_integer(method_or_bust_p(sc, p, sc->ceiling_symbol, sc->type_names[T_REAL])));
 }
 
+static s7_pointer ceiling_p_i(s7_scheme *sc, s7_int x) {return(make_integer(sc, x));}
 static s7_pointer ceiling_p_d(s7_scheme *sc, s7_double x) {return(make_integer(sc, ceiling_i_7d(sc, x)));}
 #endif
 
@@ -19660,6 +19663,7 @@ static s7_int truncate_i_7d(s7_scheme *sc, s7_double x)
   return((x > 0.0) ? (s7_int)floor(x) : (s7_int)ceil(x));
 }
 
+static s7_pointer truncate_p_i(s7_scheme *sc, s7_int x) {return(make_integer(sc, x));}
 static s7_pointer truncate_p_d(s7_scheme *sc, s7_double x) {return(make_integer(sc, truncate_i_7d(sc, x)));}
 #endif
 
@@ -19769,6 +19773,7 @@ static s7_int round_i_7d(s7_scheme *sc, s7_double z)
   return((s7_int)r5rs_round(z));
 }
 
+static s7_pointer round_p_i(s7_scheme *sc, s7_int x) {return(make_integer(sc, x));}
 static s7_pointer round_p_d(s7_scheme *sc, s7_double x) {return(make_integer(sc,round_i_7d(sc, x)));}
 #endif
 
@@ -70323,6 +70328,7 @@ static s7_pointer g_optimize(s7_scheme *sc, s7_pointer args)
 
 static s7_pfunc s7_cell_optimize(s7_scheme *sc, s7_pointer expr, bool nv)
 {
+  if (OPT_PRINT) fprintf(stderr, "   s7_cell_optimize %s\n", display(expr));
   sc->pc = 0;
   if ((cell_optimize(sc, expr)) && (sc->pc < OPTS_SIZE))
     return((nv) ? opt_cell_any_nv : opt_wrap_cell);
@@ -74491,7 +74497,7 @@ static opt_t optimize_func_two_args(s7_scheme *sc, s7_pointer expr, s7_pointer f
 	      /* two seq args can't happen here (func_2_args = map + lambda + seq, arg1 is the lambda form, arg2 is fxable (see above) */
 	      choose_c_function(sc, expr, func, 2);
 	      if (((fn_proc(expr) == g_for_each) || (fn_proc(expr) == g_map)) &&
-		  ((is_proper_list_1(sc, cadr(arg1))) &&    /* one parameter */
+		  ((is_proper_list_1(sc, cadr(arg1))) &&     /* one parameter */
 		   (!is_possibly_constant(caadr(arg1)))))    /* parameter name not trouble */
 		{
 		  /* built-in permanent closure here was not much faster */
@@ -98486,9 +98492,13 @@ static void init_opt_functions(s7_scheme *sc)
   s7_set_p_i_function(sc, global_value(sc->int_vector_symbol), int_vector_p_i);
   s7_set_p_i_function(sc, global_value(sc->float_vector_symbol), float_vector_p_i);
   s7_set_i_i_function(sc, global_value(sc->round_symbol), round_i_i);
+  s7_set_p_i_function(sc, global_value(sc->round_symbol), round_p_i);
   s7_set_i_i_function(sc, global_value(sc->floor_symbol), floor_i_i);
+  s7_set_p_i_function(sc, global_value(sc->floor_symbol), floor_p_i);
   s7_set_i_i_function(sc, global_value(sc->ceiling_symbol), ceiling_i_i);
+  s7_set_p_i_function(sc, global_value(sc->ceiling_symbol), ceiling_p_i);
   s7_set_i_i_function(sc, global_value(sc->truncate_symbol), truncate_i_i);
+  s7_set_p_i_function(sc, global_value(sc->truncate_symbol), truncate_p_i);
 
   s7_set_d_d_function(sc, global_value(sc->tan_symbol), tan_d_d);
   s7_set_d_d_function(sc, global_value(sc->atan_symbol), atan_d_d);
@@ -100969,5 +100979,6 @@ int main(int argc, char **argv)
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
- * do_tree_has_definers still segfaults on infinite recursion
+ * do_tree_has_definers infinite recursion?
+ * maybe use -ld64 in mac?
  */

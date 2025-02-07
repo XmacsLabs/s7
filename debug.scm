@@ -12,7 +12,7 @@
 	  (*debug-breaks* ())                 ; list of functions with active breakpoints
 	  ;; rest are for output formatting etc
 	  (*debug-spaces* 0)                  ; indentation (when reporting result)
-	  (*debug-max-spaces* (*s7* 'max-format-length))
+	  (*debug-max-spaces* (*s7* 'max-string-length))
 	  (*debug-start-output* (lambda (p) #f))
 	  (*debug-end-output* newline)
 	  (*debug-curlet* #f)                ; currently just for debug-frame
