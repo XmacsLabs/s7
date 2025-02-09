@@ -1983,15 +1983,15 @@ static void init_types(void)
 }
 
 #if WITH_HISTORY
-#define current_code(Sc)               car(Sc->cur_code)
+#define current_code(Sc)               T_Ext(car(Sc->cur_code))
 #define set_current_code(Sc, Code)     do {Sc->cur_code = cdr(Sc->cur_code); set_car(Sc->cur_code, T_Ext(Code));} while (0)
 #define replace_current_code(Sc, Code) set_car(Sc->cur_code, T_Ext(Code))
 #define mark_current_code(Sc)          do {int32_t _i_; s7_pointer _p_; for (_p_ = Sc->cur_code, _i_ = 0; _i_ < Sc->history_size; _i_++, _p_ = cdr(_p_)) gc_mark(car(_p_));} while (0)
 #else
-#define current_code(Sc)               Sc->cur_code
+#define current_code(Sc)               T_Ext(Sc->cur_code)
 #define set_current_code(Sc, Code)     Sc->cur_code = T_Ext(Code)
 #define replace_current_code(Sc, Code) Sc->cur_code = T_Ext(Code)
-#define mark_current_code(Sc)          gc_mark(Sc->cur_code)
+#define mark_current_code(Sc)          gc_mark(T_Ext(Sc->cur_code))
 #endif
 
 #define full_type(p)  ((p)->tf.u64_type)
@@ -100910,24 +100910,24 @@ int main(int argc, char **argv)
 #endif
 
 /* ------------------------------------------------------------
- *             19.0   21.0   22.0   23.0   24.0   25.0   25.1
+ *             19.0   21.0   22.0   23.0   24.0   25.0   25.2
  * ------------------------------------------------------------
  * tpeak        148    114    108    105    102    109    109
  * tref        1081    687    463    459    464    412    413
- * tlimit      3936   5371   5371   5371   5371    783    784
- * index              1016    973    967    972    988    991
+ * tlimit      3936   5371   5371   5371   5371    783    777
+ * index              1016    973    967    972    988    990
  * tmock              1145   1082   1042   1045   1031   1031
  * tvect       3408   2464   1772   1669   1497   1457   1457
  * thook       7651   ----   2590   2030   2046   1731   1733
+ * tauto                     2562   2048   1729   1760   1756
  * texit       1884   1950   1778   1741   1770   1759   1759
- * tauto                     2562   2048   1729   1760   1766
- * s7test             1831   1818   1829   1830   1849   1873
+ * s7test             1831   1818   1829   1830   1849   1854
  * lt          2222   2172   2150   2185   1950   1892   1895
- * dup                3788   2492   2239   2097   2012   2004
+ * dup                3788   2492   2239   2097   2012   2001
  * tread              2421   2419   2408   2405   2241   2248
  * tcopy              5546   2539   2375   2386   2352   2352
+ * tload                     3046   2404   2566   2506   2488
  * trclo       8248   2782   2615   2634   2622   2499   2499
- * tload                     3046   2404   2566   2506   2500
  * tmat               3042   2524   2578   2590   2522   2522
  * fbench      2933   2583   2460   2430   2478   2536   2536
  * tsort       3683   3104   2856   2804   2858   2858   2858
@@ -100935,30 +100935,30 @@ int main(int argc, char **argv)
  * tio                3752   3683   3620   3583   3127   3135
  * tbit        3836   3305   3245   3261   3264   3181   3181
  * tobj               3970   3828   3577   3508   3434   3434
- * teq                4045   3536   3486   3544   3556   3573
+ * teq                4045   3536   3486   3544   3556   3569
  * tmac               4373   ----   4193   4188   4024   4026
  * tcomplex           3869   3804   3844   3888   4215   4216
- * tcase              4793   4439   4430   4439   4376   4383
+ * tcase              4793   4439   4430   4439   4376   4380
  * tmap               8774   4489   4541   4586   4380   4380
  * tlet        11.0   6974   5609   5980   5965   4470   4470
- * tfft               7729   4755   4476   4536   4538   4540
+ * tfft               7729   4755   4476   4536   4538   4538
  * tshoot             5447   5183   5055   5034   4833   4837
- * tstar              6705   5834   5278   5177   5059   5059
+ * tstar              6705   5834   5278   5177   5059   5073
  * concordance 10.0   6342   5488   5162   5180   5259   5272
  * tnum               6013   5433   5396   5409   5402   5406
  * tlist       9219   7546   6558   6240   6300   5770   5784
  * trec        19.6   6980   6599   6656   6658   6015   6015
- * tari        15.0   12.7   6827   6543   6278   6112   6112
+ * tari        15.0   12.7   6827   6543   6278   6112   6111
  * tgsl               7802   6373   6282   6208   6208   6213
  * tset                             6260   6364   6278   6278
  * tleft       12.2   9753   7537   7331   7331   6393   6393
- * tmisc                            7614   7115   7130   7137
+ * tmisc                            7614   7115   7130   7141
  * tclo               8025   7645   8809   7770   7627   7640
  * tgc                10.4   7763   7579   7617   7619   7649
  * tlamb                            8003   7941   7920   7927
  * thash              11.7   9734   9479   9526   9283   9286
- * tform                     10.0   9992   9961   9626   9455 [9400 if no fdat->port check]
- * cb          12.9   11.0   9658   9564   9609   9657   9664
+ * tform                     10.0   9992   9961   9626   9452 [9400 if no fdat->port check]
+ * cb          12.9   11.0   9658   9564   9609   9657   9660
  * tmap-hash                                      10.3   10.3
  * tgen               11.4   12.0   12.1   12.2   12.4   12.4
  * tall        15.9   15.6   15.6   15.6   15.1   15.1   15.1
@@ -100981,4 +100981,5 @@ int main(int argc, char **argv)
  *
  * do_tree_has_definers infinite recursion?
  * maybe use -ld64 in mac?
+ * iterate unlet et al symtab gc-protected-objs stacks?
  */
