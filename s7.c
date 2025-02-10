@@ -50213,6 +50213,9 @@ static bool iterator_equal_1(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_i
 	if (!let_equal(sc, x_seq, y_seq, ci))
 	  return(false);
 
+      /* let_iterator_slot will be NULL at end */
+      if (is_slot_end(let_iterator_slot(x))) return(is_slot_end(let_iterator_slot(y)));
+      if (is_slot_end(let_iterator_slot(y))) return(false); /* not needed but seems clearer */
       for (xs = let_slots(x_seq), ys = let_slots(y_seq); tis_slot(xs) && tis_slot(ys); xs = next_slot(xs), ys = next_slot(ys))
 	if (xs == let_iterator_slot(x))
 	  return(ys == let_iterator_slot(y));
@@ -54537,6 +54540,9 @@ static no_return void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
 { /* half the reported compute time here is in the longjmp after the catcher runs */
   bool reset_error_hook = false;
   s7_pointer cur_code = current_code(sc);
+#if WITH_HISTORY
+  if (is_free(cur_code)) cur_code = sc->F;
+#endif
 
   sc->format_depth = -1;
   sc->object_out_locked = false;  /* possible error in obj->str method after object_out has set this flag */
@@ -100981,5 +100987,4 @@ int main(int argc, char **argv)
  *
  * do_tree_has_definers infinite recursion?
  * maybe use -ld64 in mac?
- * iterate unlet et al symtab gc-protected-objs stacks?
  */

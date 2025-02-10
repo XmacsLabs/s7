@@ -150,7 +150,6 @@
 
 (freq-test)
 
-
 ;;;; --------------------------------------------------------------------------------
 
 (define (string-split char-delimiter? string)
@@ -556,7 +555,6 @@
     ((= i 4))
   (output-fern-as-eps "barnsley.eps" (create-fern 0 0 50000)))
 
-
 ;;; --------------------------------------------------------------------------------
 
 ;;; circles through 2 points
@@ -611,7 +609,6 @@
 
 (test-circles)
 
-
 ;;; --------------------------------------------------------------------------------
 
 ;;; compare strings
@@ -632,7 +629,6 @@
       (compare-strings string<? strings)))) ; test for in ascending order
 
 (test-compare)
-
 
 ;;; --------------------------------------------------------------------------------
 
@@ -703,7 +699,6 @@
     (same-fringe? (list 1 () (list 2 () (list 3 () ()))) (list 3 (list 2 (list 1 () ()) ()) ()))))
 
 (fringe)
-
 
 ;;; --------------------------------------------------------------------------------
 
@@ -848,7 +843,6 @@
 
 (test-heap)
 
-
 ;;; --------------------------------------------------------------------------------
 
 ;;; sierpinski carpet
@@ -905,7 +899,6 @@
 (test-babbage)
 ;; 25264
 
-
 ;;; --------------------------------------------------------------------------------
 
 ;;; longest increasing subsequence
@@ -941,5 +934,60 @@
     (lis < '(0 8 4 12 2 10 6 14 1 9 5 13 3 11 7 15))))
 
 (test-increase)
+
+;;; --------------------------------------------------------------------------------
+
+#|
+;;; binary-trees GC benchmark, like gcbench in the standard benchmarks
+;;; derived from the Racket version
+;;; 18 secs for N=21, GC time is claiming 6 secs (via (*s7* 'gc-stats)), but callgrind says it's more like 2 secs?
+
+(define (make d)
+  (if (= d 0)
+      (cons #f #f)
+      (cons (make (- d 1)) (make (- d 1)))))
+
+(define (check t)
+  (if (car t)
+      (+ 1 (check (car t)) (check (cdr t)))
+      1))
+
+(define (main n)
+  (define iterations 0)
+  (define min-depth 4)
+  (define max-depth (max (+ min-depth 2) n))
+  (define stretch-depth (+ max-depth 1))
+  (format #t "stretch tree of depth ~a\t check: ~a\n" stretch-depth (check (make stretch-depth)))
+  (define long-lived-tree (make max-depth))
+  (do ((d 4 (+ d 2)))
+      ((>= d (+ 1 max-depth)))
+    (set! iterations (ash 1 (+ (- max-depth d) min-depth)))
+    (format #t "~a\t trees of depth ~a\t check: ~a\n"
+            iterations
+            d
+            (do ((sum 0)
+		 (i 0 (+ i 1)))
+		((= i iterations) sum)
+              (set! sum (+ sum (check (make d)))))))
+  (format #t "long lived tree of depth ~a\t check: ~a\n" max-depth (check long-lived-tree)))
+
+(main 21)
+
+;;; /home/bil/motif-snd/ repl ~/cl/t838.scm
+;;; load /home/bil/cl/t838.scm
+;;; stretch tree of depth 22	 check: 8388607
+;;; 2097152	 trees of depth 4	 check: 65011712
+;;; 524288	 trees of depth 6	 check: 66584576
+;;; 131072	 trees of depth 8	 check: 66977792
+;;; 32768	 trees of depth 10	 check: 67076096
+;;; 8192	 trees of depth 12	 check: 67100672
+;;; 2048	 trees of depth 14	 check: 67106816
+;;; 512	         trees of depth 16	 check: 67108352
+;;; 128	         trees of depth 18	 check: 67108736
+;;; 32	         trees of depth 20	 check: 67108832
+;;; long lived tree of depth 21	 check: 4194303
+
+|#
+
 
 (exit)
