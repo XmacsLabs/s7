@@ -40531,12 +40531,14 @@ member uses equal?  If 'func' is a function of 2 arguments, it is used for the c
       if (is_null(x)) return(sc->F);
       if ((is_any_macro(eq_func)) && (!is_c_macro(eq_func)))
 	clear_all_optimizations(sc, closure_body(eq_func));
-      y = list_1(sc, copy_proper_list(sc, args)); /* this could probably be handled with a counter cell (cdr here is unused) */
+      y = list_1(sc, sc->temp9 = copy_proper_list(sc, args)); /* this could probably be handled with a counter cell (cdr here is unused) */
+      sc->temp9 = y;
       set_opt1_fast(y, x);
       set_opt2_slow(y, x);
       begin_temp(sc->x, y);
       push_stack(sc, OP_MEMBER_IF, list_1(sc, y), eq_func);
       end_temp(sc->x);
+      sc->temp9 = sc->unused;
       if (needs_copied_args(eq_func))
 	push_stack(sc, OP_APPLY, list_2_unchecked(sc, car(args), car(x)), eq_func);
       else
@@ -84190,21 +84192,15 @@ static bool do_vector_has_definers(s7_pointer v)
   return(false);
 }
 
-#if S7_DEBUGGING
-  static s7_int dodef_ctr = 0;
-#endif
-
-static /* inline */ bool do_tree_has_definers(s7_scheme *sc, s7_pointer tree)
+static /* inline */ bool do_tree_has_definers(s7_scheme *sc, s7_pointer tree, uint32_t depth)
 {
   /* we can't be very fancy here because quote gloms up everything: (cond '(define x 0) ...) etc, and the tree here can
    *   be arbitrarily messed up, and we need to be reasonably fast.  So we accept some false positives: (case ((define)...)...) or '(define...)
    * but what about ((f...)...) where (f...) returns a macro that defines something? Or (for-each or ...) where for-each and or might be
    * obfuscated and the args might contain a definer?
    */
-#if S7_DEBUGGING
-  dodef_ctr++;  /* cleared before top call below */
-  if (dodef_ctr > 10000) {fprintf(stderr, "loop in %s?\n", __func__); abort();}
-#endif
+  if (depth > 10000) return(true); /* cyclic code!? */
+
   for (s7_pointer p = tree; is_pair(p); p = cdr(p))
     {
       s7_pointer pp = car(p);
@@ -84222,9 +84218,9 @@ static /* inline */ bool do_tree_has_definers(s7_scheme *sc, s7_pointer tree)
 	      else return(true);
 	    }}
       else
-	if (is_pair(pp)) /* TODO: unquoted_pair ?? */
+	if (is_pair(pp))
 	  {
-	    if (do_tree_has_definers(sc, pp))
+	    if (do_tree_has_definers(sc, pp, ++depth))
 	      return(true);
 	  }
 	else
@@ -84404,10 +84400,7 @@ static s7_pointer check_do(s7_scheme *sc)
       return(sc->nil);
     }
 
-#if S7_DEBUGGING
-  dodef_ctr = 0;
-#endif
-  if (do_tree_has_definers(sc, form))           /* we don't want definers in body, vars, or end test */
+  if (do_tree_has_definers(sc, form, 0))         /* we don't want definers in body, vars, or end test */
     return(fxify_step_exprs(sc, code));
 
   body = cddr(code);
@@ -100985,6 +100978,7 @@ int main(int argc, char **argv)
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
- * do_tree_has_definers infinite recursion?
  * maybe use -ld64 in mac?
+ * gc root names for decode_bt and heap_analyze
+ * weak-hash-table iterate tests
  */

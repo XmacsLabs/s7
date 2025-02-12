@@ -941,6 +941,7 @@
 ;;; binary-trees GC benchmark, like gcbench in the standard benchmarks
 ;;; derived from the Racket version
 ;;; 18 secs for N=21, GC time is claiming 6 secs (via (*s7* 'gc-stats)), but callgrind says it's more like 2 secs?
+;;;   4Ghz i7-6700, on Mac M4 16 secs, guile 3.0.8 20 secs
 
 (define (make d)
   (if (= d 0)
