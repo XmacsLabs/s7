@@ -1127,7 +1127,7 @@ struct s7_scheme {
   s7_cell **heap, **free_heap, **free_heap_top, **free_heap_trigger, **previous_free_heap_top;
   s7_int heap_size, gc_freed, gc_total_freed, max_heap_size, gc_temps_size;
   s7_double gc_resize_heap_fraction, gc_resize_heap_by_4_fraction;
-  s7_int gc_calls, gc_total_time, gc_start, gc_end;
+  s7_int gc_calls, gc_total_time, gc_start, gc_end, gc_true_calls, gc_true_total_time;
   heap_block_t *heap_blocks;
 
 #if WITH_HISTORY
@@ -1474,6 +1474,7 @@ struct s7_scheme {
   int32_t *tc_rec_calls;
   bool printing_gc_info;
   s7_int blocks_allocated, format_ports_allocated, c_functions_allocated;
+  s7_int overall_start_time, gc_mark_time, gc_loop_time, gc_list_time;
 #endif
 };
 
@@ -7736,12 +7737,16 @@ static s7_int gc(s7_scheme *sc)
 {
   s7_cell **old_free_heap_top;
   s7_int i;
+#if S7_DEBUGGING
+  s7_int start_clock;
+#endif
 
   if (sc->gc_in_progress)
     error_nr(sc, sc->error_symbol, set_elist_1(sc, wrap_string(sc, "GC called recursively", 21)));
   sc->gc_in_progress = true;
   sc->gc_start = my_clock();
   sc->gc_calls++;
+  sc->gc_true_calls++;
   sc->continuation_counter = 0;
 
   mark_rootlet(sc);
@@ -7870,6 +7875,9 @@ static s7_int gc(s7_scheme *sc)
 	  gc_mark(opt1_any(s1));                           /* not set_mark -- need to protect let/body/args as well */
       }}
 
+#if S7_DEBUGGING
+  sc->gc_mark_time += (my_clock() - sc->gc_start);
+#endif
   /* free up all unmarked objects */
   old_free_heap_top = sc->free_heap_top;
   {
@@ -7899,6 +7907,9 @@ static s7_int gc(s7_scheme *sc)
    *   of long-lived objects.
    */
 #endif
+#if S7_DEBUGGING
+    start_clock = my_clock();
+#endif
     while (tp < heap_top)          /* != here or ^ makes no difference, and going to 64 (from 32) doesn't matter */
       {
 	s7_pointer p;
@@ -7912,7 +7923,14 @@ static s7_int gc(s7_scheme *sc)
      *   If NUM_THREADS=2, and all thread variables are local, surely there's no "false sharing"?
      */
     sc->free_heap_top = fp;
+#if S7_DEBUGGING
+    sc->gc_loop_time += (my_clock() - start_clock);
+    start_clock = my_clock();
+#endif
     sweep(sc);
+#if S7_DEBUGGING
+    sc->gc_list_time += (my_clock() - start_clock);
+#endif
   }
 
   unmark_semipermanent_objects(sc);
@@ -7922,6 +7940,7 @@ static s7_int gc(s7_scheme *sc)
   sc->gc_total_freed += sc->gc_freed;
   sc->gc_end = my_clock();
   sc->gc_total_time += (sc->gc_end - sc->gc_start);
+  sc->gc_true_total_time += (sc->gc_end - sc->gc_start);
 
   if (show_gc_stats(sc))
     {
@@ -96830,18 +96849,24 @@ static s7_pointer memory_usage(s7_scheme *sc)
 #endif
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "IO", 2), cons(sc, make_integer(sc, info.ru_inblock), make_integer(sc, info.ru_oublock)));
 #endif
+#if S7_DEBUGGING
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "elapsed-time", 12), make_real(sc, (double)(my_clock() - sc->overall_start_time) / ticks_per_second()));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-times", 8),
+			     list_3(sc, make_real(sc, (double)(sc->gc_mark_time) / ticks_per_second()),
+				    make_real(sc, (double)(sc->gc_loop_time) / ticks_per_second()),
+				    make_real(sc, (double)(sc->gc_list_time) / ticks_per_second())));
+#endif
 
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "rootlet-size", 12), make_integer(sc, let_length(sc, sc->rootlet)));
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "heap-size", 9),
 			     cons(sc, make_integer(sc, sc->heap_size), kmg(sc, sc->heap_size * (sizeof(s7_cell) + 2 * sizeof(s7_pointer)))));
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "cell-size", 9), make_integer(sc, sizeof(s7_cell)));
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-total-freed", 14), make_integer(sc, sc->gc_total_freed));
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-total-time", 13), make_real(sc, (double)(sc->gc_total_time) / ticks_per_second()));
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-calls", 8), make_integer(sc, sc->gc_calls));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-total-time", 13), make_real(sc, (double)(sc->gc_true_total_time) / ticks_per_second()));
+  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-calls", 8), make_integer(sc, sc->gc_true_calls));
 
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "small_ints", 10),
 			     cons(sc, make_integer(sc, NUM_SMALL_INTS), kmg(sc, NUM_SMALL_INTS * (sizeof(s7_pointer) + sizeof(s7_cell)))));
-
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "permanent-cells", 15),
 			     cons(sc, make_integer(sc, sc->semipermanent_cells), kmg(sc, sc->semipermanent_cells * sizeof(s7_cell))));
   i = 0;
@@ -97028,8 +97053,8 @@ static s7_pointer memory_usage(s7_scheme *sc)
   add_slot_unchecked_with_id(sc, mu_let,
 			     make_symbol(sc, "file-names", 10),
 			     cons(sc, make_integer(sc, sc->file_names_top), make_integer(sc, len)));
-  add_slot_unchecked_with_id(sc, mu_let, 
-			     make_symbol(sc, "c_functions", 11), 
+  add_slot_unchecked_with_id(sc, mu_let,
+			     make_symbol(sc, "c_functions", 11),
 			     cons(sc, make_integer(sc, sc->c_functions_allocated), make_integer(sc, sc->c_functions_allocated * (sizeof(c_proc_t) + sizeof(s7_cell)))));
 #endif
 
@@ -97516,7 +97541,7 @@ static s7_pointer sl_set_gc_stats(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 
 static s7_pointer sl_set_gc_info(s7_scheme *sc, s7_pointer sym, s7_pointer val) /* ticks_per_second is not settable */
 {
-  if (val == sc->F)
+  if (val == sc->F) /* for profile.scm?? seems like a bad idea! */
     {
       sc->gc_total_time = 0;
       sc->gc_calls = 0;
@@ -100034,6 +100059,12 @@ s7_scheme *s7_init(void)
   if (!cur_sc) original_cur_sc = sc;
   cur_sc = sc;
 #endif
+#if S7_DEBUGGING
+  sc->overall_start_time = my_clock();
+  sc->gc_mark_time = 0;
+  sc->gc_list_time = 0;
+  sc->gc_loop_time = 0;
+#endif
   sc->gc_off = true;                              /* sc->args and so on are not set yet, so a gc during init -> segfault */
   sc->gc_in_progress = false;
   sc->gc_stats = 0;
@@ -100215,7 +100246,9 @@ s7_scheme *s7_init(void)
   sc->gc_resize_heap_by_4_fraction = GC_RESIZE_HEAP_BY_4_FRACTION;
   sc->max_heap_size = (1LL << 45);
   sc->gc_calls = 0;
+  sc->gc_true_calls = 0;
   sc->gc_total_time = 0;
+  sc->gc_true_total_time = 0;
   /* unvectorize free-heap?  t_free obj nxt -> next in list, free_heap_top|length; get free: obj=free_heap_top; top=nxt; len--
    *   push: cur->nxt=top, top=cur len++; trigger when len<trigger; can still do batch alloc/free setting len at end;
    *   how to gc sweep tmps -- seems to require a back pointer (2-way list) but there's no room; no need to realloc when heap grows, but do
@@ -100978,7 +101011,6 @@ int main(int argc, char **argv)
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
- * maybe use -ld64 in mac?
- * gc root names for decode_bt and heap_analyze
+ * gc root names for decode_bt and heap_analyze (and use names in the latter -- decoded_name)
  * weak-hash-table iterate tests
  */
