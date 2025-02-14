@@ -155,11 +155,6 @@
 
 #define STACK_RESIZE_TRIGGER 256   /* was INITIAL_STACK_SIZE/2 which seems excessive */
 
-#ifndef INITIAL_PROTECTED_OBJECTS_SIZE
-  #define INITIAL_PROTECTED_OBJECTS_SIZE 16
-#endif
-/* a vector of objects that are (semi-permanently) protected from the GC, grows as needed */
-
 #ifndef GC_TEMPS_SIZE
   #define GC_TEMPS_SIZE 256
 #endif
@@ -1469,12 +1464,12 @@ struct s7_scheme {
   s7_int saved_pointers_loc, saved_pointers_size;
 
   s7_pointer type_names[NUM_TYPES];
+  s7_int overall_start_time;
 
 #if S7_DEBUGGING
   int32_t *tc_rec_calls;
   bool printing_gc_info;
   s7_int blocks_allocated, format_ports_allocated, c_functions_allocated;
-  s7_int overall_start_time, gc_mark_time, gc_loop_time, gc_list_time;
 #endif
 };
 
@@ -1984,15 +1979,15 @@ static void init_types(void)
 }
 
 #if WITH_HISTORY
-#define current_code(Sc)               T_Ext(car(Sc->cur_code))
-#define set_current_code(Sc, Code)     do {Sc->cur_code = cdr(Sc->cur_code); set_car(Sc->cur_code, T_Ext(Code));} while (0)
-#define replace_current_code(Sc, Code) set_car(Sc->cur_code, T_Ext(Code))
+#define current_code(Sc)               car(Sc->cur_code)
+#define set_current_code(Sc, Code)     do {Sc->cur_code = cdr(Sc->cur_code); set_car(Sc->cur_code, Code);} while (0)
+#define replace_current_code(Sc, Code) set_car(Sc->cur_code, Code)
 #define mark_current_code(Sc)          do {int32_t _i_; s7_pointer _p_; for (_p_ = Sc->cur_code, _i_ = 0; _i_ < Sc->history_size; _i_++, _p_ = cdr(_p_)) gc_mark(car(_p_));} while (0)
 #else
-#define current_code(Sc)               T_Ext(Sc->cur_code)
-#define set_current_code(Sc, Code)     Sc->cur_code = T_Ext(Code)
-#define replace_current_code(Sc, Code) Sc->cur_code = T_Ext(Code)
-#define mark_current_code(Sc)          gc_mark(T_Ext(Sc->cur_code))
+#define current_code(Sc)               Sc->cur_code
+#define set_current_code(Sc, Code)     Sc->cur_code = Code
+#define replace_current_code(Sc, Code) Sc->cur_code = Code
+#define mark_current_code(Sc)          gc_mark(Sc->cur_code)
 #endif
 
 #define full_type(p)  ((p)->tf.u64_type)
@@ -2171,9 +2166,9 @@ static void init_types(void)
 
 #define is_boolean(p)                  (type(p) == T_BOOLEAN)
 
-#define is_free(p)                     (type(p) == T_FREE)
-#define is_free_and_clear(p)           (full_type(p) == T_FREE) /* protect against new_cell in-between states? */
-#define is_simple(P)                   t_simple_p[type(P)]  /* eq? */
+#define is_free(p)                     (unchecked_type(p) == T_FREE)
+#define is_free_and_clear(p)           (full_type(p) == T_FREE) /* protect against new_cell in-between states? full_type is unchecked */
+#define is_simple(P)                   t_simple_p[type(P)]      /* eq? */
 #define has_structure(P)               ((t_structure_p[type(P)]) && ((!is_t_vector(P)) || (!has_simple_elements(P))))
 
 #define is_any_macro(P)                t_any_macro_p[type(P)]
@@ -5448,7 +5443,7 @@ static void print_gc_info(s7_scheme *sc, s7_pointer obj, const char *func, int32
   if (!obj)
     fprintf(stderr, "[%d]: obj is %p\n", line, obj);
   else
-    if (unchecked_type(obj) != T_FREE)
+    if (!is_free(obj))
       fprintf(stderr, "%s from %s[%d]: %p type is %d?\n", __func__, func, line, obj, unchecked_type(obj));
     else
       {
@@ -5485,7 +5480,7 @@ static s7_pointer check_nref(s7_pointer p, const char *func, int32_t line)
 	fprintf(stderr, "%s%s[%d]: attempt to use messed up cell (type: %d)%s\n", bold_text, func, line, unchecked_type(p), unbold_text);
 	if (cur_sc->stop_at_error) abort();
       }
-  if (unchecked_type(p) == T_FREE)
+  if (is_free(p))
     {
       fprintf(stderr, "%s%s[%d]: attempt to use free cell%s\n", bold_text, func, line, unbold_text);
       print_gc_info(cur_sc, p, func, line);
@@ -6811,7 +6806,7 @@ void s7_gc_unprotect_at(s7_scheme *sc, s7_int loc)
 {
   if (loc < sc->protected_objects_size)
     {
-      if (vector_element(sc->protected_objects, loc) != sc->unused)
+      if (vector_element(sc->protected_objects, loc) != sc->unused) /* ?? */
 	sc->protected_objects_free_list[++sc->protected_objects_free_list_loc] = loc;
       else if (S7_DEBUGGING) fprintf(stderr, "redundant gc_unprotect_at location %" ld64 "\n", loc);
       vector_element(sc->protected_objects, loc) = sc->unused;
@@ -6838,7 +6833,8 @@ s7_pointer s7_gc_protect_via_location(s7_scheme *sc, s7_pointer x, s7_int loc)
 
 s7_pointer s7_gc_unprotect_via_location(s7_scheme *sc, s7_int loc)
 {
-  vector_element(sc->protected_objects, loc) = sc->F;
+  vector_element(sc->protected_objects, loc) = sc->unused;
+  sc->protected_objects_free_list[++sc->protected_objects_free_list_loc] = loc; /* added 13-Feb-25 */
   return(sc->F);
 }
 
@@ -7737,9 +7733,6 @@ static s7_int gc(s7_scheme *sc)
 {
   s7_cell **old_free_heap_top;
   s7_int i;
-#if S7_DEBUGGING
-  s7_int start_clock;
-#endif
 
   if (sc->gc_in_progress)
     error_nr(sc, sc->error_symbol, set_elist_1(sc, wrap_string(sc, "GC called recursively", 21)));
@@ -7875,9 +7868,6 @@ static s7_int gc(s7_scheme *sc)
 	  gc_mark(opt1_any(s1));                           /* not set_mark -- need to protect let/body/args as well */
       }}
 
-#if S7_DEBUGGING
-  sc->gc_mark_time += (my_clock() - sc->gc_start);
-#endif
   /* free up all unmarked objects */
   old_free_heap_top = sc->free_heap_top;
   {
@@ -7907,9 +7897,6 @@ static s7_int gc(s7_scheme *sc)
    *   of long-lived objects.
    */
 #endif
-#if S7_DEBUGGING
-    start_clock = my_clock();
-#endif
     while (tp < heap_top)          /* != here or ^ makes no difference, and going to 64 (from 32) doesn't matter */
       {
 	s7_pointer p;
@@ -7923,14 +7910,7 @@ static s7_int gc(s7_scheme *sc)
      *   If NUM_THREADS=2, and all thread variables are local, surely there's no "false sharing"?
      */
     sc->free_heap_top = fp;
-#if S7_DEBUGGING
-    sc->gc_loop_time += (my_clock() - start_clock);
-    start_clock = my_clock();
-#endif
     sweep(sc);
-#if S7_DEBUGGING
-    sc->gc_list_time += (my_clock() - start_clock);
-#endif
   }
 
   unmark_semipermanent_objects(sc);
@@ -7957,13 +7937,9 @@ static s7_int gc(s7_scheme *sc)
 #endif
     }
   if (show_protected_objects_stats(sc))
-    {
-      s7_int num, len = vector_length(sc->protected_objects); /* allocated at startup */
-      for (i = 0, num = 0; i < len; i++)
-	if (vector_element(sc->protected_objects, i) != sc->unused)
-	  num++;
-      s7_warn(sc, 256, "gc-protected-objects: %" ld64 " in use of %" ld64 "\n", num, len);
-    }
+    s7_warn(sc, 256, "gc-protected-objects: %" ld64 " in use of %" ld64 "\n",
+	    sc->protected_objects_size - 1 - sc->protected_objects_free_list_loc, 
+	    sc->protected_objects_size);	      
   sc->previous_free_heap_top = sc->free_heap_top;
   sc->gc_in_progress = false;
   return(sc->gc_freed);
@@ -8477,7 +8453,7 @@ static void push_stack_1(s7_scheme *sc, opcode_t op, s7_pointer args, s7_pointer
     }
   if (code) stack_end_code(sc) = T_Pos(code);
   stack_end_let(sc) = T_Let(sc->curlet);
-  if ((args) && (unchecked_type(args) != T_FREE)) stack_end_args(sc) = T_Pos(args);
+  if ((args) && (!is_free(args))) stack_end_args(sc) = T_Pos(args);
   stack_end_op(sc) = (s7_pointer)op;
   sc->stack_end += 4;
 }
@@ -54054,7 +54030,7 @@ static s7_pointer init_owlet(s7_scheme *sc)
 }
 
 #if WITH_HISTORY
-static s7_pointer cull_history(s7_scheme *sc, s7_pointer code)
+static s7_pointer sanitize_history(s7_scheme *sc, s7_pointer code)
 {
   begin_small_symbol_set(sc); /* make a list of words banned from the history */
   add_symbol_to_small_symbol_set(sc, sc->starlet_symbol);
@@ -54092,7 +54068,7 @@ It has the additional local variables: error-type, error-data, error-code, error
   if (is_pair(args))
     error_nr(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, too_many_arguments_string, sc->owlet_symbol, args));
 #if WITH_HISTORY
-  slot_set_value(sc->error_history, cull_history(sc, slot_value(sc->error_history)));
+  slot_set_value(sc->error_history, sanitize_history(sc, slot_value(sc->error_history)));
 #endif
   e = let_copy(sc, sc->owlet);
   gc_protect_via_stack(sc, e);
@@ -54562,7 +54538,7 @@ static no_return void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
   bool reset_error_hook = false;
   s7_pointer cur_code = current_code(sc);
 #if WITH_HISTORY
-  if (is_free(cur_code)) cur_code = sc->F;
+  if ((is_free(cur_code)) || (cur_code == sc->unused)) cur_code = sc->F;
 #endif
 
   sc->format_depth = -1;
@@ -54599,7 +54575,7 @@ static no_return void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
       for (s7_pointer p = sc->cur_code; i < sc->history_size; i++, p = cdr(p)) car(p) = sc->nil;
     }
 #endif
-  if (is_pair(cur_code)) /* not redundant */
+  if (is_pair(cur_code)) /* not redundant -- maybe use checked_type here */
     {
       s7_int line = -1, file, position;
       if (has_location(cur_code)) /* ignore callgrind!  this is the normal case */
@@ -96527,7 +96503,8 @@ void s7_heap_analyze(s7_scheme *sc)
     mark_holdee(NULL, g->p, "permanent object");
 
   for (s7_int i = 0; i < sc->protected_objects_size; i++)
-    mark_holdee(NULL, vector_element(sc->protected_objects, i), "gc protected object");
+    if (vector_element(sc->protected_objects, i) != sc->unused)
+      mark_holdee(NULL, vector_element(sc->protected_objects, i), "gc protected object");
 
   for (s7_int i = 0; i < sc->protected_setters_loc; i++)
     mark_holdee(NULL, vector_element(sc->protected_setters, i), "gc protected setter");
@@ -96849,14 +96826,7 @@ static s7_pointer memory_usage(s7_scheme *sc)
 #endif
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "IO", 2), cons(sc, make_integer(sc, info.ru_inblock), make_integer(sc, info.ru_oublock)));
 #endif
-#if S7_DEBUGGING
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "elapsed-time", 12), make_real(sc, (double)(my_clock() - sc->overall_start_time) / ticks_per_second()));
-  add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-times", 8),
-			     list_3(sc, make_real(sc, (double)(sc->gc_mark_time) / ticks_per_second()),
-				    make_real(sc, (double)(sc->gc_loop_time) / ticks_per_second()),
-				    make_real(sc, (double)(sc->gc_list_time) / ticks_per_second())));
-#endif
-
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "rootlet-size", 12), make_integer(sc, let_length(sc, sc->rootlet)));
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "heap-size", 9),
 			     cons(sc, make_integer(sc, sc->heap_size), kmg(sc, sc->heap_size * (sizeof(s7_cell) + 2 * sizeof(s7_pointer)))));
@@ -96929,7 +96899,8 @@ static s7_pointer memory_usage(s7_scheme *sc)
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "cells-in-use/free", 17),
 			     cons(sc, make_integer(sc, in_use), make_integer(sc, sc->free_heap_top - sc->free_heap)));
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "gc-protected-objects", 20),
-			     cons(sc, make_integer(sc, sc->protected_objects_size - sc->protected_objects_free_list_loc),
+			     cons(sc, make_integer(sc, sc->protected_objects_size - 2 - sc->protected_objects_free_list_loc),
+				  /* -1 to make size and loc commensurable, another -1 because we're using an element in this function (see gc_loc above) */
 				  make_integer(sc, sc->protected_objects_size)));
   add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "setters", 7), make_integer(sc, sc->protected_setters_loc));
 
@@ -97185,7 +97156,7 @@ static s7_pointer sl_int_fixup(s7_scheme *sc, s7_pointer val)
 static s7_pointer sl_history(s7_scheme *sc)
 {
 #if WITH_HISTORY
-  return(cull_history(sc, (sc->cur_code == sc->history_sink) ? sc->old_cur_code : sc->cur_code));
+  return(sanitize_history(sc, (sc->cur_code == sc->history_sink) ? sc->old_cur_code : sc->cur_code));
 #else
   return(sc->cur_code);
 #endif
@@ -100059,12 +100030,7 @@ s7_scheme *s7_init(void)
   if (!cur_sc) original_cur_sc = sc;
   cur_sc = sc;
 #endif
-#if S7_DEBUGGING
   sc->overall_start_time = my_clock();
-  sc->gc_mark_time = 0;
-  sc->gc_list_time = 0;
-  sc->gc_loop_time = 0;
-#endif
   sc->gc_off = true;                              /* sc->args and so on are not set yet, so a gc during init -> segfault */
   sc->gc_in_progress = false;
   sc->gc_stats = 0;
@@ -100259,23 +100225,29 @@ s7_scheme *s7_init(void)
   sc->max_string_port_length = (1LL << 45);
   sc->output_file_port_length = OUTPUT_FILE_PORT_LENGTH;
 
-  /* this has to precede s7_make_* allocations */
-  sc->protected_setters_size = INITIAL_PROTECTED_OBJECTS_SIZE;
-  sc->protected_setters_loc = 0;
-  sc->protected_setters = make_vector_1(sc, INITIAL_PROTECTED_OBJECTS_SIZE, FILLED, T_VECTOR);
-  sc->protected_setter_symbols = make_vector_1(sc, INITIAL_PROTECTED_OBJECTS_SIZE, FILLED, T_VECTOR);
-
-  sc->protected_objects_size = INITIAL_PROTECTED_OBJECTS_SIZE;
-  sc->protected_objects_free_list = (s7_int *)Malloc(INITIAL_PROTECTED_OBJECTS_SIZE * sizeof(s7_int));
-  sc->protected_objects_free_list_loc = INITIAL_PROTECTED_OBJECTS_SIZE - 1;
-  sc->protected_objects = make_vector_1(sc, INITIAL_PROTECTED_OBJECTS_SIZE, FILLED, T_VECTOR);
-  for (i = 0; i < INITIAL_PROTECTED_OBJECTS_SIZE; i++) /* using #<unused> as the not-set indicator here lets that value leak out! */
-    {
-      vector_element(sc->protected_objects, i) = sc->unused;
-      vector_element(sc->protected_setters, i) = sc->unused;
-      vector_element(sc->protected_setter_symbols, i) = sc->unused;
-      sc->protected_objects_free_list[i] = i;
-    }
+#ifndef INITIAL_PROTECTED_OBJECTS_SIZE
+  #define INITIAL_PROTECTED_OBJECTS_SIZE 16
+#endif
+/* a vector of objects that are (semi-permanently) protected from the GC, grows as needed */
+  {
+    s7_int size = (INITIAL_PROTECTED_OBJECTS_SIZE > 0) ? INITIAL_PROTECTED_OBJECTS_SIZE : 2;
+    /* this has to precede s7_make_* allocations, need to protect against 0 here else segfault in g_multivector->gc_protect_2 */
+    sc->protected_setters_size = size;
+    sc->protected_setters_loc = 0;
+    sc->protected_setters = make_vector_1(sc, size, FILLED, T_VECTOR);
+    sc->protected_setter_symbols = make_vector_1(sc, size, FILLED, T_VECTOR);
+    
+    sc->protected_objects_size = size;
+    sc->protected_objects_free_list = (s7_int *)Malloc(size * sizeof(s7_int));
+    sc->protected_objects_free_list_loc = size - 1;
+    sc->protected_objects = make_vector_1(sc, size, FILLED, T_VECTOR);
+    for (i = 0; i < sc->protected_setters_size; i++)
+      {
+	vector_element(sc->protected_objects, i) = sc->unused;
+	vector_element(sc->protected_setters, i) = sc->unused;
+	vector_element(sc->protected_setter_symbols, i) = sc->unused;
+	sc->protected_objects_free_list[i] = i;
+      }}
 
   sc->stack = make_vector_1(sc, INITIAL_STACK_SIZE, FILLED, T_VECTOR);
   /* if not_filled, segfault in gc_mark in mark_stack_1 after size check? probably unfilled OP_BARRIER etc? */
@@ -101011,6 +100983,9 @@ int main(int argc, char **argv)
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  *
- * gc root names for decode_bt and heap_analyze (and use names in the latter -- decoded_name)
+ * gc root names for decode_bt and heap_analyze (and use names in the latter -- decoded_name -- s7_heap_analyze has the names already)
  * weak-hash-table iterate tests
+ * check initial* against 0 etc
+ * if protected_objects_size=2, 101268: (func) got (hash-table ([garbage here]) 2 3 0) but expected (hash-table (#f) 2 3 0)
+ *   so resize_gc_protect is broken? use <2 not ==0
  */
