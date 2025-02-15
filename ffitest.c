@@ -830,12 +830,20 @@ int main(int argc, char **argv)
   s7_gc_unprotect_at(sc, gc_loc);
 
   { /* force realloc of protected_objects array */
-    s7_int gc_locs[20];
-    for (i = 0; i < 18; i++) /* initial size = 16 */
-      gc_locs[i] = s7_gc_protect(sc, s7_cons(sc, s7_f(sc), s7_t(sc)));
-    for (i = 0; i < 18; i++)
-      s7_gc_unprotect_at(sc, gc_locs[i]);
-  }
+    #define GCPO_SIZE 18
+    s7_int gc_locs[GCPO_SIZE];
+    s7_pointer gc_p[GCPO_SIZE];
+    for (i = 0; i < GCPO_SIZE; i++) /* initial size probably = 16 */
+      gc_locs[i] = s7_gc_protect(sc, gc_p[i] = s7_cons(sc, s7_make_integer(sc, i), s7_nil(sc)));
+    /* s7_gc(sc); */ /* maybe export this? gc proc s7.c 7729 */
+    for (i = 0; i < GCPO_SIZE; i++)
+      {
+	if ((s7_gc_protected_at(sc, gc_locs[i]) != gc_p[i]) || 
+	    (s7_type_of(sc, gc_p[i]) == s7_f(sc)) ||
+	    (s7_integer(s7_car(gc_p[i])) != i))
+	  {fprintf(stderr, "gc_protected_objects[%" ld64 "] is changed: %s\n", i, s1 = TO_STR(gc_p[i])); free(s1);}
+	s7_gc_unprotect_at(sc, gc_locs[i]);
+      }}
 
   p = TO_S7_INT(123);
   gc_loc = s7_gc_protect(sc, p);

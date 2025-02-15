@@ -163,6 +163,11 @@
  *    might be vulnerable to the GC.
  */
 
+#ifndef INITIAL_PROTECTED_OBJECTS_SIZE
+  #define INITIAL_PROTECTED_OBJECTS_SIZE 16
+#endif
+/* a vector of objects that are (semi-permanently) protected from the GC, grows as needed */
+
 
 /* ---------------- scheme choices ---------------- */
 
@@ -7925,13 +7930,8 @@ static s7_int gc(s7_scheme *sc)
   if (show_gc_stats(sc))
     {
 #if !MS_WINDOWS
-#if S7_DEBUGGING
-      s7_warn(sc, 512, "%s[%d]: gc freed %" ld64 "/%" ld64 " (free: %" p64 "), time: %f\n", func, line,
-	      sc->gc_freed, sc->heap_size, (intptr_t)(sc->free_heap_top - sc->free_heap), (double)(sc->gc_end - sc->gc_start) / ticks_per_second());
-#else
       s7_warn(sc, 256, "gc freed %" ld64 "/%" ld64 " (free: %" p64 "), time: %f\n",
 	      sc->gc_freed, sc->heap_size, (intptr_t)(sc->free_heap_top - sc->free_heap), (double)(sc->gc_end - sc->gc_start) / ticks_per_second());
-#endif
 #else
       s7_warn(sc, 256, "gc freed %" ld64 "/%" ld64 "\n", sc->gc_freed, sc->heap_size);
 #endif
@@ -54575,7 +54575,7 @@ static no_return void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
       for (s7_pointer p = sc->cur_code; i < sc->history_size; i++, p = cdr(p)) car(p) = sc->nil;
     }
 #endif
-  if (is_pair(cur_code)) /* not redundant -- maybe use checked_type here */
+  if (is_pair(cur_code)) /* not redundant -- maybe use unchecked_type here */
     {
       s7_int line = -1, file, position;
       if (has_location(cur_code)) /* ignore callgrind!  this is the normal case */
@@ -97586,6 +97586,37 @@ static s7_pointer sl_set_bignum_precision(s7_scheme *sc, s7_pointer sym, s7_poin
   return(val);
 }
 
+static s7_pointer sl_set_default_hash_table_length(s7_scheme *sc, s7_pointer sym, s7_pointer val)
+{
+  s7_int iv = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val)); /* protect against this being 9223372036854775807, then being used as a hash-table's size */
+  if (iv > sc->max_vector_length)       /* these range limits are from g_make_hash_table */
+    error_nr(sc, sc->out_of_range_symbol,
+	     set_elist_3(sc, wrap_string(sc, "(set! (*s7* 'default-hash-table-length) ~D), which is greater than (*s7* 'max-vector-length), ~D", 96),
+			 val, wrap_integer(sc, sc->max_vector_length)));
+  if (iv >= (1LL << 32LL))
+    error_nr(sc, sc->out_of_range_symbol,
+	     set_elist_3(sc, wrap_string(sc, "(set! (*s7* 'default-hash-table-length) ~D), which is >= ~D", 59),
+			 val, wrap_integer(sc, 1LL << 32LL)));
+  sc->default_hash_table_length = iv;
+  return(val);
+}
+
+static s7_pointer sl_set_symbol_printer(s7_scheme *sc, s7_pointer sym, s7_pointer val)
+{
+  if (val != sc->F)
+    {
+      if (!is_any_closure(val))
+	error_nr(sc, sc->wrong_type_arg_symbol,
+		 set_elist_4(sc, wrap_string(sc, "(set! (*s7* '~A) ~S): new value is ~A but should be a function or #f", 68),
+			     sym, val, object_type_name(sc, val)));
+      if (!s7_is_aritable(sc, val, 1))
+	error_nr(sc, sc->wrong_type_arg_symbol,
+		 set_elist_2(sc, wrap_string(sc, "(*s7* 'symbol-printer) function, ~A, should take one argument", 61), val));
+    }
+  sc->symbol_printer = val;
+  return(val);
+}
+
 static no_return void sl_unsettable_error_nr(s7_scheme *sc, s7_pointer sym)
 {
   immutable_object_error_nr(sc, set_elist_2(sc, wrap_string(sc, "can't set (*s7* '~S)", 20), sym));
@@ -97624,19 +97655,8 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 
     case SL_DEBUG:
       return(sl_set_debug(sc, sym, val));
-
     case SL_DEFAULT_HASH_TABLE_LENGTH:
-      iv = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val)); /* protect against this being 9223372036854775807, then being used as a hash-table's size */
-      if (iv > sc->max_vector_length)       /* these range limits are from g_make_hash_table */
-	error_nr(sc, sc->out_of_range_symbol,
-		 set_elist_3(sc, wrap_string(sc, "(set! (*s7* 'default-hash-table-length) ~D), which is greater than (*s7* 'max-vector-length), ~D", 96),
-			     val, wrap_integer(sc, sc->max_vector_length)));
-      if (iv >= (1LL << 32LL)) /* why this?? */
-	error_nr(sc, sc->out_of_range_symbol,
-		 set_elist_3(sc, wrap_string(sc, "(set! (*s7* 'default-hash-table-length) ~D), which is >= ~D", 59),
-			     val, wrap_integer(sc, 1LL << 32LL)));
-      sc->default_hash_table_length = iv;
-      return(val);
+      return(sl_set_default_hash_table_length(sc, sym, val));
 
     case SL_DEFAULT_RANDOM_STATE:
       if (!is_random_state(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_RANDOM_STATE]);
@@ -97825,19 +97845,7 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       sl_unsettable_error_nr(sc, sym);
 
     case SL_SYMBOL_PRINTER:
-      if (val != sc->F)
-	{
-	  if (!is_any_closure(val))
-	    error_nr(sc, sc->wrong_type_arg_symbol,
-		     set_elist_4(sc, wrap_string(sc, "(set! (*s7* '~A) ~S): new value is ~A but should be a function or #f", 68),
-				 sym, val, object_type_name(sc, val)));
-	  if (!s7_is_aritable(sc, val, 1))
-	    error_nr(sc, sc->wrong_type_arg_symbol,
-		     set_elist_2(sc, wrap_string(sc, "(*s7* 'symbol-printer) function, ~A, should take one argument", 61), val));
-	}
-      sc->symbol_printer = val;
-      return(val);
-
+      return(sl_set_symbol_printer(sc, sym, val));
     case SL_SYMBOL_QUOTE:
       if (!is_boolean(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
       sc->symbol_quote = s7_boolean(sc, val);
@@ -97847,7 +97855,6 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       if (!is_boolean(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
       sc->undefined_constant_warnings = s7_boolean(sc, val);
       return(val);
-
     case SL_UNDEFINED_IDENTIFIER_WARNINGS:
       if (!is_boolean(val)) starlet_wrong_type_error_nr(sc, sym, val, sc->type_names[T_BOOLEAN]);
       sc->undefined_identifier_warnings = s7_boolean(sc, val);
@@ -100172,25 +100179,25 @@ s7_scheme *s7_init(void)
 #endif
   sc->show_stack_limit = 20;
 
-  sc->heap_size = INITIAL_HEAP_SIZE;
+  sc->heap_size = (INITIAL_HEAP_SIZE > 0) ? INITIAL_HEAP_SIZE : 64000;
   if ((sc->heap_size % 32) != 0)
     sc->heap_size = 32 * (s7_int)ceil((double)(sc->heap_size) / 32.0);
   sc->heap = (s7_pointer *)Malloc(sc->heap_size * sizeof(s7_pointer));
   sc->free_heap = (s7_cell **)Malloc(sc->heap_size * sizeof(s7_cell *));
-  sc->free_heap_top = (s7_cell **)(sc->free_heap + INITIAL_HEAP_SIZE);
+  sc->free_heap_top = (s7_cell **)(sc->free_heap + sc->heap_size);
   sc->free_heap_trigger = (s7_cell **)(sc->free_heap + GC_TRIGGER_SIZE);
   sc->previous_free_heap_top = sc->free_heap_top;
   {
-    s7_cell *cells = (s7_cell *)Malloc(INITIAL_HEAP_SIZE * sizeof(s7_cell)); /* was calloc 14-Apr-22 */
+    s7_cell *cells = (s7_cell *)Malloc(sc->heap_size * sizeof(s7_cell)); /* was calloc 14-Apr-22 */
     add_saved_pointer(sc, (void *)cells);
-    for (i = 0; i < INITIAL_HEAP_SIZE; i++)       /* LOOP_4 here is slower! */
+    for (i = 0; i < sc->heap_size; i++)       /* LOOP_4 here is slower! */
       {
 	sc->heap[i] = &cells[i];
  	sc->free_heap[i] = sc->heap[i];
 #if S7_DEBUGGING
 	sc->heap[i]->debugger_bits = 0; sc->heap[i]->gc_line = 0; sc->heap[i]->gc_func = NULL;
 #endif
-	clear_type(sc->heap[i]);                  /* type(sc->heap[i]) = T_FREE */
+	clear_type(sc->heap[i]);              /* type(sc->heap[i]) = T_FREE */
 	i++;
 	sc->heap[i] = &cells[i];
  	sc->free_heap[i] = sc->heap[i];
@@ -100199,7 +100206,7 @@ s7_scheme *s7_init(void)
 #endif
 	clear_type(sc->heap[i]);
      }
-    /* memcpy((void *)(sc->free_heap), (const void *)(sc->heap), sizeof(s7_pointer) * INITIAL_HEAP_SIZE); */
+    /* memcpy((void *)(sc->free_heap), (const void *)(sc->heap), sizeof(s7_pointer) * sc->heap_size); */
     /*   weird that this memcpy (without the equivalent sets above) is much slower */
     sc->heap_blocks = (heap_block_t *)Malloc(sizeof(heap_block_t));
     sc->heap_blocks->start = (intptr_t)cells;
@@ -100207,7 +100214,7 @@ s7_scheme *s7_init(void)
     sc->heap_blocks->offset = 0;
     sc->heap_blocks->next = NULL;
   }
-  sc->gc_temps_size = GC_TEMPS_SIZE;
+  sc->gc_temps_size = (GC_TEMPS_SIZE > 0) ? GC_TEMPS_SIZE : 256;
   sc->gc_resize_heap_fraction = GC_RESIZE_HEAP_FRACTION;
   sc->gc_resize_heap_by_4_fraction = GC_RESIZE_HEAP_BY_4_FRACTION;
   sc->max_heap_size = (1LL << 45);
@@ -100225,10 +100232,6 @@ s7_scheme *s7_init(void)
   sc->max_string_port_length = (1LL << 45);
   sc->output_file_port_length = OUTPUT_FILE_PORT_LENGTH;
 
-#ifndef INITIAL_PROTECTED_OBJECTS_SIZE
-  #define INITIAL_PROTECTED_OBJECTS_SIZE 16
-#endif
-/* a vector of objects that are (semi-permanently) protected from the GC, grows as needed */
   {
     s7_int size = (INITIAL_PROTECTED_OBJECTS_SIZE > 0) ? INITIAL_PROTECTED_OBJECTS_SIZE : 2;
     /* this has to precede s7_make_* allocations, need to protect against 0 here else segfault in g_multivector->gc_protect_2 */
@@ -100241,7 +100244,7 @@ s7_scheme *s7_init(void)
     sc->protected_objects_free_list = (s7_int *)Malloc(size * sizeof(s7_int));
     sc->protected_objects_free_list_loc = size - 1;
     sc->protected_objects = make_vector_1(sc, size, FILLED, T_VECTOR);
-    for (i = 0; i < sc->protected_setters_size; i++)
+    for (i = 0; i < size; i++)
       {
 	vector_element(sc->protected_objects, i) = sc->unused;
 	vector_element(sc->protected_setters, i) = sc->unused;
@@ -100982,10 +100985,4 @@ int main(int argc, char **argv)
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
- *
- * gc root names for decode_bt and heap_analyze (and use names in the latter -- decoded_name -- s7_heap_analyze has the names already)
- * weak-hash-table iterate tests
- * check initial* against 0 etc
- * if protected_objects_size=2, 101268: (func) got (hash-table ([garbage here]) 2 3 0) but expected (hash-table (#f) 2 3 0)
- *   so resize_gc_protect is broken? use <2 not ==0
  */
