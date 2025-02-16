@@ -7602,14 +7602,7 @@ static void mark_output_port(s7_pointer p)
     gc_mark(port_string_or_function(p));
 }
 
-static void mark_free(s7_pointer p)
-{
-#if S7_DEBUGGING
-  /* this can happen in make_room_for_cc_stack */
-  /* fprintf(stderr, "%smark free: %p%s\n", bold_text, p, unbold_text); */
-#endif
-}
-
+static void mark_free(s7_pointer p) {} /* this can happen in make_room_for_cc_stack */
 
 static void init_mark_functions(void)
 {
@@ -26009,7 +26002,7 @@ static bool has_two_int_args(s7_scheme *sc, s7_pointer expr)
 	  if (is_t_integer(arg2)) return(true);
 	  if ((is_pair(arg2)) && (is_symbol(car(arg2))) && (is_defined_global(car(arg2))) && (is_c_function(global_value(car(arg2)))))
 	    {
-	      s7_pointer sig = c_function_signature(global_value(car(arg2)));
+	      sig = c_function_signature(global_value(car(arg2)));
 	      if ((is_pair(sig)) && (car(sig) == sc->is_integer_symbol)) return(true);
 	    }}}
   return(false);
@@ -60596,9 +60589,10 @@ static bool fx_tree_in(s7_scheme *sc, s7_pointer tree, s7_pointer var1, s7_point
 
     case HOP_SAFE_C_opSSq_S:
       {
-	s7_pointer s1 = cadadr(p), s2 = caddadr(p), s3 = caddr(p);
+	s7_pointer s1 = cadadr(p), s2 = caddadr(p);
 	if (fx_proc(tree) == fx_vref_vref_ss_s)
 	  {
+	    s7_pointer s3 = caddr(p);
 	    if ((s3 == var1) && (is_defined_global(s1)))
 	      {
 		if ((!more_vars) && (o_var_ok(s2, var1, var2, var3))) return(with_fx(tree, fx_vref_vref_go_t));
@@ -67342,21 +67336,11 @@ static s7_pointer opt_set_p_i_f(opt_info *o)
 }
 /* here and below (opt_set_p_d_f), the mutable versions are not safe, and are very tricky to make safe.  First if a variable is set twice,
  *  in the body, as in (do (...) (... (set! buffix (+ 1 buffix)) (if (>= buffix fftsize) (set! buffix 0)))) from pvoc.scm,
- *  if the first set! is opt_set_p_i_fm (buffix is assumed mutable), the second sets it to built-in immutable zero, so the next time around loop,
+ *  if the first set! is opt_set_p_i_fm (see tmp) (buffix is assumed mutable), the second sets it to built-in immutable zero, so the next time around loop,
  *  the set_integer is direct so now built-in 0 == 128 (yet still prints itself as "0").  Also if a mutable variable is stored,
  * (define (f2) (let ((v (vector 0 0 0)) (y 1.0)) (do ((i 0 (+ i 1))) ((= i 3) v) (set! y (+ y 1.0)) (vector-set! v i y))))
  * (f2) -> #(4.0 4.0 4.0).  Maybe safe if body has just one statement?
  */
-
-#if 0
-static s7_pointer opt_set_p_i_fm(opt_info *o)
-{
-  s7_int x = o->v[6].fi(o->v[5].o1);
-  check_mutability(o->sc, o, __func__, __LINE__);
-  set_integer(slot_value(o->v[1].p), x);
-  return(slot_value(o->v[1].p));
-}
-#endif
 
 static s7_pointer opt_set_p_d_s(opt_info *o)
 {
@@ -67373,16 +67357,6 @@ static s7_pointer opt_set_p_d_f(opt_info *o)
   slot_set_value(o->v[1].p, x);
   return(x);
 }
-
-#if 0
-static s7_pointer opt_set_p_d_fm(opt_info *o)
-{
-  s7_double x = o->v[5].fd(o->v[4].o1);
-  check_mutability(o->sc, o, __func__, __LINE__);
-  set_real(slot_value(o->v[1].p), x);
-  return(slot_value(o->v[1].p));
-}
-#endif
 
 static s7_pointer opt_set_p_d_f_sf_add(opt_info *o)
 {
@@ -69897,7 +69871,6 @@ static bool int_optimize_1(s7_scheme *sc, s7_pointer expr)
 	      /* timing tests don't get many useful hits */
 	    }}
 #endif
-
       if ((is_macro(s_func)) && (!no_cell_opt(expr)))
 	{
 	  s7_pointer body = closure_body(s_func);
@@ -96848,25 +96821,25 @@ static s7_pointer memory_usage(s7_scheme *sc)
 
   /* safe_lists */
   {
-    s7_int live = 0, in_use = 0, line_used = 0;
+    s7_int live = 0, lines_in_use = 0, line_used = 0;
     for (i = 1; i < NUM_SAFE_LISTS; i++)
       if (is_pair(sc->safe_lists[i]))
 	{
 	  live++;
-	  if (safe_list_is_in_use(sc->safe_lists[i])) {in_use++; line_used = i;}
+	  if (safe_list_is_in_use(sc->safe_lists[i])) {lines_in_use++; line_used = i;}
 	}
 #if S7_DEBUGGING
     begin_temp(sc->y, sc->nil);
     for (i = NUM_SAFE_LISTS - 1; i > 0; i--) /* omit safe_lists[0]=() since it is never used */
       sc->y = cons(sc, make_integer(sc, sc->safe_list_uses[i]), sc->y);
     add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "safe-lists", 10),
-			       (in_use == 0) ? list_3(sc, small_int(live), int_zero, sc->y) :
-			                       list_4(sc, small_int(live), small_int(in_use), small_int(line_used), sc->y));
+			       (lines_in_use == 0) ? list_3(sc, small_int(live), int_zero, sc->y) :
+			                             list_4(sc, small_int(live), small_int(lines_in_use), small_int(line_used), sc->y));
     end_temp(sc->y);
 #else
     add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "safe-lists", 10),
-			       (in_use == 0) ? list_2(sc, small_int(live), int_zero) :
-			                       list_3(sc, small_int(live), small_int(in_use), small_int(line_used)));
+			       (lines_in_use == 0) ? list_2(sc, small_int(live), int_zero) :
+			                              list_3(sc, small_int(live), small_int(lines_in_use), small_int(line_used)));
 #endif
   }
 
@@ -96884,12 +96857,12 @@ static s7_pointer memory_usage(s7_scheme *sc)
 	{
 	  /* can't use bare type name here ("let" is a syntactic symbol) */
 	  const char *tname = (i == 0) ? "free" : type_name_from_type(i, NO_ARTICLE);
-	  s7_int len = safe_strlen(tname);
+	  s7_int tlen = safe_strlen(tname);
 	  uint8_t name[32]; /* not 16 -- gmp overflows this buffer with "big-complex-number", len=18 */
-	  memcpy((void *)name, (const void *)tname, len);
-	  name[len] = (uint8_t)'\0';
+	  memcpy((void *)name, (const void *)tname, tlen);
+	  name[tlen] = (uint8_t)'\0';
 	  name[0] = (uint8_t)toupper((int)name[0]);
-	  sc->y = cons_unchecked(sc, make_integer(sc, ts[i]), cons(sc, make_symbol(sc, (const char *)name, len), sc->y));
+	  sc->y = cons_unchecked(sc, make_integer(sc, ts[i]), cons(sc, make_symbol(sc, (const char *)name, tlen), sc->y));
 	}}
   if (is_pair(sc->y))
     add_slot_unchecked_with_id(sc, mu_let, make_symbol(sc, "heap-by-type", 12), s7_inlet(sc, proper_list_reverse_in_place(sc, sc->y)));
@@ -97739,7 +97712,7 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
       return(val);
 
     case SL_INITIAL_STRING_PORT_LENGTH:
-      iv = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val)); return(val);
+      iv = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
       if (iv > 1048576) /* just a guess, some joker might try setting this to (*s7* 'most-positive-fixnum)... */
 	starlet_out_of_range_error_nr(sc, sym, val, wrap_string(sc, "it doesn't need to be this big", 30));
       sc->initial_string_port_length = iv;
