@@ -369,7 +369,7 @@
 			((and (or (symbol? a) (hash-table? a) (let? a) (no-pairs? (cdr a)))
 			      (or (symbol? b) (hash-table? b) (let? b) (no-pairs? (cdr b))))
 			 ;; we assume above hash-tables and lets don't use expressions for the key/variable names
-			 (let ((tmp (gensym)))
+			 (let ((tmp (gensym "swap!-")))
 			   `(let ((,tmp ,a))
 			      (set! ,a ,b)
 			      (set! ,b ,tmp))))
@@ -379,9 +379,9 @@
 			       (b-object (if (pair? b) (car b) b))
 			       (a-indices (and (pair? a) (cdr a)))
 			       (b-indices (and (pair? b) (cdr b)))
-			       (tmp-a-indices (gensym))
-			       (tmp-b-indices (gensym))
-			       (tmp (gensym)))
+			       (tmp-a-indices (gensym "swap!-"))
+			       (tmp-b-indices (gensym "swap!-"))
+			       (tmp (gensym "swap!-")))
 			   `(let ((,tmp-a-indices (and (pair? ',a) (map eval ',a-indices))) ; eval once-only in run-time env
 				  (,tmp-b-indices (and (pair? ',b) (map eval ',b-indices))))
 			      (let ((,tmp (if (pair? ',a) 

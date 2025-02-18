@@ -819,9 +819,9 @@ typedef struct s7_cell {
   } tf;
   union {
 
-    union {                       /* integers, floats */
-      s7_int integer_value;
-      s7_double real_value;
+    union {
+      s7_int integer_value;       /* integers */
+      s7_double real_value;       /* floats */
 
       struct {                    /* ratios */
 	s7_int numerator;
@@ -837,10 +837,10 @@ typedef struct s7_cell {
       } cz;
 
 #if WITH_GMP
-      bigint *bgi;                /* bignums */
-      bigrat *bgr;
-      bigflt *bgf;
-      bigcmp *bgc;
+      bigint *bgi;                /* bignums (integer) */
+      bigrat *bgr;                /*         (ratio) */
+      bigflt *bgf;                /*         (float) */
+      bigcmp *bgc;                /*         (complex) */
 #endif
     } number;
 
@@ -15599,14 +15599,15 @@ static s7_pointer make_sharp_constant(s7_scheme *sc, const char *name, bool with
 	    return(chars[(uint8_t)'\n']);
 	  break;
 
-	case 's': if (c_strings_are_equal(name + 1, "space"))     return(chars[(uint8_t)' ']);  break;
-	case 'r': if (c_strings_are_equal(name + 1, "return"))    return(chars[(uint8_t)'\r']); break;
-	case 'l': if (c_strings_are_equal(name + 1, "linefeed"))  return(chars[(uint8_t)'\n']); break;
-	case 't': if (c_strings_are_equal(name + 1, "tab"))       return(chars[(uint8_t)'\t']); break;
 	case 'a': if (c_strings_are_equal(name + 1, "alarm"))     return(chars[7]);             break;
 	case 'b': if (c_strings_are_equal(name + 1, "backspace")) return(chars[8]);             break;
-	case 'e': if (c_strings_are_equal(name + 1, "escape"))    return(chars[0x1b]);          break;
 	case 'd': if (c_strings_are_equal(name + 1, "delete"))    return(chars[0x7f]);          break;
+	case 'e': if (c_strings_are_equal(name + 1, "escape"))    return(chars[0x1b]);          break;
+	case 'l': if (c_strings_are_equal(name + 1, "linefeed"))  return(chars[(uint8_t)'\n']); break;
+	case 'r': if (c_strings_are_equal(name + 1, "return"))    return(chars[(uint8_t)'\r']); break;
+	case 's': if (c_strings_are_equal(name + 1, "space"))     return(chars[(uint8_t)' ']);  break;
+	case 't': if (c_strings_are_equal(name + 1, "tab"))       return(chars[(uint8_t)'\t']); break;
+	  /* to print something in bold-face: (format *stderr* "~Ahiho~A~%" (string-append (string #\escape) "[1m") (string-append (string #\escape) "[22m")) */
 
 	case 'x':
 	  /* #\x is just x, but apparently #\x<num> is int->char? #\x65 -> #\e, and #\xcebb is lambda? */
@@ -100958,4 +100959,5 @@ int main(int argc, char **argv)
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
+ * string-wrappers extended?
  */
