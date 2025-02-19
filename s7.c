@@ -100959,5 +100959,5 @@ int main(int argc, char **argv)
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
- * string-wrappers extended?
+ * if we have the function (not its name) it's "safe"
  */

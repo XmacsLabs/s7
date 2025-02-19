@@ -4,6 +4,7 @@
 ;(set! (*s7* 'profile) 1)
 (when (provided? 'number-separator) (set! (*s7* 'number-separator) #\,))
 ;(set! (*s7* 'gc-stats) 4) ; stack-stats
+(set! (*s7* 'float-format-precision) 4)
 
 (unless (defined? 'fuzzies)
   (define fuzzies 100000))
@@ -42,6 +43,7 @@
 	(time.free p)
 	(substring timestr 0 len)))))
 
+#|
 (define (memory-rusage)
   (with-let (sublet *libc*)
     (let ((v (rusage.make)))
@@ -49,10 +51,7 @@
       (let ((mem (rusage.ru_maxrss v)))
 	(free v)
 	mem)))) ; 99 414 [016] -- this is in kbytes
-
-(define-constant start-resident-size (memory-rusage))
-(format #t "size: ~S~%" start-resident-size)
-(define current-size start-resident-size)
+|#
 
 (define (cycler size)
   (let ((cp-lst (make-list 3 #f))
@@ -104,6 +103,23 @@
 
 (load "stuff.scm")
 (load "write.scm")
+
+#|
+(define linter (let ()
+		 (let-temporarily (((*s7* 'autoloading?) #t))
+		   (load "lint.scm"))
+		 (lambda (str)
+		   (call-with-output-string
+		    (lambda (op)
+		      (call-with-input-string str
+			(lambda (ip)
+			  (lint ip op))))))))
+
+(define (checked-linter code)
+  (or (pair? (cyclic-sequences code))
+      (linter (object->string code :readable))))
+|#
+
 ;;(define (pp-checked obj) (let-temporarily ((((funclet pretty-print) '*pretty-print-cycles*) #t)) (pp obj)))
 ;; #t is the default for print-cycles
 (require case.scm)
@@ -172,6 +188,26 @@
 (define my-with-baffle with-baffle)
 (define* (my-make-byte-vector size (init 0)) (make-byte-vector size init))
 (define* (my-make-string size (init #\a)) (make-string size init))
+
+(define recall-ccr #f)
+(with-baffle (set! recall-ccr (call/cc (lambda (ccr) ccr))))
+(immutable! recall-ccr)
+(define-constant (recall1 . args)
+  (catch 
+      (lambda ()
+	(recall-ccr 1)
+	(error 'oops (display "ccr oops" *stderr*) (newline *stderr*)))
+    (lambda args 'ok)))
+
+(define recall-ccx #f)
+(call-with-exit (lambda (ccx) (set! recall-ccx ccx)))
+(immutable! recall-ccx)
+(define-constant (recall2 . args)
+  (catch 
+      (lambda ()
+	(recall-ccx 1)
+	(error 'oops (display "ccx oops" *stderr*) (newline *stderr*)))
+    (lambda args 'ok)))
 
 (define-constant Hk (make-hook 'x))
 (set! (hook-functions Hk) (list (lambda (h)
@@ -420,9 +456,13 @@
 (define (s7-equivalent-float-epsilon) (*s7* 'equivalent-float-epsilon))
 (define (s7-hash-table-float-epsilon) (*s7* 'hash-table-float-epsilon))
 (define (s7-bignum-precision) (*s7* 'bignum-precision))
-(define (s7-float-format-precision) (*s7* 'float-format-precision))
+;(define (s7-float-format-precision) (*s7* 'float-format-precision))
 (define (s7-default-random-state) (*s7* 'default-random-state))
 (define (s7-cpu-time) (*s7* 'cpu-time))
+
+(define (s7-pair-filename x) (string? (pair-filename x)))
+(define (s7-pair-line-number x) (integer? (pair-line-number x)))
+(define (s7-port-filename x) (string? (port-filename x)))
 
 (define-macro (_mac_ x) `(+ ,x 1))
 (define-macro* (_mac*_ (x 1)) `(+ ,x 1))
@@ -799,16 +839,15 @@
 (define-constant htset hash-table-set!)
 
 (set! (hook-functions *unbound-variable-hook*) ())
-(define max-stack (*s7* 'stack-top))
 (define last-error-type #f)
 (define old-definee #f)
 (define-constant L0 (immutable! (let ((a 1)) (immutable! 'a) (curlet))))
 
-(define (tp val) ; omits trailing " if val long and already a string
+(define (tp val) ; [omits trailing "] ... if val long and already a string -- memory-usage needs 2035 at least
   (let ((str (object->string val)))
-    (if (< (length str) 512)
+    (if (< (length str) 4096)
 	str
-	(string-append (substring str 0 509) "..."))))
+	(string-append (substring str 0 4092) "...\""))))
 
 (define (cons-r a b n) (if (= 0 n) (list a b) (cons (cons-r (+ a 1) (+ b 1) (- n 1)) (cons-r (- a 1) (- b 1) (- n 1)))))
 (define (list-r a b n) (if (= 0 n) (list a b) (list (list-r (+ a 1) (+ b 1) (- n 1)) (list-r (- a 1) (- b 1) (- n 1)))))
@@ -848,7 +887,7 @@
 			  'inexact->exact 'vector->list 'boolean? 'undefined? 'unspecified?
 			  'caar (if with-bignums '+ 'ash) ; overflow memory else?
 			  'list-tail 'symbol->string 'string->symbol 'exact->inexact
-			  'object->string 'char>? 'symbol->value ;'symbol-initial-value -- needs GC protection normally
+			  'object->string 'char>? 'symbol->value
 			  'cadar 'integer-decode-float 'string-copy 'cdddr 'logand 'cadddr
 			  'with-input-from-string 'substring 'string->list 'char-upper-case?
 			  'hash-table-set! 'cddddr 'string<? 'dynamic-wind 'call-with-input-file 'error
@@ -927,10 +966,10 @@
 			  'close-input-port
 			  ;'current-input-port ;-- too many (read...)
 			  ;'set-current-input-port ; -- collides with rd8 etc
-                          'set-cdr!
+                          ;'set-cdr! ; can create cyclic code
                           ;'unlet ;-- spurious diffs
                           ;'port-line-number ;-- too many spurious diffs
-			  'load  ; -- (load (port-filename)) ;'current-error-port ;-- spurious output
+			  ;'load  ; -- (load (port-filename)) ;'current-error-port ;-- spurious output ; (load <any string>) etc
 			  ;'close-output-port
 			  'hash-table ; -- handled as equivalent via checked-hash-table
 			  'current-output-port
@@ -955,13 +994,14 @@
 			  ;'cond-expand ; (cond-expand (reader-cond...)) too many times
 			  ;'random-state->list
                           ;'pair-line-number 'pair-filename ; -- too many uninteresting diffs
+			  ;'s7-pair-line-number 's7-pair-filename 's7-port-filename ; these depend on optimization state (overwriting location info)
 			  'let-set!
 			  ;'coverlet ;-- blocks block's equivalent?
                           'help ;-- snd goes crazy
 			  'macroexpand ;-- uninteresting objstr stuff
 			  'signature ; -- circular lists cause infinite loops with (e.g.) for-each??
 			  'eval-string
-			  'tree-memq 'tree-set-memq 'tree-count 'tree-leaves
+			  'tree-member 'tree-memq 'tree-set-memq 'tree-count 'tree-leaves
 			  'tree-cyclic?
                           'require
 			  'else '_mac_ '_mac*_ '_bac_ '_bac*_ '_mac1*_ '_fnc1*_
@@ -979,6 +1019,7 @@
 			  'let-ref 'int-vector 'aritable? 'gensym? 'syntax? 'iterator-at-end? 'let? 'gensym
 			  'subvector 'float-vector 'iterator-sequence 'getenv 'float-vector-ref 'complex-vector 'complex-vector-ref
 			  'cyclic-sequences 'let->list
+			  ;'checked-linter
 
 			  'setter 'int-vector?
 			  'int-vector-set! 'c-object? 'c-object-type 'proper-list?
@@ -1005,7 +1046,7 @@
 			  's7-initial-string-port-length 's7-history-size
 			  's7-default-rationalize-error 's7-equivalent-float-epsilon
 			  's7-hash-table-float-epsilon 's7-bignum-precision
-			  's7-float-format-precision
+			  ;'s7-float-format-precision
 			  's7-stacktrace-defaults
 
 			  'block 'make-block 'block? 'block-ref 'block-set!
@@ -1042,7 +1083,6 @@
 			  'tf30 'tf31 'tf32 'tf33 'tf34 'f40 'f41
 			  'match?
 			  'catch 'length 'eq? 'car '< 'assq 'complex? 'vector-ref
-			  ;'linter ; infinite loop if cyclic code
 			  'ifa 'ifb ; see fix-op below
 
 			  '_asdf_
@@ -1053,13 +1093,16 @@
 			  'gb1 'gb2 'gb3
 			  'cf00 'c-function-with-values 'c-macro-with-values 'safe-c-function-with-2-values
 
-			  'bignum 'symbol 'count-if ;'pretty-print
-			  'tree-member 'funclet? 'bignum? 'copy-tree
+			  'bignum 'symbol 'count-if 
+			  ;'pretty-print
+			  'funclet? 'bignum? 'copy-tree
 			  ;'dynamic-unwind ; many swaps that are probably confused
                           ;'function-open-output 'function-open-input 'function-get-output 'function-close-output ;see s7test, not set up for t725
 
 			  'symbol-initial-value
 			  'swap!
+			  'continuer
+			  'recall1 'recall2
 			  ))
 
       (args (vector "-123" "1234" "-3/4" "-1" "1/2" "1+i" "1-i" "0+i" "0-i" "(expt 2 32)" "4294967297" "1001" "10001"
@@ -1082,8 +1125,7 @@
 		    "1/0+i" "0+0/0i" "0+1/0i" "1+0/0i" "0/0+0/0i" "0/0+i" "+nan.0-3i" "+inf.0-nan.0i"
 		    "cons" "\"ra\"" "''2" "'a" "_!asdf!_" "let-ref-fallback"
 
-		    "#\\a" "#\\A" "#\\x" ;"\"str1\"" "\"STR1\"" "#\\0" "0+." ".0-" ;"#\\"
-		    "#\\newpine"
+		    "#\\a" "#\\A" "#\\x" ;"\"str1\"" "\"STR1\"" "#\\0" "0+." ".0-"
 		    "(make-hook)" "(make-hook '__x__)"
 		    "1+i" "0+i" "(ash 1 43)"  "(fib 8)" "(fibr 8)" "(fibf 8.0)"
 		    "(integer->char 255)" "(string (integer->char 255))" "(string #\\null)" "(byte-vector 0)"
@@ -1146,6 +1188,8 @@
 		    "(make-iterator (make-vector '(2 3) #f))" "(make-iterator #r())"
 		    "(make-iterator (hash-table 'a -1/2 'b 2))"
 		    "(make-iterator (weak-hash-table 1.0 'a 2.0 'b 3.0 'c))"
+		    "(make-iterator (weak-hash-table \"1\" 1.0 \"2\" 2.0 \"3\" 3.0))"
+		    "(make-iterator (weak-hash-table (gensym) 1.0 (symbol \"2\") 2.0 (weak-hash-table 'a 1) 3.0))"
 		    "(make-iterator (let ((lst '((a . 1) (b . 2) (c . 2)))
                                           (+iterator+ #t))
                                       (lambda ()
@@ -1189,10 +1233,10 @@
 		    "(let ((x 1)) (dynamic-wind (lambda () (set! x 2)) (lambda () (+ x 1)) (lambda () (set! x 1))))"
 
 		    "(let-temporarily ((x 1)) x)" "(let-temporarily ((x #(1)) (i 0)) i)"
-		    ;"(s7-init-and-free))"
+		    "(s7-init-and-free))"
 
 		    "1+1e10i" "1e15-1e15i" ;"0+1e18i" "-1e18"
-		    ;"(random 1.0)" ; number->string so lengths differ
+		    ;"(+ 10 (random 90))" ; number->string so lengths differ
 		    "(random 1)" "(random 0)" "(random -1)"
 		    ;"(else ())" "(else (f x) B)"
 		    "(else)"
@@ -1293,6 +1337,7 @@
 		    "(make-vector '(2 3) #f boolean?)"
 		    "(make-vector '(2 3) 'a symbol?)"
 		    "(make-hash-table 8 #f (cons symbol? integer?))"
+		    "(make-weak-hash-table 8 #f (cons symbol? integer?))"
 		    "(let ((i 32)) (set! (setter 'i) integer?) (curlet))"
 		    "(let ((i 32)) (set! (setter 'i) integer?) (set! i 3) (curlet))"
 
@@ -1306,7 +1351,7 @@
 		    "(make-hash-table 8 #f (cons (lambda (x) #f) (lambda (x) #f)))" ; same
 		    "(make-vector 3 #f (let ((calls 0)) (lambda (x) (set! calls (+ calls 1)) (= calls 1))))" ; 2 calls = error I hope
 
-		    ;"(write (vector 1.0) (openlet (inlet 'write for-each)))"
+		    "(write (list 1.0) (openlet (inlet 'write car)))"
 
 		    "(immutable! #(1 2))" "(immutable! #r(1 2))" "(immutable! \"asdf\")" "(immutable! '(1 2))" "(immutable! (hash-table 'a 1))"
 		    ;"(immutable! 'x)"
@@ -1339,19 +1384,12 @@
 		    (reader-cond (with-mock-data "(if (> (random 1.0) 0.5) _v_ _mv_)"))
 		    "(set! (symbol-initial-value 'make-block) 123456789)"
 
-		    ;"*s7*"     ;variable
-		    ;"(*s7* 'gc-info)"
+		    ;"*s7*"     ;variable? and verbose if (for example) (_fnc9_ *s7*)
 		    "(begin (real? (*s7* 'cpu-time)))" ; variable
 		    "(*s7* 'c-types)"
 		    ;"(copy (*s7* 'file-names))" ; one is *stdin* which can hang if read* gets it as the port
-		    ;"(*s7* 'gc-freed)" "(*s7* 'gc-total-freed)" "(*s7* 'free-heap-size)" ; variable
 		    ;"(copy (*s7* 'gc-protected-objects))"  ; access + element set => not protected! perhaps copy it?
-		    ;"(begin (let? (*s7* 'memory-usage)))" ; slow
-		    ;"(*s7* 'most-negative-fixnum)" "(*s7* 'most-positive-fixnum)"
-		    "(*s7* 'rootlet-size)"
-		    ;"(begin (list? (*s7* 'stack)))" "(begin (integer? (*s7* 'stack-size)))" ; variable, and stack can contain e.g. #<unused>
-		    "(*s7* 'version)"
-		    "(*s7* 'stacktrace-defaults)"
+		    ;"(*s7* 'rootlet-size)"
 		    "(begin (list? (*s7* 'catches)))"
 		    "(begin (integer? (*s7* 'stack-top)))"
 		    ;(reader-cond ((provided? 'debugging) "(when ((*s7* 'heap-size) < (ash 1 21)) (heap-analyze) (heap-scan 47))")) ;(+ 1 (random 47))))"))
@@ -1366,17 +1404,17 @@
 		    "(*s7* 'c-types)"
 		    ;"(*s7* 'debug)" ; causes infinite output and rootlet id trouble??
 		    "(*s7* 'default-hash-table-length)"
-		    "(*s7* 'default-random-state)"
+		    ;"(*s7* 'default-random-state)" ; useless diffs
 		    "(*s7* 'default-rationalize-error)"
 		    "(*s7* 'equivalent-float-epsilon)"
 		    "(*s7* 'expansions?)"
 		    ;"(*s7* 'filenames)"
 		    ;"(*s7* 'file-names)"
-		    "(*s7* 'float-format-precision)"
+		    ;"(*s7* 'float-format-precision)"
 		    ;"(*s7* 'free-heap-size)"
 		    ;"(*s7* 'gc-freed)"
 		    ;"(*s7* 'gc-info)"
-		    ;"(*s7* 'gc-protected-objects)"
+		    "(*s7* 'gc-protected-objects)"
 		    "(*s7* 'gc-resize-heap-by-4-fraction)"
 		    "(*s7* 'gc-resize-heap-fraction)"
 		    ;"(*s7* 'gc-stats)"
@@ -1386,21 +1424,20 @@
 		    "(*s7* 'heap-size)"
 		    ;"(*s7* 'history)"
 		    "(*s7* 'history-enabled)"
-		    "(*s7* 'history-size)"
+		    ;"(*s7* 'history-size)" ; if 1M, tests slow down to a near halt clearing history
 		    "(*s7* 'initial-string-port-length)"
 		    "(*s7* 'major-version)"
-		    "(*s7* 'max-heap-size)"
+		    ;"(*s7* 'max-heap-size)"
 		    ;"(*s7* 'max-list-length)"
 		    ;"(*s7* 'max-string-port-length)" ; infinite output
-		    "(*s7* 'max-stack-size)"
+		    ;"(*s7* 'max-stack-size)"
 		    ;"(*s7* 'max-string-length)"
 		    ;"(*s7* 'max-vector-dimensions)"
 		    ;"(*s7* 'max-vector-length)"
 		    "(*s7* 'memory-usage)"
-		    ;"((*s7* 'memory-usage) :output-ports)"
 		    "(*s7* 'minor-version)"
-		    "(*s7* 'most-negative-fixnum)"
-		    "(*s7* 'most-positive-fixnum)"
+		    ;"(*s7* 'most-negative-fixnum)"
+		    ;"(*s7* 'most-positive-fixnum)"
 		    "(*s7* 'muffle-warnings?)"
 		    (reader-cond ((provided? 'number-separator) "(*s7* 'number-separator)"))
 		    "(*s7* 'openlets)"
@@ -1411,15 +1448,19 @@
 		    ;"(*s7* 'profile-prefix)"
 		    ;"(*s7* 'rootlet-size)"
 		    ;"(*s7* 'safety)" ; if 0 lets circular bodies through
-		    ;"(*s7* 'stack)"
+		    ;"(*s7* 'stack)" ; gets evaluated!
 		    "(*s7* 'stacktrace-defaults)"
 		    ;"(*s7* 'stack-size)"
-		    ;"(*s7* 'stack-top)"
+		    ;"(*s7* 'stack-top)" ; stupid diffs
 		    "(*s7* 'symbol-quote?)"
 		    "(*s7* 'symbol-printer)"
 		    ;"(*s7* 'undefined-constant-warnings)"
 		    ;"(*s7* 'undefined-identifier-warnings)" ; infinite output
 		    "(*s7* 'version)"
+		    ;"(let->list *s7*)" ; to much uninteresting output
+		    "(make-iterator *s7*)"
+		    "(make-iterator (rootlet))"
+		    "(make-iterator (symbol-table))"
 ;|#
 		    #f #f #f ; cyclic here (see get-arg)
 		    ))
@@ -1505,6 +1546,8 @@
                     (lambda (s) (string-append "(apply vector (list " s "))")))
 	      (list (lambda (s) (string-append "(hash-table 'a " s ")"))
                     (lambda (s) (string-append "(apply hash-table (list 'a " s "))")))
+	      (list (lambda (s) (string-append "(weak-hash-table 'a " s ")"))
+                    (lambda (s) (string-append "(apply weak-hash-table (list 'a " s "))")))
 ;	      (list (lambda (s) (string-append "(byte-vector " s ")"))
 ;                    (lambda (s) (string-append "(apply byte-vector (list " s "))")))
 	      (list (lambda (s) (string-append "(values " s ")"))
@@ -1559,6 +1602,8 @@
                     (lambda (s) (string-append "(let* ((s1 (begin " s ")) (s2 (copy s1))) (member s1 (list s2) fequal?))")))
 	      (list (lambda (s) (string-append "(iterate (make-iterator (vector " s ")))"))
 		    (lambda (s) (string-append "(car (list " s "))")))
+	      (list (lambda (s) (string-append "(let* ((obj (car (list " s "))) (I1 (make-iterator obj)) (I2 (make-iterator (copy obj)))) (I1) (equal? I1 I2))"))
+		    (lambda (s) (string-append "(let* ((obj (car (list " s "))) (I1 (make-iterator obj)) (I2 (make-iterator (copy obj)))) (I2) (equivalent? I1 I2))")))
 	      (list (lambda (s) (string-append "(call-with-exit (lambda (return) (return " s ")))"))
 		    (lambda (s) (string-append "((lambda () (values " s ")))")))
 	      (list (lambda (s) (string-append "(let ((x #f)) (for-each (lambda (y) (set! x y)) (list " s ")) x)"))
@@ -1892,6 +1937,7 @@
 	  ))
 
     (define (eval-it str)
+      ;(format *stderr* "str: ~S~%" str)
       (set! (current-output-port) #f)
       (set! estr str)
       (set! old-definee _definee_)
@@ -2020,8 +2066,8 @@
 #|
 functions currently omitted (from functions vector):
 unlet owlet *read-error-hook* set-current-output-port immutable! system close-output-port exit
-port-filename load string->keyword dynamic-unwind emergency-exit read set-current-error-port *autoload-hook*
-gc abort open-output-file set-current-input-port pair-line-number pair-filename coverlet delete-file curlet
+[port-filename] load string->keyword dynamic-unwind emergency-exit read set-current-error-port *autoload-hook*
+gc abort open-output-file set-current-input-port [pair-line-number pair-filename] coverlet delete-file curlet
 
 [read-line] [funclet] [port-line-number] [read-string] [varlet] [random-state] [random] [hash-code] [random-state->list] [current-input-port]
 [make-string] [symbol-table] [current-error-port] [eval] [read-byte] [stacktrace] [read-char] [reverse!] [procedure-source] [*function*]
