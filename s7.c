@@ -3830,13 +3830,13 @@ static void set_number_name(s7_pointer p, const char *name, int32_t len)
     }
 }
 
-static s7_int s7_int_min = 0;
 static int32_t s7_int_digits_by_radix[17];
 
 #define S7_INT_BITS 63
 
 #define S7_INT64_MAX 9223372036854775807LL
-#define S7_INT64_MIN (int64_t)(-S7_INT64_MAX - 1LL)
+/* #define S7_INT64_MIN -9223372036854775808LL */   /* why is this disallowed in gcc? "warning: integer constant is so large that it is unsigned" !! */
+#define S7_INT64_MIN (int64_t)(-S7_INT64_MAX - 1LL) /* in gcc 9 we had to assign this to an s7_int, then use that! */
 
 #define S7_INT32_MAX 2147483647LL
 #define S7_INT32_MIN (-S7_INT32_MAX - 1LL)
@@ -3849,7 +3849,6 @@ static void init_int_limits(void)
   /* actually not safe = (log (- (expt 2 63) 1)) and (log (- (expt 2 31) 1)) (using 63 and 31 bits) */
   #define S7_LOG_INT64_MAX 43.668274
 #endif
-  s7_int_min = S7_INT64_MIN; /* see comment in s7_make_ratio -- we're trying to hack around a gcc bug (9.2.1 Ubuntu) */
   s7_int_digits_by_radix[0] = 0;
   s7_int_digits_by_radix[1] = 0;
   for (int32_t i = 2; i < 17; i++)
@@ -3930,7 +3929,7 @@ static void init_small_ints(void)
   int_three = small_ints[3];
 
   mostfix = make_permanent_integer(S7_INT64_MAX);
-  leastfix = make_permanent_integer(s7_int_min);
+  leastfix = make_permanent_integer(S7_INT64_MIN);
   set_number_name(mostfix, "9223372036854775807", 19);
   set_number_name(leastfix, "-9223372036854775808", 20);
 
@@ -12918,32 +12917,54 @@ static Inline s7_pointer inline_block_to_string(s7_scheme *sc, block_t *block, s
 
 static s7_pointer block_to_string(s7_scheme *sc, block_t *block, s7_int len) {return(inline_block_to_string(sc, block, len));}
 
-static inline s7_pointer make_simple_ratio(s7_scheme *sc, s7_int num, s7_int den)
+static /* inline */ s7_pointer make_simple_ratio(s7_scheme *sc, s7_int num, s7_int den)
 {
   s7_pointer x;
-  if (den == 1)
-    return(make_integer(sc, num));
-  if (den == -1)
-    return(make_integer(sc, -num));
-  if (den == S7_INT64_MIN)
+  if (den < 0)
     {
-      if ((num & 1) != 0)
-	return(make_real(sc, (long_double)num / (long_double)den));
-      num /= 2;
-      den /= 2; /* otherwise -den below -> S7_INT_MIN! */
-    }
-  new_cell(sc, x, T_RATIO);
-  if (den < 0) /* this is noticeably faster in callgrind than using (den < 0) ? ... twice */
-    {
+      if (den == -1)
+	return(make_integer(sc, -num));
+      if (den == S7_INT64_MIN)
+	{
+	  if ((num & 1) != 0)
+	    return(make_real(sc, (long_double)num / (long_double)den));
+	  num /= 2;
+	  den /= 2; /* otherwise -den below -> S7_INT64_MIN! */
+	}
+      new_cell(sc, x, T_RATIO);
       set_numerator(x, -num);
       set_denominator(x, -den);
     }
   else
     {
+      if (den == 1)
+	return(make_integer(sc, num));
+      new_cell(sc, x, T_RATIO);
       set_numerator(x, num);
       set_denominator(x, den);
     }
-  if ((S7_DEBUGGING) && (denominator(x) < 0)) {fprintf(stderr, " %s[%d]: den == %" ld64 "?\n", __func__, __LINE__, denominator(x)); if (sc->stop_at_error) abort();}
+  return(x);
+}
+
+static /* inline */ s7_pointer make_simpler_ratio(s7_scheme *sc, s7_int num, s7_int den) /* assume den > 1 */
+{
+  s7_pointer x;
+  if ((S7_DEBUGGING) && (den < 2)) fprintf(stderr, "%s[%d]: denominator: %" ld64 "/n", __func__, __LINE__, den);
+  new_cell(sc, x, T_RATIO);
+  set_numerator(x, num);
+  set_denominator(x, den);
+  return(x);
+}
+
+static inline s7_pointer make_simpler_ratio_or_integer(s7_scheme *sc, s7_int num, s7_int den) /* assume den > 0 */
+{
+  s7_pointer x;
+  if ((S7_DEBUGGING) && (den < 0)) fprintf(stderr, "%s[%d]: denominator: %" ld64 "/n", __func__, __LINE__, den);
+  if (den == 1)
+    return(make_integer(sc, num));
+  new_cell(sc, x, T_RATIO);
+  set_numerator(x, num);
+  set_denominator(x, den);
   return(x);
 }
 
@@ -13937,7 +13958,7 @@ static s7_int c_gcd(s7_int u, s7_int v)
    *   and C++'s gcd returns negative results sometimes -- isn't gcd defined to be positive?  std::gcd is ca 25% faster than the code below.
    */
   s7_int a, b;
-  if ((u == s7_int_min) || (v == s7_int_min))
+  if ((u == S7_INT64_MIN) || (v == S7_INT64_MIN))
     {
       /* can't take abs of these (below) so do it by hand */
       s7_int divisor = 1;
@@ -14023,7 +14044,7 @@ static bool c_rationalize(s7_double ux, s7_double error, s7_int *numer, s7_int *
 
       if (((x0 <= val) && (val <= x1)) || (e1 == 0.0) || (e1p == 0.0) || (tries > 100))
 	{
-	  if ((q0 == s7_int_min) && (p0 == 1)) /* (rationalize 1.000000004297917e-12) when error is 1e-12 */
+	  if ((q0 == S7_INT64_MIN) && (p0 == 1)) /* (rationalize 1.000000004297917e-12) when error is 1e-12 */
 	    {
 	      (*numer) = 0;
 	      (*denom) = 1;
@@ -14034,6 +14055,7 @@ static bool c_rationalize(s7_double ux, s7_double error, s7_int *numer, s7_int *
 	      (*denom) = q0;
 	      if ((S7_DEBUGGING) && (q0 == 0)) fprintf(stderr, "%s[%d]: %f %" ld64 "/0\n", __func__, __LINE__, ux, p0);
 	    }
+	  if ((S7_DEBUGGING) && (*denom < 0)) fprintf(stderr, "%s[%d]: denominator is %" ld64 "?\n", __func__, __LINE__, *denom);
 	  return(true);
 	}
       tries++;
@@ -14062,7 +14084,7 @@ s7_pointer s7_rationalize(s7_scheme *sc, s7_double x, s7_double error)
 {
   s7_int numer = 0, denom = 1;
   if (c_rationalize(x, error, &numer, &denom))
-    return(make_simple_ratio(sc, numer, denom));
+    return(make_simpler_ratio_or_integer(sc, numer, denom));
   return(make_real(sc, x));
 }
 
@@ -14154,22 +14176,22 @@ static no_return void division_by_zero_error_2_nr(s7_scheme *sc, s7_pointer call
 static s7_pointer make_ratio(s7_scheme *sc, s7_int a, s7_int b)
 {
   s7_pointer x;
-  if (b == s7_int_min)
-    {
-      /* This should not trigger an error during reading -- we might have the
-       *   ratio on a switch with-bignums or whatever, so its mere occurrence is just an annoyance.
-       */
-      if (a & 1)
-	return(make_real(sc, (long_double)a / (long_double)b));
-      a /= 2;
-      b /= 2;
-    }
   if (b < 0)
     {
+      if (b == S7_INT64_MIN)
+	{
+	  /* This should not trigger an error during reading -- we might have the
+	   *   ratio on a switch with-bignums or whatever, so its mere occurrence is just an annoyance.
+	   */
+	  if (a & 1)
+	    return(make_real(sc, (long_double)a / (long_double)b));
+	  a /= 2;
+	  b /= 2;
+	}
       a = -a;
       b = -b;
     }
-  if (a == s7_int_min)
+  if (a == S7_INT64_MIN)
     {
       while (((a & 1) == 0) && ((b & 1) == 0))
 	{
@@ -14194,7 +14216,6 @@ static s7_pointer make_ratio(s7_scheme *sc, s7_int a, s7_int b)
 
   new_cell(sc, x, T_RATIO);
   set_numerator(x, a);
-  if ((S7_DEBUGGING) && (b < 0)) {fprintf(stderr, " %s[%d]: b == %" ld64 "?\n", __func__, __LINE__, b); if (sc->stop_at_error) abort();}
   set_denominator(x, b);
   return(x);
 }
@@ -14764,29 +14785,29 @@ static const char dignum[] = "0123456789abcdef";
 static size_t integer_to_string_any_base(char *p, s7_int n, int32_t radix)  /* called by number_to_string_with_radix */
 {
   s7_int i, len, end;
-  bool sign;
+  bool sign = (n < 0);
   s7_int pown;
 
   if ((radix < 2) || (radix > 16))
     return(0);
 
-  if (n == S7_INT64_MIN) /* can't negate this, so do it by hand */
+  if (sign) 
     {
-      static const char *mnfs[17] = {"","",
-	"-1000000000000000000000000000000000000000000000000000000000000000", "-2021110011022210012102010021220101220222",
-	"-20000000000000000000000000000000", "-1104332401304422434310311213", "-1540241003031030222122212",
-	"-22341010611245052052301", "-1000000000000000000000", "-67404283172107811828",	"-9223372036854775808",
-	"-1728002635214590698",	"-41a792678515120368", "-10b269549075433c38", "-4340724c6c71dc7a8", "-160e2ad3246366808", "-8000000000000000"};
-
-      len = safe_strlen(mnfs[radix]);
-      memcpy((void *)p, (const void *)mnfs[radix], len);
-      p[len] = '\0';
-      return(len);
+      if (n == S7_INT64_MIN) /* can't negate this, so do it by hand */
+	{
+	  static const char *mnfs[17] = {"","",
+					 "-1000000000000000000000000000000000000000000000000000000000000000", "-2021110011022210012102010021220101220222",
+					 "-20000000000000000000000000000000", "-1104332401304422434310311213", "-1540241003031030222122212",
+					 "-22341010611245052052301", "-1000000000000000000000", "-67404283172107811828", "-9223372036854775808",
+					 "-1728002635214590698", "-41a792678515120368", "-10b269549075433c38", "-4340724c6c71dc7a8", "-160e2ad3246366808",
+					 "-8000000000000000"};
+	  len = safe_strlen(mnfs[radix]);
+	  memcpy((void *)p, (const void *)mnfs[radix], len);
+	  p[len] = '\0';
+	  return(len);
+	}
+      n = -n;
     }
-
-  sign = (n < 0);
-  if (sign) n = -n;
-
   /* the previous version that counted up to n, rather than dividing down below n, as here, could be confused by large ints on 64 bit machines  */
   pown = n;
   for (i = 1; i < 100; i++)
@@ -14815,18 +14836,19 @@ static size_t integer_to_string_any_base(char *p, s7_int n, int32_t radix)  /* c
 static const char *integer_to_string(s7_scheme *sc, s7_int num, s7_int *nlen) /* do not free the returned string */
 {
   char *p, *op;
-  bool sign;
-  if (num == S7_INT64_MIN)
+  bool sign = (num < 0);
+  if (sign)
     {
-      (*nlen) = 20;
-      return((const char *)"-9223372036854775808");
+      if (num == S7_INT64_MIN)
+	{
+	  (*nlen) = 20;
+	  return((const char *)"-9223372036854775808");
+	}
+      num = -num;  /* we need a positive index below */
     }
   p = (char *)(sc->int_to_str1 + INT_TO_STR_SIZE - 1);
   op = p;
   *p-- = '\0';
-
-  sign = (num < 0);
-  if (sign) num = -num;  /* we need a positive index below */
   do {*p-- = "0123456789"[num % 10]; num /= 10;} while (num);
   if (sign)
     {
@@ -14841,13 +14863,15 @@ static const char *integer_to_string(s7_scheme *sc, s7_int num, s7_int *nlen) /*
 static const char *integer_to_string_no_length(s7_scheme *sc, s7_int num) /* do not free the returned string */
 {
   char *p;
-  bool sign;
-  if (num == S7_INT64_MIN)
-    return(number_name(leastfix)); /* "-9223372036854775808" but avoids a compiler complaint */
+  bool sign = (num < 0);
+  if (sign)
+    {
+      if (num == S7_INT64_MIN)
+	return(number_name(leastfix)); /* "-9223372036854775808" but avoids a compiler complaint */
+      num = -num;
+    }
   p = (char *)(sc->int_to_str2 + INT_TO_STR_SIZE - 1);
   *p-- = '\0';
-  sign = (num < 0);
-  if (sign) num = -num;
   do {*p-- = "0123456789"[num % 10]; num /= 10;} while (num);
   if (sign)
     {
@@ -16659,9 +16683,9 @@ static inline s7_pointer abs_p_p(s7_scheme *sc, s7_pointer x)
 	}
 #else
       if (numerator(x) == S7_INT64_MIN)
-	return(make_ratio(sc, S7_INT64_MAX, denominator(x)));
+	return(make_ratio(sc, S7_INT64_MAX, denominator(x))); /* not rationalized, so can't call make_simpler_ratio */
 #endif
-      return(make_simple_ratio(sc, -numerator(x), denominator(x)));
+      return(make_simpler_ratio(sc, -numerator(x), denominator(x)));
 
     case T_REAL:
       if (is_NaN(real(x)))                  /* (abs -nan.0) -> +nan.0, not -nan.0 */
@@ -16712,13 +16736,17 @@ static s7_pointer magnitude_p_p(s7_scheme *sc, s7_pointer x)
   switch (type(x))
     {
     case T_INTEGER:
-      if (integer(x) == S7_INT64_MIN) return(mostfix);
-      /* (magnitude -9223372036854775808) -> -9223372036854775808
-       *   same thing happens in abs, lcm and gcd: (gcd -9223372036854775808) -> -9223372036854775808
-       */
-      return((integer(x) < 0) ? make_integer(sc, -integer(x)) : x);
+      if (integer(x) < 0)
+	{
+	  if (integer(x) == S7_INT64_MIN) return(mostfix);
+	  /* (magnitude -9223372036854775808) -> -9223372036854775808
+	   *   same thing happens in abs, lcm and gcd: (gcd -9223372036854775808) -> -9223372036854775808
+	   */
+	  return(make_integer(sc, -integer(x)));
+	}
+      return(x);
     case T_RATIO:
-      return((numerator(x) < 0) ? make_simple_ratio(sc, -numerator(x), denominator(x)) : x);
+      return((numerator(x) < 0) ? make_simpler_ratio(sc, -numerator(x), denominator(x)) : x);
     case T_REAL:
       if (is_NaN(real(x)))                 /* (magnitude -nan.0) -> +nan.0, not -nan.0 */
 	return((nan_payload(real(x)) > 0) ? x : real_NaN);
@@ -17042,7 +17070,7 @@ static s7_pointer g_rationalize(s7_scheme *sc, s7_pointer args)
 	if (fabs(rat) < fabs(err))
 	  return(int_zero);
 
-	return((c_rationalize(rat, err, &numer, &denom)) ? make_simple_ratio(sc, numer, denom) : sc->F);
+	return((c_rationalize(rat, err, &numer, &denom)) ? make_simpler_ratio_or_integer(sc, numer, denom) : sc->F);
       }}
   return(sc->F); /* make compiler happy */
 }
@@ -17557,7 +17585,7 @@ static s7_pointer g_log(s7_scheme *sc, s7_pointer args)
 		  s7_int num, den;
 		  if (c_rationalize(res, sc->default_rationalize_error, &num, &den))
 		      /* && (s7_int_abs(num) < 100) && (s7_int_abs(den) < 100)) *//* why this? */
-		    return(make_simple_ratio(sc, num, den));
+		    return(make_simpler_ratio_or_integer(sc, num, den));
 		}
 	      return(make_real(sc, res));
 	    }
@@ -19347,7 +19375,7 @@ static s7_pointer g_gcd(s7_scheme *sc, s7_pointer args)
 	    return(big_gcd(sc, n, d, p));
 #else
 	  {
-	    if ((n == s7_int_min) && (is_null(cdr(p)))) /* gcd is supposed to return a positive integer, but we can't take abs(s7_int_min) */
+	    if ((n == S7_INT64_MIN) && (is_null(cdr(p)))) /* gcd is supposed to return a positive integer, but we can't take abs(S7_INT64_MIN) */
 	      sole_arg_out_of_range_error_nr(sc, sc->gcd_symbol, args, it_is_too_large_string);
 	  }
 #endif
@@ -20560,7 +20588,7 @@ static s7_pointer negate_p_p(s7_scheme *sc, s7_pointer p)     /* can't use "nega
 #endif
       return(make_integer(sc, -integer(p)));
 
-    case T_RATIO:   return(make_simple_ratio(sc, -numerator(p), denominator(p)));
+    case T_RATIO:   return(make_simpler_ratio(sc, -numerator(p), denominator(p)));
     case T_REAL:    return(make_real(sc, -real(p)));
     case T_COMPLEX: return(make_complex_not_0i(sc, -real_part(p), -imag_part(p)));
 
@@ -25832,7 +25860,7 @@ static s7_pointer inexact_to_exact_p_p(s7_scheme *sc, s7_pointer x)
 	  }
 	/* c_rationalize limit is RATIONALIZE_LIMIT=1e12 currently so this is a tighter limit than DOUBLE_TO_INT64_LIMIT */
 	if (c_rationalize(val, sc->default_rationalize_error, &numer, &denom))
-	  return(make_simple_ratio(sc, numer, denom));
+	  return(make_simpler_ratio_or_integer(sc, numer, denom));
       }
 
     default:
@@ -26681,7 +26709,7 @@ static s7_pointer g_random(s7_scheme *sc, s7_pointer args)
 	  }
 	error = ((x < 1e-6) && (x > -1e-6)) ? 1e-18 : 1e-12;
 	c_rationalize(x * next_random(r), error, &numer, &denom);
-	return(make_simple_ratio(sc, numer, denom));
+	return(make_simpler_ratio_or_integer(sc, numer, denom));
       }
     case T_REAL:
       return(make_real(sc, real(num) * next_random(r)));
@@ -45477,7 +45505,7 @@ static hash_entry_t *hash_symbol(s7_scheme *sc, s7_pointer table, s7_pointer key
 static s7_int hash_map_int(s7_scheme *sc, s7_pointer table, s7_pointer key)
 {
   s7_int k = integer(key);
-  return((k >= 0) ? k : ((k == s7_int_min) ? S7_INT64_MAX : -k));
+  return((k >= 0) ? k : ((k == S7_INT64_MIN) ? S7_INT64_MAX : -k));
 }
 
 static s7_int hash_map_ratio(s7_scheme *sc, s7_pointer table, s7_pointer key)
@@ -46059,7 +46087,7 @@ static hash_entry_t *hash_equal_eq(s7_scheme *sc, s7_pointer table, s7_pointer k
   return(sc->unentry);
 }
 
-#define hash_int_abs(x) ((x) >= 0 ? (x) : ((x == s7_int_min) ? S7_INT64_MAX : -(x)))
+#define hash_int_abs(x) ((x) >= 0 ? (x) : ((x == S7_INT64_MIN) ? S7_INT64_MAX : -(x)))
 
 static hash_entry_t *hash_equal_integer(s7_scheme *sc, s7_pointer table, s7_pointer key)
 {
@@ -100894,8 +100922,8 @@ int main(int argc, char **argv)
  *             19.0   21.0   22.0   23.0   24.0   25.0   25.2
  * ------------------------------------------------------------
  * tpeak        148    114    108    105    102    109    109
- * tref        1081    687    463    459    464    412    413
- * tlimit      3936   5371   5371   5371   5371    783    777
+ * tref        1081    687    463    459    464    412    412
+ * tlimit      3936   5371   5371   5371   5371    783    775
  * index              1016    973    967    972    988    990
  * tmock              1145   1082   1042   1045   1031   1031
  * tvect       3408   2464   1772   1669   1497   1457   1457
@@ -100906,10 +100934,10 @@ int main(int argc, char **argv)
  * lt          2222   2172   2150   2185   1950   1892   1895
  * dup                3788   2492   2239   2097   2012   2001
  * tread              2421   2419   2408   2405   2241   2248
- * tcopy              5546   2539   2375   2386   2352   2352
- * tload                     3046   2404   2566   2506   2488
+ * tcopy              5546   2539   2375   2386   2352   2348
+ * tload                     3046   2404   2566   2506   2495
  * trclo       8248   2782   2615   2634   2622   2499   2499
- * tmat               3042   2524   2578   2590   2522   2522
+ * tmat               3042   2524   2578   2590   2522   2516
  * fbench      2933   2583   2460   2430   2478   2536   2536
  * tsort       3683   3104   2856   2804   2858   2858   2858
  * titer       4550   3349   3070   2985   2966   2917   2917
@@ -100917,28 +100945,28 @@ int main(int argc, char **argv)
  * tbit        3836   3305   3245   3261   3264   3181   3181
  * tobj               3970   3828   3577   3508   3434   3434
  * teq                4045   3536   3486   3544   3556   3569
- * tmac               4373   ----   4193   4188   4024   4026
- * tcomplex           3869   3804   3844   3888   4215   4216
+ * tmac               4373   ----   4193   4188   4024   4025
+ * tcomplex           3869   3804   3844   3888   4215   4196
  * tcase              4793   4439   4430   4439   4376   4380
- * tmap               8774   4489   4541   4586   4380   4380
- * tlet        11.0   6974   5609   5980   5965   4470   4470
+ * tmap               8774   4489   4541   4586   4380   4377
+ * tlet        11.0   6974   5609   5980   5965   4470   4466
  * tfft               7729   4755   4476   4536   4538   4538
  * tshoot             5447   5183   5055   5034   4833   4837
- * tstar              6705   5834   5278   5177   5059   5073
+ * tstar              6705   5834   5278   5177   5059   5055
  * concordance 10.0   6342   5488   5162   5180   5259   5272
  * tnum               6013   5433   5396   5409   5402   5406
  * tlist       9219   7546   6558   6240   6300   5770   5784
  * trec        19.6   6980   6599   6656   6658   6015   6015
- * tari        15.0   12.7   6827   6543   6278   6112   6111
+ * tari        15.0   12.7   6827   6543   6278   6112   6102
  * tgsl               7802   6373   6282   6208   6208   6213
- * tset                             6260   6364   6278   6278
+ * tset                             6260   6364   6278   6265
  * tleft       12.2   9753   7537   7331   7331   6393   6393
- * tmisc                            7614   7115   7130   7141
+ * tmisc                            7614   7115   7130   7098
  * tclo               8025   7645   8809   7770   7627   7640
  * tgc                10.4   7763   7579   7617   7619   7649
  * tlamb                            8003   7941   7920   7927
- * thash              11.7   9734   9479   9526   9283   9286
- * tform                     10.0   9992   9961   9626   9452 [9400 if no fdat->port check]
+ * thash              11.7   9734   9479   9526   9283   9273
+ * tform                     10.0   9992   9961   9626   9448
  * cb          12.9   11.0   9658   9564   9609   9657   9660
  * tmap-hash                                      10.3   10.3
  * tgen               11.4   12.0   12.1   12.2   12.4   12.4
@@ -100947,7 +100975,7 @@ int main(int argc, char **argv)
  * tmv                21.9   21.1   20.7   20.6   16.6   16.6
  * calls              37.5   37.0   37.5   37.1   37.1   37.0
  * sg                        55.9   55.8   55.4   55.3   55.2
- * tbig              175.8  156.5  148.1  146.2  145.5  145.4
+ * tbig              175.8  156.5  148.1  146.2  145.5  145.2
  * ------------------------------------------------------------
  *
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
@@ -100959,5 +100987,5 @@ int main(int argc, char **argv)
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
- * if we have the function (not its name) it's "safe"
+ * if we have the function (not its name) it's "safe"(?)
  */
