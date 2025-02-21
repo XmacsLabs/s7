@@ -1,6 +1,6 @@
 ;;; numeric function simple timing tests
 
-;(set! (*s7* 'heap-size) (* 4 1024000))
+(set! (*s7* 'heap-size) (* 4 1024000))
 
 (define size 250000)
 (define int-limit 1000000)
