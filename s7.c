@@ -12917,20 +12917,15 @@ static Inline s7_pointer inline_block_to_string(s7_scheme *sc, block_t *block, s
 
 static s7_pointer block_to_string(s7_scheme *sc, block_t *block, s7_int len) {return(inline_block_to_string(sc, block, len));}
 
-static /* inline */ s7_pointer make_simple_ratio(s7_scheme *sc, s7_int num, s7_int den)
+static /* inline */ s7_pointer make_simple_ratio(s7_scheme *sc, s7_int num, s7_int den) /* no gcd needed in this case */
 {
   s7_pointer x;
   if (den < 0)
     {
+      if ((num == S7_INT64_MIN) || (den == S7_INT64_MIN))  /* assume no gcd involved */
+	return(make_real(sc, (long_double)num / (long_double)den));
       if (den == -1)
 	return(make_integer(sc, -num));
-      if (den == S7_INT64_MIN)
-	{
-	  if ((num & 1) != 0)
-	    return(make_real(sc, (long_double)num / (long_double)den));
-	  num /= 2;
-	  den /= 2; /* otherwise -den below -> S7_INT64_MIN! */
-	}
       new_cell(sc, x, T_RATIO);
       set_numerator(x, -num);
       set_denominator(x, -den);
@@ -12946,7 +12941,7 @@ static /* inline */ s7_pointer make_simple_ratio(s7_scheme *sc, s7_int num, s7_i
   return(x);
 }
 
-static /* inline */ s7_pointer make_simpler_ratio(s7_scheme *sc, s7_int num, s7_int den) /* assume den > 1 */
+static /* inline */ s7_pointer make_simpler_ratio(s7_scheme *sc, s7_int num, s7_int den) /* no gcd needed, and den > 1 */
 {
   s7_pointer x;
   if ((S7_DEBUGGING) && (den < 2)) fprintf(stderr, "%s[%d]: denominator: %" ld64 "/n", __func__, __LINE__, den);
@@ -12956,10 +12951,10 @@ static /* inline */ s7_pointer make_simpler_ratio(s7_scheme *sc, s7_int num, s7_
   return(x);
 }
 
-static inline s7_pointer make_simpler_ratio_or_integer(s7_scheme *sc, s7_int num, s7_int den) /* assume den > 0 */
+static inline s7_pointer make_simpler_ratio_or_integer(s7_scheme *sc, s7_int num, s7_int den) /* nom gcd needed and den > 0 (might be 1) */
 {
   s7_pointer x;
-  if ((S7_DEBUGGING) && (den < 0)) fprintf(stderr, "%s[%d]: denominator: %" ld64 "/n", __func__, __LINE__, den);
+  if ((S7_DEBUGGING) && (den <= 0)) fprintf(stderr, "%s[%d]: denominator: %" ld64 "/n", __func__, __LINE__, den);
   if (den == 1)
     return(make_integer(sc, num));
   new_cell(sc, x, T_RATIO);
@@ -14194,7 +14189,15 @@ static s7_pointer make_ratio(s7_scheme *sc, s7_int a, s7_int b)
 	  /* This should not trigger an error during reading -- we might have the
 	   *   ratio on a switch with-bignums or whatever, so its mere occurrence is just an annoyance.
 	   */
+	  /* if (a == b) return(int_one); */
 	  if (a & 1)
+	    return(make_real(sc, (long_double)a / (long_double)b));
+	  a /= 2;
+	  b /= 2;
+	}
+      if (a == S7_INT64_MIN)
+	{
+	  if (b & 1)
 	    return(make_real(sc, (long_double)a / (long_double)b));
 	  a /= 2;
 	  b /= 2;
@@ -14235,7 +14238,7 @@ static s7_pointer make_ratio(s7_scheme *sc, s7_int a, s7_int b)
 s7_pointer s7_make_ratio(s7_scheme *sc, s7_int a, s7_int b)
 {
   if (b == 0)
-    division_by_zero_error_2_nr(sc, wrap_string(sc, "make-ratio", 10), wrap_integer(sc, a), int_zero);
+    division_by_zero_error_2_nr(sc, wrap_string(sc, "s7_make_ratio", 13), wrap_integer(sc, a), int_zero);
   return(make_ratio(sc, a, b));
 }
 
@@ -19031,8 +19034,8 @@ static s7_pointer expt_p_pp(s7_scheme *sc, s7_pointer n, s7_pointer pw)
 	      {
 		if (y == S7_INT64_MIN)                        /* (expt -1 most-negative-fixnum) */
 		  return(int_one);
-		if (s7_int_abs(y) & 1)                        /* (expt -1 odd-int) */
-		  return(n);
+		if (y & 1)                                    /* (expt -1 odd-int) */
+		  return(n);                                  /*    n == -1 */
 		return(int_one);                              /* (expt -1 even-int) */
 	      }
 
@@ -22057,7 +22060,7 @@ static s7_pointer divide_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer y)
 	    division_by_zero_error_2_nr(sc, sc->divide_symbol, x, y);
 	  if (integer(x) == 1)  /* mainly to handle (/ 1 -9223372036854775808) correctly! */
 	    return(invert_p_p(sc, y));
-	  return(make_ratio(sc, integer(x), integer(y)));
+	  return(make_ratio(sc, integer(x), integer(y))); /* gcd needed perhaps */
 
 	case T_RATIO:
 #if HAVE_OVERFLOW_CHECKS
@@ -100961,12 +100964,12 @@ int main(int argc, char **argv)
  * tmap               8774   4489   4541   4586   4380   4377
  * tlet        11.0   6974   5609   5980   5965   4470   4466
  * tfft               7729   4755   4476   4536   4538   4538
- * tshoot             5447   5183   5055   5034   4833   4837
+ * tshoot             5447   5183   5055   5034   4833   4776
  * tstar              6705   5834   5278   5177   5059   5055
  * concordance 10.0   6342   5488   5162   5180   5259   5272
  * tnum               6013   5433   5396   5409   5402   5406
  * tlist       9219   7546   6558   6240   6300   5770   5784
- * tari        14.3   12.5   6619   6662   6499   6292   5988
+ * tari        14.3   12.5   6619   6662   6499   6292   5989
  * trec        19.6   6980   6599   6656   6658   6015   6015
  * tgsl               7802   6373   6282   6208   6208   6213
  * tset                             6260   6364   6278   6265
@@ -100998,5 +101001,6 @@ int main(int argc, char **argv)
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  * if we have the function (not its name) it's "safe"(?)
- * cb.scm binary-tree -> tshoot? (one is redundant)
+ * is make_simple_ratio needed?
+ * symbol-set?
  */

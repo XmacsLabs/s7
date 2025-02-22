@@ -157,40 +157,53 @@
 
 ;;; --------------------------------------------------------------------------------
 
-;;; this one is not very good
+;;; binary-trees GC benchmark, like gcbench in the standard benchmarks
+;;; 18 secs for N=21 (or 22? -- tested originally with +1 below)
+;;;   GC time is claiming 6 secs (via (*s7* 'gc-stats)), but callgrind says it's more like 2 secs?
+;;;   4Ghz i7-6700, on Mac M4 16 secs, guile 3.0.8 20 secs
 
-(define binary-tree
-  (let ()
-    (define (item-check tree)
-      (if (not (car tree))
-	  1
-	  (+ 1 (item-check (car tree)) (item-check (cdr tree)))))
-    
-    (define (bottom-up-tree depth)
-      (if (zero? depth)
-	  (cons #f #f)
-	  (cons (bottom-up-tree (- depth 1)) 
-		(bottom-up-tree (- depth 1)))))
-    
-    (lambda (N)
-      (let* ((min-depth 4)
-	     (max-depth (max (+ min-depth 2) N))
-	     (stretch-depth (+ max-depth 1))
-	     (stretch-tree (bottom-up-tree stretch-depth)))
-	(format *stderr* "stretch tree of depth ~D~30Tcheck: ~D~%" stretch-depth (item-check stretch-tree))
-	(let ((long-lived-tree (bottom-up-tree max-depth)))
-	  (do ((depth min-depth (+ depth 2)))
-	      ((> depth max-depth))
-	    (let ((iterations (expt 2 (- (+ max-depth min-depth) depth))))
-	      (do ((i 0 (+ i 1))
-		   (check 0 (+ check (item-check (bottom-up-tree depth)))))
-		  ((= i iterations)
-		   (format *stderr* "~D~9Ttrees of depth ~D~30Tcheck: ~D~%" iterations depth check)))))
-	  (format *stderr* "long lived tree of depth ~D~30Tcheck: ~D~%" max-depth (item-check long-lived-tree)))))))
+(define (bin-make d)
+  (if (= d 0)
+      (cons #f #f)
+      (cons (bin-make (- d 1)) (bin-make (- d 1)))))
 
-;(binary-tree 21)
-(binary-tree 14)
+(define (bin-check t)
+  (if (car t)
+      (+ 1 (bin-check (car t)) (bin-check (cdr t)))
+      1))
 
+(define (bin-main n)
+  (define iterations 0)
+  (define min-depth 4)
+  (define max-depth (max (+ min-depth 2) n))
+  (define stretch-depth (+ max-depth 1))
+  (format #t "stretch tree of depth ~a\t check: ~a\n" stretch-depth (bin-check (bin-make stretch-depth)))
+  (define long-lived-tree (bin-make max-depth))
+  (do ((d min-depth (+ d 2)))
+      ((>= d (+ 1 max-depth)))
+    (set! iterations (ash 1 (+ (- max-depth d) min-depth)))
+    (format #t "~a\t trees of depth ~a\t check: ~a\n"
+            iterations
+            d
+            (do ((sum 0)
+		 (i 0 (+ i 1)))
+		((= i iterations) sum)
+              (set! sum (+ sum (bin-check (bin-make d)))))))
+  (format #t "long lived tree of depth ~a\t check: ~a\n" max-depth (bin-check long-lived-tree)))
+
+(bin-main 14)
+
+;;; stretch tree of depth 15	 check: 65535
+;;; 16384 trees of depth 4	 check: 507904
+;;; 4096 trees of depth 6	 check: 520192
+;;; 1024 trees of depth 8	 check: 523264
+;;; 256	 trees of depth 10	 check: 524032
+;;; 64	 trees of depth 12	 check: 524224
+;;; 16	 trees of depth 14	 check: 524272
+;;; long lived tree of depth 14	 check: 32767
+;;; Maximum stopping distance 323, starting number 35655
+;;;
+;;; for 21
 ;;; stretch      tree of  depth 22	 check: 8388607
 ;;; 2097152	 trees of depth 4	 check: 65011712
 ;;; 524288	 trees of depth 6	 check: 66584576
