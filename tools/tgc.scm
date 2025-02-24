@@ -157,4 +157,7 @@
     (tgc 200000))
 ;(tgc 1000000000)
 
+;(load "write.scm") (gc) (gc) (let-temporarily (((*s7* 'float-format-precision) 4)) (pretty-print (*s7* 'memory-usage) *stderr*)) (newline)
+; weak-hash-table[-iter] undefined
+
 (exit)

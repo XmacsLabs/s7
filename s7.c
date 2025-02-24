@@ -7930,8 +7930,8 @@ static s7_int gc(s7_scheme *sc)
     }
   if (show_protected_objects_stats(sc))
     s7_warn(sc, 256, "gc-protected-objects: %" ld64 " in use of %" ld64 "\n",
-	    sc->protected_objects_size - 1 - sc->protected_objects_free_list_loc, 
-	    sc->protected_objects_size);	      
+	    sc->protected_objects_size - 1 - sc->protected_objects_free_list_loc,
+	    sc->protected_objects_size);
   sc->previous_free_heap_top = sc->free_heap_top;
   sc->gc_in_progress = false;
   return(sc->gc_freed);
@@ -10423,8 +10423,8 @@ static s7_pointer internal_inlet(s7_scheme *sc, s7_int num_args, ...)
   va_start(ap, num_args);
   for (s7_int i = 0; i < num_args; i += 2)
     {
-      s7_pointer symbol = va_arg(ap, s7_pointer);
-      s7_pointer value = va_arg(ap, s7_pointer);
+      s7_pointer symbol = T_Sym(va_arg(ap, s7_pointer));
+      s7_pointer value = T_Ext(va_arg(ap, s7_pointer));
       if (!sp)
 	{
 	  add_slot_unchecked(sc, new_e, symbol, value, id);
@@ -14805,7 +14805,7 @@ static size_t integer_to_string_any_base(char *p, s7_int n, int32_t radix)  /* c
   if ((radix < 2) || (radix > 16))
     return(0);
 
-  if (sign) 
+  if (sign)
     {
       if (n == S7_INT64_MIN) /* can't negate this, so do it by hand */
 	{
@@ -34371,7 +34371,7 @@ static void int_vector_to_port(s7_scheme *sc, s7_pointer vect, s7_pointer port, 
   char buf[128];
   const char *p;
   s7_int len = print_vector_length(sc, vect, port, use_write);
-  if (len < 0) return;
+  if (len < 0) return; /* actually -1, see above -- this means there's nothing more to print */
   too_long = (len < vector_length(vect));
 
   if ((use_write == P_READABLE) &&
@@ -50060,6 +50060,7 @@ static bool vector_equal(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_
 	}
       else nci = clear_shared_info(sc->circle_info);
     }
+  /* splitting out the typed_vector_typer case is only slightly faster (5% and much trickier) */
   for (s7_int i = 0; i < len; i++)
     if (!is_equal_1(sc, vector_element(x, i), vector_element(y, i), nci))
       return(false);
@@ -53000,20 +53001,20 @@ static s7_pointer c_object_to_let(s7_scheme *sc, s7_pointer obj)
       sc->class_symbol = make_symbol(sc, "class", 5);
       sc->c_object_let_symbol = make_symbol(sc, "c-object-let", 12);
     }
-  let = internal_inlet(sc, 10, sc->value_symbol, obj,
+  let = internal_inlet(sc, 8, sc->value_symbol, obj,
 		       sc->type_symbol, sc->is_c_object_symbol,
 		       sc->c_object_type_symbol, make_integer(sc, c_object_type(obj)),
-		       sc->c_object_let_symbol, clet,
-		       sc->class_symbol, c_object_type_to_let(sc, obj));
+		       sc->c_object_let_symbol, clet);
+  gc_protect_via_stack(sc, let);
+  g_varlet(sc, set_plist_3(sc, let, sc->class_symbol, c_object_type_to_let(sc, obj)));
   if ((is_let(clet)) &&
       ((has_active_methods(sc, clet)) || (has_active_methods(sc, obj))))
     {
-      s7_int gc_loc = gc_protect_1(sc, let);
       s7_pointer func = find_method(sc, clet, sc->object_to_let_symbol);
       if (func != sc->undefined)
 	s7_apply_function(sc, func, set_plist_2(sc, obj, let));
-      s7_gc_unprotect_at(sc, gc_loc);
     }
+  unstack_gc_protect(sc);
   return(let);
 }
 
@@ -56046,7 +56047,7 @@ static s7_pointer fx_U(s7_scheme *sc, s7_pointer arg) {return(U_lookup(sc, T_Sym
 static s7_pointer fx_V(s7_scheme *sc, s7_pointer arg) {return(V_lookup(sc, T_Sym(arg), arg));}
 static s7_pointer fx_c_nc(s7_scheme *sc, s7_pointer arg) {return(fn_call(sc, arg));}
 static s7_pointer fx_c_0c(s7_scheme *sc, s7_pointer arg) {return(fn_proc(arg)(sc, sc->nil));}
-static s7_pointer fx_cons_cc(s7_scheme *sc, s7_pointer arg) {return(cons(sc, cadr(arg), caddr(arg)));}
+static s7_pointer fx_cons_cc(s7_scheme *sc, s7_pointer arg) {return(cons(sc, cadr(arg), opt1_con(cdr(arg))));}
 static s7_pointer fx_curlet(s7_scheme *sc, s7_pointer arg) {return(s7_curlet(sc));}
 
 #define fx_c_any(Name, Lookup) \
@@ -59212,7 +59213,12 @@ static s7_function fx_choose(s7_scheme *sc, s7_pointer holder, s7_pointer cur_en
 #if !WITH_GMP
 	  if (fn_proc(arg) == g_add_i_random) return(fx_add_i_random);
 #endif
-	  return((fn_proc(arg) == g_random_i) ? fx_random_i : ((fn_proc(arg) == g_cons) ? fx_cons_cc : fx_c_nc));
+	  if (fn_proc(arg) == g_cons)
+	    {
+	      set_opt1_con(cdr(arg), caddr(arg));
+	      return(fx_cons_cc);
+	    }
+	  return((fn_proc(arg) == g_random_i) ? fx_random_i : fx_c_nc);
 
 	case OP_OR_2A:
 	  if (fx_proc(cddr(arg)) == fx_and_2a) {set_opt3_pair(arg, cdaddr(arg)); return(fx_or_and_2a);}
@@ -71062,16 +71068,19 @@ static bool op_for_each(s7_scheme *sc)
 {
   s7_pointer iterators = car(sc->args);
   s7_pointer saved_args = cdr(sc->args);
+  sc->temp9 = saved_args;
   for (s7_pointer x = saved_args, y = iterators; is_pair(x); x = cdr(x), y = cdr(y))
     {
       set_car(x, s7_iterate(sc, car(y)));
       if (iterator_is_at_end(car(y)))
 	{
 	  sc->value = sc->unspecified;
+	  sc->temp9 = sc->unused;
 	  return(true);
 	}}
   push_stack_direct(sc, OP_FOR_EACH);
   sc->args = (needs_copied_args(sc->code)) ? copy_proper_list(sc, saved_args) : saved_args;
+  sc->temp9 = sc->unused;
   return(false);
 }
 
@@ -100210,14 +100219,14 @@ s7_scheme *s7_init(void)
 	sc->heap[i] = &cells[i];
  	sc->free_heap[i] = sc->heap[i];
 #if S7_DEBUGGING
-	sc->heap[i]->debugger_bits = 0; sc->heap[i]->gc_line = 0; sc->heap[i]->gc_func = NULL;
+	sc->heap[i]->debugger_bits = 0; sc->heap[i]->gc_line = 0; sc->heap[i]->gc_func = NULL; sc->heap[i]->uses = 0;
 #endif
 	clear_type(sc->heap[i]);              /* type(sc->heap[i]) = T_FREE */
 	i++;
 	sc->heap[i] = &cells[i];
  	sc->free_heap[i] = sc->heap[i];
 #if S7_DEBUGGING
-	sc->heap[i]->debugger_bits = 0; sc->heap[i]->gc_line = 0; sc->heap[i]->gc_func = NULL;
+	sc->heap[i]->debugger_bits = 0; sc->heap[i]->gc_line = 0; sc->heap[i]->gc_func = NULL; sc->heap[i]->uses = 0;
 #endif
 	clear_type(sc->heap[i]);
      }
@@ -100254,7 +100263,7 @@ s7_scheme *s7_init(void)
     sc->protected_setters_loc = 0;
     sc->protected_setters = make_vector_1(sc, size, FILLED, T_VECTOR);
     sc->protected_setter_symbols = make_vector_1(sc, size, FILLED, T_VECTOR);
-    
+
     sc->protected_objects_size = size;
     sc->protected_objects_free_list = (s7_int *)Malloc(size * sizeof(s7_int));
     sc->protected_objects_free_list_loc = size - 1;
@@ -100948,8 +100957,8 @@ int main(int argc, char **argv)
  * dup                3788   2492   2239   2097   2012   2001
  * tread              2421   2419   2408   2405   2241   2248
  * tcopy              5546   2539   2375   2386   2352   2348
- * tload                     3046   2404   2566   2506   2495
- * trclo       8248   2782   2615   2634   2622   2499   2499
+ * tload                     3046   2404   2566   2506   2495  2469
+ * trclo       8248   2782   2615   2634   2622   2499   2499  2476
  * tmat               3042   2524   2578   2590   2522   2516
  * fbench      2933   2583   2460   2430   2478   2536   2536
  * tsort       3683   3104   2856   2804   2858   2858   2858
@@ -101001,6 +101010,4 @@ int main(int argc, char **argv)
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  * if we have the function (not its name) it's "safe"(?)
- * is make_simple_ratio needed?
- * symbol-set?
  */

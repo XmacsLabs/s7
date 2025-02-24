@@ -162,12 +162,12 @@
 ;;;   GC time is claiming 6 secs (via (*s7* 'gc-stats)), but callgrind says it's more like 2 secs?
 ;;;   4Ghz i7-6700, on Mac M4 16 secs, guile 3.0.8 20 secs
 
-(define (bin-make d)
+(define-constant (bin-make d)
   (if (= d 0)
       (cons #f #f)
       (cons (bin-make (- d 1)) (bin-make (- d 1)))))
 
-(define (bin-check t)
+(define-constant (bin-check t)
   (if (car t)
       (+ 1 (bin-check (car t)) (bin-check (cdr t)))
       1))

@@ -1,5 +1,7 @@
 ;; shared library loader timing test
 
+(set! (*s7* 'heap-size) 512000)
+
 (call-with-output-file "add1.c"
   (lambda (oport)
     (format oport "
@@ -209,7 +211,6 @@ static s7_pointer make_and_free(s7_scheme *sc, s7_pointer args)
 {
   s7_scheme *s7;
   s7 = s7_init();
-  
   dax_type_tag = s7_make_c_type(s7, \"dax\");
   s7_c_type_set_gc_free(s7, dax_type_tag, free_dax);
   s7_c_type_set_gc_mark(s7, dax_type_tag, mark_dax);
@@ -224,7 +225,7 @@ static s7_pointer make_and_free(s7_scheme *sc, s7_pointer args)
   
   s7_define_variable(s7, \"dax-data\", 
 		     s7_dilambda(s7, \"dax-data\", dax_data, 1, 0, set_dax_data, 2, 0, \"dax data field\"));
-  
+
   s7_free(s7);
   return(s7_f(sc));
 }

@@ -612,7 +612,7 @@
 ;;; --------------------------------------------------------------------------------
 
 ;;; compare strings
-(define (compare-strings fn strs)
+(define-constant (compare-strings fn strs)
   (or (null? strs)                             ; returns #t on empty list
       (null? (cdr strs))                       ; returns #t on list of size 1
       (do ((fst strs (cdr fst))
