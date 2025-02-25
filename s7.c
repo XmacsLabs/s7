@@ -32160,23 +32160,26 @@ The symbols refer to the argument to \"provide\".  (require lint.scm)"
 	    error_nr(sc, sc->wrong_type_arg_symbol,
 		     set_elist_2(sc, wrap_string(sc, "require: ~S is not a symbol", 27), car(p)));
 	  }
-      if ((!is_a_feature(sym, s7_symbol_value(sc, sc->features_symbol))) &&
-	  (sc->is_autoloading))
+      if (!is_a_feature(sym, s7_symbol_value(sc, sc->features_symbol)))  /* if on *features* it's already loaded */
 	{
-	  s7_pointer f = g_autoloader(sc, set_plist_1(sc, sym));
-	  if (is_false(sc, f))
-	    {
-	      unstack_gc_protect(sc);
-	      error_nr(sc, sc->autoload_error_symbol,
-		       set_elist_2(sc, wrap_string(sc, "require: no autoload info for ~S", 32), sym));
-	    }
-	  if (hook_has_functions(sc->autoload_hook))
-	    s7_apply_function(sc, sc->autoload_hook, set_plist_2(sc, sym, f));
-	  if (is_string(f))
-	    s7_load_with_environment(sc, string_value(f), sc->curlet);
-	  else
-	    if (is_closure(f))   /* f should be a function of one argument, the current (calling) environment */
-	      s7_call(sc, f, set_ulist_1(sc, sc->curlet, sc->nil));
+	 if (sc->is_autoloading)
+	   {
+	     s7_pointer f = g_autoloader(sc, set_plist_1(sc, sym));
+	     if (is_false(sc, f))
+	       {
+		 unstack_gc_protect(sc);
+		 error_nr(sc, sc->autoload_error_symbol,
+			  set_elist_2(sc, wrap_string(sc, "require: no autoload info for ~S", 32), sym));
+	       }
+	     if (hook_has_functions(sc->autoload_hook))
+	       s7_apply_function(sc, sc->autoload_hook, set_plist_2(sc, sym, f));
+	     if (is_string(f))
+	       s7_load_with_environment(sc, string_value(f), sc->curlet);
+	     else
+	       if (is_closure(f))   /* f should be a function of one argument, the current (calling) environment */
+		 s7_call(sc, f, set_ulist_1(sc, sc->curlet, sc->nil));
+	   }
+	 else s7_warn(sc, 256, "require: can't load %s because (*s7* 'autoloading?) is #f\n", symbol_name(sym));
 	}}
   if (stack_top_op(sc) == OP_GC_PROTECT) unstack_gc_protect(sc); /* op_error_quit if load failed in scheme in Snd */
   return(sc->T);
@@ -97718,7 +97721,8 @@ static s7_pointer starlet_set_1(s7_scheme *sc, s7_pointer sym, s7_pointer val)
 
     case SL_GC_TEMPS_SIZE:
       sc->gc_temps_size = s7_integer_clamped_if_gmp(sc, sl_integer_gt_0(sc, sym, val));
-      return(val);
+      if (sc->gc_temps_size > sc->heap_size) sc->gc_temps_size = sc->heap_size;
+      return(make_integer(sc, sc->gc_temps_size));
     case SL_GC_RESIZE_HEAP_FRACTION:
       sc->gc_resize_heap_fraction = sl_real_0_to_1(sc, sym, val);
       return(val);
@@ -98861,6 +98865,7 @@ static void init_features(s7_scheme *sc)
 #if POINTER_32
   s7_provide(sc, "32-bit");
 #endif
+/* maybe WITH_WARNINGS */
 
 #ifdef __APPLE__
   s7_provide(sc, "osx");
@@ -100957,8 +100962,8 @@ int main(int argc, char **argv)
  * dup                3788   2492   2239   2097   2012   2001
  * tread              2421   2419   2408   2405   2241   2248
  * tcopy              5546   2539   2375   2386   2352   2348
- * tload                     3046   2404   2566   2506   2495  2469
- * trclo       8248   2782   2615   2634   2622   2499   2499  2476
+ * tload                     3046   2404   2566   2506   2465
+ * trclo       8248   2782   2615   2634   2622   2499   2476
  * tmat               3042   2524   2578   2590   2522   2516
  * fbench      2933   2583   2460   2430   2478   2536   2536
  * tsort       3683   3104   2856   2804   2858   2858   2858
@@ -100969,27 +100974,27 @@ int main(int argc, char **argv)
  * teq                4045   3536   3486   3544   3556   3569
  * tmac               4373   ----   4193   4188   4024   4025
  * tcomplex           3869   3804   3844   3888   4215   4196
- * tcase              4793   4439   4430   4439   4376   4380
+ * tcase              4793   4439   4430   4439   4376   4378
  * tmap               8774   4489   4541   4586   4380   4377
  * tlet        11.0   6974   5609   5980   5965   4470   4466
  * tfft               7729   4755   4476   4536   4538   4538
- * tshoot             5447   5183   5055   5034   4833   4776
+ * tshoot             5447   5183   5055   5034   4833   4774
  * tstar              6705   5834   5278   5177   5059   5055
  * concordance 10.0   6342   5488   5162   5180   5259   5272
- * tnum               6013   5433   5396   5409   5402   5406
+ * tnum               6013   5433   5396   5409   5402   5399
  * tlist       9219   7546   6558   6240   6300   5770   5784
  * tari        14.3   12.5   6619   6662   6499   6292   5989
  * trec        19.6   6980   6599   6656   6658   6015   6015
  * tgsl               7802   6373   6282   6208   6208   6213
- * tset                             6260   6364   6278   6265
+ * tset                             6260   6364   6278   6274
  * tleft       12.2   9753   7537   7331   7331   6393   6393
  * tmisc                            7614   7115   7130   7098
  * tclo               8025   7645   8809   7770   7627   7640
  * tgc                10.4   7763   7579   7617   7619   7649
  * tlamb                            8003   7941   7920   7927
  * thash              11.7   9734   9479   9526   9283   9273
- * tform                     10.0   9992   9961   9626   9448
- * cb          12.9   11.0   9658   9564   9609   9657   9660
+ * tform                     10.0   9992   9961   9626   9439
+ * cb          12.9   11.0   9658   9564   9609   9657   9658
  * tmap-hash                                      10.3   10.3
  * tgen               11.4   12.0   12.1   12.2   12.4   12.4
  * tall        15.9   15.6   15.6   15.6   15.1   15.1   15.1
