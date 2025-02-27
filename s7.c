@@ -16727,7 +16727,7 @@ static s7_pointer g_abs(s7_scheme *sc, s7_pointer args)
   return(abs_p_p(sc, car(args)));
 }
 
-static s7_double abs_d_d(s7_double x) {return((signbit(x)) ? (-x) : x);} /* very slow in tcc */
+static s7_double abs_d_d(s7_double x) {return((signbit(x)) ? (-x) : x);} /* TODO: very slow in tcc */
 static s7_int abs_i_i(s7_int x) {return((x < 0) ? (-x) : x);}
 /* TODO: (abs|magnitude -9223372036854775808) won't work here */
 
@@ -31811,6 +31811,7 @@ s7_pointer s7_load_with_environment(s7_scheme *sc, const char *filename, s7_poin
   TRACK(sc);
   if (e == sc->starlet) return(NULL);
   if (!is_let(e)) s7_warn(sc, 128, "third argument (the let) to s7_load_with_environment is not a let");
+  /* PERHAPS: find_let here? */
 #if WITH_C_LOADER
   port = load_shared_object(sc, filename, e);
   if (port) return(port);
@@ -32281,12 +32282,12 @@ static s7_pointer g_features_set(s7_scheme *sc, s7_pointer args) /* *features* s
   if (is_null(nf))
     return(sc->nil);
   if (!is_pair(nf))
-    error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "can't set *features* to ~S (*features* must be a list)", 54), nf));
+    error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "can't set *features* to ~S (*features* must be a pair)", 54), nf));
   if (s7_list_length(sc, nf) <= 0)
     error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "can't set *features* to an improper or circular list ~S", 55), nf));
   for (s7_pointer p = nf; is_pair(p); p = cdr(p))
     if (!is_symbol(car(p)))
-      sole_arg_wrong_type_error_nr(sc, sc->features_symbol, car(p), sc->type_names[T_SYMBOL]);
+      error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "can't set *features* to ~S (each feature should be a symbol)", 60), nf));
   return(nf);
 }
 
@@ -51484,7 +51485,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
       }
 
     case T_LET:
-      if (source == sc->starlet) /* *s7* */ /* TODO: shouldn't this use starlet_iterate? */
+      if (source == sc->starlet) /* *s7* */ /* this could be more direct via starlet_make_iterator, but it hardly matters */
 	{
 	  s7_pointer iter = s7_make_iterator(sc, sc->starlet);
 	  s7_int gc_loc = gc_protect_1(sc, iter);
@@ -99998,7 +99999,7 @@ static void init_rootlet(s7_scheme *sc)
   s7_autoload(sc, make_symbol(sc, "libc.scm", 8),         s7_make_semipermanent_string(sc, "libc.scm"));
   s7_autoload(sc, make_symbol(sc, "libm.scm", 8),         s7_make_semipermanent_string(sc, "libm.scm"));    /* repl.scm adds *libm* */
   s7_autoload(sc, make_symbol(sc, "libdl.scm", 9),        s7_make_semipermanent_string(sc, "libdl.scm"));
-  s7_autoload(sc, make_symbol(sc, "libgsl.scm", 10),      s7_make_semipermanent_string(sc, "libgsl.scm"));  /* repl.scm adds *libgsl* */
+  s7_autoload(sc, make_symbol(sc, "libgsl.scm", 10),      s7_make_semipermanent_string(sc, "libgsl.scm"));  /* repl.scm adds *libgsl* -- why? */
   s7_autoload(sc, make_symbol(sc, "libgdbm.scm", 11),     s7_make_semipermanent_string(sc, "libgdbm.scm"));
   s7_autoload(sc, make_symbol(sc, "libutf8proc.scm", 15), s7_make_semipermanent_string(sc, "libutf8proc.scm"));
 
@@ -101015,4 +101016,8 @@ int main(int argc, char **argv)
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  * if we have the function (not its name) it's "safe"(?)
+ * (member x hash-table) for the exists? case (now #f if not), vector easy (return subvect?)
+ *   string easy -> substring?, let easy but not returning sublet, others find_let + let member
+ *   but third arg (i.e. equal func) needs to make sense, so the return choice is a mess.
+ *   memv/memq also
  */

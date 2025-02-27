@@ -1,6 +1,7 @@
 ;; timing test for multi-parameter funcs and so on
 
 (define size 10000) ; tried also 100k and 1M -- time is in format_to_port_1
+;(define size 1000000)
 ;;; 10k:  0.098u 0.023s
 ;;; 100k: 1.657u 0.216s
 ;;; 1M:  52.178u 1.935s
