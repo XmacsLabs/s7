@@ -69297,7 +69297,12 @@ static bool tree_has_setters(s7_scheme *sc, s7_pointer tree)
   return(result);
 }
 
+#if 1
+#define do_is_safe(Sc, Body, Stepper, Var_list, Step_vars, Has_set) do_is_safe_1(Sc, Body, Stepper, Var_list, Step_vars, Has_set, __func__, __LINE__)
+static bool do_is_safe_1(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_pointer var_list, s7_pointer step_vars, bool *has_set, const char *func, int line);
+#else
 static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_pointer var_list, s7_pointer step_vars, bool *has_set);
+#endif
 
 static bool do_passes_safety_check(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_pointer step_vars, bool *has_set)
 {
@@ -69305,6 +69310,8 @@ static bool do_passes_safety_check(s7_scheme *sc, s7_pointer body, s7_pointer st
   if (!is_safety_checked(body))
     {
       set_safety_checked(body);
+      /* fprintf(stderr, "passes: %s\n", display(body)); */
+      if (is_unsafe_do(body)) {fprintf(stderr, "unsafe\n"); return(false);}
       if (!do_is_safe(sc, body, stepper, sc->nil, step_vars, has_set))
 	set_unsafe_do(body);
     }
@@ -69354,7 +69361,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
   if (len < 3)
     return_false(sc, car_x);
 
-  if (!s7_is_proper_list(sc, cadr(car_x)))
+  if (!s7_is_proper_list(sc, cadr(car_x))) /* vars */
     return_false(sc, car_x);
   var_len = proper_list_length(cadr(car_x));
   step_len = var_len;
@@ -69364,6 +69371,19 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
   if (!is_pair(end))
     return_false(sc, car_x);
 
+  if ((is_pair(cadr(car_x))) && (is_pair(caadr(car_x))))
+    {
+      s7_pointer old_code = sc->code;
+      sc->code = car_x; /* the do form here could be totally messed up: e.g. (do () '2) in s7test */
+      if (!do_passes_safety_check(sc, cdddr(car_x), car(caadr(car_x)), cadr(car_x), &has_set))
+	{
+	  /* fprintf(stderr, "false: %s\n", display(car_x)); */
+	  sc->code = old_code;
+	  return_false(sc, car_x);
+	}
+      sc->code = old_code;
+      /* fprintf(stderr, "true: %s\n", display(car_x)); */
+    }
   opc = alloc_opt_info(sc);
   let = inline_make_let(sc, sc->curlet);
   push_stack(sc, OP_GC_PROTECT, old_e, let);
@@ -69611,7 +69631,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	   ((car(expr) == sc->vector_set_symbol) &&
 	    (is_null(cddddr(expr))) &&
 	    (is_code_constant(sc, cadddr(expr))))))
-	opc->v[8].i = 1;
+	opc->v[8].i = 1; /* checked in opt_do_1 */
     }
   if ((var_len != 1) || (step_len != 1) || (rtn_len != 0))
     {
@@ -83890,16 +83910,24 @@ static bool all_ints_here(s7_scheme *sc, s7_pointer settee, s7_pointer expr, s7_
   return(true);
 }
 
+#if 1
+static bool do_is_safe_1(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_pointer var_list, s7_pointer step_vars, bool *has_set, const char *func, int line)
+#else
 static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_pointer var_list, s7_pointer step_vars, bool *has_set)
+#endif
 {
   /* here any (unsafe?) closure or jumping-op (call/cc) or shadowed variable is trouble
    *   we can free var_list if return(false) not after (!do_is_safe...), but it seems to make no difference, or be slightly slower
    */
-  /* sc->code is the complete do form (do ...) */
+#if 0
+  /* if (func != __func__) */ fprintf(stderr, "%s[%d]: %s %s %s %s %s %s\n", func, line, __func__, display(body), display(stepper), display(var_list), display(step_vars), display(sc->code));
+#endif
+  s7_pointer code = sc->code;
 
   for (s7_pointer p = body; is_pair(p); p = cdr(p))
     {
       s7_pointer expr = car(p);
+      /* fprintf(stderr, "   expr: %s\n", display(expr)); */
       if (is_pair(expr))
 	{
 	  s7_pointer x = car(expr);
@@ -83969,9 +83997,9 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		      }
 		    end_temp(sc->temp5);
 		    end_temp(sc->w);
-		    if (!do_is_safe(sc, caddr(expr), stepper, cp, combined_vars, has_set)) return(false);
+		    if (!do_is_safe(sc, cddr(expr), stepper, cp, combined_vars, has_set)) return(false); /* caddr */
 		    if ((is_pair(cdddr(expr))) &&
-			(!do_is_safe(sc, cadddr(expr), stepper, cp, combined_vars, has_set)))
+			(!do_is_safe(sc, cdddr(expr), stepper, cp, combined_vars, has_set))) /* cadddr */
 		      return(false);
 		  }
 		  break;
@@ -83979,6 +84007,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		case OP_SET:
 		  {
 		    s7_pointer settee;
+		    /* fprintf(stderr, "set: %s\n", display(expr)); */
 		    if ((!is_pair(cdr(expr))) || (!is_pair(cddr(expr))))  /* (set!) or (set! x) */
 		      return(false);
 		    settee = cadr(expr);
@@ -84000,10 +84029,11 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		      }
 		    else
 		      {
-			s7_pointer end_and_result = caddr(sc->code);
-			if ((is_pair(end_and_result)) &&        /* sc->code = do-form (formerly (cdr(do-form)) causing a bug here) */
+			s7_pointer end_and_result = caddr(code);
+			/* I think this is trying to catch (set! end i) etc and needs the end-and-result form to check that */
+			if ((is_pair(end_and_result)) &&
 			    (is_pair(car(end_and_result))) &&
-			    (!is_syntax(caar(end_and_result)))) /* 10-Jan-24 */
+			    (!is_syntax(caar(end_and_result))))  /* 10-Jan-24 but why? */
 			  {
 			    bool res;
 			    set_match_symbol(settee);
@@ -84022,6 +84052,16 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		      return(false);
 		    if (!safe_stepper_expr(expr, stepper))      /* is step var's value used as the stored value by set!? */
 		      return(false);
+#if 1
+		    /* fprintf(stderr, "%s: %s in %s\n", __func__, display(stepper), display(expr)); */
+		    /* if we have a saver, and stepper is in its arglist, return false */
+		    if ((s7_tree_memq(sc, sc->cons_symbol, expr)) && (s7_tree_memq(sc, stepper, expr)))
+		      {
+			if (has_set) (*has_set) = true;
+			/* fprintf(stderr, "  -> false\n"); */
+			return(false);
+		      }
+#endif
 		  }
 		  break;
 
@@ -84373,7 +84413,7 @@ static s7_pointer do_end_bad(s7_scheme *sc, s7_pointer form)
 
 static s7_pointer check_do(s7_scheme *sc)
 {
-  /* returns nil if optimizable */
+  /* returns nil if optimizable, code if not(?) */
   s7_pointer form = sc->code, code, vars, end, body, p;
 
   check_do_for_obvious_errors(sc, form);
@@ -84476,35 +84516,43 @@ static s7_pointer check_do(s7_scheme *sc)
 		      pair_set_syntax_op(form, OP_DOTIMES_P);          /* dotimes_p: simple + syntax body + 1 expr */
 		    }
 
-		  if (((caddr(step_expr) == int_one) || (cadr(step_expr) == int_one)) &&
-		      (do_is_safe(sc, body, car(v), sc->nil, vars, &has_set)))
+		  if ((caddr(step_expr) == int_one) || (cadr(step_expr) == int_one))
 		    {
-		      opcode_t op = optimize_op(car(body));
-		      pair_set_syntax_op(form, OP_SAFE_DO);             /* safe_do: body is safe, step by 1 */
-		      /* no semipermanent let here because apparently do_is_safe accepts recursive calls? */
-
-		      /* this code sets the hop bit in any outer safe function call.  I tried a procedure (heaf_hopper in tmp) that
-		       *   walked the body setting all the hop bits; this worked in all tests, but cost as much as it saved.
-		       *   this was in the inner block below originally.
-		       */
-		      if ((is_optimized(car(body))) &&
-			  ((is_safe_c_op(op)) || (is_safe_closure_op(op)) || (is_safe_closure_star_op(op))) &&
-			  (!op_has_hop(car(body))))
-			set_optimize_op(car(body), op + 1); /* set hop bit if it's a safe_closure call in a safe do loop */
-
-		      if ((!has_set) &&
-			  (c_function_class(opt1_cfunc(end)) == sc->num_eq_class))
+		      if (!do_is_safe(sc, body, car(v), sc->nil, vars, &has_set))
 			{
-			  /* vars is of the form ((i 0 (+ i 1))) -- 1 var etc */
-			  pair_set_syntax_op(form, OP_SAFE_DOTIMES);   /* safe_dotimes: end is = */
-			  if (is_fxable(sc, car(body)))
-			    fx_annotate_arg(sc, body, set_plist_1(sc, caar(vars))); /* if _args, fxification ignored? (need safe_closure_s_na etc) */
-			  /* is this redundant? safe_closure_s_a must already have fx, and otherwise it is ignored */
+			  set_unsafe_do(body);
+			  /* fprintf(stderr, "check_do unsafe: %s\n", display(body)); */
+			  return(body);
 			}
-		      fx_tree(sc, body, car(v), NULL, NULL, false);
-		      if (stack_top_op(sc) == OP_SAFE_DO_STEP)
-			fx_tree_outer(sc, body, caaar(stack_top_code(sc)), NULL, NULL, true);
-		    }}
+		      else
+			{
+			  opcode_t op = optimize_op(car(body));
+			  pair_set_syntax_op(form, OP_SAFE_DO);             /* safe_do: body is safe, step by 1 */
+			  /* no semipermanent let here because apparently do_is_safe accepts recursive calls? */
+			  
+			  /* this code sets the hop bit in any outer safe function call.  I tried a procedure (heaf_hopper in tmp) that
+			   *   walked the body setting all the hop bits; this worked in all tests, but cost as much as it saved.
+			   *   this was in the inner block below originally.
+			   */
+			  if ((is_optimized(car(body))) &&
+			      ((is_safe_c_op(op)) || (is_safe_closure_op(op)) || (is_safe_closure_star_op(op))) &&
+			      (!op_has_hop(car(body))))
+			    set_optimize_op(car(body), op + 1); /* set hop bit if it's a safe_closure call in a safe do loop */
+			  
+			  if ((!has_set) &&
+			      (c_function_class(opt1_cfunc(end)) == sc->num_eq_class))
+			    {
+			      /* vars is of the form ((i 0 (+ i 1))) -- 1 var etc */
+			      /* fprintf(stderr, "set %s op_safe_dotimes\n", display(form)); */
+			      pair_set_syntax_op(form, OP_SAFE_DOTIMES);   /* safe_dotimes: end is = */
+			      if (is_fxable(sc, car(body)))
+				fx_annotate_arg(sc, body, set_plist_1(sc, caar(vars))); /* if _args, fxification ignored? (need safe_closure_s_na etc) */
+			      /* is this redundant? safe_closure_s_a must already have fx, and otherwise it is ignored */
+			    }
+			  fx_tree(sc, body, car(v), NULL, NULL, false);
+			  if (stack_top_op(sc) == OP_SAFE_DO_STEP)
+			    fx_tree_outer(sc, body, caaar(stack_top_code(sc)), NULL, NULL, true);
+			}}}
 	      return(sc->nil);
 	    }}}
 
@@ -86034,6 +86082,7 @@ static /* inline */ bool op_dotimes_step_o(s7_scheme *sc) /* called once in eval
 static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool loop_end_ok)
 {
   s7_pointer step_val;
+  if (is_unsafe_do(code)) return_false(sc, code);
   if (loop_end_ok)
     set_safe_stepper(sc->args);
   else set_safe_stepper(let_dox_slot1(sc->curlet));
@@ -99788,7 +99837,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->vector_rank_symbol =           defun("vector-rank",       vector_rank,	        1, 0, false);
   sc->make_vector_symbol =           defun("make-vector",	make_vector,		1, 2, false);
   sc->vector_symbol =                defun("vector",		vector,			0, 0, true);
-  set_is_setter(sc->vector_symbol); /* like cons, I guess */
+  /* set_is_setter(sc->vector_symbol); */
   sc->vector_typer_symbol =          defun("vector-typer",      vector_typer,	        1, 0, false);
 
   sc->subvector_symbol =             defun("subvector",         subvector,	        1, 3, false);
@@ -101019,5 +101068,9 @@ int main(int argc, char **argv)
  * (member x hash-table) for the exists? case (now #f if not), vector easy (return subvect?)
  *   string easy -> substring?, let easy but not returning sublet, others find_let + let member
  *   but third arg (i.e. equal func) needs to make sense, so the return choice is a mess.
- *   memv/memq also
+ *   memv/memq also, implement as generic-member|memq|mvmv in s7test.scm
+ *   see t843
+ * read-int|float? [read-byte could be used, but this is in regard to (open-input-file "/dev/urandom")), maybe byte-size|number-of-bytes arg to read-byte?
+ *   read-byte now is hardly different from read-char.  read here returns a "symbol"! (it assumes the file has chars, binary-port in r7rs).
+ *   (define (read-int port) (logior (read-byte port) (ash (read-byte port) 8) (ash (read-byte port) 16) (ash (read-byte port) 24) ...)) -- ugly!
  */
