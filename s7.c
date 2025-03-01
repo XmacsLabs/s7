@@ -69297,12 +69297,7 @@ static bool tree_has_setters(s7_scheme *sc, s7_pointer tree)
   return(result);
 }
 
-#if 1
-#define do_is_safe(Sc, Body, Stepper, Var_list, Step_vars, Has_set) do_is_safe_1(Sc, Body, Stepper, Var_list, Step_vars, Has_set, __func__, __LINE__)
-static bool do_is_safe_1(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_pointer var_list, s7_pointer step_vars, bool *has_set, const char *func, int line);
-#else
 static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_pointer var_list, s7_pointer step_vars, bool *has_set);
-#endif
 
 static bool do_passes_safety_check(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_pointer step_vars, bool *has_set)
 {
@@ -69310,8 +69305,7 @@ static bool do_passes_safety_check(s7_scheme *sc, s7_pointer body, s7_pointer st
   if (!is_safety_checked(body))
     {
       set_safety_checked(body);
-      /* fprintf(stderr, "passes: %s\n", display(body)); */
-      if (is_unsafe_do(body)) {fprintf(stderr, "unsafe\n"); return(false);}
+      if (is_unsafe_do(body)) return(false);
       if (!do_is_safe(sc, body, stepper, sc->nil, step_vars, has_set))
 	set_unsafe_do(body);
     }
@@ -69377,12 +69371,10 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
       sc->code = car_x; /* the do form here could be totally messed up: e.g. (do () '2) in s7test */
       if (!do_passes_safety_check(sc, cdddr(car_x), car(caadr(car_x)), cadr(car_x), &has_set))
 	{
-	  /* fprintf(stderr, "false: %s\n", display(car_x)); */
 	  sc->code = old_code;
 	  return_false(sc, car_x);
 	}
       sc->code = old_code;
-      /* fprintf(stderr, "true: %s\n", display(car_x)); */
     }
   opc = alloc_opt_info(sc);
   let = inline_make_let(sc, sc->curlet);
@@ -83910,24 +83902,16 @@ static bool all_ints_here(s7_scheme *sc, s7_pointer settee, s7_pointer expr, s7_
   return(true);
 }
 
-#if 1
-static bool do_is_safe_1(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_pointer var_list, s7_pointer step_vars, bool *has_set, const char *func, int line)
-#else
 static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_pointer var_list, s7_pointer step_vars, bool *has_set)
-#endif
 {
   /* here any (unsafe?) closure or jumping-op (call/cc) or shadowed variable is trouble
    *   we can free var_list if return(false) not after (!do_is_safe...), but it seems to make no difference, or be slightly slower
    */
-#if 0
-  /* if (func != __func__) */ fprintf(stderr, "%s[%d]: %s %s %s %s %s %s\n", func, line, __func__, display(body), display(stepper), display(var_list), display(step_vars), display(sc->code));
-#endif
   s7_pointer code = sc->code;
 
   for (s7_pointer p = body; is_pair(p); p = cdr(p))
     {
       s7_pointer expr = car(p);
-      /* fprintf(stderr, "   expr: %s\n", display(expr)); */
       if (is_pair(expr))
 	{
 	  s7_pointer x = car(expr);
@@ -84007,7 +83991,6 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		case OP_SET:
 		  {
 		    s7_pointer settee;
-		    /* fprintf(stderr, "set: %s\n", display(expr)); */
 		    if ((!is_pair(cdr(expr))) || (!is_pair(cddr(expr))))  /* (set!) or (set! x) */
 		      return(false);
 		    settee = cadr(expr);
@@ -84053,12 +84036,10 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		    if (!safe_stepper_expr(expr, stepper))      /* is step var's value used as the stored value by set!? */
 		      return(false);
 #if 1
-		    /* fprintf(stderr, "%s: %s in %s\n", __func__, display(stepper), display(expr)); */
 		    /* if we have a saver, and stepper is in its arglist, return false */
 		    if ((s7_tree_memq(sc, sc->cons_symbol, expr)) && (s7_tree_memq(sc, stepper, expr)))
 		      {
 			if (has_set) (*has_set) = true;
-			/* fprintf(stderr, "  -> false\n"); */
 			return(false);
 		      }
 #endif
@@ -84521,7 +84502,6 @@ static s7_pointer check_do(s7_scheme *sc)
 		      if (!do_is_safe(sc, body, car(v), sc->nil, vars, &has_set))
 			{
 			  set_unsafe_do(body);
-			  /* fprintf(stderr, "check_do unsafe: %s\n", display(body)); */
 			  return(body);
 			}
 		      else
@@ -84543,7 +84523,6 @@ static s7_pointer check_do(s7_scheme *sc)
 			      (c_function_class(opt1_cfunc(end)) == sc->num_eq_class))
 			    {
 			      /* vars is of the form ((i 0 (+ i 1))) -- 1 var etc */
-			      /* fprintf(stderr, "set %s op_safe_dotimes\n", display(form)); */
 			      pair_set_syntax_op(form, OP_SAFE_DOTIMES);   /* safe_dotimes: end is = */
 			      if (is_fxable(sc, car(body)))
 				fx_annotate_arg(sc, body, set_plist_1(sc, caar(vars))); /* if _args, fxification ignored? (need safe_closure_s_na etc) */
@@ -100999,14 +100978,14 @@ int main(int argc, char **argv)
  *             19.0   21.0   22.0   23.0   24.0   25.0   25.2
  * ------------------------------------------------------------
  * tpeak        148    114    108    105    102    109    109
- * tref        1081    687    463    459    464    412    412
+ * tref        1081    687    463    459    464    412    412  761 opt_dotimes from opt_do_very_simple
  * tlimit      3936   5371   5371   5371   5371    783    775
  * index              1016    973    967    972    988    990
  * tmock              1145   1082   1042   1045   1031   1031
- * tvect       3408   2464   1772   1669   1497   1457   1457
- * thook       7651   ----   2590   2030   2046   1731   1733
+ * tvect       3408   2464   1772   1669   1497   1457   1457  4873 same
+ * thook       7651   ----   2590   2030   2046   1731   1733  1747
  * tauto                     2562   2048   1729   1760   1754
- * texit       1884   1950   1778   1741   1770   1759   1759
+ * texit       1884   1950   1778   1741   1770   1759   1759  1836
  * s7test             1831   1818   1829   1830   1849   1854
  * lt          2222   2172   2150   2185   1950   1892   1895
  * dup                3788   2492   2239   2097   2012   2001
@@ -101014,45 +100993,45 @@ int main(int argc, char **argv)
  * tcopy              5546   2539   2375   2386   2352   2348
  * tload                     3046   2404   2566   2506   2465
  * trclo       8248   2782   2615   2634   2622   2499   2476
- * tmat               3042   2524   2578   2590   2522   2516
+ * tmat               3042   2524   2578   2590   2522   2516  4592
  * fbench      2933   2583   2460   2430   2478   2536   2536
  * tsort       3683   3104   2856   2804   2858   2858   2858
- * titer       4550   3349   3070   2985   2966   2917   2917
+ * titer       4550   3349   3070   2985   2966   2917   2917  3537
  * tio                3752   3683   3620   3583   3127   3135
- * tbit        3836   3305   3245   3261   3264   3181   3181
- * tobj               3970   3828   3577   3508   3434   3434
- * teq                4045   3536   3486   3544   3556   3569
- * tmac               4373   ----   4193   4188   4024   4025
- * tcomplex           3869   3804   3844   3888   4215   4196
+ * tbit        3836   3305   3245   3261   3264   3181   3181  3196
+ * tobj               3970   3828   3577   3508   3434   3434  4278
+ * teq                4045   3536   3486   3544   3556   3569  5918
+ * tmac               4373   ----   4193   4188   4024   4025  5514
+ * tcomplex           3869   3804   3844   3888   4215   4196  4257
  * tcase              4793   4439   4430   4439   4376   4378
- * tmap               8774   4489   4541   4586   4380   4377
- * tlet        11.0   6974   5609   5980   5965   4470   4466
- * tfft               7729   4755   4476   4536   4538   4538
- * tshoot             5447   5183   5055   5034   4833   4774
+ * tmap               8774   4489   4541   4586   4380   4377  4393
+ * tlet        11.0   6974   5609   5980   5965   4470   4466  5434
+ * tfft               7729   4755   4476   4536   4538   4538  15.2
+ * tshoot             5447   5183   5055   5034   4833   4774  5016
  * tstar              6705   5834   5278   5177   5059   5055
- * concordance 10.0   6342   5488   5162   5180   5259   5272
- * tnum               6013   5433   5396   5409   5402   5399
- * tlist       9219   7546   6558   6240   6300   5770   5784
- * tari        14.3   12.5   6619   6662   6499   6292   5989
+ * concordance 10.0   6342   5488   5162   5180   5259   5272  5303
+ * tnum               6013   5433   5396   5409   5402   5399  5674
+ * tlist       9219   7546   6558   6240   6300   5770   5784  7136
+ * tari        14.3   12.5   6619   6662   6499   6292   5989  6130
  * trec        19.6   6980   6599   6656   6658   6015   6015
- * tgsl               7802   6373   6282   6208   6208   6213
- * tset                             6260   6364   6278   6274
+ * tgsl               7802   6373   6282   6208   6208   6213  6291
+ * tset                             6260   6364   6278   6274  6293
  * tleft       12.2   9753   7537   7331   7331   6393   6393
- * tmisc                            7614   7115   7130   7098
+ * tmisc                            7614   7115   7130   7098  8168
  * tclo               8025   7645   8809   7770   7627   7640
  * tgc                10.4   7763   7579   7617   7619   7649
- * tlamb                            8003   7941   7920   7927
+ * tlamb                            8003   7941   7920   7927  9223
  * thash              11.7   9734   9479   9526   9283   9273
  * tform                     10.0   9992   9961   9626   9439
  * cb          12.9   11.0   9658   9564   9609   9657   9658
  * tmap-hash                                      10.3   10.3
  * tgen               11.4   12.0   12.1   12.2   12.4   12.4
- * tall        15.9   15.6   15.6   15.6   15.1   15.1   15.1
- * timp               24.4   20.0   19.6   19.7   15.5   15.5
- * tmv                21.9   21.1   20.7   20.6   16.6   16.6
- * calls              37.5   37.0   37.5   37.1   37.1   37.0
- * sg                        55.9   55.8   55.4   55.3   55.2
- * tbig              175.8  156.5  148.1  146.2  145.5  145.2
+ * tall        15.9   15.6   15.6   15.6   15.1   15.1   15.1  15.3
+ * timp               24.4   20.0   19.6   19.7   15.5   15.5  18.9
+ * tmv                21.9   21.1   20.7   20.6   16.6   16.6  16.9
+ * calls              37.5   37.0   37.5   37.1   37.1   37.0  37.4
+ * sg                        55.9   55.8   55.4   55.3   55.2  55.5
+ * tbig              175.8  156.5  148.1  146.2  145.5  145.2 174.8
  * ------------------------------------------------------------
  *
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
@@ -101070,7 +101049,9 @@ int main(int argc, char **argv)
  *   but third arg (i.e. equal func) needs to make sense, so the return choice is a mess.
  *   memv/memq also, implement as generic-member|memq|mvmv in s7test.scm
  *   see t843
- * read-int|float? [read-byte could be used, but this is in regard to (open-input-file "/dev/urandom")), maybe byte-size|number-of-bytes arg to read-byte?
+ * read-integer|float? [read-byte could be used, but this is in regard to (open-input-file "/dev/urandom")), maybe byte-size|number-of-bytes arg to read-byte?
  *   read-byte now is hardly different from read-char.  read here returns a "symbol"! (it assumes the file has chars, binary-port in r7rs).
  *   (define (read-int port) (logior (read-byte port) (ash (read-byte port) 8) (ash (read-byte port) 16) (ash (read-byte port) 24) ...)) -- ugly!
+ * funcs (not symbols) in do and add rest like vector: see f18 t845
+ * fix op_do_very_simple (bad-diffs)
  */
