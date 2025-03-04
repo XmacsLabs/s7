@@ -1478,6 +1478,8 @@ struct s7_scheme {
 #endif
 };
 
+#define MUTINT 1
+#define MUTINT_PRINT 0
 
 static no_return void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info);
 static s7_pointer wrap_string(s7_scheme *sc, const char *str, s7_int len);
@@ -2055,6 +2057,7 @@ static void init_types(void)
   #define T_Lst(P) check_ref_two(P, T_PAIR, T_NIL,       __func__, __LINE__, "gc", NULL)
   #define T_Mac(P) check_ref_mac(P,                      __func__, __LINE__)                /* a non-C macro */
   #define T_Met(P) check_ref_met(P,                      __func__, __LINE__)                /* anything that might contain a method */
+  #define T_Mut(P) check_ref_mut(P,                      __func__, __LINE__)                /* mutable number */
   #define T_Nmv(P) check_ref_nmv(P,                      __func__, __LINE__)                /* not multiple-value, not free, only affects slot values */
   #define T_Num(P) check_ref_num(P,                      __func__, __LINE__)                /* any number (not bignums) */
   #define T_Nvc(P) check_ref_one(P, T_VECTOR,            __func__, __LINE__, "sweep", NULL)
@@ -2119,6 +2122,7 @@ static void init_types(void)
   #define T_Lst(P)  P
   #define T_Mac(P)  P
   #define T_Met(P)  P
+  #define T_Mut(P)  P
   #define T_Nmv(P)  P
   #define T_Num(P)  P
   #define T_Nvc(P)  P
@@ -3084,17 +3088,14 @@ static s7_pointer clear_is_mutable(s7_pointer p) {clear_mid_type_bit(p, T_MID_MU
 
 #define car(p)                         (T_Pair(p))->object.cons.car
 #define unchecked_car(p)               (T_Pos(p))->object.cons.car
+#define set_car(p, Val)                car(p) = T_Mut(T_Pos(Val))     /* can be a slot or #<unused> or #<catch> etc */
 #define cdr(p)                         (T_Pair(p))->object.cons.cdr
-#define unchecked_set_cdr(p, Val)      cdr(p) = T_Exs(Val)      /* #<unused> in g_gc */
+#define unchecked_set_cdr(p, Val)      cdr(p) = T_Exs(Val)            /* #<unused> in g_gc */
 #define unchecked_cdr(p)               (T_Exs(p))->object.cons.cdr
-
 #if S7_DEBUGGING
   static void check_set_cdr(s7_pointer p, s7_pointer Val, const char *func, int32_t line);
-  static void check_set_car(s7_pointer p, s7_pointer Val, const char *func, int32_t line);
   #define set_cdr(p, Val)              check_set_cdr(p, Val, __func__, __LINE__)
-  #define set_car(p, Val)              check_set_car(p, Val, __func__, __LINE__)
 #else
-  #define set_car(p, Val)              car(p) = T_Pos(Val)      /* can be a slot or #<unused> or #<catch> etc */
   #define set_cdr(p, Val)              cdr(p) = T_Ext(Val)
 #endif
 
@@ -5498,6 +5499,21 @@ static s7_pointer check_nref(s7_pointer p, const char *func, int32_t line)
   return(p);
 }
 
+static s7_pointer check_ref_mut(s7_pointer p, const char *func, int32_t line)
+{
+  if ((S7_DEBUGGING) && (MUTINT) && (MUTINT_PRINT))
+    {
+      if ((is_number(p)) && (is_mutable(p)) && (in_heap(p)))
+	{
+	  /* is_mutable_number has T_Num(val) -- several other types use this bit, in_heap because mutable is also used to mean "no name" */
+	  char *str = describe_type_bits(cur_sc, p);
+	  fprintf(stderr, "%s[%d]: value is mutable, %p %s %s, from %s[%d]\n", func, line, p, display(p), str, p->gc_func, p->gc_line);
+	  free(str);
+	  if (cur_sc->stop_at_error) abort();
+	}}
+  return(p);
+}
+
 static s7_pointer check_ref_nmv(s7_pointer p, const char *func, int32_t line)
 {
   uint8_t typ = unchecked_type(p);
@@ -5573,21 +5589,6 @@ static s7_pointer check_opcode(s7_scheme *sc, s7_pointer p, const char *func, in
       if (sc->stop_at_error) abort();
     }
   return(p);
-}
-
-static void check_set_car(s7_pointer p, s7_pointer val, const char *func, int32_t line)
-{
-#if 0 /* on MUTINT? */
-  if ((is_mutable(val)) && (is_number(val)) && (in_heap(val)))
-    {
-      /* is_mutable_number has T_Num(val) -- several other types use this bit, in_heap because mutable is also used to mean "no name" */
-      char *str = describe_type_bits(cur_sc, val);
-      fprintf(stderr, "%s[%d]: set_car value is mutable, %p %s %s, from %s[%d]\n", func, line, val, display(val), str, val->gc_func, val->gc_line);
-      free(str);
-      if (cur_sc->stop_at_error) abort();
-    }
-#endif
-  car(p) = val;
 }
 
 static void check_set_cdr(s7_pointer p, s7_pointer val, const char *func, int32_t line)
@@ -9326,12 +9327,12 @@ s7_pointer s7_symbol_set_initial_value(s7_scheme *sc, s7_pointer symbol, s7_poin
 /* -------- small symbol set -------- */
 
 #if S7_DEBUGGING
-enum {SET_IGNORE, SET_BEGIN, SET_END};
+enum {set_ignore, set_begin, set_end};
 
 #define symbol_is_in_small_symbol_set(Sc, Sym) symbol_is_in_small_symbol_set_1(Sc, Sym, __func__, __LINE__)
 static bool symbol_is_in_small_symbol_set_1(s7_scheme *sc, s7_pointer sym, const char *func, int line)
 {
-  if (sc->small_symbol_set_state == SET_END)
+  if (sc->small_symbol_set_state == set_end)
     fprintf(stderr, "%s[%d]: small_symbol_set membership test but it's not running\n", func, line);
   return(small_symbol_tag(sym) == sc->small_symbol_tag);
 }
@@ -9339,19 +9340,19 @@ static bool symbol_is_in_small_symbol_set_1(s7_scheme *sc, s7_pointer sym, const
 #define add_symbol_to_small_symbol_set(Sc, Sym) add_symbol_to_small_symbol_set_1(Sc, Sym, __func__, __LINE__)
 static s7_pointer add_symbol_to_small_symbol_set_1(s7_scheme *sc, s7_pointer sym, const char *func, int line)
 {
-  if (sc->small_symbol_set_state == SET_END)
+  if (sc->small_symbol_set_state == set_end)
     fprintf(stderr, "%s[%d]: small_symbol_set add member but it's not running\n", func, line);
   set_small_symbol_tag(sym, sc->small_symbol_tag);
   return(sym);
 }
 
-#define clear_small_symbol_set(Sc) clear_small_symbol_set_1(Sc, SET_IGNORE, __func__, __LINE__)
+#define clear_small_symbol_set(Sc) clear_small_symbol_set_1(Sc, set_ignore, __func__, __LINE__)
 static void clear_small_symbol_set_1(s7_scheme *sc, int status, const char *func, int line)
 {
   /* if running end is ok, begin is an error, if not running end is error, begin is ok */
-  if (status == SET_BEGIN)
+  if (status == set_begin)
     {
-      if (sc->small_symbol_set_state == SET_BEGIN)
+      if (sc->small_symbol_set_state == set_begin)
 	{
 	  fprintf(stderr, "%s[%d]: small_symbol_set is running but begin requested (started at %s[%d])\n",
 		  func, line, sc->small_symbol_set_func, sc->small_symbol_set_line);
@@ -9360,7 +9361,7 @@ static void clear_small_symbol_set_1(s7_scheme *sc, int status, const char *func
       sc->small_symbol_set_func = func;
       sc->small_symbol_set_line = line;
     }
-  if ((status == SET_END) && (sc->small_symbol_set_state == SET_END))
+  if ((status == set_end) && (sc->small_symbol_set_state == set_end))
     fprintf(stderr, "%s[%d]: small_symbol_set is not running but end requested (started at %s[%d])\n",
 	    func, line, sc->small_symbol_set_func, sc->small_symbol_set_line);
   sc->small_symbol_set_state = status;
@@ -9376,8 +9377,8 @@ static void clear_small_symbol_set_1(s7_scheme *sc, int status, const char *func
   else sc->small_symbol_tag++;
 }
 
-#define begin_small_symbol_set(Sc) clear_small_symbol_set_1(Sc, SET_BEGIN, __func__, __LINE__)
-#define end_small_symbol_set(Sc)   clear_small_symbol_set_1(Sc, SET_END, __func__, __LINE__)
+#define begin_small_symbol_set(Sc) clear_small_symbol_set_1(Sc, set_begin, __func__, __LINE__)
+#define end_small_symbol_set(Sc)   clear_small_symbol_set_1(Sc, set_end, __func__, __LINE__)
 
 #else
 
@@ -53729,19 +53730,19 @@ static s7_pointer find_funclet(s7_scheme *sc, s7_pointer e)
 }
 
 #define PD_INITIAL_SIZE 16
-enum {PD_CALLS = 0, PD_RECUR, PD_START, PD_ITOTAL, PD_ETOTAL, PD_BLOCK_SIZE};
+enum {pd_calls = 0, pd_recur, pd_start, pd_itotal, pd_etotal, pd_block_size};
 
 static s7_pointer g_profile_out(s7_scheme *sc, s7_pointer args)
 {
-  s7_int pos = integer(car(args)) * PD_BLOCK_SIZE;
+  s7_int pos = integer(car(args)) * pd_block_size;
   profile_data_t *pd = sc->profile_data;
   s7_int *v = (s7_int *)(pd->timing_data + pos);
-  v[PD_RECUR]--;
-  if (v[PD_RECUR] == 0)
+  v[pd_recur]--;
+  if (v[pd_recur] == 0)
     {
-      s7_int cur_time = (my_clock() - v[PD_START]);
-      v[PD_ITOTAL] += cur_time;
-      v[PD_ETOTAL] += (cur_time - pd->excl[pd->excl_top]);
+      s7_int cur_time = (my_clock() - v[pd_start]);
+      v[pd_itotal] += cur_time;
+      v[pd_etotal] += (cur_time - pd->excl[pd->excl_top]);
       pd->excl_top--;
       pd->excl[pd->excl_top] += cur_time;
     }
@@ -53772,8 +53773,8 @@ static s7_pointer g_profile_in(s7_scheme *sc, s7_pointer args) /* only external 
 	  s7_int new_size = 2 * pos;
 	  pd->funcs = (s7_pointer *)Realloc(pd->funcs, new_size * sizeof(s7_pointer));
 	  memclr((void *)(pd->funcs + pd->size), (new_size - pd->size) * sizeof(s7_pointer));
-	  pd->timing_data = (s7_int *)Realloc(pd->timing_data, new_size * PD_BLOCK_SIZE * sizeof(s7_int));
-          memclr((void *)(pd->timing_data + (pd->size * PD_BLOCK_SIZE)), (new_size - pd->size) * PD_BLOCK_SIZE * sizeof(s7_int));
+	  pd->timing_data = (s7_int *)Realloc(pd->timing_data, new_size * pd_block_size * sizeof(s7_int));
+          memclr((void *)(pd->timing_data + (pd->size * pd_block_size)), (new_size - pd->size) * pd_block_size * sizeof(s7_int));
 	  pd->let_names = (s7_pointer *)Realloc(pd->let_names, new_size * sizeof(s7_pointer));
 	  memclr((void *)(pd->let_names + pd->size), (new_size - pd->size) * sizeof(s7_pointer));
 	  pd->files = (s7_pointer *)Realloc(pd->files, new_size * sizeof(s7_pointer));
@@ -53799,11 +53800,11 @@ static s7_pointer g_profile_in(s7_scheme *sc, s7_pointer args) /* only external 
 	      pd->files[pos] = sc->file_names[let_file(e)];
 	      pd->lines[pos] = let_line(e);
 	    }}
-      v = (s7_int *)(sc->profile_data->timing_data + (pos * PD_BLOCK_SIZE));
-      v[PD_CALLS]++;
-      if (v[PD_RECUR] == 0)
+      v = (s7_int *)(sc->profile_data->timing_data + (pos * pd_block_size));
+      v[pd_calls]++;
+      if (v[pd_recur] == 0)
 	{
-	  v[PD_START] = my_clock();
+	  v[pd_start] = my_clock();
 	  pd->excl_top++;
 	  if (pd->excl_top == pd->excl_size)
 	    {
@@ -53812,7 +53813,7 @@ static s7_pointer g_profile_in(s7_scheme *sc, s7_pointer args) /* only external 
 	    }
 	  pd->excl[pd->excl_top] = 0;
 	}
-      v[PD_RECUR]++;
+      v[pd_recur]++;
 
       /* this doesn't work in "continuation passing" code (e.g. cpstak.scm in the so-called standard benchmarks).
        *   swap_stack pushes dynamic_unwind, but we don't pop back to it, so the stack grows to the recursion depth.
@@ -53842,7 +53843,7 @@ static s7_pointer profile_info_out(s7_scheme *sc)
   p = make_list(sc, 7, sc->F);
   set_car(sc->elist_7, p); /* protect p */
   set_car(p, vs = make_simple_vector(sc, pd->top));
-  set_car(cdr(p), vi = make_simple_int_vector(sc, pd->top * PD_BLOCK_SIZE));
+  set_car(cdr(p), vi = make_simple_int_vector(sc, pd->top * pd_block_size));
   set_car(cddr(p), make_integer(sc, ticks_per_second()));
   pp = cdddr(p);
   set_car(pp, vn = make_simple_vector(sc, pd->top));
@@ -53866,7 +53867,7 @@ static s7_pointer profile_info_out(s7_scheme *sc)
     }
   for (i = 0; i < pd->top; i++) if (pd->funcs[i]) clear_match_symbol(pd->funcs[i]);
   memcpy((void *)int_vector_ints(vl), (void *)pd->lines, pd->top * sizeof(s7_int));
-  memcpy((void *)int_vector_ints(vi), (void *)pd->timing_data, pd->top * PD_BLOCK_SIZE * sizeof(s7_int));
+  memcpy((void *)int_vector_ints(vi), (void *)pd->timing_data, pd->top * pd_block_size * sizeof(s7_int));
   set_car(sc->elist_7, sc->F);
   return(p);
 }
@@ -53876,7 +53877,7 @@ static s7_pointer clear_profile_info(s7_scheme *sc)
   if (sc->profile_data)
     {
       profile_data_t *pd = sc->profile_data;
-      memclr(pd->timing_data, pd->top * PD_BLOCK_SIZE * sizeof(s7_int));
+      memclr(pd->timing_data, pd->top * pd_block_size * sizeof(s7_int));
       memclr(pd->funcs, pd->top * sizeof(s7_pointer));
       memclr(pd->let_names, pd->top * sizeof(s7_pointer));
       memclr(pd->files, pd->top * sizeof(s7_pointer));
@@ -53904,7 +53905,7 @@ static s7_pointer make_profile_info(s7_scheme *sc)
       pd->files = (s7_pointer *)Calloc(pd->size, sizeof(s7_pointer));
       pd->lines = (s7_int *)Calloc(pd->size, sizeof(s7_int));
       pd->excl = (s7_int *)Calloc(pd->excl_size, sizeof(s7_int));
-      pd->timing_data = (s7_int *)Calloc(pd->size * PD_BLOCK_SIZE, sizeof(s7_int));
+      pd->timing_data = (s7_int *)Calloc(pd->size * pd_block_size, sizeof(s7_int));
       sc->profile_data = pd;
     }
   return(sc->F);
@@ -54511,6 +54512,19 @@ static bool catch_dynamic_unwind_function(s7_scheme *sc, s7_int catch_loc, s7_po
   return(false);
 }
 
+static bool catch_load_close_function(s7_scheme *sc, s7_int catch_loc, s7_pointer type, s7_pointer info)
+{
+  if (SHOW_EVAL_OPS) fprintf(stderr, "catcher: %s\n", __func__);
+  if ((S7_DEBUGGING) && (!is_loader_port(current_input_port(sc)))) fprintf(stderr, "%s[%d]: %s not loading?\n", __func__, __LINE__, display(current_input_port(sc)));
+  if (SHOW_EVAL_OPS) fprintf(stderr, "%s closing %s\n", __func__, display(current_input_port(sc)));
+
+  /* this looks like catch_eval_function */
+  s7_close_input_port(sc, current_input_port(sc));
+  pop_input_port(sc);
+  /* sc->current_file = NULL; */
+  return(false);
+}
+
 typedef bool (*catch_function_t)(s7_scheme *sc, s7_int catch_loc, s7_pointer type, s7_pointer info);
 static catch_function_t catchers[NUM_OPS];
 
@@ -54536,6 +54550,8 @@ static void init_catchers(void)
   catchers[OP_READ_DONE] =          catch_read_function;      /* perhaps an error during (read) */
   catchers[OP_UNWIND_INPUT] =       catch_in_function;
   catchers[OP_UNWIND_OUTPUT] =      catch_out_function;
+  catchers[OP_LOAD_CLOSE_AND_POP_IF_EOF] = catch_load_close_function;
+  /* do we need one for load_return_if_eof? */
 }
 
 /* -------------------------------- throw -------------------------------- */
@@ -54629,8 +54645,8 @@ static no_return void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
   sc->has_openlets = true;        /*   same problem -- we need a cleaner way to handle this, op_?_unwind */
   sc->do_body_p = NULL;
 #if S7_DEBUGGING
-  sc->small_symbol_set_state = SET_IGNORE;
-  sc->big_symbol_set_state = SET_IGNORE;
+  sc->small_symbol_set_state = set_ignore;
+  sc->big_symbol_set_state = set_ignore;
   sc->v = sc->unused;
   sc->x = sc->unused;
   sc->y = sc->unused;
@@ -69341,9 +69357,6 @@ static bool tree_has_setters(s7_scheme *sc, s7_pointer tree)
   end_small_symbol_set(sc);
   return(result);
 }
-
-#define MUTINT 1
-#define MUTINT_PRINT 0
 
 static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_pointer var_list, s7_pointer step_vars, bool *has_set);
 
@@ -100613,8 +100626,8 @@ s7_scheme *s7_init(void)
   sc->big_symbol_tag = 0;
   sc->small_symbol_tag = 1;
 #if S7_DEBUGGING
-  sc->big_symbol_set_state = SET_IGNORE;
-  sc->small_symbol_set_state = SET_IGNORE;
+  sc->big_symbol_set_state = set_ignore;
+  sc->small_symbol_set_state = set_ignore;
   sc->y_line = 0;
   sc->v_line = 0;
   sc->c_functions_allocated = 0;
@@ -101270,4 +101283,5 @@ int main(int argc, char **argv)
  * funcs (not symbols) in do and add rest like vector: see f18 t845, cdr case too
  * mutints: hash-table-set! key&value are set directly so can't be mutable, also list/cons/vector/hash-table/inlet etc
  *   check all int++ steppers for mutable bit
+ * with-let (unlet) (curlet) -> (outlet (unlet))??  see libdef.scm/smsg1
  */
