@@ -2057,7 +2057,8 @@ static void init_types(void)
   #define T_Lst(P) check_ref_two(P, T_PAIR, T_NIL,       __func__, __LINE__, "gc", NULL)
   #define T_Mac(P) check_ref_mac(P,                      __func__, __LINE__)                /* a non-C macro */
   #define T_Met(P) check_ref_met(P,                      __func__, __LINE__)                /* anything that might contain a method */
-  #define T_Mut(P) check_ref_mut(P,                      __func__, __LINE__)                /* mutable number */
+  #define T_Muti(P) check_ref_muti(P,                    __func__, __LINE__)                /* a mutable integer */
+  #define T_Nmut(Q, P) check_ref_nmut(Q, P,              __func__, __LINE__)                /* not mutable number */
   #define T_Nmv(P) check_ref_nmv(P,                      __func__, __LINE__)                /* not multiple-value, not free, only affects slot values */
   #define T_Num(P) check_ref_num(P,                      __func__, __LINE__)                /* any number (not bignums) */
   #define T_Nvc(P) check_ref_one(P, T_VECTOR,            __func__, __LINE__, "sweep", NULL)
@@ -2122,7 +2123,8 @@ static void init_types(void)
   #define T_Lst(P)  P
   #define T_Mac(P)  P
   #define T_Met(P)  P
-  #define T_Mut(P)  P
+  #define T_Muti(P) P
+  #define T_Nmut(Q, P) P
   #define T_Nmv(P)  P
   #define T_Num(P)  P
   #define T_Nvc(P)  P
@@ -3088,7 +3090,7 @@ static s7_pointer clear_is_mutable(s7_pointer p) {clear_mid_type_bit(p, T_MID_MU
 
 #define car(p)                         (T_Pair(p))->object.cons.car
 #define unchecked_car(p)               (T_Pos(p))->object.cons.car
-#define set_car(p, Val)                car(p) = T_Mut(T_Pos(Val))     /* can be a slot or #<unused> or #<catch> etc */
+#define set_car(p, Val)                car(p) = T_Nmut(p, T_Pos(Val))    /* can be a slot or #<unused> or #<catch> etc */
 #define cdr(p)                         (T_Pair(p))->object.cons.cdr
 #define unchecked_set_cdr(p, Val)      cdr(p) = T_Exs(Val)            /* #<unused> in g_gc */
 #define unchecked_cdr(p)               (T_Exs(p))->object.cons.cdr
@@ -5499,9 +5501,9 @@ static s7_pointer check_nref(s7_pointer p, const char *func, int32_t line)
   return(p);
 }
 
-static s7_pointer check_ref_mut(s7_pointer p, const char *func, int32_t line)
+static s7_pointer check_ref_nmut(s7_pointer q, s7_pointer p, const char *func, int32_t line) /* p must not be a mutable number */
 {
-  if ((S7_DEBUGGING) && (MUTINT) && (MUTINT_PRINT))
+  if ((S7_DEBUGGING) && (MUTINT) && (MUTINT_PRINT) && (in_heap(q)))
     {
       if ((is_number(p)) && (is_mutable(p)) && (in_heap(p)))
 	{
@@ -5511,6 +5513,18 @@ static s7_pointer check_ref_mut(s7_pointer p, const char *func, int32_t line)
 	  free(str);
 	  if (cur_sc->stop_at_error) abort();
 	}}
+  return(p);
+}
+
+static s7_pointer check_ref_muti(s7_pointer p, const char *func, int32_t line) /* p must be a mutable integer */
+{
+  if ((!is_number(p)) || (!is_t_integer(p)) || (!is_mutable(p)))
+    {
+      char *str = describe_type_bits(cur_sc, p);
+      fprintf(stderr, "%s[%d]: value is not a mutable integer, %p %s %s\n", func, line, p, display(p), str);
+      free(str);
+      if (cur_sc->stop_at_error) abort();
+    }
   return(p);
 }
 
@@ -11796,7 +11810,9 @@ Only the let is searched if ignore-globals is not #f."
 	  if (!is_let(e))
 	    wrong_type_error_nr(sc, sc->is_defined_symbol, 2, cadr(args), a_let_string); /* not e */
 	}
-      if (is_unlet(e)) return(make_boolean(sc, initial_value(sym) != sc->undefined));
+      /* if (is_unlet(e)) return(make_boolean(sc, initial_value(sym) != sc->undefined)); */
+      /* this ^ is wrong: (with-let (unlet) (define xx 1) (list (defined? 'xx) (defined? 'xx (curlet)))) should be (#t #t) */
+
       if (is_keyword(sym))                       /* if no "e", is global -> #t */
 	{                                        /* we're treating :x as 'x outside rootlet, but consider all keywords defined (as themselves) in rootlet? */
 	  if (e == sc->rootlet) return(sc->T);   /* (defined? x (rootlet)) where x value is a keyword */
@@ -14153,7 +14169,7 @@ s7_pointer s7_make_real(s7_scheme *sc, s7_double n)
 
 #if S7_DEBUGGING
 #define make_mutable_real(Sc, N) make_mutable_real_1(Sc, N, __func__, __LINE__)
-s7_pointer make_mutable_real_1(s7_scheme *sc, s7_double n, const char *func, int line)
+static s7_pointer make_mutable_real_1(s7_scheme *sc, s7_double n, const char *func, int line)
 {
   s7_pointer x;
   new_cell(sc, x, T_REAL | T_MUTABLE | T_IMMUTABLE);
@@ -42751,7 +42767,7 @@ static s7_pointer g_vector_set_3(s7_scheme *sc, s7_pointer args)
 static s7_pointer vector_set_p_ppp(s7_scheme *sc, s7_pointer vec, s7_pointer ind, s7_pointer val)
 {
   s7_int index;
-  if ((S7_DEBUGGING) && (is_mutable(ind))) ind = make_integer(sc, integer(ind));
+  if ((S7_DEBUGGING) && (is_mutable(ind)) && (is_t_integer(ind))) ind = make_integer(sc, integer(ind));
 
   if ((!is_t_vector(vec)) || (vector_rank(vec) > 1))
     return(g_vector_set(sc, set_plist_3(sc, vec, ind, val)));
@@ -69061,6 +69077,7 @@ static s7_pointer opt_do_1(opt_info *o)
 		set_integer(step_val, ostep->v[O_WRAP].fi(ostep));
 	      }
 	  unstack_gc_protect(sc);
+	  clear_mutable_integer(step_val);
 	  set_curlet(sc, old_e);
 	  return(sc->T);
 	}
@@ -69263,6 +69280,7 @@ static s7_pointer opt_do_very_simple(opt_info *o)
 		integer(vp)++;
 	      }
 	    slot_set_value(o1->v[1].p, make_integer(sc, integer(slot_value(o1->v[1].p))));
+	    clear_mutable_integer(ival);
 	  }
 	else
 	  if ((f == opt_d_7pid_ssf_nr) &&           /* tref.scm */
@@ -70397,7 +70415,7 @@ s7_float_function s7_float_optimize(s7_scheme *sc, s7_pointer expr)
 
 static s7_pfunc s7_optimize_1(s7_scheme *sc, s7_pointer expr, bool nv)
 {
-  if (WITH_GMP) return(NULL);
+  if (WITH_GMP) return_null(sc, expr);
   if ((!is_pair(expr)) || (no_cell_opt(expr)) || (sc->debug != 0))
     return_null(sc, expr);
   sc->pc = 0;
@@ -71801,7 +71819,15 @@ static Inline void inline_op_map_gather(s7_scheme *sc) /* called thrice in eval,
     {
       if (is_multiple_value(sc->value))
 	counter_set_result(sc->args, revappend(sc, multiple_value(sc->value), counter_result(sc->args)));
-      else counter_set_result(sc->args, cons(sc, sc->value, counter_result(sc->args)));
+      else 
+	{
+#if MUTINT
+	  if ((is_mutable(sc->value)) && (is_t_integer(sc->value)))
+	    counter_set_result(sc->args, cons(sc, make_integer(sc, integer(sc->value)), counter_result(sc->args)));
+	  else
+#endif
+	  counter_set_result(sc->args, cons(sc, sc->value, counter_result(sc->args)));
+	}
     }
 }
 
@@ -71918,7 +71944,7 @@ static s7_pointer op_safe_c_pa_mv(s7_scheme *sc, s7_pointer args)
   if (is_null(p))
     {
       s7_pointer val1 = car(sc->value), val2 = cadr(sc->value);
-      s7_pointer val3 = fx_call(sc, cddr(sc->code)); /* is plist3 ever clobbered by fx_call? plist_1|2 are set */
+      s7_pointer val3 = fx_call(sc, cddr(sc->code)); /* is plist_3 ever clobbered by fx_call? plist_1|2 are set */
       sc->args = set_plist_3(sc, val1, val2, val3);
     }
   else
@@ -86293,7 +86319,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool loo
 	{
 	  s7_int end = loop_end(sc->args);
 	  s7_pointer stepper = make_mutable_integer(sc, integer(slot_value(sc->args)));
-	  slot_set_value(sc->args, stepper);
+	  slot_set_value(sc->args, T_Muti(stepper)); /* REMINDER: just shut up the #%$%# compiler */
 	  if ((func == opt_float_any_nv) ||
 	      (func == opt_cell_any_nv))
 	    {
@@ -86904,9 +86930,16 @@ static goto_t op_safe_do(s7_scheme *sc)
 	      s7_pointer val_slot = s7_slot(sc, cadr(body));
 	      s7_int step = integer(slot_value(step_slot));
 	      s7_pointer step_val = slot_value(step_slot);
+#if MUTINT
+	      clear_mutable_integer(step_val);
+#endif
 	      do {
 		slot_set_value(val_slot, fx_call(sc, fx_p));
+#if !MUTINT
 		set_integer(step_val, ++step);
+#else
+		slot_set_value(step_slot, make_integer(sc, step = integer(slot_value(step_slot)) + 1));
+#endif
 	      } while (step != endi); /* geq not needed here -- we're leq endi and stepping by +1 all ints */
 	      clear_mutable_integer(step_val);
 	      sc->value = sc->T;
@@ -90582,7 +90615,7 @@ static void rec_set_f8(s7_scheme *sc, s7_pointer p)
   sc->rec_f8p = car(p);
 }
 
-typedef enum {OPT_PTR, OPT_INT, OPT_DBL, OPT_INT_0} opt_pid_t;
+typedef enum {opt_ptr, opt_int, opt_dbl, opt_int_0} opt_pid_t;
 
 
 /* -------- if_a_a_opla_laq and if_a_opla_laq_a -------- */
@@ -90626,12 +90659,12 @@ static opt_pid_t opinit_if_a_a_opla_laq(s7_scheme *sc, s7_pointer code)
 			      sc->rec_bool = a_is_cadr(code);
 			      sc->rec_val1 = make_mutable_integer(sc, integer(slot_value(slot)));
 			      slot_set_value(slot, sc->rec_val1);
-			      if (sc->pc != 4) return(OPT_INT); /* call1/call2 above are more complicated than (- n 1) or the like */
+			      if (sc->pc != 4) return(opt_int); /* call1/call2 above are more complicated than (- n 1) or the like */
 			      sc->rec_fb1 = sc->rec_test_o->v[0].fb;
 			      sc->rec_fi1 = sc->rec_result_o->v[0].fi;
 			      sc->rec_fi2 = sc->rec_a1_o->v[0].fi;
 			      sc->rec_fi3 = sc->rec_a2_o->v[0].fi;
-			      return(OPT_INT_0);
+			      return(opt_int_0);
 			    }}}}
 	      if (is_t_real(slot_value(slot)))
 		{
@@ -90651,7 +90684,7 @@ static opt_pid_t opinit_if_a_a_opla_laq(s7_scheme *sc, s7_pointer code)
 				  sc->rec_bool = a_is_cadr(code);
 				  sc->rec_val1 = make_mutable_real(sc, real(slot_value(slot)));
 				  slot_set_value(slot, sc->rec_val1);
-				  return(OPT_DBL);
+				  return(opt_dbl);
 				}}}}}}}}
 #endif
   tick_tc(sc, OP_RECUR_IF_A_A_opLA_LAq);
@@ -90663,7 +90696,7 @@ static opt_pid_t opinit_if_a_a_opla_laq(s7_scheme *sc, s7_pointer code)
   rec_set_f2(sc, cdr(call2));
   sc->rec_slot1 = let_slots(sc->curlet);
   sc->rec_loc = 0;
-  return(OPT_PTR);
+  return(opt_ptr);
 }
 
 static s7_int oprec_i_if_a_a_opla_laq(s7_scheme *sc)
@@ -90790,13 +90823,13 @@ static s7_pointer op_recur_if_a_a_opla_laq(s7_scheme *sc, s7_pointer code)
   opt_pid_t choice = opinit_if_a_a_opla_laq(sc, code);
   bool a_op = true_is_done(code);
   tick_tc(sc, OP_RECUR_IF_A_A_opLA_LAq);
-  if ((choice == OPT_INT) || (choice == OPT_INT_0))
+  if ((choice == opt_int) || (choice == opt_int_0))
     {
-      if (choice == OPT_INT_0)
+      if (choice == opt_int_0)
 	return(make_integer(sc, (a_op) ? oprec_i_if_a_a_opla_laq_0(sc) : oprec_i_if_a_opla_laq_a_0(sc)));
       return(make_integer(sc, (a_op) ? oprec_i_if_a_a_opla_laq(sc) : oprec_i_if_a_opla_laq_a(sc)));
     }
-  if (choice == OPT_PTR)
+  if (choice == opt_ptr)
     return((a_op) ? oprec_if_a_a_opla_laq(sc) : oprec_if_a_opla_laq_a(sc));
   return(make_real(sc, (a_op) ? oprec_d_if_a_a_opla_laq(sc) : oprec_d_if_a_opla_laq_a(sc)));
 }
@@ -91069,7 +91102,7 @@ static opt_pid_t opinit_if_a_a_opa_laq(s7_scheme *sc, s7_pointer code)
 			    {
 			      sc->rec_val1 = make_mutable_integer(sc, integer(slot_value(slot)));
 			      slot_set_value(slot, sc->rec_val1);
-			      return(OPT_INT);
+			      return(opt_int);
 			    }}}}}}}
 #endif
   /* not int: a_op: (lis (cons (car lis) (copy-list-1 (cdr lis)))),
@@ -91089,7 +91122,7 @@ static opt_pid_t opinit_if_a_a_opa_laq(s7_scheme *sc, s7_pointer code)
   sc->rec_slot1 = let_slots(sc->curlet);
   sc->rec_fn = fn_proc(caller);
   sc->rec_loc = 0;
-  return(OPT_PTR);
+  return(opt_ptr);
 }
 
 static s7_int oprec_i_if_a_a_opa_laq(s7_scheme *sc)
@@ -91176,7 +91209,7 @@ static s7_pointer op_recur_if_a_a_opa_laq(s7_scheme *sc, s7_pointer code)
   bool la_op = a_is_cadr(rec_call_clause(code));
   opt_pid_t choice = opinit_if_a_a_opa_laq(sc, code);
   tick_tc(sc, OP_RECUR_IF_A_A_opA_LAq);
-  if (choice == OPT_INT)
+  if (choice == opt_int)
     return(make_integer(sc, (a_op) ? oprec_i_if_a_a_opa_laq(sc) : oprec_i_if_a_opa_laq_a(sc)));
   if (a_op)
     return((la_op) ? oprec_if_a_a_opa_laq(sc) : oprec_if_a_a_opla_aq(sc));
@@ -91559,7 +91592,7 @@ static opt_pid_t opinit_cond_a_a_a_l2a_lopa_l2aq(s7_scheme *sc, s7_pointer code)
 				      sc->rec_val2 = make_mutable_integer(sc, integer(slot_value(sc->rec_slot2)));
 				      slot_set_value(sc->rec_slot2, sc->rec_val2);
 				      if (sc->pc != 8)
-					return(OPT_INT);
+					return(opt_int);
 				      sc->rec_fb1 = sc->rec_test_o->v[0].fb;
 				      sc->rec_fb2 = sc->rec_a1_o->v[0].fb;
 				      sc->rec_fi1 = sc->rec_result_o->v[0].fi;
@@ -91568,7 +91601,7 @@ static opt_pid_t opinit_cond_a_a_a_l2a_lopa_l2aq(s7_scheme *sc, s7_pointer code)
 				      sc->rec_fi4 = sc->rec_a4_o->v[0].fi;
 				      sc->rec_fi5 = sc->rec_a5_o->v[0].fi;
 				      sc->rec_fi6 = sc->rec_a6_o->v[0].fi;
-				      return(OPT_INT_0);
+				      return(opt_int_0);
 				    }}}}}}}}}
 #endif
   rec_set_test(sc, cadr(code));
@@ -91583,7 +91616,7 @@ static opt_pid_t opinit_cond_a_a_a_l2a_lopa_l2aq(s7_scheme *sc, s7_pointer code)
   rec_set_f5(sc, p);
   rec_set_f6(sc, cdr(p));
   sc->rec_loc = 0;
-  return(OPT_PTR);
+  return(opt_ptr);
 }
 
 static s7_int oprec_i_cond_a_a_a_l2a_lopa_l2aq(s7_scheme *sc)
@@ -91649,8 +91682,8 @@ static s7_pointer op_recur_cond_a_a_a_l2a_lopa_l2aq(s7_scheme *sc, s7_pointer co
 {
   opt_pid_t choice = opinit_cond_a_a_a_l2a_lopa_l2aq(sc, code);
   tick_tc(sc, OP_RECUR_COND_A_A_A_L2A_LopA_L2Aq);
-  if (choice != OPT_PTR)
-    return(make_integer(sc, (choice == OPT_INT) ? oprec_i_cond_a_a_a_l2a_lopa_l2aq(sc) : oprec_i_cond_a_a_a_l2a_lopa_l2aq_0(sc)));
+  if (choice != opt_ptr)
+    return(make_integer(sc, (choice == opt_int) ? oprec_i_cond_a_a_a_l2a_lopa_l2aq(sc) : oprec_i_cond_a_a_a_l2a_lopa_l2aq_0(sc)));
   return(oprec_cond_a_a_a_l2a_lopa_l2aq(sc));
 }
 
@@ -93520,9 +93553,6 @@ static bool op_load_return_if_eof(s7_scheme *sc)
       sc->code = sc->value;
       return(true);             /* we read an expression, now evaluate it, and return to read the next */
     }
-
-  if (SHOW_EVAL_OPS) fprintf(stderr, "%s closing %s\n", __func__, display(current_input_port(sc)));
-
   sc->current_file = NULL;
   return(false);
 }
@@ -101283,5 +101313,5 @@ int main(int argc, char **argv)
  * funcs (not symbols) in do and add rest like vector: see f18 t845, cdr case too
  * mutints: hash-table-set! key&value are set directly so can't be mutable, also list/cons/vector/hash-table/inlet etc
  *   check all int++ steppers for mutable bit
- * with-let (unlet) (curlet) -> (outlet (unlet))??  see libdef.scm/smsg1
+ * for op_load_return we need ffitest? s7_load_with_environment?
  */
