@@ -21,20 +21,18 @@
     (do ((i 0 (+ i 1)))
 	((= i 1024))
       (set! (v i) (- 1024 i))) ;(- (random 100.0) 50.0))) -- this makes this timing test unrepeatable
-
     (display (max+loc v)) (newline)
-
     (do ((i 0 (+ i 1)))
 	((= i tests))
       (max+loc v))))
 
 (test-max 10000)
 
+
 ;;; --------------------------------
 
 (define size 300000)
 (define size/10 (/ size 10))
-
 
 (define (f1)
   (let ((v (make-vector size 1))
@@ -45,7 +43,6 @@
 
 (unless (= (f1) size)
   (format *stderr* "f1: ~S~%" (f1)))
-
 
 (define (f2)
   (let ((v (make-int-vector size 1))
