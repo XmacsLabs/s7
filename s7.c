@@ -5569,7 +5569,7 @@ static s7_pointer check_ref_step(s7_pointer p, const char *func, int32_t line) /
     if (is_saved_stepper(p))
       {
 	char *str = describe_type_bits(cur_sc, p);
-	fprintf(stderr, "%s%s[%d]: %s is a saaved stepper, %s, from %s[%d]%s\n", bold_text, func, line, display(p), str, p->gc_func, p->gc_line, unbold_text);
+	fprintf(stderr, "%s%s[%d]: %s is a saved stepper, %s, from %s[%d]%s\n", bold_text, func, line, display(p), str, p->gc_func, p->gc_line, unbold_text);
 	free(str);
 	if (cur_sc->stop_at_error) abort();
       }
@@ -12734,6 +12734,7 @@ static s7_pointer g_call_cc(s7_scheme *sc, s7_pointer args)
 /* we can't naively optimize call/cc to call-with-exit if the continuation is only
  *   used as a function in the call/cc body because it might (for example) be wrapped
  *   in a lambda form that is being exported.  See b-func in s7test for an example.
+ *   But we can notice that embedded use?
  */
 
 static void op_call_cc(s7_scheme *sc)
@@ -84046,6 +84047,31 @@ static bool all_ints_here(s7_scheme *sc, s7_pointer settee, s7_pointer expr, s7_
 }
 
 #if MUTINT
+#if 1
+static bool tree_inspect_stepper(s7_scheme *sc, s7_pointer stepper, s7_pointer tree)
+{
+  if (DO_PRINT) fprintf(stderr, " %s: %s\n", __func__, display(tree));
+  for (s7_pointer p = tree; is_pair(p); p = cdr(p))
+    if (is_pair(car(p)))
+      tree_inspect_stepper(sc, stepper, car(p));
+    else
+      if (((is_symbol(car(p))) || (is_c_function(car(p)))) && (is_saver(car(p))))
+	{
+	  for (s7_pointer arg = cdr(p); is_pair(arg); arg = cdr(arg))
+	    if (car(arg) == stepper)
+	      return(true);
+	}
+      else
+	if ((is_symbol(car(p))) && (is_setter(car(p))) && (is_pair(cdr(p)))) /* need c_function too here */
+	  {
+	    for (s7_pointer arg = cdr(p); is_pair(cdr(arg)); arg = cdr(arg))
+	      if ((is_null(cdr(arg))) && 
+		  ((car(arg) == stepper) || ((is_saver(car(arg))) && (cadr(arg) == stepper))))
+		return(true);
+	  }
+  return(false);
+}
+#else
 static void tree_inspect_steppers(s7_scheme *sc, s7_pointer tree)
 {
   if (MUTINT_PRINT) fprintf(stderr, "  %s\n", display(tree));
@@ -84069,6 +84095,7 @@ static void tree_inspect_steppers(s7_scheme *sc, s7_pointer tree)
   /* TODO: also check (abs|floor|etc stepper) */ /* maybe need a bit for returns_arg */
 }
 #endif
+#endif
 
 #if DO_PRINT
 #define do_return_false(body) do {if (DO_PRINT) fprintf(stderr, "  %s[%d] from %s[%d]: %s false\n", __func__, __LINE__, funcly, linely, display(body)); return(false);} while (0)
@@ -84089,13 +84116,13 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
       if (is_pair(expr))
 	{
 	  s7_pointer x = car(expr);
-#if 0
-	  /* TODO: need check for saver + stepper -> tree_inspect_steppers and abs/floor and renamed (lst list) -- or user func? */
+#if 1
 	  if (is_pair(x))
 	    {
 	      if (!do_is_safe(sc, x, stepper, var_list, step_vars, has_set))
 		do_return_false(x);
-	      continue;
+	      if (DO_PRINT) fprintf(stderr, "%s is ok\n", display(x));
+	      continue; /* TODO: this ignores the rest of expr */
 	    }
 #endif
 	  if ((!is_symbol(x)) && (!is_safe_c_function(x)) && (x != sc->quote_function))
@@ -84237,38 +84264,11 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 			do_return_false(expr);
 		      }
 #if MUTINT
-		    if (is_symbol(stepper)) /* can be ()? */
-		      {
-		    begin_small_symbol_set(sc);
-#if 0
-		    for (s7_pointer p = step_vars; is_pair(p); p = cdr(p))
-		      add_symbol_to_small_symbol_set(sc, car(p));
-#else
-		    clear_is_saved_stepper(stepper);
-		    add_symbol_to_small_symbol_set(sc, stepper);
-#endif
-		    tree_inspect_steppers(sc, body);
+		    if ((is_symbol(stepper)) && /* can be ()? */
+			(!is_saved_stepper(stepper)) &&
+			(tree_inspect_stepper(sc, stepper, body)))
+		      set_is_saved_stepper(stepper);
 		    if (MUTINT_PRINT) fprintf(stderr, "%s[%d]: %s %s %d\n", __func__, __LINE__, display(stepper), display(body), is_saved_stepper(stepper));
-		    end_small_symbol_set(sc);
-
-		    /* see safe_stepper_expr above */
-		    /* maybe safe_stepper has to do with the increment expr? */
-
-		    if (is_saved_stepper(stepper)) do_return_false(expr);
-		    }
-#if 0
-		    if ((s7_tree_memq(sc, sc->cons_symbol, expr)) && /* caddr(expr) list/vector/hash-table/inlet/sublet */
-			(s7_tree_memq(sc, stepper, expr)))           /* cdaddr(expr) here */
-		      {
-			/* if (has_set) (*has_set) = true; */
-			/* set steppers unsafe */
-			if (MUTINT_PRINT) 
-			  fprintf(stderr, "%s[%d]: stepper %s and cons in %s\n", __func__, __LINE__, display(stepper), display(expr));
-			/* this is not needed once everything is in place */
-			do_return_false(expr);
-			/* also need vector|list-set! + last arg etc -- use is_setter to see these */
-		      }
-#endif
 #endif
 		  }
 		  break;
@@ -84323,6 +84323,24 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 	      }
 	    else
 	      {
+		if (DO_PRINT) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(expr));
+		if ((is_pair(expr)) && (is_pair(cdr(expr))) && 
+		    (is_saver(car(expr))) && 
+		    (direct_memq(stepper, cdr(expr))))
+		    /* (cadr(expr) == stepper)) */
+		  do_return_false(expr);
+		if ((is_pair(expr)) && (is_pair(cdr(expr))) && 
+		    (is_symbol(car(expr))) && 
+		    (!is_defined_initial(car(expr))) && 
+		    (direct_memq(stepper, cdr(expr))))
+		  {
+		    s7_pointer slot = s7_slot(sc, car(expr));
+		    if (!is_sequence(slot_value(slot)))
+		      {
+			/* fprintf(stderr, "  slot: %s\n", display(slot)); */
+			do_return_false(expr);
+		      }}
+
 		/* if a macro, we'll eventually expand it (if *_optimize), but that requires a symbol lookup here and macroexpand */
 		if ((!is_optimized(expr)) ||
 		    (optimize_op(expr) == OP_UNKNOWN_NP) ||
@@ -99909,6 +99927,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->ash_symbol =                   defun("ash",		ash,			2, 0, false);
   sc->exp_symbol =                   defun("exp",		exp,			1, 0, false); set_all_float(sc->exp_symbol);
   sc->abs_symbol =                   defun("abs",		abs,			1, 0, false); set_all_integer_and_float(sc->abs_symbol);
+  set_is_saver(sc->abs_symbol);
   sc->magnitude_symbol =             defun("magnitude",	        magnitude,		1, 0, false); set_all_integer_and_float(sc->magnitude_symbol);
   sc->angle_symbol =                 defun("angle",		angle,			1, 0, false);
   sc->sin_symbol =                   defun("sin",		sin,			1, 0, false); set_all_float(sc->sin_symbol);
@@ -101245,47 +101264,47 @@ int main(int argc, char **argv)
  *             19.0   21.0   22.0   23.0   24.0   25.0   25.2
  * ------------------------------------------------------------
  * tpeak        148    114    108    105    102    109    109
- * tref        1081    687    463    459    464    412    412  761 opt_dotimes from opt_do_very_simple
+ * tref        1081    687    463    459    464    412    412
  * tlimit      3936   5371   5371   5371   5371    783    775
  * index              1016    973    967    972    988    990
  * tmock              1145   1082   1042   1045   1031   1031
- * tvect       3408   2464   1772   1669   1497   1457   1457  4873 same   1664
- * thook       7651   ----   2590   2030   2046   1731   1733  1747
+ * tvect       3408   2464   1772   1669   1497   1457   1457  1482
+ * thook       7651   ----   2590   2030   2046   1731   1733  1725
  * tauto                     2562   2048   1729   1760   1754
- * texit       1884   1950   1778   1741   1770   1759   1759  1836
+ * texit       1884   1950   1778   1741   1770   1759   1759  1854
  * s7test             1831   1818   1829   1830   1849   1854
  * lt          2222   2172   2150   2185   1950   1892   1895
- * dup                3788   2492   2239   2097   2012   2001
+ * dup                3788   2492   2239   2097   2012   2001  2040
  * tread              2421   2419   2408   2405   2241   2248
  * tcopy              5546   2539   2375   2386   2352   2348
  * tload                     3046   2404   2566   2506   2465
  * trclo       8248   2782   2615   2634   2622   2499   2476
- * tmat               3042   2524   2578   2590   2522   2516  4592  4677
+ * tmat               3042   2524   2578   2590   2522   2516  4202
  * fbench      2933   2583   2460   2430   2478   2536   2536
  * tsort       3683   3104   2856   2804   2858   2858   2858
- * titer       4550   3349   3070   2985   2966   2917   2917  3537
+ * titer       4550   3349   3070   2985   2966   2917   2917
  * tio                3752   3683   3620   3583   3127   3135
- * tbit        3836   3305   3245   3261   3264   3181   3181  3196
- * tobj               3970   3828   3577   3508   3434   3434  4278
- * teq                4045   3536   3486   3544   3556   3569  5918
- * tmac               4373   ----   4193   4188   4024   4025  5514
- * tcomplex           3869   3804   3844   3888   4215   4196  4257
+ * tbit        3836   3305   3245   3261   3264   3181   3181  3286
+ * tobj               3970   3828   3577   3508   3434   3434  3482
+ * teq                4045   3536   3486   3544   3556   3569
+ * tmac               4373   ----   4193   4188   4024   4025  5847
+ * tcomplex           3869   3804   3844   3888   4215   4196
  * tcase              4793   4439   4430   4439   4376   4378
  * tmap               8774   4489   4541   4586   4380   4377  4393
- * tlet        11.0   6974   5609   5980   5965   4470   4466  5434
- * tfft               7729   4755   4476   4536   4538   4538  15.2
- * tshoot             5447   5183   5055   5034   4833   4774  5016
- * tstar              6705   5834   5278   5177   5059   5055
- * concordance 10.0   6342   5488   5162   5180   5259   5272  5303
- * tnum               6013   5433   5396   5409   5402   5399  5674
- * tlist       9219   7546   6558   6240   6300   5770   5784  7136
+ * tlet        11.0   6974   5609   5980   5965   4470   4466  5179
+ * tfft               7729   4755   4476   4536   4538   4538  4625
+ * tshoot             5447   5183   5055   5034   4833   4774
+ * tstar              6705   5834   5278   5177   5059   5055  5508
+ * concordance 10.0   6342   5488   5162   5180   5259   5272  5317
+ * tnum               6013   5433   5396   5409   5402   5399
+ * tlist       9219   7546   6558   6240   6300   5770   5784  5802
  * tari        14.3   12.5   6619   6662   6499   6292   5989  6130
  * trec        19.6   6980   6599   6656   6658   6015   6015
- * tgsl               7802   6373   6282   6208   6208   6213  6291
- * tset                             6260   6364   6278   6274  6293
+ * tgsl               7802   6373   6282   6208   6208   6213
+ * tset                             6260   6364   6278   6274  6506
  * tleft       12.2   9753   7537   7331   7331   6393   6393
- * tmisc                            7614   7115   7130   7098  8168
- * tclo               8025   7645   8809   7770   7627   7640
+ * tmisc                            7614   7115   7130   7098  8155
+ * tclo               8025   7645   8809   7770   7627   7640  10.8
  * tgc                10.4   7763   7579   7617   7619   7649
  * tlamb                            8003   7941   7920   7927  9223
  * thash              11.7   9734   9479   9526   9283   9273
@@ -101293,12 +101312,12 @@ int main(int argc, char **argv)
  * cb          12.9   11.0   9658   9564   9609   9657   9658
  * tmap-hash                                      10.3   10.3
  * tgen               11.4   12.0   12.1   12.2   12.4   12.4
- * tall        15.9   15.6   15.6   15.6   15.1   15.1   15.1  15.3
- * timp               24.4   20.0   19.6   19.7   15.5   15.5  18.9
- * tmv                21.9   21.1   20.7   20.6   16.6   16.6  16.9
- * calls              37.5   37.0   37.5   37.1   37.1   37.0  37.4
- * sg                        55.9   55.8   55.4   55.3   55.2  55.5
- * tbig              175.8  156.5  148.1  146.2  145.5  145.2 174.8
+ * tall        15.9   15.6   15.6   15.6   15.1   15.1   15.1
+ * timp               24.4   20.0   19.6   19.7   15.5   15.5  17.9
+ * tmv                21.9   21.1   20.7   20.6   16.6   16.6  18.4
+ * calls              37.5   37.0   37.5   37.1   37.1   37.0  37.2
+ * sg                        55.9   55.8   55.4   55.3   55.2
+ * tbig              175.8  156.5  148.1  146.2  145.5  145.2 166.6
  * ------------------------------------------------------------
  *
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
@@ -101319,8 +101338,10 @@ int main(int argc, char **argv)
  * read-integer|float? [read-byte could be used, but this is in regard to (open-input-file "/dev/urandom")), maybe byte-size|number-of-bytes arg to read-byte?
  *   read-byte now is hardly different from read-char.  read here returns a "symbol"! (it assumes the file has chars, binary-port in r7rs).
  *   (define (read-int port) (logior (read-byte port) (ash (read-byte port) 8) (ash (read-byte port) 16) (ash (read-byte port) 24) ...)) -- ugly!
- * funcs (not symbols) in do and add rest like vector: see f18 t845, cdr case too
  * mutints: hash-table-set! key&value are set directly so can't be mutable, also list/cons/vector/hash-table/inlet etc
- *   check all int++ steppers for mutable bit, move make_mutable to the point of use and clear afterwards everywhere
+ *   check all int++ steppers for saver bit, move make_mutable to the point of use and clear afterwards everywhere
+ *   fill out rest of abs-like "savers": floor/round/truncate/ceiling
  * for op_load_return we need ffitest? s7_load_with_environment?
+ * call/cc ->call/exit but see b-func in s7test 40699 [cc in rtn val]
+ * for setter on symbol/c-function move t_setter to t_unknopt
  */
