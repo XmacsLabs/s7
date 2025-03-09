@@ -689,8 +689,8 @@
 	       ;; I assume the caller is also compiled with these flags?
 	       (system (format #f "~A -c ~A -o ~A ~A ~A" 
 			       *cload-c-compiler* c-file-name o-file-name *cload-cflags* cflags))
-	       (system (format #f "~A ~A -o ~A -dynamic -bundle -undefined suppress -flat_namespace ~A ~A"  
-			       ;; -undefined suppress is deprecated, but still needed! (libgsl), and the suggested fix, -ld64, is also deprecated
+	       (system (format #f "~A ~A s7.o -o ~A -dynamic -bundle -flat_namespace ~A ~A"  
+			       ;; -undefined suppress is deprecated, so trying adding s7.o
 			       *cload-c-compiler* o-file-name so-file-name *cload-ldflags* ldflags)))
 	      
 	      ((provided? 'freebsd)

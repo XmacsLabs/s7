@@ -1639,7 +1639,7 @@ void block_init(s7_scheme *sc)
   (let ((flags (string-append (if (provided? 'debugging) "-g3" "-g -O2") " " asan-flags)))
     (cond ((provided? 'osx)
 	   (system (string-append "gcc -c s7test-block.c " flags))
-	   (system "gcc s7test-block.o -o s7test-block.so -dynamic -bundle -undefined suppress -flat_namespace"))
+	   (system "gcc s7test-block.o s7.o -o s7test-block.so -dynamic -bundle -flat_namespace"))
 
 	  ((or (provided? 'freebsd)
 	       (provided? 'netbsd))

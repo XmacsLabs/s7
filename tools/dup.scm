@@ -128,12 +128,12 @@
 
 (set! (*s7* 'heap-size) 4096000)
 
-(dup 16 "s7.c" 110000)
-;(dup 12 "s7.c" 110000)
-;(dup 8 "s7.c" 110000)
+(dup 16 "s7.c" 120000)
+;(dup 12 "s7.c" 120000)
+;(dup 8 "s7.c" 120000)
 ;(dup 12 "ffitest.c" 10000)
 ;(dup 8 "ffitest.c" 10000)
-;(dup 1 "s7test.scm" 110000)
+;(dup 1 "s7test.scm" 120000)
 
 (when (> (*s7* 'profile) 0)
   (show-profile 200))

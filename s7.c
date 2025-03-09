@@ -3102,7 +3102,8 @@ static s7_pointer clear_is_mutable(s7_pointer p) {clear_mid_type_bit(p, T_MID_MU
 
 #define car(p)                         (T_Pair(p))->object.cons.car
 #define unchecked_car(p)               (T_Pos(p))->object.cons.car
-#define set_car(p, Val)                car(p) = T_Nmut(p, T_Pos(Val))    /* can be a slot or #<unused> or #<catch> etc */
+/* #define set_car(p, Val)                car(p) = Val */                  /* can be a slot or #<unused> or #<catch> etc */
+#define set_car(p, Val)                car(p) = T_Nmut(p, T_Pos(Val))
 #define cdr(p)                         (T_Pair(p))->object.cons.cdr
 #define unchecked_set_cdr(p, Val)      cdr(p) = T_Exs(Val)            /* #<unused> in g_gc */
 #define unchecked_cdr(p)               (T_Exs(p))->object.cons.cdr
@@ -69474,7 +69475,7 @@ static bool all_floats(s7_scheme *sc, s7_pointer expr)
 static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 {
   opt_info *opc;
-  s7_pointer p, end, let = NULL, old_e = sc->curlet, stop, ind, ind_step;
+  s7_pointer p, end, let = NULL, old_e = sc->curlet, stop, ind, ind_step, vars = cadr(car_x);
   int32_t i, k, var_len, body_len = len - 3, body_index, step_len, rtn_len, step_pc, init_pc, end_test_pc;
   bool has_set = false;
   opt_info *init_o[SIZE_O], *step_o[SIZE_O], *body_o[SIZE_O], *return_o[SIZE_O];
@@ -69482,9 +69483,9 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
   if (len < 3)
     return_false(sc, car_x);
 
-  if (!s7_is_proper_list(sc, cadr(car_x))) /* vars */
+  if (!s7_is_proper_list(sc, vars))
     return_false(sc, car_x);
-  var_len = proper_list_length(cadr(car_x));
+  var_len = proper_list_length(vars);
   step_len = var_len;
   if (body_len > SIZE_O)
     return_false(sc, car_x);
@@ -69498,11 +69499,12 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
    *   opt_cell_do[69386]: return(false) because do_passes_safety_check is unhappy: (do ((lsum 0) (k 0 (+ k 1))) ((= k 8) (set! sum (+ sum lsum))) (set! lsum (+ lsum k)))
    *   opt_cell_do[69386]: return(false) because do_passes_safety_check is unhappy: (do ((lsum 0) (k 0 (+ k 1))) ((= k 8) (set! sum (+ sum lsum))) (set! lsum (+ lsum k)))
    */
-  if ((is_pair(cadr(car_x))) && (is_pair(caadr(car_x))))
+  /* TODO: why check the topmost do-local all by its lonesome? */
+  if ((is_pair(vars)) && (is_pair(car(vars))) && (is_pair(cdar(vars))) && (is_pair(cddar(vars)))) /* car_x is the do form */
     {
       s7_pointer old_code = sc->code;
       sc->code = car_x; /* the do form here could be totally messed up: e.g. (do () '2) in s7test */
-      if (!do_passes_safety_check(sc, cdddr(car_x), car(caadr(car_x)), cadr(car_x), &has_set))
+      if (!do_passes_safety_check(sc, cdddr(car_x), caar(vars), vars, &has_set))
 	{
 	  sc->code = old_code;
 	  if (MUTINT_PRINT) fprintf(stderr, "%s[%d]: return(false) because do_passes_safety_check is unhappy: %s\n", __func__, __LINE__, display(car_x));
@@ -69520,7 +69522,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
    *    else symbol_id can be > let_id (see "(test (do ((i (do ((i (do ((i 0 (+ i 1)))...")
    */
   begin_small_symbol_set(sc);
-  for (p = cadr(car_x); is_pair(p); p = cdr(p))
+  for (p = vars; is_pair(p); p = cdr(p))
     {
       s7_pointer var = car(p);
       if ((is_pair(var)) &&
@@ -69545,7 +69547,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
   {
     s7_pointer slot;
     init_pc = sc->pc;
-    for (k = 0, p = cadr(car_x), slot = let_slots(let); (is_pair(p)) && (k < SIZE_O); k++, p = cdr(p), slot = next_slot(slot))
+    for (k = 0, p = vars, slot = let_slots(let); (is_pair(p)) && (k < SIZE_O); k++, p = cdr(p), slot = next_slot(slot))
       {
 	s7_pointer var = car(p);
 	init_o[k] = sc->opts[sc->pc];
@@ -69596,7 +69598,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 			/* need for stepper too -- how does it know (+ x 0.1) is float? try (i 0 (floor (+ i 1))) etc */
 		      }}}}
     set_curlet(sc, let);
-    for (p = cadr(car_x); is_pair(p); p = cdr(p))
+    for (p = vars; is_pair(p); p = cdr(p))
       {
 	s7_pointer var = car(p);
 	if (is_pair(cddr(var)))
@@ -69634,7 +69636,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	  s7_pointer slot;
 
 	  if (car(stop) == sc->gt_symbol) lim++;
-	  for (p = cadr(car_x), slot = let_slots(let); is_pair(p); p = cdr(p), slot = next_slot(slot))
+	  for (p = vars, slot = let_slots(let); is_pair(p); p = cdr(p), slot = next_slot(slot))
 	    {
 	      /* this could be put off until it is needed (ref/set), but this code is not called much
 	       *    another choice: go from init downto 0: init is lim
@@ -69692,7 +69694,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
    */
   /* steps */
   step_pc = sc->pc;
-  for (k = 0, p = cadr(car_x); is_pair(p); k++, p = cdr(p))
+  for (k = 0, p = vars; is_pair(p); k++, p = cdr(p))
     {
       s7_pointer var = car(p);
       step_o[k] = sc->opts[sc->pc];
@@ -69755,7 +69757,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	  ((is_c_function(car(expr))) ||
 	   (is_safe_setter(car(expr))) ||
 	   ((car(expr) == sc->set_symbol) &&
-	    (cadr(expr) != caaadr(car_x))) || /* caadr: (stepper init ...) */
+	    (cadr(expr) != caar(vars))) || /* caadr: (stepper init ...) */
 	   ((car(expr) == sc->vector_set_symbol) &&
 	    (is_null(cddddr(expr))) &&
 	    (is_code_constant(sc, cadddr(expr))))))
@@ -69809,7 +69811,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
     }
 
   opc->v[0].fp = (body_len == 1) ? opt_do_1 : opt_do_n;
-  p = caadr(car_x);
+  p = car(vars);
   ind = car(p);
   ind_step = caddr(p);
   end = caaddr(car_x);
@@ -69840,7 +69842,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	  (cadr(ind_step) == ind) &&
 	  (caddr(ind_step) == int_one) &&
 	  (is_null(cdddr(ind_step))) &&
-	  (do_passes_safety_check(sc, cdddr(car_x), ind, cadr(car_x), &has_set)))
+	  (do_passes_safety_check(sc, cdddr(car_x), ind, vars, &has_set)))
 	{
 	  s7_pointer slot = let_slots(let);
 	  let_set_dox_slot1(let, slot);
@@ -69877,7 +69879,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 	    (cadr(ind_step) == ind) &&
 	    (is_null(cddr(ind_step))) &&
 	    (body_len == 1) &&
-	    (do_passes_safety_check(sc, cdddr(car_x), ind, cadr(car_x), &has_set)))
+	    (do_passes_safety_check(sc, cdddr(car_x), ind, vars, &has_set)))
 	  opc->v[0].fp = opt_do_list_simple;
     }
   return_true(sc, car_x);
@@ -79205,7 +79207,7 @@ static bool op_let_1(s7_scheme *sc)
   s7_int id;
   while (true)
     {
-      sc->args = cons(sc, sc->value, sc->args);
+      sc->args = cons(sc, sc->value, sc->args); /* sc->value can be a mutable number here */
       if (is_pair(sc->code))
 	{
 	  s7_pointer x = cdar(sc->code);
@@ -84047,10 +84049,9 @@ static bool all_ints_here(s7_scheme *sc, s7_pointer settee, s7_pointer expr, s7_
 }
 
 #if MUTINT
-#if 1
 static bool tree_inspect_stepper(s7_scheme *sc, s7_pointer stepper, s7_pointer tree)
 {
-  if (DO_PRINT) fprintf(stderr, " %s: %s\n", __func__, display(tree));
+  /* if (DO_PRINT) fprintf(stderr, " %s: %s\n", __func__, display(tree)); */
   for (s7_pointer p = tree; is_pair(p); p = cdr(p))
     if (is_pair(car(p)))
       tree_inspect_stepper(sc, stepper, car(p));
@@ -84071,34 +84072,10 @@ static bool tree_inspect_stepper(s7_scheme *sc, s7_pointer stepper, s7_pointer t
 	  }
   return(false);
 }
-#else
-static void tree_inspect_steppers(s7_scheme *sc, s7_pointer tree)
-{
-  if (MUTINT_PRINT) fprintf(stderr, "  %s\n", display(tree));
-  for (s7_pointer p = tree; is_pair(p); p = cdr(p))
-    if (is_pair(car(p)))
-      tree_inspect_steppers(sc, car(p));
-    else
-      if (((is_symbol(car(p))) || (is_c_function(car(p)))) && (is_saver(car(p))))
-	{
-	  for (s7_pointer arg = cdr(p); is_pair(arg); arg = cdr(arg))
-	    if ((is_symbol(car(arg))) && (symbol_is_in_small_symbol_set(sc, car(arg))))
-	      set_is_saved_stepper(car(arg));
-	}
-      else
-	if ((is_symbol(car(p))) && (is_setter(car(p))) && (is_pair(cdr(p)))) /* need c_function too here */
-	  {
-	    for (s7_pointer arg = cdr(p); is_pair(cdr(arg)); arg = cdr(arg))
-	      if ((is_null(cdr(arg))) && (is_symbol(car(arg))) && (symbol_is_in_small_symbol_set(sc, car(arg))))
-		set_is_saved_stepper(car(arg));
-	  }
-  /* TODO: also check (abs|floor|etc stepper) */ /* maybe need a bit for returns_arg */
-}
-#endif
 #endif
 
 #if DO_PRINT
-#define do_return_false(body) do {if (DO_PRINT) fprintf(stderr, "  %s[%d] from %s[%d]: %s false\n", __func__, __LINE__, funcly, linely, display(body)); return(false);} while (0)
+#define do_return_false(body) do {if (DO_PRINT) fprintf(stderr, "  %s[%d] from %s[%d]: %s\n", __func__, __LINE__, funcly, linely, display(body)); return(false);} while (0)
 static bool do_is_safe_1(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_pointer var_list, s7_pointer step_vars, bool *has_set, const char *funcly, int linely)
 #else
 #define do_return_false(body) return(false)
@@ -84109,7 +84086,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
    *   we can free var_list if return(false) not after (!do_is_safe...), but it seems to make no difference, or be slightly slower
    */
   s7_pointer code = sc->code;
-  if (DO_PRINT) fprintf(stderr, "  do_is_safe: %s\n", display(body));
+  /* if (DO_PRINT) fprintf(stderr, "  do_is_safe: %s, stepper: %s\n", display(body), display(stepper)); */
   for (s7_pointer p = body; is_pair(p); p = cdr(p))
     {
       s7_pointer expr = car(p);
@@ -84121,7 +84098,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 	    {
 	      if (!do_is_safe(sc, x, stepper, var_list, step_vars, has_set))
 		do_return_false(x);
-	      if (DO_PRINT) fprintf(stderr, "%s is ok\n", display(x));
+	      /* if (DO_PRINT) fprintf(stderr, "  %s is ok\n", display(x)); */
 	      continue; /* TODO: this ignores the rest of expr */
 	    }
 #endif
@@ -84260,7 +84237,8 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		    if (!safe_stepper_expr(sc, expr, stepper))     /* is step var's value used as the stored value by set!? */
 		      { /* but this is safe if (set! loc i) where i is int because it checks and copies */
 			if ((MUTINT_PRINT) || (DO_PRINT))
-			  fprintf(stderr, "%s%s[%d]: !safe_stepper_expr %s with %s%s\n", bold_text, __func__, __LINE__, display(expr), display(stepper), unbold_text);
+			  fprintf(stderr, "  %s%s[%d]: !safe_stepper_expr %s with %s%s\n", 
+				  bold_text, __func__, __LINE__, display(expr), display(stepper), unbold_text);
 			do_return_false(expr);
 		      }
 #if MUTINT
@@ -84268,7 +84246,8 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 			(!is_saved_stepper(stepper)) &&
 			(tree_inspect_stepper(sc, stepper, body)))
 		      set_is_saved_stepper(stepper);
-		    if (MUTINT_PRINT) fprintf(stderr, "%s[%d]: %s %s %d\n", __func__, __LINE__, display(stepper), display(body), is_saved_stepper(stepper));
+		    if (MUTINT_PRINT) fprintf(stderr, "%s[%d]: %s %s %d\n", __func__, __LINE__,
+					      display(stepper), display(body), (is_symbol(stepper)) ? is_saved_stepper(stepper) : -1);
 #endif
 		  }
 		  break;
@@ -84323,7 +84302,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 	      }
 	    else
 	      {
-		if (DO_PRINT) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(expr));
+		/* if (DO_PRINT) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(expr)); */
 		if ((is_pair(expr)) && (is_pair(cdr(expr))) && 
 		    (is_saver(car(expr))) && 
 		    (direct_memq(stepper, cdr(expr))))
@@ -84335,7 +84314,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		    (direct_memq(stepper, cdr(expr))))
 		  {
 		    s7_pointer slot = s7_slot(sc, car(expr));
-		    if (!is_sequence(slot_value(slot)))
+		    if ((is_slot(slot)) && (!is_sequence(slot_value(slot)))) /* TODO: undefined case -> s7test */
 		      {
 			/* fprintf(stderr, "  slot: %s\n", display(slot)); */
 			do_return_false(expr);
@@ -84743,8 +84722,7 @@ static s7_pointer check_do(s7_scheme *sc)
 		      if (!do_is_safe(sc, body, car(v), sc->nil, vars, &has_set))
 			{
 			  if (MUTINT) set_unsafe_do(body);
-			  if ((MUTINT_PRINT) || (DO_PRINT))
-			    fprintf(stderr, "%s[%d]: do_is_unsafe %s\n", __func__, __LINE__, display(body));
+			  if (DO_PRINT) fprintf(stderr, "  %s[%d]: do_is_unsafe %s\n", __func__, __LINE__, display(body));
 			  if (MUTINT) return(body);
 			}
 		      else
@@ -84753,7 +84731,7 @@ static s7_pointer check_do(s7_scheme *sc)
 			  pair_set_syntax_op(form, OP_SAFE_DO);             /* safe_do: body is safe, step by 1 */
 			  /* no semipermanent let here because apparently do_is_safe accepts recursive calls? */
 			  
-			  /* this code sets the hop bit in any outer safe function call.  I tried a procedure (heaf_hopper in tmp) that
+			  /* this code sets the hop bit in any outer safe function call.  I tried a procedure (leaf_hopper in tmp) that
 			   *   walked the body setting all the hop bits; this worked in all tests, but cost as much as it saved.
 			   *   this was in the inner block below originally.
 			   */
@@ -86320,7 +86298,6 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool loo
       return_false(sc, code);
     }
 #else
-  /* not hit in tvect */
   if ((is_unsafe_do(code)) && (MUTINT_PRINT))
     fprintf(stderr, "%s[%d]: ignores is_unsafe_do(code): %s\n", __func__, __LINE__, display_truncated(code));
 #endif
@@ -99943,10 +99920,10 @@ static void init_rootlet(s7_scheme *sc)
   sc->acosh_symbol =                 defun("acosh",		acosh,			1, 0, false);
   sc->atanh_symbol =                 defun("atanh",		atanh,			1, 0, false);
   sc->sqrt_symbol =                  defun("sqrt",		sqrt,			1, 0, false);
-  sc->floor_symbol =                 defun("floor",		floor,			1, 0, false);
-  sc->ceiling_symbol =               defun("ceiling",		ceiling,		1, 0, false);
-  sc->truncate_symbol =              defun("truncate",		truncate,		1, 0, false);
-  sc->round_symbol =                 defun("round",		round,			1, 0, false);
+  sc->floor_symbol =                 defun("floor",		floor,			1, 0, false); set_is_saver(sc->floor_symbol);
+  sc->ceiling_symbol =               defun("ceiling",		ceiling,		1, 0, false); set_is_saver(sc->ceiling_symbol);
+  sc->truncate_symbol =              defun("truncate",		truncate,		1, 0, false); set_is_saver(sc->truncate_symbol);
+  sc->round_symbol =                 defun("round",		round,			1, 0, false); set_is_saver(sc->round_symbol);
   sc->logand_symbol =                defun("logand",		logand,			0, 0, true);
   sc->logior_symbol =                defun("logior",		logior,			0, 0, true);
   sc->logxor_symbol =                defun("logxor",		logxor,			0, 0, true);
@@ -100101,7 +100078,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->vector_symbol =                defun("vector",		vector,			0, 0, true); set_is_saver(sc->vector_symbol);
   sc->vector_typer_symbol =          defun("vector-typer",      vector_typer,	        1, 0, false);
 
-  sc->subvector_symbol =             defun("subvector",         subvector,	        1, 3, false);  set_is_saver(sc->subvector_symbol);
+  sc->subvector_symbol =             defun("subvector",         subvector,	        1, 3, false); set_is_saver(sc->subvector_symbol);
   sc->subvector_position_symbol =    defun("subvector-position", subvector_position,    1, 0, false);
   sc->subvector_vector_symbol =      defun("subvector-vector",  subvector_vector,       1, 0, false);
 
@@ -101269,7 +101246,7 @@ int main(int argc, char **argv)
  * index              1016    973    967    972    988    990
  * tmock              1145   1082   1042   1045   1031   1031
  * tvect       3408   2464   1772   1669   1497   1457   1457  1482
- * thook       7651   ----   2590   2030   2046   1731   1733  1725
+ * thook       7651   ----   2590   2030   2046   1731   1725
  * tauto                     2562   2048   1729   1760   1754
  * texit       1884   1950   1778   1741   1770   1759   1759  1854
  * s7test             1831   1818   1829   1830   1849   1854
@@ -101279,7 +101256,7 @@ int main(int argc, char **argv)
  * tcopy              5546   2539   2375   2386   2352   2348
  * tload                     3046   2404   2566   2506   2465
  * trclo       8248   2782   2615   2634   2622   2499   2476
- * tmat               3042   2524   2578   2590   2522   2516  4202
+ * tmat               3042   2524   2578   2590   2522   2516  2949
  * fbench      2933   2583   2460   2430   2478   2536   2536
  * tsort       3683   3104   2856   2804   2858   2858   2858
  * titer       4550   3349   3070   2985   2966   2917   2917
@@ -101287,7 +101264,7 @@ int main(int argc, char **argv)
  * tbit        3836   3305   3245   3261   3264   3181   3181  3286
  * tobj               3970   3828   3577   3508   3434   3434  3482
  * teq                4045   3536   3486   3544   3556   3569
- * tmac               4373   ----   4193   4188   4024   4025  5847
+ * tmac               4373   ----   4193   4188   4024   4025  5487
  * tcomplex           3869   3804   3844   3888   4215   4196
  * tcase              4793   4439   4430   4439   4376   4378
  * tmap               8774   4489   4541   4586   4380   4377  4393
@@ -101317,7 +101294,7 @@ int main(int argc, char **argv)
  * tmv                21.9   21.1   20.7   20.6   16.6   16.6  18.4
  * calls              37.5   37.0   37.5   37.1   37.1   37.0  37.2
  * sg                        55.9   55.8   55.4   55.3   55.2
- * tbig              175.8  156.5  148.1  146.2  145.5  145.2 166.6
+ * tbig              175.8  156.5  148.1  146.2  145.5  145.2 162.9
  * ------------------------------------------------------------
  *
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
@@ -101338,10 +101315,9 @@ int main(int argc, char **argv)
  * read-integer|float? [read-byte could be used, but this is in regard to (open-input-file "/dev/urandom")), maybe byte-size|number-of-bytes arg to read-byte?
  *   read-byte now is hardly different from read-char.  read here returns a "symbol"! (it assumes the file has chars, binary-port in r7rs).
  *   (define (read-int port) (logior (read-byte port) (ash (read-byte port) 8) (ash (read-byte port) 16) (ash (read-byte port) 24) ...)) -- ugly!
- * mutints: hash-table-set! key&value are set directly so can't be mutable, also list/cons/vector/hash-table/inlet etc
- *   check all int++ steppers for saver bit, move make_mutable to the point of use and clear afterwards everywhere
- *   fill out rest of abs-like "savers": floor/round/truncate/ceiling
+ * mutints: check all int++ steppers for saver bit, move make_mutable to the point of use and clear afterwards everywhere
+ *   fill out rest of abs-like "savers": floor/round/truncate/ceiling, float steppers
  * for op_load_return we need ffitest? s7_load_with_environment?
- * call/cc ->call/exit but see b-func in s7test 40699 [cc in rtn val]
- * for setter on symbol/c-function move t_setter to t_unknopt
+ * call/cc ->call/exit but see b-func in s7test 40699 [cc in rtn val], call/cc_chooser?
+ * for setter on symbol/c-function move t_setter to t_unknopt, for abs et al use some other bit than saver
  */
