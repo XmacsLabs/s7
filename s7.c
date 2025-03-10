@@ -2826,13 +2826,18 @@ static s7_pointer clear_is_mutable(s7_pointer p) {clear_mid_type_bit(p, T_MID_MU
 
 #define T_FULL_IS_SAVER                T_FULL_TRUE_IS_DONE
 #define T_IS_SAVER                     T_TRUE_IS_DONE
-#define is_saver(p)                    has_high_type_bit(p, T_IS_SAVER) /* TODO: need is_symbol || c_function */
+#define is_saver(p)                    has_high_type_bit(p, T_IS_SAVER)
 #define set_is_saver(p)                do {set_high_type_bit(T_Sym(p), T_IS_SAVER); set_high_type_bit(T_Fnc(global_value(p)), T_IS_SAVER);} while (0)
 
 #define T_FULL_UNKNOPT                 (1LL << (48 + 11))
 #define T_UNKNOPT                      (1 << 11)
 #define is_unknopt(p)                  has_high_type_bit(T_Pair(p), T_UNKNOPT)
 #define set_is_unknopt(p)              set_high_type_bit(T_Pair(p), T_UNKNOPT)
+
+#define T_FULL_IS_TRANSLUCENT          T_FULL_UNKNOPT
+#define T_IS_TRANSLUCENT               T_UNKNOPT
+#define is_translucent(p)              has_high_type_bit(p, T_IS_TRANSLUCENT)
+#define set_is_translucent(p)          do {set_high_type_bit(T_Sym(p), T_IS_TRANSLUCENT); set_high_type_bit(T_Fnc(global_value(p)), T_IS_TRANSLUCENT);} while (0)
 
 #define T_MAC_OK                       T_UNKNOPT
 #define mac_is_ok(p)                   has_high_type_bit(T_Pair(p), T_MAC_OK)
@@ -5016,7 +5021,10 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj)
 						      ((is_c_function(obj)) ? " saver-c-function" :
 						       " ?34?"))) : "",
 	  /* bit 35+24 */
-	  ((full_typ & T_FULL_UNKNOPT) != 0) ?   ((is_pair(obj)) ? " unknopt" : " ?35?") : "",
+	  ((full_typ & T_FULL_UNKNOPT) != 0) ?   ((is_pair(obj)) ? " unknopt" :
+						  ((is_symbol(obj)) ? " translucent-symbol" :
+						   ((is_c_function(obj)) ? " translucent-c-function" :
+						    " ?35?"))) : "",
 	  /* bit 36+24 */
 	  ((full_typ & T_FULL_SAFETY_CHECKED) != 0) ? ((is_pair(obj)) ? " safety-checked" : " ?36?") : "",
 	  /* bit 37+24 */
@@ -5086,7 +5094,7 @@ static bool has_odd_bits(s7_pointer obj)
   if (((full_typ & T_UNSAFE) != 0) && (!is_symbol(obj)) && (!is_slot(obj)) && (!is_let(obj)) && (!is_pair(obj))) return(true);
   if (((full_typ & T_VERY_SAFE_CLOSURE) != 0) && (!is_pair(obj)) && (!is_any_closure(obj)) && (!is_let(obj))) return(true);
   if (((full_typ & T_FULL_CASE_KEY) != 0) && (!is_symbol(obj)) && (!is_pair(obj))) return(true);
-  if (((full_typ & T_FULL_UNKNOPT) != 0) && (!is_pair(obj))) return(true);
+  if (((full_typ & T_FULL_UNKNOPT) != 0) && (!is_pair(obj)) && (!is_symbol(obj)) && (!is_c_function(obj))) return(true);
   if (((full_typ & T_FULL_SAFETY_CHECKED) != 0) && (!is_pair(obj))) return(true);
   if (((full_typ & T_DONT_EVAL_ARGS) != 0) && (!is_any_macro(obj)) && (!is_syntax(obj))) return(true);
   if (((full_typ & T_CHECKED) != 0) && (!is_slot(obj)) && (!is_pair(obj)) && (!is_symbol(obj))) return(true);
@@ -84054,12 +84062,16 @@ static bool tree_inspect_stepper(s7_scheme *sc, s7_pointer stepper, s7_pointer t
   /* if (DO_PRINT) fprintf(stderr, " %s: %s\n", __func__, display(tree)); */
   for (s7_pointer p = tree; is_pair(p); p = cdr(p))
     if (is_pair(car(p)))
-      tree_inspect_stepper(sc, stepper, car(p));
+      {
+	if (tree_inspect_stepper(sc, stepper, car(p)))
+	  return(true);
+      }
     else
       if (((is_symbol(car(p))) || (is_c_function(car(p)))) && (is_saver(car(p))))
 	{
 	  for (s7_pointer arg = cdr(p); is_pair(arg); arg = cdr(arg))
-	    if (car(arg) == stepper)
+	    if ((car(arg) == stepper) || 
+		((is_pair(car(arg))) && (is_translucent(caar(arg))) && (cadar(arg) == stepper)))
 	      return(true);
 	}
       else
@@ -84067,7 +84079,10 @@ static bool tree_inspect_stepper(s7_scheme *sc, s7_pointer stepper, s7_pointer t
 	  {
 	    for (s7_pointer arg = cdr(p); is_pair(cdr(arg)); arg = cdr(arg))
 	      if ((is_null(cdr(arg))) && 
-		  ((car(arg) == stepper) || ((is_saver(car(arg))) && (cadr(arg) == stepper))))
+		  ((car(arg) == stepper) || 
+		   ((is_pair(car(arg))) && 
+		    (((is_saver(caar(arg))) && (direct_memq(stepper, cdar(arg)))) ||
+		     ((is_translucent(caar(arg))) && (cadar(arg) == stepper))))))
 		return(true);
 	  }
   return(false);
@@ -84304,7 +84319,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 	      {
 		/* if (DO_PRINT) fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(expr)); */
 		if ((is_pair(expr)) && (is_pair(cdr(expr))) && 
-		    (is_saver(car(expr))) && 
+		    ((is_saver(car(expr))) || (is_translucent(car(expr)))) && 
 		    (direct_memq(stepper, cdr(expr))))
 		    /* (cadr(expr) == stepper)) */
 		  do_return_false(expr);
@@ -84314,11 +84329,16 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		    (direct_memq(stepper, cdr(expr))))
 		  {
 		    s7_pointer slot = s7_slot(sc, car(expr));
-		    if ((is_slot(slot)) && (!is_sequence(slot_value(slot)))) /* TODO: undefined case -> s7test */
+		    /* fprintf(stderr, "slot: %s\n", display(slot)); */
+		    if ((!is_slot(slot)) || (!is_applicable(slot_value(slot)))) /* expr: '(=> () ...) */
 		      {
 			/* fprintf(stderr, "  slot: %s\n", display(slot)); */
 			do_return_false(expr);
-		      }}
+		      }
+		    if (((is_saver(slot_value(slot))) || (is_translucent(slot_value(slot)))) && 
+			(direct_memq(stepper, cdr(expr))))
+		      do_return_false(expr);
+		  }
 
 		/* if a macro, we'll eventually expand it (if *_optimize), but that requires a symbol lookup here and macroexpand */
 		if ((!is_optimized(expr)) ||
@@ -99823,8 +99843,8 @@ static void init_rootlet(s7_scheme *sc)
   sc->closed_output_function = s7_make_safe_function(sc, "closed-output-function", g_closed_output_function_port, 1, 0, false, "output-function error"),
 
   sc->newline_symbol =               defun("newline",		newline,		0, 1, false);
-  sc->write_symbol =                 defun("write",		write,			1, 1, false);
-  sc->display_symbol =               defun("display",		display,		1, 1, false);
+  sc->write_symbol =                 defun("write",		write,			1, 1, false); set_is_translucent(sc->write_symbol);
+  sc->display_symbol =               defun("display",		display,		1, 1, false); set_is_translucent(sc->display_symbol);
   sc->read_char_symbol =             defun("read-char",	        read_char,		0, 1, false);
   sc->peek_char_symbol =             defun("peek-char",	        peek_char,		0, 1, false);
   sc->write_char_symbol =            defun("write-char",	write_char,		1, 1, false);
@@ -99904,7 +99924,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->ash_symbol =                   defun("ash",		ash,			2, 0, false);
   sc->exp_symbol =                   defun("exp",		exp,			1, 0, false); set_all_float(sc->exp_symbol);
   sc->abs_symbol =                   defun("abs",		abs,			1, 0, false); set_all_integer_and_float(sc->abs_symbol);
-  set_is_saver(sc->abs_symbol);
+  set_is_translucent(sc->abs_symbol);
   sc->magnitude_symbol =             defun("magnitude",	        magnitude,		1, 0, false); set_all_integer_and_float(sc->magnitude_symbol);
   sc->angle_symbol =                 defun("angle",		angle,			1, 0, false);
   sc->sin_symbol =                   defun("sin",		sin,			1, 0, false); set_all_float(sc->sin_symbol);
@@ -99920,10 +99940,10 @@ static void init_rootlet(s7_scheme *sc)
   sc->acosh_symbol =                 defun("acosh",		acosh,			1, 0, false);
   sc->atanh_symbol =                 defun("atanh",		atanh,			1, 0, false);
   sc->sqrt_symbol =                  defun("sqrt",		sqrt,			1, 0, false);
-  sc->floor_symbol =                 defun("floor",		floor,			1, 0, false); set_is_saver(sc->floor_symbol);
-  sc->ceiling_symbol =               defun("ceiling",		ceiling,		1, 0, false); set_is_saver(sc->ceiling_symbol);
-  sc->truncate_symbol =              defun("truncate",		truncate,		1, 0, false); set_is_saver(sc->truncate_symbol);
-  sc->round_symbol =                 defun("round",		round,			1, 0, false); set_is_saver(sc->round_symbol);
+  sc->floor_symbol =                 defun("floor",		floor,			1, 0, false); set_is_translucent(sc->floor_symbol);
+  sc->ceiling_symbol =               defun("ceiling",		ceiling,		1, 0, false); set_is_translucent(sc->ceiling_symbol);
+  sc->truncate_symbol =              defun("truncate",		truncate,		1, 0, false); set_is_translucent(sc->truncate_symbol);
+  sc->round_symbol =                 defun("round",		round,			1, 0, false); set_is_translucent(sc->round_symbol);
   sc->logand_symbol =                defun("logand",		logand,			0, 0, true);
   sc->logior_symbol =                defun("logior",		logior,			0, 0, true);
   sc->logxor_symbol =                defun("logxor",		logxor,			0, 0, true);
@@ -101248,7 +101268,7 @@ int main(int argc, char **argv)
  * tvect       3408   2464   1772   1669   1497   1457   1457  1482
  * thook       7651   ----   2590   2030   2046   1731   1725
  * tauto                     2562   2048   1729   1760   1754
- * texit       1884   1950   1778   1741   1770   1759   1759  1854
+ * texit       1884   1950   1778   1741   1770   1759   1759  1835
  * s7test             1831   1818   1829   1830   1849   1854
  * lt          2222   2172   2150   2185   1950   1892   1895
  * dup                3788   2492   2239   2097   2012   2001  2040
@@ -101256,42 +101276,42 @@ int main(int argc, char **argv)
  * tcopy              5546   2539   2375   2386   2352   2348
  * tload                     3046   2404   2566   2506   2465
  * trclo       8248   2782   2615   2634   2622   2499   2476
- * tmat               3042   2524   2578   2590   2522   2516  2949
+ * tmat               3042   2524   2578   2590   2522   2516  2975
  * fbench      2933   2583   2460   2430   2478   2536   2536
  * tsort       3683   3104   2856   2804   2858   2858   2858
  * titer       4550   3349   3070   2985   2966   2917   2917
  * tio                3752   3683   3620   3583   3127   3135
- * tbit        3836   3305   3245   3261   3264   3181   3181  3286
- * tobj               3970   3828   3577   3508   3434   3434  3482
+ * tbit        3836   3305   3245   3261   3264   3181   3181  3196
+ * tobj               3970   3828   3577   3508   3434   3434  3434
  * teq                4045   3536   3486   3544   3556   3569
  * tmac               4373   ----   4193   4188   4024   4025  5487
  * tcomplex           3869   3804   3844   3888   4215   4196
  * tcase              4793   4439   4430   4439   4376   4378
  * tmap               8774   4489   4541   4586   4380   4377  4393
- * tlet        11.0   6974   5609   5980   5965   4470   4466  5179
+ * tlet        11.0   6974   5609   5980   5965   4470   4466  4811
  * tfft               7729   4755   4476   4536   4538   4538  4625
  * tshoot             5447   5183   5055   5034   4833   4774
- * tstar              6705   5834   5278   5177   5059   5055  5508
- * concordance 10.0   6342   5488   5162   5180   5259   5272  5317
+ * tstar              6705   5834   5278   5177   5059   5055
+ * concordance 10.0   6342   5488   5162   5180   5259   5272  5281
  * tnum               6013   5433   5396   5409   5402   5399
  * tlist       9219   7546   6558   6240   6300   5770   5784  5802
  * tari        14.3   12.5   6619   6662   6499   6292   5989  6130
  * trec        19.6   6980   6599   6656   6658   6015   6015
  * tgsl               7802   6373   6282   6208   6208   6213
- * tset                             6260   6364   6278   6274  6506
- * tleft       12.2   9753   7537   7331   7331   6393   6393
+ * tset                             6260   6364   6278   6274  6293
+ * tleft       12.2   9753   7537   7331   7331   6393   6393  7611 [lost opt_dotimes?]
  * tmisc                            7614   7115   7130   7098  8155
- * tclo               8025   7645   8809   7770   7627   7640  10.8
+ * tclo               8025   7645   8809   7770   7627   7640
  * tgc                10.4   7763   7579   7617   7619   7649
- * tlamb                            8003   7941   7920   7927  9223
+ * tlamb                            8003   7941   7920   7927  9218
  * thash              11.7   9734   9479   9526   9283   9273
  * tform                     10.0   9992   9961   9626   9439
  * cb          12.9   11.0   9658   9564   9609   9657   9658
  * tmap-hash                                      10.3   10.3
  * tgen               11.4   12.0   12.1   12.2   12.4   12.4
  * tall        15.9   15.6   15.6   15.6   15.1   15.1   15.1
- * timp               24.4   20.0   19.6   19.7   15.5   15.5  17.9
- * tmv                21.9   21.1   20.7   20.6   16.6   16.6  18.4
+ * timp               24.4   20.0   19.6   19.7   15.5   15.5  15.9
+ * tmv                21.9   21.1   20.7   20.6   16.6   16.6  17.5
  * calls              37.5   37.0   37.5   37.1   37.1   37.0  37.2
  * sg                        55.9   55.8   55.4   55.3   55.2
  * tbig              175.8  156.5  148.1  146.2  145.5  145.2 162.9
@@ -101299,7 +101319,6 @@ int main(int argc, char **argv)
  *
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
  * the fx_tree->fx_tree_in etc routes are a mess (redundant and flags get set at pessimal times)
- *
  * use optn pointers for if branches (also on existing cases -- many ops can be removed)
  *   the rec_p1 swap can collapse funcs in oprec_if_a_opla_aq_a and presumably elsewhere
  *   extend oprec_i* and also to oprec_p[air]* where base p is protected but locals need not be?
@@ -101316,8 +101335,7 @@ int main(int argc, char **argv)
  *   read-byte now is hardly different from read-char.  read here returns a "symbol"! (it assumes the file has chars, binary-port in r7rs).
  *   (define (read-int port) (logior (read-byte port) (ash (read-byte port) 8) (ash (read-byte port) 16) (ash (read-byte port) 24) ...)) -- ugly!
  * mutints: check all int++ steppers for saver bit, move make_mutable to the point of use and clear afterwards everywhere
- *   fill out rest of abs-like "savers": floor/round/truncate/ceiling, float steppers
- * for op_load_return we need ffitest? s7_load_with_environment?
+ *   fill out rest of abs-like "savers": floor/round/truncate/ceiling, float/ratio/complex mutable steppers
  * call/cc ->call/exit but see b-func in s7test 40699 [cc in rtn val], call/cc_chooser?
- * for setter on symbol/c-function move t_setter to t_unknopt, for abs et al use some other bit than saver
+ * for setter on symbol/c-function move t_setter to safety_checked?
  */

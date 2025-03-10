@@ -25947,7 +25947,8 @@ c"
       (test (object->string (random-state 123 321)) "#<random-state 123 321>")
       (test (object->string (random-state 9223372036854775807 9223372036854775807)) "#<random-state 9223372036854775807 9223372036854775807>")
       (test (object->string (random-state 123 321) :readable) "(random-state 123 321)")
-      (test (object->string (random-state 9223372036854775807 9223372036854775807) :readable) "(random-state 9223372036854775807 9223372036854775807)"))
+      (test (object->string (random-state 9223372036854775807 9223372036854775807) :readable) "(random-state 9223372036854775807 9223372036854775807)")
+      (test (object->string 20057446674355970889/10028723337177985444) "#<bignum: 20057446674355970889/10028723337177985444>"))
     (begin
       (test (object->string (rootlet) #f (bignum "80")) "(rootlet)")
       (test (substring (object->string (random-state 9223372036854775807)) 0 6) "#<rand")
@@ -30773,6 +30774,7 @@ in s7:
 (test (let ((v 2.0)) (define (func) (do ((i 0 (+ i 1))) ((= i 1)) (do ((j 0 (+ j 1))) ((> j 0)) (set! j v)))) (func)) #t)
 (test (let ((v 2+i)) (define (func) (do ((i 0 (+ i 1))) ((= i 1)) (do ((j 0 (+ j 1))) ((> j 0)) (set! j v)))) (func)) 'error)
 (test (let ((v #(2))) (define (func) (do ((i 0 (+ i 1))) ((= i 1)) (do ((j 0 (+ j 1))) ((> j 0)) (set! j v)))) (func)) 'error)
+(test (let () (define (func) (let ((x #f) (i 0)) (do ((var #f) (i 0 (+ i 1))) ((= i 1)) (set! var (=> ()))))) (func) (func)) 'error)
 
 (let () ; opt_set_p_i|d_fm bug
   (define (f1)
