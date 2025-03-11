@@ -1040,6 +1040,8 @@ int main(int argc, char **argv)
     uint8_t *bels;
     s7_complex cval;
     s7_complex *cels;
+    s7_pointer ival;
+    s7_int *iels;
 
     dims = (s7_int *)malloc(2 * sizeof(s7_int));
     dims[0] = 2;
@@ -1051,6 +1053,15 @@ int main(int argc, char **argv)
     if (s7_vector_rank(p) != 2) fprintf(stderr, "float vector rank not 2?\n");
     if (s7_vector_dimension(p, 0) != 2) fprintf(stderr, "%d: s7_vector_dimension 0: %" ld64 "\n", __LINE__, s7_vector_dimension(p, 0));
     if (s7_vector_dimension(p, 1) != 3) fprintf(stderr, "%d: s7_vector_dimension 1: %" ld64 "\n", __LINE__, s7_vector_dimension(p, 1));
+    iels = (s7_int *)malloc(10 * sizeof(s7_int));
+    for (s7_int i = 0; i < 10; i++) iels[i] = i * 2;
+    ival = s7_make_int_vector_wrapper(sc, 10, iels, 1, NULL, false);
+    if (!s7_is_int_vector(ival)) fprintf(stderr, "not a int_vector?\n");
+    if (s7_int_vector_ref(ival, 3) != 6) fprintf(stderr, "int[3] == %" ld64 "?\n", iels[3]);
+    s7_int_vector_set(ival, 2, 123);
+    if (iels[2] != 123) fprintf(stderr, "iels[2] == %" ld64 "?\n", iels[2]);
+    ival = s7_f(sc);
+    free(iels);
 
     p = s7_make_float_vector(sc, 6, 1, NULL);
     if (!s7_is_float_vector(p)) fprintf(stderr, "not a float_vector?\n");
@@ -1081,6 +1092,7 @@ int main(int argc, char **argv)
     bels = s7_byte_vector_elements(p);
     if (bels[1] != 32) fprintf(stderr, "byte_vector bels[1] not 32?\n");
     if (!s7_is_byte_vector(p)) fprintf(stderr, "not a byte_vector?\n");
+
     free(dims); /* ?? */
   }
 

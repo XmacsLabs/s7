@@ -1,10 +1,10 @@
 #ifndef S7_H
 #define S7_H
 
-#define S7_VERSION "11.3"
-#define S7_DATE "11-Mar-2025"
+#define S7_VERSION "11.4"
+#define S7_DATE "12-Mar-2025"
 #define S7_MAJOR_VERSION 11
-#define S7_MINOR_VERSION 3
+#define S7_MINOR_VERSION 4
 
 #include <stdint.h>           /* for int64_t */
 
@@ -346,6 +346,7 @@ s7_pointer s7_make_vector(s7_scheme *sc, s7_int len);                           
 s7_pointer s7_make_normal_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info); /* make-vector but possibly multidimensional */
 s7_pointer s7_make_and_fill_vector(s7_scheme *sc, s7_int len, s7_pointer fill);       /* (make-vector len fill) */
 s7_pointer s7_make_int_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info);
+s7_pointer s7_make_int_vector_wrapper(s7_scheme *sc, s7_int len, s7_int *data, s7_int dims, s7_int *dim_info, bool free_data);
 s7_pointer s7_make_byte_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info);
 s7_pointer s7_make_float_vector(s7_scheme *sc, s7_int len, s7_int dims, s7_int *dim_info);
 s7_pointer s7_make_float_vector_wrapper(s7_scheme *sc, s7_int len, s7_double *data, s7_int dims, s7_int *dim_info, bool free_data);
@@ -943,6 +944,7 @@ bool s7_is_bignum(s7_pointer obj);
  *
  *        s7 changes
  *
+ * 10-Mar-24: s7_make_int_vector_wrapper.
  * --------
  * 31-Dec:    s7_function_let as an experiment.
  * 31-Aug:    s7_define_expansion.
