@@ -31875,8 +31875,6 @@ in s7:
 	  (set! val (cons (list i j) val))))))
   
   (test (f1) '((2 3) (2 2) (2 1) (2 0) (1 3) (1 2) (1 1) (1 0) (0 3) (0 2) (0 1) (0 0)))
-  ;;(display "f1: ") (display (f1)) (newline)
-  ;;(do ((i 0 (+ i 1))) ((= i tries)) (f1))
   
   (define (f2)
     (let ((val ()))
@@ -31887,8 +31885,6 @@ in s7:
 	  (set! val (cons (list (+ i 0) j) val))))))
   
   (test (f2) '((2 3) (2 2) (2 1) (2 0) (1 3) (1 2) (1 1) (1 0) (0 3) (0 2) (0 1) (0 0)))
-  ;;(display "f2: ") (display (f2)) (newline)
-  ;;(do ((i 0 (+ i 1))) ((= i tries)) (f2))
   
   (define (f3)
     (let ((val ()))
@@ -31899,8 +31895,6 @@ in s7:
 	  (set! val (cons (list (+ i 0) (+ j 0)) val))))))
   
   (test (f3) '((2 3) (2 2) (2 1) (2 0) (1 3) (1 2) (1 1) (1 0) (0 3) (0 2) (0 1) (0 0)))
-  ;;(display "f3: ") (display (f3)) (newline)
-  ;;(do ((i 0 (+ i 1))) ((= i tries)) (f3))
   
   (define (f4)
     (let ((val ()))
@@ -31911,8 +31905,6 @@ in s7:
 	  (set! val (cons (vector i j) val))))))
   
   (test (f4) '(#(2 3) #(2 2) #(2 1) #(2 0) #(1 3) #(1 2) #(1 1) #(1 0) #(0 3) #(0 2) #(0 1) #(0 0)))
-  ;;(display "f4: ") (display (f4)) (newline)
-  ;;(do ((i 0 (+ i 1))) ((= i tries)) (f4))
   
   (define (f5)
     (let ((val ()))
@@ -31923,8 +31915,6 @@ in s7:
 	  (set! val (cons (hash-table 'a i 'b j) val))))))
   
   (test (f5) (list (hash-table 'a 1 'b 1) (hash-table 'a 1 'b 0) (hash-table 'a 0 'b 1) (hash-table 'a 0 'b 0)))
-  ;;(display "f5: ") (display (f5)) (newline)
-  ;;(do ((i 0 (+ i 1))) ((= i tries)) (f5))
   
   (define (f6)
     (let ((val ()))
@@ -31935,8 +31925,6 @@ in s7:
 	  (set! val (cons (inlet 'a i 'b j) val))))))
   
   (test (f6) (list (inlet 'a 1 'b 1) (inlet 'a 1 'b 0) (inlet 'a 0 'b 1) (inlet 'a 0 'b 0)))
-  ;;(display "f6: ") (display (f6)) (newline)
-  ;;(do ((i 0 (+ i 1))) ((= i tries)) (f6))
   
   (define (f7)
     (let ((val ())
@@ -31948,9 +31936,7 @@ in s7:
 	  (set! val (cons (lst i j) val))))))
   
   (test (f7) '((1 1) (1 0) (0 1) (0 0)))
-  ;;(display "f7: ") (display (f7)) (newline)
-  ;;(do ((i 0 (+ i 1))) ((= i tries)) (f7))
-  
+
   (define (f8)
     (let ((val ())
 	  (lst (lambda args args)))
@@ -31961,8 +31947,6 @@ in s7:
 	  (set! val (cons (lst i j) val))))))
   
   (test (f8) '((1 1) (1 0) (0 1) (0 0)))
-  ;;(display "f8: ") (display (f8)) (newline)
-  ;;(do ((i 0 (+ i 1))) ((= i tries)) (f8))
   
   (define (f9)
     (let ((val ()))
@@ -31973,8 +31957,6 @@ in s7:
 	  (set! val (cons (list (abs i) (floor j)) val))))))
   
   (test (f9) '((1 1) (1 0) (0 1) (0 0)))
-  ;;(display "f9: ") (display (f9)) (newline)
-  ;;(do ((i 0 (+ i 1))) ((= i tries)) (f9))
   
   (define (f10)
     (let ((val ()))
@@ -31985,8 +31967,6 @@ in s7:
 	  (set! val (cons (list (/ i 1) (floor j)) val))))))
   
   (test (f10) '((1 1) (1 0) (0 1) (0 0)))
-  ;;(display "f10: ") (display (f10)) (newline)
-  ;;(do ((i 0 (+ i 1))) ((= i tries)) (f10))
   
   (define (f11)
     (let ((val ()))
@@ -31997,8 +31977,6 @@ in s7:
 	  (set! val (cons (list (/ i 1) (abs j)) val))))))
   
   (test (f11) '((1 1) (1 0) (0 1) (0 0)))
-  ;;(display "f11: ") (display (f11)) (newline)
-  ;;(do ((i 0 (+ i 1))) ((= i tries)) (f11))
   
   (define (f12)
     (let ((val ()))
@@ -32009,8 +31987,6 @@ in s7:
 	  (set! val (list i j val))))))
   
   (test (f12) '(1 1 (1 0 (0 1 (0 0 ())))))
-  ;;(display "f12: ") (display (f12)) (newline)
-  ;;(do ((i 0 (+ i 1))) ((= i tries)) (f12))
   
   (define (f13)
     (let ((val (make-vector 4 #f)))
@@ -32021,8 +31997,6 @@ in s7:
 	  (vector-set! val (+ i j) (list i j))))))
   
   (test (f13) #((0 0) (1 0) (1 1) #f))
-  ;;(display "f13: ") (display (f13)) (newline)
-  ;;(do ((i 0 (+ i 1))) ((= i tries)) (f13))
   
   (define (f14)
     (let ((val (make-vector 4 #f)))
@@ -32033,8 +32007,6 @@ in s7:
 	  (vector-set! val (+ i j) i)))))
   
   (test (f14) #(0 1 1 #f))
-  ;;(display "f14: ") (display (f14)) (newline)
-  ;;(do ((i 0 (+ i 1))) ((= i tries)) (f14))
   
   (define (f15)
     (let ((val (make-vector 4 #f)))
@@ -32045,8 +32017,6 @@ in s7:
 	  (vector-set! val (+ i j) j))))) ; int-vector et al should be ok
   
   (test (f15) #(0 0 1 #f))
-  ;;(display "f15: ") (display (f15)) (newline)
-  ;;(do ((i 0 (+ i 1))) ((= i tries)) (f15))
   
   (define (f16)
     (let ((val (make-vector '(3 3 3) #f)))
@@ -32059,8 +32029,6 @@ in s7:
 	    (vector-set! val i j k j))))))
   
   (test (f16) #3d(((0 0 0) (1 1 1) (2 2 2)) ((0 0 0) (1 1 1) (2 2 2)) ((0 0 0) (1 1 1) (2 2 2))))
-  ;;(display "f16: ") (display (f16)) (newline)
-  ;;(do ((i 0 (+ i 1))) ((= i tries)) (f16))
   
   (define (f17)
     (let ((val (make-vector 4 #f)))
@@ -32071,8 +32039,6 @@ in s7:
 	  (vector-set! val (+ i j) (abs j)))))) ; int-vector et al should be ok
   
   (test (f17) #(0 0 1 #f))
-  ;;(display "f17: ") (display (f17)) (newline)
-  ;;(do ((i 0 (+ i 1))) ((= i tries)) (f17))
 
   (define (f18)
     (let ((val ()))
@@ -32105,6 +32071,38 @@ in s7:
 	(set! val (cons (lst i j) val)))))
   
   (test (f20) '((1 1) (1 0) (0 1) (0 0)))
+
+  (define (f21)
+    (let ((val ()))
+      (do ((i 0 (+ i 1/2)))
+	  ((>= i 2) val)
+	(do ((j 0 (+ j 1/3)))
+	    ((>= j 2/3))
+	  (set! val (cons (list i j) val))))))
+  
+  (test (f21) '((3/2 1/3) (3/2 0) (1 1/3) (1 0) (1/2 1/3) (1/2 0) (0 1/3) (0 0)))
+
+  (define (f22)
+    (let ((val ()))
+      (do ((i 0.0 (+ i 1.0)))
+	  ((>= i 2.0) val)
+	(do ((j 0.0 (+ j 1.0)))
+	    ((>= j 2.0))
+	  (set! val (cons (list i j) val))))))
+  
+  (test (f22) '((1.0 1.0) (1.0 0.0) (0.0 1.0) (0.0 0.0)))
+
+  (define (f23)
+    (let ((val ()))
+      (do ((i 0.0 (+ i 1.0+1.0i)))
+	  ((= i 2.0+2.0i) val)
+	(do ((j 0.0 (+ j 1.0-1.0i)))
+	    ((= j 2.0-2.0i))
+	  (set! val (cons (list i j) val))))))
+  
+  (test (f23) '((1.0+1.0i 1.0-1.0i) (1.0+1.0i 0.0) (0.0 1.0-1.0i) (0.0 0.0)))
+
+  ;; see also timp.scm especially f24 and friends
   )
 
 

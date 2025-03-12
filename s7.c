@@ -69456,14 +69456,6 @@ static bool do_passes_safety_check(s7_scheme *sc, s7_pointer body, s7_pointer st
   if (!is_safety_checked(body))
     {
       set_safety_checked(body);
-#if 0
-      /* this never happens */
-      if (is_unsafe_do(body))
-	{
-	  if (MUTINT_PRINT) fprintf(stderr, "%s[%d]: return(false) since is_unsafe_do(body): %s\n", __func__, __LINE__, display_truncated(body));
-	  return(false);
-	}
-#endif
       if (!do_is_safe(sc, body, stepper, sc->nil, step_vars, has_set))
 	set_unsafe_do(body);
     }
@@ -84215,18 +84207,18 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		    settee = cadr(expr);
 		    if (!is_symbol(settee))             /* (set! (...) ...) which is tricky due to setter functions/macros */
 		      {
-			s7_pointer setv;
 			if ((!is_pair(settee)) || (!is_symbol(car(settee))))
 			  do_return_false(expr);
-			setv = lookup_unexamined(sc, car(settee));
-			if (!((setv) &&
-			      ((is_sequence(setv)) ||
-			       ((is_c_function(setv)) &&
-				(is_safe_procedure(c_function_setter(setv)))))))
-			  do_return_false(expr);
-
-			/* if ((has_set) && (!is_sequence(setv))) (*has_set) = true; */
-			/*    ^ trouble in tmock.scm (opt2_fn not set) -- apparently op_simple_do assumes has_fn which set! lacks */
+			if (!direct_memq(car(settee), var_list)) /* is it a local var */
+			  {
+			    s7_pointer setv = lookup_unexamined(sc, car(settee));
+			    if (!((setv) &&
+				  ((is_sequence(setv)) || 
+				   ((is_c_function(setv)) && (is_safe_procedure(c_function_setter(setv)))))))
+			      do_return_false(expr);
+			    /* if ((has_set) && (!is_sequence(setv))) (*has_set) = true; */
+			    /*    ^ trouble in tmock.scm (opt2_fn not set) -- apparently op_simple_do assumes has_fn which set! lacks */
+			  }
 			if (has_set) (*has_set) = true;
 		      }
 		    else
@@ -84278,9 +84270,10 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		    if ((is_symbol(stepper)) && /* can be ()? */
 			(!is_saved_stepper(stepper)) &&
 			(tree_inspect_stepper(sc, stepper, body)))
-		      set_is_saved_stepper(stepper);
-		    if (MUTINT_PRINT) fprintf(stderr, "%s[%d]: %s %s %d\n", __func__, __LINE__,
-					      display(stepper), display(body), (is_symbol(stepper)) ? is_saved_stepper(stepper) : -1);
+		      {
+			set_is_saved_stepper(stepper);
+			if (MUTINT_PRINT) fprintf(stderr, "%s[%d]: saved stepper: %s in %s\n", __func__, __LINE__, display(stepper), display(body));
+		      }
 #endif
 		  }
 		  break;
@@ -84770,7 +84763,7 @@ static s7_pointer check_do(s7_scheme *sc)
 		    {
 		      if (!do_is_safe(sc, body, car(v), sc->nil, vars, &has_set))
 			{
-			  if (MUTINT) set_unsafe_do(body);
+			  /* if (MUTINT) set_unsafe_do(body); */
 			  /* if (DO_PRINT) fprintf(stderr, "  %s[%d]: do_is_unsafe %s\n", __func__, __LINE__, display(body)); */
 			  /* if (MUTINT) return(body); */ /* we used to ignore this (not set OP_SAFE_DO but just return) */
 			}
@@ -86335,17 +86328,8 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool loo
 #if MUTINT
   if (is_unsafe_do(code))
     {
-      /* hit a lot, several times in tvect
-       *  opt_dotimes[86151]: return(false) since is_unsafe_do(code): ((when (> (abs (vect i)) mx) (set!...
-       *  opt_dotimes[86151]: return(false) since is_unsafe_do(code): ((do ((k3 (* k size3 size3)) (i3 (*...
-       *  opt_dotimes[86151]: return(false) since is_unsafe_do(code): ((do ((n 0 (+ n 1))) ((= n size3))...
-       *  opt_dotimes[86151]: return(false) since is_unsafe_do(code): ((do ((k3 (* k size3 size3)) (i3 (*...
-       *  opt_dotimes[86151]: return(false) since is_unsafe_do(code): ((do ((n 0 (+ n 1))) ((= n size3))...
-       *  opt_dotimes[86151]: return(false) since is_unsafe_do(code): ((do ((k3 (* k size3 size3)) (i3 (*...
-       *  opt_dotimes[86151]: return(false) since is_unsafe_do(code): ((do ((n 0 (+ n 1))) ((= n size3))...
-       */
       if (MUTINT_PRINT) fprintf(stderr, "%s[%d]: return(false) since is_unsafe_do(code): %s\n", __func__, __LINE__, display_truncated(code));
-      return_false(sc, code);
+      /* return_false(sc, code); */
     }
 #else
   if ((is_unsafe_do(code)) && (MUTINT_PRINT))
@@ -101282,7 +101266,7 @@ int main(int argc, char **argv)
  *
  * valgrind --leak-check=full --show-reachable=no --suppressions=/home/bil/cl/free.supp repl s7test.scm
  * addr2line -e repl 0xd7237 -> s7.c:29697
- * 24-Aug-24: cloc: blank 9043 comment 3880 code 86759, [gmp: 5619, s7_debugging: 2867 see search,scm] -> 78273 lines of code normally
+ * 24-Aug-24: cloc: blank 9043 comment 3880 code 86759, [gmp: 5619, s7_debugging: 2867 see search.scm] -> 78273 lines of code normally
  */
 #endif
 #endif
@@ -101296,17 +101280,17 @@ int main(int argc, char **argv)
  * index              1016    973    967    972    988    990
  * tmock              1145   1082   1042   1045   1031   1031
  * tvect       3408   2464   1772   1669   1497   1457   1453
- * thook       7651   ----   2590   2030   2046   1731   1711  [1734]
+ * thook       7651   ----   2590   2030   2046   1731   1711    1734
  * tauto                     2562   2048   1729   1760   1754
  * texit       1884   1950   1778   1741   1770   1759   1758
  * s7test             1831   1818   1829   1830   1849   1854
  * lt          2222   2172   2150   2185   1950   1892   1894
- * dup                3788   2492   2239   2097   2012   2001  [2007]
+ * dup                3788   2492   2239   2097   2012   2001    2007
  * tread              2421   2419   2408   2405   2241   2248
  * tcopy              5546   2539   2375   2386   2352   2348
  * tload                     3046   2404   2566   2506   2465
  * trclo       8248   2782   2615   2634   2622   2499   2476
- * tmat               3042   2524   2578   2590   2522   2516  2843 [2675]
+ * tmat               3042   2524   2578   2590   2522   2516  2681
  * fbench      2933   2583   2460   2430   2478   2536   2536
  * tsort       3683   3104   2856   2804   2858   2858   2858
  * titer       4550   3349   3070   2985   2966   2917   2917
@@ -101317,20 +101301,20 @@ int main(int argc, char **argv)
  * tmac               4373   ----   4193   4188   4024   4025  4721
  * tcomplex           3869   3804   3844   3888   4215   4192
  * tcase              4793   4439   4430   4439   4376   4378
- * tmap               8774   4489   4541   4586   4380   4377      4386
- * tlet        11.0   6974   5609   5980   5965   4470   4466  4811  [5432 -- all unlet probably (unlet) as car?]
- * tfft               7729   4755   4476   4536   4538   4538    4625
+ * tmap               8774   4489   4541   4586   4380   4377
+ * tlet        11.0   6974   5609   5980   5965   4470   4466
+ * tfft               7729   4755   4476   4536   4538   4538  4625
  * tshoot             5447   5183   5055   5034   4833   4774
  * tstar              6705   5834   5278   5177   5059   5055
- * concordance 10.0   6342   5488   5162   5180   5259   5272      5281
- * tnum               6013   5433   5396   5409   5402   5380
+ * concordance 10.0   6342   5488   5162   5180   5259   5272    5281
+ * tnum               6013   5433   5396   5409   5402   5360
  * tlist       9219   7546   6558   6240   6300   5770   5784
- * tari        14.3   12.5   6619   6662   6499   6292   5989    6130
+ * tari        14.3   12.5   6619   6662   6499   6292   5989
  * trec        19.6   6980   6599   6656   6658   6015   6015
  * tgsl               7802   6373   6282   6208   6208   6213
- * tset                             6260   6364   6278   6274      6293
- * tleft       12.2   9753   7537   7331   7331   6393   6393  7611 [lost opt_dotimes?]
- * tmisc                            7614   7115   7130   7098  8155
+ * tset                             6260   6364   6278   6274    6293
+ * tleft       12.2   9753   7537   7331   7331   6393   6393  6876
+ * tmisc                            7614   7115   7130   7098
  * tclo               8025   7645   8809   7770   7627   7640
  * tgc                10.4   7763   7579   7617   7619   7649
  * tlamb                            8003   7941   7920   7927
@@ -101340,11 +101324,11 @@ int main(int argc, char **argv)
  * tmap-hash                                      10.3   10.3
  * tgen               11.4   12.0   12.1   12.2   12.4   12.4
  * tall        15.9   15.6   15.6   15.6   15.1   15.1   15.1
- * timp               24.4   20.0   19.6   19.7   15.5   15.5    [17.9] [opt_dotimes lost again]
- * tmv                21.9   21.1   20.7   20.6   16.6   16.6    17.0
- * calls              37.5   37.0   37.5   37.1   37.1   37.0      37.2
+ * timp               24.4   20.0   19.6   19.7   15.5   15.5    15.6
+ * tmv                21.9   21.1   20.7   20.6   16.6   16.6    16.7
+ * calls              37.5   37.0   37.5   37.1   37.1   37.0    37.2
  * sg                        55.9   55.8   55.4   55.3   55.2
- * tbig              175.8  156.5  148.1  146.2  145.5  145.2 162.9
+ * tbig              175.8  156.5  148.1  146.2  145.5  144.8
  * ------------------------------------------------------------
  *
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
@@ -101365,7 +101349,8 @@ int main(int argc, char **argv)
  *   read-byte now is hardly different from read-char.  read here returns a "symbol"! (it assumes the file has chars, binary-port in r7rs).
  *   (define (read-int port) (logior (read-byte port) (ash (read-byte port) 8) (ash (read-byte port) 16) (ash (read-byte port) 24) ...)) -- ugly!
  * mutints: check all int++ steppers for saver bit, move make_mutable to the point of use and clear afterwards everywhere
- *   fill out rest of abs-like "savers": floor/round/truncate/ceiling, float/ratio/complex mutable steppers
  * call/cc ->call/exit but see b-func in s7test 40699 [cc in rtn val], call/cc_chooser?
  * for setter on symbol/c-function move t_setter to safety_checked?
+ * timp comments are probably out-of-date
+ * "most complex": optimize_func_two_args, eval, fx_choose, fx_tree_in
  */
