@@ -32102,7 +32102,83 @@ in s7:
   
   (test (f23) '((1.0+1.0i 1.0-1.0i) (1.0+1.0i 0.0) (0.0 1.0-1.0i) (0.0 0.0)))
 
-  ;; see also timp.scm especially f24 and friends
+  ;; from timp.scm
+  (define size 5)
+  
+  (define (f23a) ; [134] opt'd
+    (let ((sum 0.0)
+  	  (L (inlet 'multiply  *)))
+      (do ((i 0 (+ i 1)))
+  	  ((= i size) sum)
+        (set! sum (+ sum ((let-ref L 'multiply) i 0.0001))))))
+  
+  (test (f23a) 0.001)
+  
+  (define (f24) ; [605] -> [134 opt'd]
+    (let ((sum 0.0)
+  	  (L (inlet 'multiply  *)))
+      (do ((i 0 (+ i 1)))
+  	  ((= i size) sum)
+        (set! sum (+ sum ((L 'multiply) i 0.0001))))))
+  
+  (test (f24) 0.001)
+  
+  (define (f24a) ; [690]
+    (let ((sum 0.0)
+  	  (L (inlet 'multiply  *))
+  	  (H (hash-table 'multiply +)))
+      (do ((i 0 (+ i 1)))
+  	  ((= i size) sum)
+        (set! sum (+ sum ((L 'multiply) i 0.0001)))
+        (set! L H)))) ; apparently this blocks the optimizer -> op_x_aa etc
+  
+  (test (f24a) 10.0004)
+  
+  (define (f24b) ; [577]
+    (let ((sum 0.0)
+  	  (L (inlet 'multiply  *))
+  	  (L1 (inlet 'multiply  +)))
+      (do ((i 0 (+ i 1)))
+  	  ((= i size) sum)
+        (set! sum (+ sum ((L 'multiply) i 0.0001)))
+        (set! L L1)))) ; same as above
+  
+  (test (f24b) 10.0004)
+  
+  (define (setL L)
+    (set! (L 'multiply) floor))
+  
+  (define (f24c-1) ; floor: too many arguments
+    (let ((sum 0.0)
+  	  (L (inlet 'multiply  *)))
+      (do ((i 0 (+ i 1)))
+  	  ((= i 3) sum)
+        (set! sum (+ sum ((L 'multiply) i 0.0001)))
+        (setL L))))
+  
+  (define (f24c) (catch #t f24c-1 (lambda args 'error)))
+  (test (catch #t f24c-1 (lambda args 'error)) 'error)
+  
+  (define (f24d-1) ; same error as above
+    (let ((sum 0.0)
+  	  (L (inlet 'multiply  *)))
+      (do ((i 0 (+ i 1)))
+  	  ((= i 3) sum)
+        (set! sum (+ sum ((L 'multiply) i 0.0001)))
+        (let-set! L 'multiply floor))))
+  
+  (define (f24d) (catch #t f24d-1 (lambda args 'error)))
+  (test (catch #t f24d-1 (lambda args 'error)) 'error)
+  
+  (define (f25) ; [638]
+    (let ((sum 0.0)
+  	  (L (inlet 'multiply  *)))
+      (do ((i 0 (+ i 1)))
+  	  ((= i size) sum)
+        (set! sum (+ sum ((L 'multiply) i 0.0001)))
+        (let-set! L 'multiply +))))
+  
+  (test (f25) 10.0004)
   )
 
 

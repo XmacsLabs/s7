@@ -2445,13 +2445,8 @@ static void init_types(void)
 #define is_immutable_let(p)            has_mid_type_bit(T_Let(p), T_MID_IMMUTABLE)
 /* T_IMMUTABLE is compatible with T_MUTABLE -- the latter is an internal bit for locally mutable numbers */
 
-#define T_SETTER                       (1 << (16 + 9))
-#define T_MID_SETTER                   (1 << 9)
-#define set_is_setter(p)               set_mid_type_bit(T_Sym(p), T_MID_SETTER)
-#define is_setter(p)                   has_mid_type_bit(T_Sym(p), T_MID_SETTER)
-/* optimizer flag for a procedure that sets some variable (set-car! for example) */
-
-#define T_ALLOW_OTHER_KEYS             T_MID_SETTER
+#define T_FULL_ALLOW_OTHER_KEYS        (1 << (16 + 9))
+#define T_ALLOW_OTHER_KEYS             (1 << 9)
 #define set_allow_other_keys(p)        set_mid_type_bit(T_Pair(p), T_ALLOW_OTHER_KEYS)
 #define allows_other_keys(p)           has_mid_type_bit(T_Pair(p), T_ALLOW_OTHER_KEYS)
 #define c_function_set_allow_other_keys(p) set_mid_type_bit(T_Fst(p), T_ALLOW_OTHER_KEYS)
@@ -2460,12 +2455,12 @@ static void init_types(void)
  *   we can't allow (define* (f :allow-other-keys)...) because there's only one nil, and besides, it does say "other".
  */
 
-#define T_LET_REMOVED                  T_MID_SETTER
+#define T_LET_REMOVED                  T_ALLOW_OTHER_KEYS
 #define let_set_removed(p)             set_mid_type_bit(T_Let(p), T_LET_REMOVED)
 #define let_removed(p)                 has_mid_type_bit(T_Let(p), T_LET_REMOVED)
 /* mark lets that have been removed from the heap or checked for that possibility */
 
-#define T_HAS_EXPRESSION               T_MID_SETTER
+#define T_HAS_EXPRESSION               T_ALLOW_OTHER_KEYS
 #define slot_set_has_expression(p)     set_mid_type_bit(T_Slt(p), T_HAS_EXPRESSION)
 #define slot_has_expression(p)         has_mid_type_bit(T_Slt(p), T_HAS_EXPRESSION)
 
@@ -2507,7 +2502,7 @@ static s7_pointer clear_is_mutable(s7_pointer p) {clear_mid_type_bit(p, T_MID_MU
 #define set_is_elist(p)                set_mid_type_bit(T_Lst(p), T_MID_IS_ELIST)
 #define is_elist(p)                    has_mid_type_bit(T_Lst(p), T_MID_IS_ELIST)
 
-#define T_NO_INT_OPT                   T_MID_SETTER
+#define T_NO_INT_OPT                   T_ALLOW_OTHER_KEYS
 #define set_no_int_opt(p)              set_mid_type_bit(T_Pair(p), T_NO_INT_OPT)
 #define no_int_opt(p)                  has_mid_type_bit(T_Pair(p), T_NO_INT_OPT)
 
@@ -2515,7 +2510,7 @@ static s7_pointer clear_is_mutable(s7_pointer p) {clear_mid_type_bit(p, T_MID_MU
 #define set_no_float_opt(p)            set_mid_type_bit(T_Pair(p), T_NO_FLOAT_OPT)
 #define no_float_opt(p)                has_mid_type_bit(T_Pair(p), T_NO_FLOAT_OPT)
 
-#define T_INTEGER_KEYS                 T_MID_SETTER
+#define T_INTEGER_KEYS                 T_ALLOW_OTHER_KEYS
 #define set_has_integer_keys(p)        set_mid_type_bit(T_Pair(p), T_INTEGER_KEYS)
 #define has_integer_keys(p)            has_mid_type_bit(T_Pair(p), T_INTEGER_KEYS)
 
@@ -2836,7 +2831,7 @@ static s7_pointer clear_is_mutable(s7_pointer p) {clear_mid_type_bit(p, T_MID_MU
 
 #define T_FULL_IS_TRANSLUCENT          T_FULL_UNKNOPT
 #define T_IS_TRANSLUCENT               T_UNKNOPT
-#define is_translucent(p)              has_high_type_bit(p, T_IS_TRANSLUCENT)
+#define is_translucent(p)              (((is_symbol(p)) || (is_c_function(p))) && (has_high_type_bit(p, T_IS_TRANSLUCENT)))
 #define set_is_translucent(p)          do {set_high_type_bit(T_Sym(p), T_IS_TRANSLUCENT); set_high_type_bit(T_Fnc(global_value(p)), T_IS_TRANSLUCENT);} while (0)
 
 #define T_MAC_OK                       T_UNKNOPT
@@ -2848,6 +2843,11 @@ static s7_pointer clear_is_mutable(s7_pointer p) {clear_mid_type_bit(p, T_MID_MU
 #define T_SAFETY_CHECKED               (1 << 12)
 #define is_safety_checked(p)           has_high_type_bit(T_Pair(p), T_SAFETY_CHECKED)
 #define set_safety_checked(p)          do {if (in_heap(p)) set_high_type_bit(T_Pair(p), T_SAFETY_CHECKED);} while (0)
+
+#define T_SETTER                       T_SAFETY_CHECKED
+#define set_is_setter(p)               do {set_high_type_bit(T_Sym(p), T_SETTER); set_high_type_bit(global_value(p), T_SETTER);} while (0)
+#define is_setter(p)                   ((has_high_type_bit(p, T_SETTER)) && (!is_pair(p)))
+/* optimizer flag for a procedure that sets some variable (set-car! for example) */
 
 #define T_FULL_HAS_FN                  (1LL << (48 + 13))
 #define T_HAS_FN                       (1 << 13)
@@ -4908,12 +4908,11 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj)
 	  /* bit 24 */
 	  ((full_typ & T_IMMUTABLE) != 0) ?      " immutable" : "",
 	  /* bit 25 */
-	  ((full_typ & T_SETTER) != 0) ?         ((is_normal_symbol(obj)) ? " setter" :
-						  ((is_pair(obj)) ? " allow-other-keys|no-int-opt" :
-						   ((is_slot(obj)) ? " has-expression" :
-						    ((is_c_function_star(obj)) ? " allow-other-keys" :
-						     ((is_let(obj)) ? " let-removed-from-heap" :
-						      " ?17?"))))) : "",
+	  ((full_typ & T_ALLOW_OTHER_KEYS) != 0) ? ((is_pair(obj)) ? " allow-other-keys|no-int-opt" :
+						    ((is_slot(obj)) ? " has-expression" :
+						     ((is_c_function_star(obj)) ? " allow-other-keys" :
+						      ((is_let(obj)) ? " let-removed-from-heap" :
+						       " ?17?")))) : "",
 	  /* bit 26 */
 	  ((full_typ & T_MUTABLE) != 0) ?        ((is_number(obj)) ? " mutable" :
 						  ((is_symbol(obj)) ? " has-keyword" :
@@ -5026,7 +5025,11 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj)
 						   ((is_c_function(obj)) ? " translucent-c-function" :
 						    " ?35?"))) : "",
 	  /* bit 36+24 */
-	  ((full_typ & T_FULL_SAFETY_CHECKED) != 0) ? ((is_pair(obj)) ? " safety-checked" : " ?36?") : "",
+	  ((full_typ & T_FULL_SAFETY_CHECKED) != 0) ? ((is_pair(obj)) ? " safety-checked" :
+						       ((is_symbol(obj)) ? " setter" :
+							((is_c_function(obj)) ? " setter-c-function" :
+							 ((is_syntax(obj)) ? " setter-syntax" :
+							  " ?36?")))) : "",
 	  /* bit 37+24 */
 	  ((full_typ & T_FULL_HAS_FN) != 0) ?    ((is_pair(obj)) ? " has-fn" : " ?37") : "",
 	  /* bit 62 */
@@ -5095,7 +5098,7 @@ static bool has_odd_bits(s7_pointer obj)
   if (((full_typ & T_VERY_SAFE_CLOSURE) != 0) && (!is_pair(obj)) && (!is_any_closure(obj)) && (!is_let(obj))) return(true);
   if (((full_typ & T_FULL_CASE_KEY) != 0) && (!is_symbol(obj)) && (!is_pair(obj))) return(true);
   if (((full_typ & T_FULL_UNKNOPT) != 0) && (!is_pair(obj)) && (!is_symbol(obj)) && (!is_c_function(obj))) return(true);
-  if (((full_typ & T_FULL_SAFETY_CHECKED) != 0) && (!is_pair(obj))) return(true);
+  if (((full_typ & T_FULL_SAFETY_CHECKED) != 0) && (!is_pair(obj)) && (!is_normal_symbol(obj)) && (!is_c_function(obj)) && (!is_syntax(obj))) return(true);
   if (((full_typ & T_DONT_EVAL_ARGS) != 0) && (!is_any_macro(obj)) && (!is_syntax(obj))) return(true);
   if (((full_typ & T_CHECKED) != 0) && (!is_slot(obj)) && (!is_pair(obj)) && (!is_symbol(obj))) return(true);
   if (((full_typ & T_SHARED) != 0) && (!t_sequence_p[type(obj)]) && (!t_structure_p[type(obj)]) && (!is_any_closure(obj))) return(true);
@@ -5120,8 +5123,8 @@ static bool has_odd_bits(s7_pointer obj)
       (!is_let(obj)) && (!is_slot(obj)) && (!is_c_function(obj)) && (!is_number(obj)) &&
       (!is_pair(obj)) && (!is_hash_table(obj)) && (!is_any_macro(obj)) && (!is_symbol(obj)))
     return(true);
-  if (((full_typ & T_SETTER) != 0) &&
-      (!is_slot(obj)) && (!is_normal_symbol(obj)) && (!is_pair(obj)) && (!is_let(obj)) && (!is_c_function_star(obj)) && (!is_let(obj)))
+  if (((full_typ & T_FULL_ALLOW_OTHER_KEYS) != 0) &&
+      (!is_slot(obj)) && (!is_pair(obj)) && (!is_let(obj)) && (!is_c_function_star(obj)) && (!is_let(obj)))
     return(true);
   if (((full_typ & T_LOCATION) != 0) &&
       (!is_pair(obj)) && (!is_input_port(obj)) && (!is_let(obj)) && (!is_any_procedure(obj)) && (!is_slot(obj)))
@@ -11368,6 +11371,16 @@ static bool direct_memq(const s7_pointer symbol, s7_pointer symbols)
   for (s7_pointer x = symbols; is_pair(x); x = cdr(x))
     if (car(x) == symbol)
 	return(true);
+  return(false);
+}
+
+static bool direct_translucent_member(const s7_pointer symbol, s7_pointer symbols)
+{
+  for (s7_pointer x = symbols; is_pair(x); x = cdr(x))
+    {
+      if (car(x) == symbol) return(true);
+      if ((is_pair(car(x))) && (is_translucent(caar(x))) && (is_pair(cdar(x))) && (cadar(x) == symbol)) return(true);
+    }
   return(false);
 }
 
@@ -69426,9 +69439,9 @@ static bool stop_is_safe(s7_scheme *sc, s7_pointer stop, s7_pointer body)
 
 static bool tree_has_setters(s7_scheme *sc, s7_pointer tree)
 {
+#if 0
   bool result;
   if (is_quote(car(tree))) return(false);
-  /* TODO: use is_setter? */
   begin_small_symbol_set(sc);
   add_symbol_to_small_symbol_set(sc, sc->set_symbol);
   add_symbol_to_small_symbol_set(sc, sc->vector_set_symbol);
@@ -69440,6 +69453,19 @@ static bool tree_has_setters(s7_scheme *sc, s7_pointer tree)
   result = pair_set_memq(sc, tree);
   end_small_symbol_set(sc);
   return(result);
+#else
+  while (true)
+    {
+      s7_pointer p = car(tree);
+      if (is_setter(p)) return(true);
+      if ((is_unquoted_pair(p)) &&
+	  (tree_has_setters(sc, p)))
+	return(true);
+      tree = cdr(tree);
+      if (!is_pair(tree)) break;
+    }
+  return(is_setter(tree));
+#endif
 }
 
 #define DO_PRINT 0
@@ -69497,7 +69523,7 @@ static bool all_floats(s7_scheme *sc, s7_pointer expr)
 static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 {
   opt_info *opc;
-  s7_pointer p, end, let = NULL, old_e = sc->curlet, stop, ind, ind_step, vars = cadr(car_x);
+  s7_pointer p, end, let = NULL, old_e = sc->curlet, stop, ind, ind_step, vars = (is_pair(cdr(car_x))) ? cadr(car_x) : sc->nil;
   int32_t i, k, var_len, body_len = len - 3, body_index, step_len, rtn_len, step_pc, init_pc, end_test_pc;
   bool has_set = false;
   opt_info *init_o[SIZE_O], *step_o[SIZE_O], *body_o[SIZE_O], *return_o[SIZE_O];
@@ -84051,6 +84077,7 @@ static bool all_ints_here(s7_scheme *sc, s7_pointer settee, s7_pointer expr, s7_
   if (!is_symbol(car(expr))) return(false);
   func = lookup_unexamined(sc, car(expr));
   if (!func) return(false);
+  /* TODO: (case ...) */
   if ((is_int_vector(func)) || (is_byte_vector(func))) return(true);
   if (!is_any_c_function(func)) return(false);
   if ((car(expr) == sc->vector_ref_symbol) && (is_pair(cdr(expr))) && (is_symbol(cadr(expr))))
@@ -84090,15 +84117,15 @@ static bool tree_inspect_stepper(s7_scheme *sc, s7_pointer stepper, s7_pointer t
 	      return(true);
 	}
       else
-	if ((is_symbol(car(p))) && (is_setter(car(p))) && (is_pair(cdr(p)))) /* need c_function too here */
+	if ((is_setter(car(p))) && (is_pair(cdr(p))))
 	  {
-	    for (s7_pointer arg = cdr(p); is_pair(cdr(arg)); arg = cdr(arg))
-	      if ((is_null(cdr(arg))) && 
-		  ((car(arg) == stepper) || 
-		   ((is_pair(car(arg))) && 
-		    (((is_saver(caar(arg))) && (direct_memq(stepper, cdar(arg)))) ||
-		     ((is_translucent(caar(arg))) && (cadar(arg) == stepper))))))
-		return(true);
+	    s7_pointer arg;
+	    for (arg = cdr(p); is_pair(cdr(arg)); arg = cdr(arg));
+	    if ((car(arg) == stepper) || 
+		((is_pair(car(arg))) && 
+		 (((is_saver(caar(arg))) && (direct_memq(stepper, cdar(arg)))) ||
+		  ((is_translucent(caar(arg))) && (cadar(arg) == stepper)))))
+	      return(true);
 	  }
   return(false);
 }
@@ -84224,7 +84251,8 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		    else
 		      {
 			s7_pointer end_and_result = caddr(code); /* sc->code */
-			/* I think this is trying to catch (set! end i) etc and needs the end-and-result form to check that */
+			/* I think this is trying to catch (set! end i) [do-test-20 s7test] etc and needs the end-and-result form to check that */
+#if 1
 			if ((is_pair(end_and_result)) &&
 			    (is_pair(car(end_and_result))) &&
 			    (!is_syntax(caar(end_and_result))))  /* 10-Jan-24 but why? */
@@ -84235,11 +84263,12 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 			    clear_match_symbol(settee);
 			    if (res) 
 			      {
-				if (MUTINT_PRINT)
-				  fprintf(stderr, "%s[%d]: %s not in %s\n", __func__, __LINE__, display(settee), display_truncated(end_and_result));
+				if (DO_PRINT)
+				  fprintf(stderr, "%s[%d]: %s in %s\n", __func__, __LINE__, display(settee), display_truncated(end_and_result));
 				do_return_false(expr);
 			      }
 			  }
+#endif
 			if (!direct_memq(settee, var_list)) /* is some local variable being set? */
 			  {
 			    s7_pointer val = lookup_unexamined(sc, settee);
@@ -84328,12 +84357,30 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 	      }
 	    else
 	      {
-		/* if (DO_PRINT) fprintf(stderr, "%s[%d]: expr: %s\n", __func__, __LINE__, display(expr)); */
+		if (DO_PRINT) fprintf(stderr, "%s[%d]: expr: %s, setter: %d, saver: %d, stepper: %s\n",
+				      __func__, __LINE__, display(expr), is_setter(car(expr)), is_saver(car(expr)), display(stepper));
+#if 1
+		if ((is_pair(expr)) && (is_pair(cdr(expr))))
+		  {
+		    if ((is_saver(car(expr))) && (direct_translucent_member(stepper, cdr(expr))))
+		      do_return_false(expr);
+		    if (is_setter(car(expr))) /* tree_inspect_stepper? */
+		      {
+			s7_pointer arg;
+			/* fprintf(stderr, "setter: %s\n", display(car(expr))); */
+			for (arg = cdr(expr); is_pair(cdr(arg)); arg = cdr(arg));
+			if ((car(arg) == stepper) || 
+			    ((is_pair(car(arg))) && 
+			     (((is_saver(caar(arg))) && (direct_memq(stepper, cdar(arg)))) ||
+			      ((is_translucent(caar(arg))) && (is_pair(cdar(arg))) && (cadar(arg) == stepper))))) /* is_pair for (write) etc */
+			  do_return_false(expr);
+		      }}
+#else
 		if ((is_pair(expr)) && (is_pair(cdr(expr))) && 
-		    ((is_saver(car(expr))) || (is_translucent(car(expr)))) && 
+		    ((is_saver(car(expr))) || (is_translucent(car(expr)))) &&
 		    (direct_memq(stepper, cdr(expr))))
-		    /* (cadr(expr) == stepper)) */
 		  do_return_false(expr);
+#endif
 		if ((is_pair(expr)) && (is_pair(cdr(expr))) && 
 		    (is_symbol(car(expr))) && 
 		    (!is_defined_initial(car(expr))) && 
@@ -84346,36 +84393,31 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 			/* fprintf(stderr, "  slot: %s\n", display(slot)); */
 			do_return_false(expr);
 		      }
-		    if (((is_saver(slot_value(slot))) || (is_translucent(slot_value(slot)))) && 
-			(direct_memq(stepper, cdr(expr))))
+		    if ((is_saver(slot_value(slot))) && /* || (is_translucent(slot_value(slot)))) && */
+			(direct_translucent_member(stepper, cdr(expr))))
 		      do_return_false(expr);
 		  }
 
 		/* if a macro, we'll eventually expand it (if *_optimize), but that requires a symbol lookup here and macroexpand */
-#if 1
-		if ((!is_optimized(expr)) ||
-		    (optimize_op(expr) == OP_UNKNOWN_NP) ||
-		    (!do_is_safe(sc, cdr(expr), stepper, var_list, step_vars, has_set)))
+#if 1 /* see t845! */
+		if (!is_optimized(expr)) 
 		  do_return_false(expr);
-
+		if (optimize_op(expr) == OP_UNKNOWN_NP) /* tmac, (mx 1 (3 4 5)) */
+		  do_return_false(expr);
+		if (!do_is_safe(sc, cdr(expr), stepper, var_list, step_vars, has_set))
+		  do_return_false(expr);
+#endif
+#if 0
 		/* is this still needed? fx_c_optcq bug -- tests seem ok without it -- 3.5 in tmat */
 		if ((is_symbol(x)) && (is_slot(global_slot(x))) && (is_syntax(global_value(x)))) /* maybe (x == sc->immutable_symbol)? */
 		  do_return_false(expr); /* syntax hidden behind some other name */
 #endif
-		if ((is_symbol(x)) && (is_setter(x)))
+		if (is_setter(x))
 		  {
 		    /* (hash-table-set! ht i 0) -- caddr is being saved, so this is not safe
 		     *   similarly (vector-set! v 0 i) etc
 		     */
-		    /* if (x == sc->let_set_symbol) do_return_false(expr); */ /* TODO: f24d + hash-table?? in timp or anything?? */
 		    /* fprintf(stderr, "x: %s, body: %s\n", display(x), display(body)); */
-#if 0
-		    if ((x == sc->let_set_symbol) &&
-			(is_symbol(cadr(expr))) &&
-			(tree_count_at_least(sc, cadr(expr), body, 0, 2) == 2))
-		      do_return_false(expr);
-#endif
-		    /* maybe op [implicit]let-ref? or any fancy op? */
 		    if ((has_set) &&
 			(!direct_memq(cadr(expr), var_list)) &&   /* non-local is being changed */
 			((cadr(expr) == stepper) ||               /* stepper is being set? */
@@ -99565,7 +99607,7 @@ then returns each var to its original value."
   sc->unless_symbol =            syntax(sc, "unless",                  OP_UNLESS,            int_two,  max_arity,  H_unless);
   sc->begin_symbol =             syntax(sc, "begin",                   OP_BEGIN,             int_zero, max_arity,  H_begin);      /* (begin) is () */
   sc->set_symbol =               syntax(sc, "set!",                    OP_SET,               int_two,  int_two,    H_set);
-  set_is_setter(sc->set_symbol); /* ? 26-Jan-24 */
+  set_is_setter(sc->set_symbol);   /* ? 26-Jan-24 */
   sc->cond_symbol =              copy_args_syntax(sc, "cond",          OP_COND,              int_one,  max_arity,  H_cond);
   sc->and_symbol =               copy_args_syntax(sc, "and",           OP_AND,               int_zero, max_arity,  H_and);
   sc->or_symbol =                copy_args_syntax(sc, "or",            OP_OR,                int_zero, max_arity,  H_or);
@@ -101290,7 +101332,7 @@ int main(int argc, char **argv)
  * tcopy              5546   2539   2375   2386   2352   2348
  * tload                     3046   2404   2566   2506   2465
  * trclo       8248   2782   2615   2634   2622   2499   2476
- * tmat               3042   2524   2578   2590   2522   2516  2681
+ * tmat               3042   2524   2578   2590   2522   2516  2665
  * fbench      2933   2583   2460   2430   2478   2536   2536
  * tsort       3683   3104   2856   2804   2858   2858   2858
  * titer       4550   3349   3070   2985   2966   2917   2917
@@ -101303,7 +101345,7 @@ int main(int argc, char **argv)
  * tcase              4793   4439   4430   4439   4376   4378
  * tmap               8774   4489   4541   4586   4380   4377
  * tlet        11.0   6974   5609   5980   5965   4470   4466
- * tfft               7729   4755   4476   4536   4538   4538  4625
+ * tfft               7729   4755   4476   4536   4538   4538  4620
  * tshoot             5447   5183   5055   5034   4833   4774
  * tstar              6705   5834   5278   5177   5059   5055
  * concordance 10.0   6342   5488   5162   5180   5259   5272    5281
@@ -101313,7 +101355,7 @@ int main(int argc, char **argv)
  * trec        19.6   6980   6599   6656   6658   6015   6015
  * tgsl               7802   6373   6282   6208   6208   6213
  * tset                             6260   6364   6278   6274    6293
- * tleft       12.2   9753   7537   7331   7331   6393   6393  6876
+ * tleft       12.2   9753   7537   7331   7331   6393   6393
  * tmisc                            7614   7115   7130   7098
  * tclo               8025   7645   8809   7770   7627   7640
  * tgc                10.4   7763   7579   7617   7619   7649
@@ -101324,8 +101366,8 @@ int main(int argc, char **argv)
  * tmap-hash                                      10.3   10.3
  * tgen               11.4   12.0   12.1   12.2   12.4   12.4
  * tall        15.9   15.6   15.6   15.6   15.1   15.1   15.1
- * timp               24.4   20.0   19.6   19.7   15.5   15.5    15.6
- * tmv                21.9   21.1   20.7   20.6   16.6   16.6    16.7
+ * timp               24.4   20.0   19.6   19.7   15.5   15.5
+ * tmv                21.9   21.1   20.7   20.6   16.6   16.6
  * calls              37.5   37.0   37.5   37.1   37.1   37.0    37.2
  * sg                        55.9   55.8   55.4   55.3   55.2
  * tbig              175.8  156.5  148.1  146.2  145.5  144.8
@@ -101350,7 +101392,6 @@ int main(int argc, char **argv)
  *   (define (read-int port) (logior (read-byte port) (ash (read-byte port) 8) (ash (read-byte port) 16) (ash (read-byte port) 24) ...)) -- ugly!
  * mutints: check all int++ steppers for saver bit, move make_mutable to the point of use and clear afterwards everywhere
  * call/cc ->call/exit but see b-func in s7test 40699 [cc in rtn val], call/cc_chooser?
- * for setter on symbol/c-function move t_setter to safety_checked?
  * timp comments are probably out-of-date
  * "most complex": optimize_func_two_args, eval, fx_choose, fx_tree_in
  */
