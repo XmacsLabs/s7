@@ -87,6 +87,8 @@ end
     (if (let? e)
 	(reverse! (map values e))
 	(error 'wrong-type-arg "let->list argument should be an environment: ~A" e)))
+  ;; this is not a full implementation of let->list -- if "e" is not a let, we need to look for its associated let
+  ;;    c_object_let, c_pointre_info, *s7*?, rootlet is special
 
   (define* (string->list str (start 0) end)
     (if (and (string? str)

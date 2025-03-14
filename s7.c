@@ -1478,9 +1478,6 @@ struct s7_scheme {
 #endif
 };
 
-#define MUTINT 1
-#define MUTINT_PRINT 0
-
 static no_return void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info);
 static s7_pointer wrap_string(s7_scheme *sc, const char *str, s7_int len);
 
@@ -2058,7 +2055,6 @@ static void init_types(void)
   #define T_Mac(P) check_ref_mac(P,                      __func__, __LINE__)                /* a non-C macro */
   #define T_Met(P) check_ref_met(P,                      __func__, __LINE__)                /* anything that might contain a method */
   #define T_Muti(P) check_ref_muti(P,                    __func__, __LINE__)                /* a mutable integer */
-  #define T_Nmut(Q, P) check_ref_nmut(Q, P,              __func__, __LINE__)                /* not mutable number */
   #define T_Nmv(P) check_ref_nmv(P,                      __func__, __LINE__)                /* not multiple-value, not free, only affects slot values */
   #define T_Num(P) check_ref_num(P,                      __func__, __LINE__)                /* any number (not bignums) */
   #define T_Nvc(P) check_ref_one(P, T_VECTOR,            __func__, __LINE__, "sweep", NULL)
@@ -2081,7 +2077,6 @@ static void init_types(void)
   #define T_Sln(P) check_ref_sln(P,                      __func__, __LINE__)                /* slot or nil or NULL */
   #define T_Slt(P) check_ref_one(P, T_SLOT,              __func__, __LINE__, NULL, NULL)
   #define T_Stk(P) check_ref_one(P, T_STACK,             __func__, __LINE__, NULL, NULL)
-  #define T_Step(P) check_ref_step(P,                    __func__, __LINE__)                /* a safe stepper (slot) */
   #define T_Str(P) check_ref_one(P, T_STRING,            __func__, __LINE__, "sweep", NULL)
   #define T_SVec(P) check_ref_svec(P,                    __func__, __LINE__)                /* subvector */
   #define T_Sym(P) check_ref_one(P, T_SYMBOL,            __func__, __LINE__, "sweep", "remove_gensym_from_symbol_table")
@@ -2125,7 +2120,6 @@ static void init_types(void)
   #define T_Mac(P)  P
   #define T_Met(P)  P
   #define T_Muti(P) P
-  #define T_Nmut(Q, P) P
   #define T_Nmv(P)  P
   #define T_Num(P)  P
   #define T_Nvc(P)  P
@@ -2148,7 +2142,6 @@ static void init_types(void)
   #define T_Sln(P)  P
   #define T_Slt(P)  P
   #define T_Stk(P)  P
-  #define T_Step(P) P
   #define T_Str(P)  P
   #define T_SVec(P) P
   #define T_Sym(P)  P
@@ -2377,11 +2370,6 @@ static void init_types(void)
 #define T_TC                           T_MID_LOW_COUNT
 #define has_tc(p)                      has_mid_type_bit(T_Pair(p), T_TC)
 #define set_has_tc(p)                  set_mid_type_bit(T_Pair(p), T_TC)
-
-#define T_SAVED_STEPPER                T_MID_LOW_COUNT
-#define is_saved_stepper(p)            has_mid_type_bit(T_Sym(p), T_SAVED_STEPPER)
-#define set_is_saved_stepper(p)        do {set_mid_type_bit(T_Sym(p), T_SAVED_STEPPER); if (MUTINT_PRINT) fprintf(stderr, "%s[%d]: %s saved\n", __func__, __LINE__, display(p));} while (0)
-#define clear_is_saved_stepper(p)      clear_mid_type_bit(T_Sym(p), T_SAVED_STEPPER)
 
 #define T_SAFE_PROCEDURE               (1 << (16 + 5))
 #define T_MID_SAFE_PROCEDURE           (1 << 5)
@@ -3107,8 +3095,7 @@ static s7_pointer clear_is_mutable(s7_pointer p) {clear_mid_type_bit(p, T_MID_MU
 
 #define car(p)                         (T_Pair(p))->object.cons.car
 #define unchecked_car(p)               (T_Pos(p))->object.cons.car
-/* #define set_car(p, Val)                car(p) = Val */                  /* can be a slot or #<unused> or #<catch> etc */
-#define set_car(p, Val)                car(p) = T_Nmut(p, T_Pos(Val))
+#define set_car(p, Val)                car(p) = Val                   /* can be a slot or #<unused> or #<catch> etc */
 #define cdr(p)                         (T_Pair(p))->object.cons.cdr
 #define unchecked_set_cdr(p, Val)      cdr(p) = T_Exs(Val)            /* #<unused> in g_gc */
 #define unchecked_cdr(p)               (T_Exs(p))->object.cons.cdr
@@ -4890,9 +4877,7 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj)
 	  /* bit 19 */
 	  ((full_typ & T_SHARED) != 0) ?         ((is_sequence(obj)) ? " shared" : " ?11?") : "",
 	  /* bit 20 */
-	  ((full_typ & T_LOW_COUNT) != 0) ?      ((is_pair(obj)) ? " low-count" :
-						  ((is_symbol(obj)) ? " saved-stepper" :
-						   " ?12?")) : "",
+	  ((full_typ & T_LOW_COUNT) != 0) ?      ((is_pair(obj)) ? " low-count" : " ?12?") : "",
 	  /* bit 21 */
 	  ((full_typ & T_SAFE_PROCEDURE) != 0) ? ((is_applicable(obj)) ? " safe-procedure" : " ?13?") : "",
 	  /* bit 22 */
@@ -5093,7 +5078,7 @@ static bool has_odd_bits(s7_pointer obj)
   if (((full_typ & T_MULTIPLE_VALUE) != 0) && (!is_symbol(obj)) && (!is_pair(obj))) return(true);
   if (((full_typ & T_UNSAFE_DO) != 0) && (!is_pair(obj)) && (!is_let(obj)) && (!is_any_c_function(obj)) && (!is_symbol(obj))) return(true);
   if (((full_typ & T_ITER_OK) != 0) && (!is_iterator(obj)) && (!is_pair(obj)) && (!is_slot(obj)) && (!is_c_function(obj)) && (!is_symbol(obj))) return(true);
-  if (((full_typ & T_LOW_COUNT) != 0) && (!is_pair(obj)) && (!is_symbol(obj))) return(true);
+  if (((full_typ & T_LOW_COUNT) != 0) && (!is_pair(obj))) return(true);
   if (((full_typ & T_UNSAFE) != 0) && (!is_symbol(obj)) && (!is_slot(obj)) && (!is_let(obj)) && (!is_pair(obj))) return(true);
   if (((full_typ & T_VERY_SAFE_CLOSURE) != 0) && (!is_pair(obj)) && (!is_any_closure(obj)) && (!is_let(obj))) return(true);
   if (((full_typ & T_FULL_CASE_KEY) != 0) && (!is_symbol(obj)) && (!is_pair(obj))) return(true);
@@ -5529,34 +5514,7 @@ static s7_pointer check_nref(s7_pointer p, const char *func, int32_t line)
   return(p);
 }
 
-static s7_pointer check_ref_nmut(s7_pointer q, s7_pointer p, const char *func, int32_t line) /* p must not be a mutable number */
-{
-  if ((S7_DEBUGGING) && (MUTINT) && (MUTINT_PRINT) && (in_heap(q))) /* and not in sc->args! see op_safe_dotimes[86801] */
-    {
-      if ((is_number(p)) && (is_mutable(p)) && (in_heap(p)))
-	{
-	  /* is_mutable_number has T_Num(val) -- several other types use this bit, in_heap because mutable is also used to mean "no name" */
-	  char *str = describe_type_bits(cur_sc, p);
-	  fprintf(stderr, "%s%s[%d]: value is mutable, %p %s %s, from %s[%d]%s\n", bold_text, func, line, p, display(p), str, p->gc_func, p->gc_line, unbold_text);
-	  free(str);
-	  if (cur_sc->stop_at_error) abort();
-	}}
-  return(p);
-}
-
-static s7_pointer check_ref_muti(s7_pointer p, const char *func, int32_t line) /* p must be a mutable integer */
-{
-  if ((!is_number(p)) || (!is_t_integer(p)) || (!is_mutable(p)))
-    {
-      char *str = describe_type_bits(cur_sc, p);
-      fprintf(stderr, "%s%s[%d]: value is not a mutable integer, %p %s %s%s\n", bold_text, func, line, p, display(p), str, unbold_text);
-      free(str);
-      if (cur_sc->stop_at_error) abort();
-    }
-  return(p);
-}
-
-static s7_pointer check_ref_nmv(s7_pointer p, const char *func, int32_t line) /* must precede check_ref_step, slot_value includes T_Nmv */
+static s7_pointer check_ref_nmv(s7_pointer p, const char *func, int32_t line)
 {
   uint8_t typ = unchecked_type(p);
   check_nref(p, func, line);
@@ -5570,21 +5528,6 @@ static s7_pointer check_ref_nmv(s7_pointer p, const char *func, int32_t line) /*
       fprintf(stderr, "%s%s[%d]: slot_value is %s?%s\n", bold_text, func, line, s7_type_names[typ], unbold_text);
       if (cur_sc->stop_at_error) abort();
     }
-  return(p);
-}
-
-static s7_pointer check_ref_step(s7_pointer p, const char *func, int32_t line) /* p (a slot) must be a safe stepper */
-{
-  if (!is_slot(p))
-    fprintf(stderr, "%s%s[%d]: not a slot but a %s%s\n", bold_text, func, line, s7_type_names[unchecked_type(p)], unbold_text);
-  else
-    if (is_saved_stepper(p))
-      {
-	char *str = describe_type_bits(cur_sc, p);
-	fprintf(stderr, "%s%s[%d]: %s is a saved stepper, %s, from %s[%d]%s\n", bold_text, func, line, display(p), str, p->gc_func, p->gc_line, unbold_text);
-	free(str);
-	if (cur_sc->stop_at_error) abort();
-      }
   return(p);
 }
 
@@ -69439,21 +69382,6 @@ static bool stop_is_safe(s7_scheme *sc, s7_pointer stop, s7_pointer body)
 
 static bool tree_has_setters(s7_scheme *sc, s7_pointer tree)
 {
-#if 0
-  bool result;
-  if (is_quote(car(tree))) return(false);
-  begin_small_symbol_set(sc);
-  add_symbol_to_small_symbol_set(sc, sc->set_symbol);
-  add_symbol_to_small_symbol_set(sc, sc->vector_set_symbol);
-  add_symbol_to_small_symbol_set(sc, sc->list_set_symbol);
-  add_symbol_to_small_symbol_set(sc, sc->let_set_symbol);
-  add_symbol_to_small_symbol_set(sc, sc->hash_table_set_symbol);
-  add_symbol_to_small_symbol_set(sc, sc->set_car_symbol);
-  add_symbol_to_small_symbol_set(sc, sc->set_cdr_symbol);
-  result = pair_set_memq(sc, tree);
-  end_small_symbol_set(sc);
-  return(result);
-#else
   while (true)
     {
       s7_pointer p = car(tree);
@@ -69465,7 +69393,6 @@ static bool tree_has_setters(s7_scheme *sc, s7_pointer tree)
       if (!is_pair(tree)) break;
     }
   return(is_setter(tree));
-#endif
 }
 
 #define DO_PRINT 0
@@ -69541,12 +69468,6 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
   if (!is_pair(end))
     return_false(sc, car_x);
 
-#if MUTINT
-  /* happens very rarely (three times in s7test) -- looks odd!
-   *   opt_cell_do[69386]: return(false) because do_passes_safety_check is unhappy: (do ((i 0 (+ i 1))) ((= i (- n d))) (if (= (logand i p) r) (set! network (cons (list i (+ i d)) network))))
-   *   opt_cell_do[69386]: return(false) because do_passes_safety_check is unhappy: (do ((lsum 0) (k 0 (+ k 1))) ((= k 8) (set! sum (+ sum lsum))) (set! lsum (+ lsum k)))
-   *   opt_cell_do[69386]: return(false) because do_passes_safety_check is unhappy: (do ((lsum 0) (k 0 (+ k 1))) ((= k 8) (set! sum (+ sum lsum))) (set! lsum (+ lsum k)))
-   */
   /* TODO: why check the topmost do-local all by its lonesome? */
   if ((is_pair(vars)) && (is_pair(car(vars))) && (is_pair(cdar(vars))) && (is_pair(cddar(vars)))) /* car_x is the do form */
     {
@@ -69555,12 +69476,11 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
       if (!do_passes_safety_check(sc, cdddr(car_x), caar(vars), vars, &has_set))
 	{
 	  sc->code = old_code;
-	  if (MUTINT_PRINT) fprintf(stderr, "%s[%d]: return(false) because do_passes_safety_check is unhappy: %s\n", __func__, __LINE__, display(car_x));
+	  if (DO_PRINT) fprintf(stderr, "%s[%d]: return(false) because do_passes_safety_check is unhappy: %s\n", __func__, __LINE__, display(car_x));
 	  return_false(sc, car_x);
 	}
       sc->code = old_code;
     }
-#endif
 
   opc = alloc_opt_info(sc);
   let = inline_make_let(sc, sc->curlet);
@@ -71911,15 +71831,10 @@ static Inline void inline_op_map_gather(s7_scheme *sc) /* called thrice in eval,
     {
       if (is_multiple_value(sc->value))
 	counter_set_result(sc->args, revappend(sc, multiple_value(sc->value), counter_result(sc->args)));
-      else 
-	{
-#if MUTINT
-	  if ((is_mutable(sc->value)) && (is_t_integer(sc->value)))
-	    counter_set_result(sc->args, cons(sc, make_integer(sc, integer(sc->value)), counter_result(sc->args)));
-	  else
-#endif
-	  counter_set_result(sc->args, cons(sc, sc->value, counter_result(sc->args)));
-	}
+      else
+	if ((is_mutable(sc->value)) && (is_t_integer(sc->value)))
+	  counter_set_result(sc->args, cons(sc, make_integer(sc, integer(sc->value)), counter_result(sc->args)));
+	else counter_set_result(sc->args, cons(sc, sc->value, counter_result(sc->args)));
     }
 }
 
@@ -84079,6 +83994,9 @@ static bool all_ints_here(s7_scheme *sc, s7_pointer settee, s7_pointer expr, s7_
   if (!func) return(false);
   /* TODO: (case ...) */
   if ((is_int_vector(func)) || (is_byte_vector(func))) return(true);
+
+  if (is_either_macro(func)) return(true);
+
   if (!is_any_c_function(func)) return(false);
   if ((car(expr) == sc->vector_ref_symbol) && (is_pair(cdr(expr))) && (is_symbol(cadr(expr))))
     {
@@ -84097,39 +84015,6 @@ static bool all_ints_here(s7_scheme *sc, s7_pointer settee, s7_pointer expr, s7_
       return(false);
   return(true);
 }
-
-#if MUTINT
-static bool tree_inspect_stepper(s7_scheme *sc, s7_pointer stepper, s7_pointer tree)
-{
-  /* if (DO_PRINT) fprintf(stderr, " %s: %s\n", __func__, display(tree)); */
-  for (s7_pointer p = tree; is_pair(p); p = cdr(p))
-    if (is_pair(car(p)))
-      {
-	if (tree_inspect_stepper(sc, stepper, car(p)))
-	  return(true);
-      }
-    else
-      if (((is_symbol(car(p))) || (is_c_function(car(p)))) && (is_saver(car(p))))
-	{
-	  for (s7_pointer arg = cdr(p); is_pair(arg); arg = cdr(arg))
-	    if ((car(arg) == stepper) || 
-		((is_pair(car(arg))) && (is_translucent(caar(arg))) && (cadar(arg) == stepper)))
-	      return(true);
-	}
-      else
-	if ((is_setter(car(p))) && (is_pair(cdr(p))))
-	  {
-	    s7_pointer arg;
-	    for (arg = cdr(p); is_pair(cdr(arg)); arg = cdr(arg));
-	    if ((car(arg) == stepper) || 
-		((is_pair(car(arg))) && 
-		 (((is_saver(caar(arg))) && (direct_memq(stepper, cdar(arg)))) ||
-		  ((is_translucent(caar(arg))) && (cadar(arg) == stepper)))))
-	      return(true);
-	  }
-  return(false);
-}
-#endif
 
 #if DO_PRINT
 #define do_return_false(body) do {if (DO_PRINT) fprintf(stderr, "  %s[%d] from %s[%d]: %s\n", __func__, __LINE__, funcly, linely, display(body)); return(false);} while (0)
@@ -84240,7 +84125,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 			  {
 			    s7_pointer setv = lookup_unexamined(sc, car(settee));
 			    if (!((setv) &&
-				  ((is_sequence(setv)) || 
+				  ((is_sequence(setv)) ||
 				   ((is_c_function(setv)) && (is_safe_procedure(c_function_setter(setv)))))))
 			      do_return_false(expr);
 			    /* if ((has_set) && (!is_sequence(setv))) (*has_set) = true; */
@@ -84261,7 +84146,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 			    set_match_symbol(settee);
 			    res = tree_match(car(end_and_result));  /* (set! end ...) in some fashion */
 			    clear_match_symbol(settee);
-			    if (res) 
+			    if (res)
 			      {
 				if (DO_PRINT)
 				  fprintf(stderr, "%s[%d]: %s in %s\n", __func__, __LINE__, display(settee), display_truncated(end_and_result));
@@ -84275,36 +84160,26 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 			    if (has_set) (*has_set) = true;
 			    if ((val) && (is_t_integer(val)) && (!all_ints_here(sc, settee, caddr(expr), step_vars)))
 			      {
-				if (MUTINT_PRINT) 
-				  fprintf(stderr, "%s[%d]: %s not all_ints_here in %s with %s\n", __func__, __LINE__, 
-					  display(settee), display_truncated(caddr(expr)), display(step_vars));
+				if (DO_PRINT)
+				  fprintf(stderr, "%s[%d]: %s (%s) not all_ints_here in %s with %s\n", __func__, __LINE__,
+					  display(settee), display(val), display_truncated(caddr(expr)), display(step_vars));
 				do_return_false(expr);
 			      }
 			  }}
 		    if (!do_is_safe(sc, cddr(expr), stepper, var_list, step_vars, has_set))
 		      {
-			if (MUTINT_PRINT) 
-			  fprintf(stderr, "%s[%d]: !do_is_safe %s %s %s %s\n", __func__, __LINE__, 
+			if (DO_PRINT)
+			  fprintf(stderr, "%s[%d]: !do_is_safe %s %s %s %s\n", __func__, __LINE__,
 				  display(expr), display(stepper), display(var_list), display(step_vars));
 			do_return_false(expr);
 		      }
 		    if (!safe_stepper_expr(sc, expr, stepper))     /* is step var's value used as the stored value by set!? */
 		      { /* but this is safe if (set! loc i) where i is int because it checks and copies */
-			if ((MUTINT_PRINT) || (DO_PRINT))
-			  fprintf(stderr, "  %s%s[%d]: !safe_stepper_expr %s with %s%s\n", 
+			if ((DO_PRINT) || (DO_PRINT))
+			  fprintf(stderr, "  %s%s[%d]: !safe_stepper_expr %s with %s%s\n",
 				  bold_text, __func__, __LINE__, display(expr), display(stepper), unbold_text);
 			do_return_false(expr);
-		      }
-#if MUTINT
-		    if ((is_symbol(stepper)) && /* can be ()? */
-			(!is_saved_stepper(stepper)) &&
-			(tree_inspect_stepper(sc, stepper, body)))
-		      {
-			set_is_saved_stepper(stepper);
-			if (MUTINT_PRINT) fprintf(stderr, "%s[%d]: saved stepper: %s in %s\n", __func__, __LINE__, display(stepper), display(body));
-		      }
-#endif
-		  }
+		      }}
 		  break;
 
 		case OP_LET_TEMPORARILY:
@@ -84359,31 +84234,26 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 	      {
 		if (DO_PRINT) fprintf(stderr, "%s[%d]: expr: %s, setter: %d, saver: %d, stepper: %s\n",
 				      __func__, __LINE__, display(expr), is_setter(car(expr)), is_saver(car(expr)), display(stepper));
-#if 1
+
 		if ((is_pair(expr)) && (is_pair(cdr(expr))))
 		  {
 		    if ((is_saver(car(expr))) && (direct_translucent_member(stepper, cdr(expr))))
 		      do_return_false(expr);
-		    if (is_setter(car(expr))) /* tree_inspect_stepper? */
+		    if (is_setter(car(expr))) /* tree_inspect_stepper in tmp? */
 		      {
 			s7_pointer arg;
 			/* fprintf(stderr, "setter: %s\n", display(car(expr))); */
 			for (arg = cdr(expr); is_pair(cdr(arg)); arg = cdr(arg));
-			if ((car(arg) == stepper) || 
-			    ((is_pair(car(arg))) && 
+			if ((car(arg) == stepper) ||
+			    ((is_pair(car(arg))) &&
 			     (((is_saver(caar(arg))) && (direct_memq(stepper, cdar(arg)))) ||
 			      ((is_translucent(caar(arg))) && (is_pair(cdar(arg))) && (cadar(arg) == stepper))))) /* is_pair for (write) etc */
 			  do_return_false(expr);
 		      }}
-#else
-		if ((is_pair(expr)) && (is_pair(cdr(expr))) && 
-		    ((is_saver(car(expr))) || (is_translucent(car(expr)))) &&
-		    (direct_memq(stepper, cdr(expr))))
-		  do_return_false(expr);
-#endif
-		if ((is_pair(expr)) && (is_pair(cdr(expr))) && 
-		    (is_symbol(car(expr))) && 
-		    (!is_defined_initial(car(expr))) && 
+
+		if ((is_pair(expr)) && (is_pair(cdr(expr))) &&
+		    (is_symbol(car(expr))) &&
+		    (!is_defined_initial(car(expr))) &&
 		    (direct_memq(stepper, cdr(expr))))
 		  {
 		    s7_pointer slot = s7_slot(sc, car(expr));
@@ -84400,17 +84270,17 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 
 		/* if a macro, we'll eventually expand it (if *_optimize), but that requires a symbol lookup here and macroexpand */
 #if 1 /* see t845! */
-		if (!is_optimized(expr)) 
+		{
+		  s7_pointer val = (is_symbol(x)) ? lookup_unexamined(sc, x) : x;
+		  if ((val) && (is_either_macro(val)) && (!is_setter(val))) return(true);
+		}
+
+		if (!is_optimized(expr))
 		  do_return_false(expr);
 		if (optimize_op(expr) == OP_UNKNOWN_NP) /* tmac, (mx 1 (3 4 5)) */
 		  do_return_false(expr);
 		if (!do_is_safe(sc, cdr(expr), stepper, var_list, step_vars, has_set))
 		  do_return_false(expr);
-#endif
-#if 0
-		/* is this still needed? fx_c_optcq bug -- tests seem ok without it -- 3.5 in tmat */
-		if ((is_symbol(x)) && (is_slot(global_slot(x))) && (is_syntax(global_value(x)))) /* maybe (x == sc->immutable_symbol)? */
-		  do_return_false(expr); /* syntax hidden behind some other name */
 #endif
 		if (is_setter(x))
 		  {
@@ -84430,7 +84300,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		      (*has_set) = true;
 		    /* and also set stepper unsafe? and also any other steppers */
 		    /* need a way to lock unsafe_stepper -- maybe set safe, clear here, do not set elsewhere */
-		    
+
 		    if (!do_is_safe(sc, cddr(expr), stepper, var_list, step_vars, has_set))
 		      do_return_false(expr);
 		    if (!safe_stepper_expr(sc, expr, stepper))
@@ -84801,42 +84671,35 @@ static s7_pointer check_do(s7_scheme *sc)
 		      pair_set_syntax_op(car(body), symbol_syntax_op_checked(car(body)));
 		      pair_set_syntax_op(form, OP_DOTIMES_P);          /* dotimes_p: simple + syntax body + 1 expr */
 		    }
-		  if ((caddr(step_expr) == int_one) || (cadr(step_expr) == int_one))
+		  if (((caddr(step_expr) == int_one) || (cadr(step_expr) == int_one)) &&
+		      (do_is_safe(sc, body, car(v), sc->nil, vars, &has_set)))
 		    {
-		      if (!do_is_safe(sc, body, car(v), sc->nil, vars, &has_set))
+		      opcode_t op = optimize_op(car(body));
+		      pair_set_syntax_op(form, OP_SAFE_DO);             /* safe_do: body is safe, step by 1 */
+		      /* no semipermanent let here because apparently do_is_safe accepts recursive calls? */
+
+		      /* this code sets the hop bit in any outer safe function call.  I tried a procedure (leaf_hopper in tmp) that
+		       *   walked the body setting all the hop bits; this worked in all tests, but cost as much as it saved.
+		       *   this was in the inner block below originally.
+		       */
+		      if ((is_optimized(car(body))) &&
+			  ((is_safe_c_op(op)) || (is_safe_closure_op(op)) || (is_safe_closure_star_op(op))) &&
+			  (!op_has_hop(car(body))))
+			set_optimize_op(car(body), op + 1); /* set hop bit if it's a safe_closure call in a safe do loop */
+
+		      if ((!has_set) &&
+			  (c_function_class(opt1_cfunc(end)) == sc->num_eq_class))
 			{
-			  /* if (MUTINT) set_unsafe_do(body); */
-			  /* if (DO_PRINT) fprintf(stderr, "  %s[%d]: do_is_unsafe %s\n", __func__, __LINE__, display(body)); */
-			  /* if (MUTINT) return(body); */ /* we used to ignore this (not set OP_SAFE_DO but just return) */
+			  /* vars is of the form ((i 0 (+ i 1))) -- 1 var etc */
+			  pair_set_syntax_op(form, OP_SAFE_DOTIMES);   /* safe_dotimes: end is = */
+			  if (is_fxable(sc, car(body)))
+			    fx_annotate_arg(sc, body, set_plist_1(sc, caar(vars))); /* if _args, fxification ignored? (need safe_closure_s_na etc) */
+			  /* is this redundant? safe_closure_s_a must already have fx, and otherwise it is ignored */
 			}
-		      else
-			{
-			  opcode_t op = optimize_op(car(body));
-			  pair_set_syntax_op(form, OP_SAFE_DO);             /* safe_do: body is safe, step by 1 */
-			  /* no semipermanent let here because apparently do_is_safe accepts recursive calls? */
-			  
-			  /* this code sets the hop bit in any outer safe function call.  I tried a procedure (leaf_hopper in tmp) that
-			   *   walked the body setting all the hop bits; this worked in all tests, but cost as much as it saved.
-			   *   this was in the inner block below originally.
-			   */
-			  if ((is_optimized(car(body))) &&
-			      ((is_safe_c_op(op)) || (is_safe_closure_op(op)) || (is_safe_closure_star_op(op))) &&
-			      (!op_has_hop(car(body))))
-			    set_optimize_op(car(body), op + 1); /* set hop bit if it's a safe_closure call in a safe do loop */
-			  
-			  if ((!has_set) &&
-			      (c_function_class(opt1_cfunc(end)) == sc->num_eq_class))
-			    {
-			      /* vars is of the form ((i 0 (+ i 1))) -- 1 var etc */
-			      pair_set_syntax_op(form, OP_SAFE_DOTIMES);   /* safe_dotimes: end is = */
-			      if (is_fxable(sc, car(body)))
-				fx_annotate_arg(sc, body, set_plist_1(sc, caar(vars))); /* if _args, fxification ignored? (need safe_closure_s_na etc) */
-			      /* is this redundant? safe_closure_s_a must already have fx, and otherwise it is ignored */
-			    }
-			  fx_tree(sc, body, car(v), NULL, NULL, false);
-			  if (stack_top_op(sc) == OP_SAFE_DO_STEP)
-			    fx_tree_outer(sc, body, caaar(stack_top_code(sc)), NULL, NULL, true);
-			}}}
+		      fx_tree(sc, body, car(v), NULL, NULL, false);
+		      if (stack_top_op(sc) == OP_SAFE_DO_STEP)
+			fx_tree_outer(sc, body, caaar(stack_top_code(sc)), NULL, NULL, true);
+		    }}
 	      return(sc->nil);
 	    }}}
 
@@ -86367,16 +86230,6 @@ static /* inline */ bool op_dotimes_step_o(s7_scheme *sc) /* called once in eval
 static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool loop_end_ok)
 {
   s7_pointer step_val;
-#if MUTINT
-  if (is_unsafe_do(code))
-    {
-      if (MUTINT_PRINT) fprintf(stderr, "%s[%d]: return(false) since is_unsafe_do(code): %s\n", __func__, __LINE__, display_truncated(code));
-      /* return_false(sc, code); */
-    }
-#else
-  if ((is_unsafe_do(code)) && (MUTINT_PRINT))
-    fprintf(stderr, "%s[%d]: ignores is_unsafe_do(code): %s\n", __func__, __LINE__, display_truncated(code));
-#endif
   if (loop_end_ok)
     set_safe_stepper(sc->args);
   else set_safe_stepper(let_dox_slot1(sc->curlet));
@@ -87007,18 +86860,13 @@ static goto_t op_safe_do(s7_scheme *sc)
 	      s7_pointer val_slot = s7_slot(sc, cadr(body));
 	      s7_int step = integer(slot_value(step_slot));
 	      s7_pointer step_val = slot_value(step_slot);
-#if MUTINT
+
 	      clear_mutable_integer(step_val);
-#endif
 	      do {
 		slot_set_value(val_slot, fx_call(sc, fx_p));
-#if !MUTINT
-		set_integer(step_val, ++step);
-#else
 		slot_set_value(step_slot, make_integer(sc, step = integer(slot_value(step_slot)) + 1));
-#endif
 	      } while (step != endi); /* geq not needed here -- we're leq endi and stepping by +1 all ints */
-	      clear_mutable_integer(step_val);
+
 	      sc->value = sc->T;
 	      sc->code = cdadr(code);
 	      return(goto_safe_do_end_clauses);
@@ -93649,7 +93497,7 @@ static bool op_load_close_and_pop_if_eof(s7_scheme *sc)
     }
   if ((S7_DEBUGGING) && (!is_loader_port(current_input_port(sc)))) fprintf(stderr, "%s[%d]: %s not loading?\n", __func__, __LINE__, display(current_input_port(sc)));
   /* if *#readers* func hits error, clear_loader_port might not be undone? */
-  
+
   if (SHOW_EVAL_OPS) fprintf(stderr, "%s closing %s\n", __func__, display(current_input_port(sc)));
 
   s7_close_input_port(sc, current_input_port(sc));
@@ -101322,53 +101170,53 @@ int main(int argc, char **argv)
  * index              1016    973    967    972    988    990
  * tmock              1145   1082   1042   1045   1031   1031
  * tvect       3408   2464   1772   1669   1497   1457   1453
- * thook       7651   ----   2590   2030   2046   1731   1711    1734
+ * thook       7651   ----   2590   2030   2046   1731   1734
  * tauto                     2562   2048   1729   1760   1754
  * texit       1884   1950   1778   1741   1770   1759   1758
  * s7test             1831   1818   1829   1830   1849   1854
  * lt          2222   2172   2150   2185   1950   1892   1894
- * dup                3788   2492   2239   2097   2012   2001    2007
+ * dup                3788   2492   2239   2097   2012   2006
  * tread              2421   2419   2408   2405   2241   2248
  * tcopy              5546   2539   2375   2386   2352   2348
  * tload                     3046   2404   2566   2506   2465
  * trclo       8248   2782   2615   2634   2622   2499   2476
- * tmat               3042   2524   2578   2590   2522   2516  2665
  * fbench      2933   2583   2460   2430   2478   2536   2536
+ * tmat               3042   2524   2578   2590   2522   2703 [do_is_safe 30]
  * tsort       3683   3104   2856   2804   2858   2858   2858
  * titer       4550   3349   3070   2985   2966   2917   2917
  * tio                3752   3683   3620   3583   3127   3135
  * tbit        3836   3305   3245   3261   3264   3181   3181
  * tobj               3970   3828   3577   3508   3434   3434
  * teq                4045   3536   3486   3544   3556   3569
- * tmac               4373   ----   4193   4188   4024   4025  4721
+ * tmac               4373   ----   4193   4188   4024   4025  3937
  * tcomplex           3869   3804   3844   3888   4215   4192
  * tcase              4793   4439   4430   4439   4376   4378
  * tmap               8774   4489   4541   4586   4380   4377
  * tlet        11.0   6974   5609   5980   5965   4470   4466
- * tfft               7729   4755   4476   4536   4538   4538  4620
+ * tfft               7729   4755   4476   4536   4538   4631 [do_is_safe 8]
  * tshoot             5447   5183   5055   5034   4833   4774
  * tstar              6705   5834   5278   5177   5059   5055
- * concordance 10.0   6342   5488   5162   5180   5259   5272    5281
+ * concordance 10.0   6342   5488   5162   5180   5259   5281
  * tnum               6013   5433   5396   5409   5402   5360
  * tlist       9219   7546   6558   6240   6300   5770   5784
  * tari        14.3   12.5   6619   6662   6499   6292   5989
  * trec        19.6   6980   6599   6656   6658   6015   6015
  * tgsl               7802   6373   6282   6208   6208   6213
- * tset                             6260   6364   6278   6274    6293
+ * tset                             6260   6364   6278   6293
  * tleft       12.2   9753   7537   7331   7331   6393   6393
  * tmisc                            7614   7115   7130   7098
  * tclo               8025   7645   8809   7770   7627   7640
  * tgc                10.4   7763   7579   7617   7619   7649
- * tlamb                            8003   7941   7920   7927
+ * tlamb                            8003   7941   7920   7900
  * thash              11.7   9734   9479   9526   9283   9273
  * tform                     10.0   9992   9961   9626   9439
  * cb          12.9   11.0   9658   9564   9609   9657   9658
  * tmap-hash                                      10.3   10.3
- * tgen               11.4   12.0   12.1   12.2   12.4   12.4
+ * tgen               11.4   12.0   12.1   12.2   12.4   12.4 12.5 [do_is_safe 78]
  * tall        15.9   15.6   15.6   15.6   15.1   15.1   15.1
  * timp               24.4   20.0   19.6   19.7   15.5   15.5
  * tmv                21.9   21.1   20.7   20.6   16.6   16.6
- * calls              37.5   37.0   37.5   37.1   37.1   37.0    37.2
+ * calls              37.5   37.0   37.5   37.1   37.1   37.2
  * sg                        55.9   55.8   55.4   55.3   55.2
  * tbig              175.8  156.5  148.1  146.2  145.5  144.8
  * ------------------------------------------------------------
@@ -101390,7 +101238,7 @@ int main(int argc, char **argv)
  * read-integer|float? [read-byte could be used, but this is in regard to (open-input-file "/dev/urandom")), maybe byte-size|number-of-bytes arg to read-byte?
  *   read-byte now is hardly different from read-char.  read here returns a "symbol"! (it assumes the file has chars, binary-port in r7rs).
  *   (define (read-int port) (logior (read-byte port) (ash (read-byte port) 8) (ash (read-byte port) 16) (ash (read-byte port) 24) ...)) -- ugly!
- * mutints: check all int++ steppers for saver bit, move make_mutable to the point of use and clear afterwards everywhere
+ * mutints: move make_mutable to the point of use and clear afterwards
  * call/cc ->call/exit but see b-func in s7test 40699 [cc in rtn val], call/cc_chooser?
  * timp comments are probably out-of-date
  * "most complex": optimize_func_two_args, eval, fx_choose, fx_tree_in
