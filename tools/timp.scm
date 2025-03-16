@@ -620,6 +620,18 @@
 11,000,000  s7.c:opt_p_pp_sf_add [/home/bil/motif-snd/repl]
  9,000,000  s7.c:opt_p_c [/home/bil/motif-snd/repl]              'x in the let-refs, opt_p_pp_sf_lref [build this in], save slot for let-ref too
  9,000,000  s7.c:opt_set_p_p_f [/home/bil/motif-snd/repl]
+
+to:
+
+38,942,785  s7.c:opt_dotimes [/home/bil/motif-snd/repl]
+28,000,000  s7.c:add_p_pp [/home/bil/motif-snd/repl]
+26,000,470  s7.c:multiply_p_pp [/home/bil/motif-snd/repl]
+21,601,157  s7.c:gc.isra.0 [/home/bil/motif-snd/repl]
+17,000,000  s7.c:opt_p_pp_fc [/home/bil/motif-snd/repl]
+15,000,000  s7.c:opt_p_ppf_slot_set [/home/bil/motif-snd/repl]
+11,000,000  s7.c:opt_p_pp_sf_add [/home/bil/motif-snd/repl]
+ 9,000,000  s7.c:opt_set_p_p_f [/home/bil/motif-snd/repl]
+ 8,000,000  s7.c:opt_p_pp_slot_ref [/home/bil/motif-snd/repl]
 |#
 
 (define (f28) ; [86 via opt_p_pp_sc_slot_ref]
