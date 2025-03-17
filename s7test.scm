@@ -70139,6 +70139,7 @@ hi6: (string-app...
 (test (ash -1 8) -256)
 (test (ash -129876 -1026) -1)
 (test (ash -2 -3) -1)
+(test (ash -2 3) -16)
 (test (ash -3 -3) -1)
 (test (ash -3 3) -24)
 (test (ash -31 -100) -1)
@@ -70213,6 +70214,7 @@ hi6: (string-app...
 (test (ash) 'error)
 (test (ash 1) 'error)
 (test (ash 1 2 3) 'error)
+(unless with-bignums (test (ash 1 63) 'error))
 
 (for-each
  (lambda (arg)
