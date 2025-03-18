@@ -4825,8 +4825,8 @@ void s7_show_history(s7_scheme *sc)
 
 static char *describe_type_bits(s7_scheme *sc, s7_pointer obj)
 {
-  uint64_t full_typ = full_type(obj);
-  uint8_t typ = unchecked_type(obj);
+  const uint64_t full_typ = full_type(obj);
+  const uint8_t typ = unchecked_type(obj);
   char *buf;
   char str[900];
 
@@ -5065,7 +5065,7 @@ static void init_never_unheaped(void)
 
 static bool has_odd_bits(s7_pointer obj)
 {
-  uint64_t full_typ = full_type(obj);
+  const uint64_t full_typ = full_type(obj);
   if ((full_typ & UNUSED_BITS) != 0) return(true);
   if (((full_typ & T_MULTIFORM) != 0) && (!is_any_closure(obj))) return(true);
   if (((full_typ & T_KEYWORD) != 0) && (!is_symbol(obj)) && (!is_pair(obj))) return(true);
@@ -7061,8 +7061,10 @@ static void sweep(s7_scheme *sc)
   process_gc_list(liberate(sc, string_block(s1)));
 
   gp = sc->gensyms;
+  /* fprintf(stderr, "loc: %" ld64 " -> ", gp->loc); */
   process_gc_list(remove_gensym_from_symbol_table(sc, s1); liberate(sc, gensym_block(s1)));
   if (gp->loc == 0) mark_function[T_SYMBOL] = mark_noop;
+  /* fprintf(stderr, "%" ld64 "\n", gp->loc); */
 
   gp = sc->undefineds;
   process_gc_list(free(undefined_name(s1)));
@@ -7752,7 +7754,6 @@ static s7_int gc(s7_scheme *sc)
 #endif
 {
   s7_cell **old_free_heap_top;
-  s7_int i;
 
   if (sc->gc_in_progress)
     error_nr(sc, sc->error_symbol, set_elist_1(sc, wrap_string(sc, "GC called recursively", 21)));
@@ -7828,23 +7829,23 @@ static s7_int gc(s7_scheme *sc)
   gc_mark(car(sc->elist_6));
   gc_mark(car(sc->elist_7));
 
-  for (i = 1; i < NUM_SAFE_LISTS; i++) /* see tgen.scm -- we can't just check sc->current_safe_list */
+  for (s7_int i = 1; i < NUM_SAFE_LISTS; i++) /* see tgen.scm -- we can't just check sc->current_safe_list */
     if ((is_pair(sc->safe_lists[i])) &&
 	(safe_list_is_in_use(sc->safe_lists[i]))) /* safe_lists are semipermanent, so we have to mark contents by hand */
       for (s7_pointer p = sc->safe_lists[i]; is_pair(p); p = cdr(p))
 	gc_mark(car(p));
 
-  for (i = 0; i < sc->setters_loc; i++)
+  for (s7_int i = 0; i < sc->setters_loc; i++)
     gc_mark(cdr(sc->setters[i]));
 
-  for (i = 0; i <= sc->format_depth; i++) /* sc->num_fdats is size of array */
+  for (s7_int i = 0; i <= sc->format_depth; i++) /* sc->num_fdats is size of array */
     if (sc->fdats[i])
       gc_mark(sc->fdats[i]->curly_arg);
 
   if (sc->rec_stack)
     {
       set_mark(sc->rec_stack);
-      for (i = 0; i < sc->rec_loc; i++)
+      for (s7_int i = 0; i < sc->rec_loc; i++)
 	gc_mark(sc->rec_els[i]);
     }
   mark_vector(sc->protected_objects);
@@ -7874,14 +7875,14 @@ static s7_int gc(s7_scheme *sc)
   if (sc->profiling_gensyms)
     {
       profile_data_t *pd = sc->profile_data;
-      for (i = 0; i < pd->top; i++)
+      for (s7_int i = 0; i < pd->top; i++)
 	if ((pd->funcs[i]) && (is_gensym(pd->funcs[i])))
 	  set_mark(pd->funcs[i]);
     }
 
   {
     gc_list_t *gp = sc->opt1_funcs;
-    for (i = 0; i < gp->loc; i++)
+    for (s7_int i = 0; i < gp->loc; i++)
       {
 	s7_pointer s1 = T_Pair(gp->list[i]);
 	if ((is_marked(s1)) && (!is_marked(opt1_any(s1)))) /* opt1_lambda, but op_unknown* can change to opt1_cfunc etc */
@@ -8816,9 +8817,9 @@ static /* inline */ s7_pointer new_symbol(s7_scheme *sc, const char *name, s7_in
 {
   /* name might not be null-terminated, these are semipermanent symbols even in s7_gensym; g_gensym handles everything separately */
   uint8_t *base = alloc_symbol(sc);
-  s7_pointer x = (s7_pointer)base;
-  s7_pointer str = (s7_pointer)(base + sizeof(s7_cell));
-  s7_pointer p = (s7_pointer)(base + 2 * sizeof(s7_cell));
+  const s7_pointer x = (s7_pointer)base;
+  const s7_pointer str = (s7_pointer)(base + sizeof(s7_cell));
+  const s7_pointer p = (s7_pointer)(base + 2 * sizeof(s7_cell));
   uint8_t *val = (uint8_t *)permalloc(sc, len + 1);
   memcpy((void *)val, (const void *)name, len);
   val[len] = '\0';
@@ -8920,15 +8921,13 @@ static s7_pointer g_symbol_table(s7_scheme *sc, s7_pointer unused_args)
   #define H_symbol_table "(symbol-table) returns a vector containing the current contents (symbols) of s7's symbol-table"
   #define Q_symbol_table s7_make_signature(sc, 1, sc->is_vector_symbol)
 
-  s7_pointer *els, *entries = vector_elements(sc->symbol_table);
   int32_t syms = 0;
-  s7_pointer vec;
+  s7_pointer *entries = vector_elements(sc->symbol_table);
+
   /* this can't be optimized by returning the actual symbol-table (a vector of lists), because
    *    gensyms can cause the table's lists and symbols to change at any time.  This wreaks havoc
    *    on traversals like for-each.  So, symbol-table returns a snap-shot of the table contents
    *    at the time it is called.
-   *    (define (for-each-symbol func num) (for-each (lambda (sym) (if (> num 0) (for-each-symbol func (- num 1)) (func sym))) (symbol-table)))
-   *    (for-each-symbol (lambda (sym) (gensym) 1))
    * can be called in gdb: p display(s7_eval_c_string(sc, "(for-each (lambda (x) (when (gensym? x) (format *stderr* \"~A \" x))) (symbol-table))"))
    */
   for (int32_t i = 0; i < SYMBOL_TABLE_SIZE; i++)
@@ -8938,15 +8937,17 @@ static s7_pointer g_symbol_table(s7_scheme *sc, s7_pointer unused_args)
     error_nr(sc, sc->out_of_range_symbol,
 	     set_elist_3(sc, wrap_string(sc, "symbol-table size, ~D, is greater than (*s7* 'max-vector-length), ~D", 68),
 			 wrap_integer(sc, syms), wrap_integer(sc, sc->max_vector_length)));
-  begin_temp(sc->y, make_simple_vector(sc, syms));
-  vec = sc->y;
-  set_is_symbol_table(vec);
-  els = vector_elements(vec);
-  for (int32_t i = 0, j = 0; i < SYMBOL_TABLE_SIZE; i++)
-    for (s7_pointer x = entries[i]; is_not_null(x); x = cdr(x))
-      els[j++] = car(x);
-  end_temp(sc->y);
-  return(vec);
+  {
+    const s7_pointer vec = make_simple_vector(sc, syms);
+    s7_pointer *els = vector_elements(vec);
+    /* begin_temp(sc->y, vec); */ /* what could happen here? */
+    set_is_symbol_table(vec);
+    for (int32_t i = 0, j = 0; i < SYMBOL_TABLE_SIZE; i++)
+      for (s7_pointer x = entries[i]; is_not_null(x); x = cdr(x))
+	els[j++] = car(x);
+    /* end_temp(sc->y); */
+    return(vec);
+  }
 }
 
 bool s7_for_each_symbol_name(s7_scheme *sc, bool (*symbol_func)(const char *symbol_name, void *data), void *data)
@@ -9073,7 +9074,7 @@ static s7_pointer g_gensym(s7_scheme *sc, s7_pointer args)
 
   /* make-string for symbol name */
   if (S7_DEBUGGING) full_type(str) = 0; /* here and below, this is needed to avoid set_type check errors (mallocate above) */
-  set_full_type(str, T_STRING | T_IMMUTABLE | T_UNHEAP);
+  set_full_type(str, T_STRING | T_IMMUTABLE); /* was T_UNHEAP? 17-Mar-25 */
   string_length(str) = nlen;
   string_value(str) = name;
   string_hash(str) = hash;
@@ -9094,7 +9095,7 @@ static s7_pointer g_gensym(s7_scheme *sc, s7_pointer args)
 
   /* place new symbol in symbol-table */
   if (S7_DEBUGGING) full_type(stc) = 0;
-  set_full_type(stc, T_PAIR | T_IMMUTABLE | T_UNHEAP);
+  set_full_type(stc, T_PAIR | T_IMMUTABLE); /* was T_UNHEAP? 17-Mar-25 */
   set_car(stc, x);
   unchecked_set_cdr(stc, vector_element(sc->symbol_table, location));
   vector_element(sc->symbol_table, location) = stc;
@@ -12699,7 +12700,7 @@ static s7_pointer g_call_cc(s7_scheme *sc, s7_pointer args)
 /* we can't naively optimize call/cc to call-with-exit if the continuation is only
  *   used as a function in the call/cc body because it might (for example) be wrapped
  *   in a lambda form that is being exported.  See b-func in s7test for an example.
- *   But we can notice that embedded use?
+ *   But we can notice that embedded use?  lambda(*)/m|bacro(*), curlet
  */
 
 static void op_call_cc(s7_scheme *sc)
@@ -33680,28 +33681,28 @@ static shared_info_t *load_shared_info(s7_scheme *sc, s7_pointer top, bool stop_
 	if (no_problem) return(NULL);
       }
 
-  else /* added these 19-Oct-22 -- helps in tgc, but not much elsewhere */
-    if ((is_let(top)) && (top != sc->rootlet))
-      {
-	for (s7_pointer lp = top; (no_problem) && (lp); lp = let_outlet(lp))
-	  for (s7_pointer p = let_slots(lp); tis_slot(p); p = next_slot(p))
-	    if (has_structure(slot_value(p))) /* slot_symbol need not be checked? */
-	      {no_problem = false; break;}
-	if (no_problem) return(NULL);
-      }
-    else
-      if (is_hash_table(top))
+    else /* added these 19-Oct-22 -- helps in tgc, but not much elsewhere */
+      if ((is_let(top)) && (top != sc->rootlet))
 	{
-	  s7_int len = hash_table_size(top);
-	  hash_entry_t **entries = hash_table_elements(top);
-	  bool keys_safe = hash_keys_not_cyclic(sc, top);
-	  if (hash_table_entries(top) == 0) return(NULL);
-	  for (s7_int i = 0; i < len; i++)
-	    for (hash_entry_t *p = entries[i]; p; p = hash_entry_next(p))
-	      if (((!keys_safe) && (has_structure(hash_entry_key(p)))) || (has_structure(hash_entry_value(p))))
+	  for (s7_pointer lp = top; (no_problem) && (lp); lp = let_outlet(lp))
+	    for (s7_pointer p = let_slots(lp); tis_slot(p); p = next_slot(p))
+	      if (has_structure(slot_value(p))) /* slot_symbol need not be checked? */
 		{no_problem = false; break;}
 	  if (no_problem) return(NULL);
 	}
+      else
+	if (is_hash_table(top))
+	  {
+	    s7_int len = hash_table_size(top);
+	    hash_entry_t **entries = hash_table_elements(top);
+	    bool keys_safe = hash_keys_not_cyclic(sc, top);
+	    if (hash_table_entries(top) == 0) return(NULL);
+	    for (s7_int i = 0; i < len; i++)
+	      for (hash_entry_t *p = entries[i]; p; p = hash_entry_next(p))
+		if (((!keys_safe) && (has_structure(hash_entry_key(p)))) || (has_structure(hash_entry_value(p))))
+		  {no_problem = false; break;}
+	    if (no_problem) return(NULL);
+	  }
 
   if ((S7_DEBUGGING) && (is_any_vector(top)) && (!is_t_vector(top))) fprintf(stderr, "%s[%d]: got abnormal vector\n", __func__, __LINE__);
   clear_shared_info(ci);
@@ -38726,6 +38727,31 @@ static s7_pointer g_tree_memq(s7_scheme *sc, s7_pointer args)
   if (!is_list(tree))
     wrong_type_error_nr(sc, sc->tree_memq_symbol, 2, tree, a_list_string);
   return(make_boolean(sc, s7_tree_memq(sc, car(args), tree)));
+}
+
+static inline bool tree_memq_2(s7_scheme *sc, s7_pointer sym, s7_pointer tree)    /* sym need not be a symbol */
+{
+  do {
+    if (sym == car(tree))
+      return(true);
+    if (is_pair(car(tree)))
+      {
+	s7_pointer cp = car(tree);
+	do {
+	  if (sym == car(cp))
+	    return(true);
+	  if ((is_pair(car(cp))) && (tree_memq_2(sc, sym, car(cp))))
+	    return(true);
+	  cp = cdr(cp);
+	  if (sym == cp)
+	    return(true);
+	} while (is_pair(cp));
+      }
+    tree = cdr(tree);
+    if (sym == tree)
+      return(true);
+  } while (is_pair(tree));
+  return(false);
 }
 
 
@@ -84018,8 +84044,9 @@ static bool all_ints_here(s7_scheme *sc, s7_pointer settee, s7_pointer expr, s7_
     {
       if (tree_memq_1(sc, car(step_vars), expr)) /* TODO: all step_vars? */
 	do_return_false(expr);
-      if (DO_PRINT) fprintf(stderr, "%s[%d]: unchecked macro!\n", __func__, __LINE__);
-      return(true); /* TODO: check arg list and body! t851 */
+      if (tree_memq_2(sc, car(step_vars), closure_body(func)))
+	do_return_false(expr);
+      return(true);
     }
   if (!is_any_c_function(func))  /* TODO: (case ...) */
     do_return_false(expr);
@@ -84031,7 +84058,7 @@ static bool all_ints_here(s7_scheme *sc, s7_pointer settee, s7_pointer expr, s7_
     }
   sig = c_function_signature(func);
   if ((is_pair(sig)) &&
-      ((car(sig) == sc->is_integer_symbol) || (car(sig) == sc->is_byte_symbol)))  /* like int-vector */
+      ((car(sig) == sc->is_integer_symbol) || (car(sig) == sc->is_byte_symbol)))
     return(true);
   if (!is_all_integer(car(expr)))
     do_return_false(expr);
@@ -84295,18 +84322,16 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		      do_return_false(expr);
 		  }
 
-		/* if a macro, we'll eventually expand it (if *_optimize), but that requires a symbol lookup here and macroexpand */
-#if 1 /* see t845! */
-		{
-		  const s7_pointer val = (is_symbol(x)) ? lookup_unexamined(sc, x) : x; /* x is car(expr) 200 lines back (!) */
+		{ /* if a macro check both expr and the macro body for the stepper */
+		  s7_pointer val = (is_symbol(x)) ? lookup_unexamined(sc, x) : x; /* x is car(expr) 200 lines back (!) */
 		  if ((val) && (is_either_macro(val)) && (!is_setter(val))) 
 		    {
 		      if (tree_memq_1(sc, stepper, expr))
 			do_return_false(expr);
-		      if (DO_PRINT) fprintf(stderr, "%s[%d]: unchecked macro!\n", __func__, __LINE__);
-		      return(true);  /* TODO: check arg list and body! t851 (see also all_ints_here above) */
-		    }
-		}
+		      if (tree_memq_2(sc, stepper, closure_body(val)))
+			do_return_false(expr);
+		      return(true);
+		    }}
 
 		if (!is_optimized(expr))
 		  do_return_false(expr);
@@ -84314,7 +84339,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		  do_return_false(expr);
 		if (!do_is_safe(sc, cdr(expr), stepper, var_list, step_vars, has_set))
 		  do_return_false(expr);
-#endif
+
 		if (is_setter(x))
 		  {
 		    /* (hash-table-set! ht i 0) -- caddr is being saved, so this is not safe
@@ -100004,7 +100029,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->list_ref_symbol =              defun("list-ref",		list_ref,		2, 0, true);
   sc->list_set_symbol =              defun("list-set!",	        list_set,		3, 0, true);
   sc->list_tail_symbol =             defun("list-tail",	        list_tail,		2, 0, false);
-  sc->make_list_symbol =             defun("make-list",  	make_list,		1, 1, false);
+  sc->make_list_symbol =             defun("make-list",  	make_list,		1, 1, false); set_is_saver(sc->make_list_symbol); /* init arg */
 
   sc->length_symbol =                defun("length",		length,			1, 0, false);
   sc->copy_symbol =                  defun("copy",		copy,			1, 3, false);
@@ -100031,7 +100056,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->vector_dimension_symbol =      defun("vector-dimension",  vector_dimension,	2, 0, false);
   sc->vector_dimensions_symbol =     defun("vector-dimensions", vector_dimensions,	1, 0, false);
   sc->vector_rank_symbol =           defun("vector-rank",       vector_rank,	        1, 0, false);
-  sc->make_vector_symbol =           defun("make-vector",	make_vector,		1, 2, false);
+  sc->make_vector_symbol =           defun("make-vector",	make_vector,		1, 2, false); set_is_saver(sc->make_vector_symbol); /* init arg */
   sc->vector_symbol =                defun("vector",		vector,			0, 0, true); set_is_saver(sc->vector_symbol);
   sc->vector_typer_symbol =          defun("vector-typer",      vector_typer,	        1, 0, false);
 
@@ -100105,6 +100130,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->stacktrace_symbol =            defun("stacktrace",	stacktrace,		0, 5, false);
 
   /* sc->values_symbol = */          unsafe_defun("values",	values,			0, 0, true); /* values_symbol set above for signatures, not semisafe! */
+  set_is_translucent(sc->values_symbol); /* 1-arg */
   /* set_immutable(c_function_setter(global_value(sc->values_symbol))); */ /* not needed, I think */
 
   /* quasiquote helper funcs */
@@ -100116,7 +100142,7 @@ static void init_rootlet(s7_scheme *sc)
 #endif
   sc->qq_append_symbol =             defun("<list*>",           qq_append,		2, 0, false); /* occurs via quasiquote only as #_<list*> */
   sc->apply_values_symbol =          unsafe_defun("apply-values", apply_values,         0, 1, false);
-  sc->list_values_symbol =           defun("list-values",       list_values,            0, 0, true);
+  sc->list_values_symbol =           defun("list-values",       list_values,            0, 0, true); set_is_saver(sc->list_values_symbol);
 
   sc->documentation_symbol =         defun("documentation",     documentation,          1, 0, false);
   sc->signature_symbol =             defun("signature",         signature,	        1, 0, false);
@@ -101218,10 +101244,10 @@ int main(int argc, char **argv)
  * tsort       3683   3104   2856   2804   2858   2858   2858
  * titer       4550   3349   3070   2985   2966   2917   2917
  * tio                3752   3683   3620   3583   3127   3135
- * tbit        3836   3305   3245   3261   3264   3181   3181  3164
+ * tbit        3836   3305   3245   3261   3264   3181   3164
  * tobj               3970   3828   3577   3508   3434   3434
  * teq                4045   3536   3486   3544   3556   3569
- * tmac               4373   ----   4193   4188   4024   4025  3937
+ * tmac               4373   ----   4193   4188   4024   3937
  * tcomplex           3869   3804   3844   3888   4215   4192
  * tcase              4793   4439   4430   4439   4376   4378
  * tmap               8774   4489   4541   4586   4380   4377
@@ -101264,10 +101290,12 @@ int main(int argc, char **argv)
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  * if we have the function (not its name) it's "safe"(?)
  * mutints: move make_mutable to the point of use and clear afterwards, more use of num_small_ints?
- *   t851 bug involving macros -> tmac?
  * call/cc ->call/exit but see b-func in s7test 40699 [cc in rtn val], call/cc_chooser?
  *   mark simple c/ex with safe_call_with_exit bit and skip the stack stuff t852
+ *   bit for lambda(etc)+curlet
  * "most complex": optimize_func_two_args, eval, fx_choose, fx_tree_in
- * continue with internal consts
+ * continue with internal consts/localized vars
  * maybe use /dev/urandom for t725? t852
+ * (symbol-table) -- perhaps a map of which entries are in use (add if element currently nil), this could be created when first needed?
+ * saver values (values j i) etc [apply-values too]
  */

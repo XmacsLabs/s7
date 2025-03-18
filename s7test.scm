@@ -32181,7 +32181,135 @@ in s7:
         (let-set! L 'multiply +))))
   
   (test (f25) 10.0004)
+
+  (define (f26)
+    (do ((val ())
+         (i 0 (+ i 1)))
+        ((= i 2) val)
+      (do ((j 0 (+ j 1)))
+	  ((= j 2))
+	(if (= j 1) 
+	    (set! val (make-list 1 j))))))
+  ;; (vector j) -> #(1), (make-vector 1 j) -> #(1), (make-list 1 j) -> '(1), (values j) -> 1 (translucent)
+  (test (f26) '(1))
   )
+
+(let () ; macro checks
+
+  (define-macro (fmac x) `(+ ,x 1.234))
+  (define (f1)
+    (do ((i 0 (+ i 1)))
+	((>= i 10) i)
+      (set! i (fmac i))))
+  (test (f1) 11.17)
+  
+  (define-macro (smac x) `(set! ,x (+ ,x 1.234)))
+  (define (f2)
+    (do ((i 0 (+ i 1)))
+	((>= i 10) i)
+      (smac i)))
+  (test (f2) 11.17)
+  
+  (define-macro (s1mac x) `(begin (set! i (+ i 1.234))))
+  (define (f3)
+    (do ((i 0 (+ i 1)))
+	((>= i 10) i)
+      (s1mac (+ i 1))))
+  (test (f3) 11.17)
+  
+  (define swap! (letrec ((no-pairs? (lambda (lst) ; see s7test.scm for swap! examples
+				      (or (null? lst)
+				          (and (not (pair? (car lst)))
+					       (no-pairs? (cdr lst)))))))
+	        (macro (a b)
+		  (cond ((not (or (symbol? a) (pair? a)))
+			 (error 'wrong-type-arg "can't (swap! ~A ~A): ~A is not a symbol or a pair" a b a))
+			
+			((not (or (symbol? b) (pair? b)))
+			 (error 'wrong-type-arg "can't (swap! ~A ~A): ~A is not a symbol or a pair" a b b))
+
+			((and (symbol? a) (immutable? a))
+			 (error 'wrong-type-args "can't (swap! ~A ~A): ~A is immutable" a b a))
+			
+			((and (symbol? b) (immutable? b))
+			 (error 'wrong-type-args "can't (swap! ~A ~A): ~A is immutable" a b b))
+			
+			((and (or (symbol? a) (hash-table? a) (let? a) (no-pairs? (cdr a)))
+			      (or (symbol? b) (hash-table? b) (let? b) (no-pairs? (cdr b))))
+			 ;; we assume above hash-tables and lets don't use expressions for the key/variable names
+			 (let ((tmp (gensym "swap!-")))
+			   `(let ((,tmp ,a))
+			      (set! ,a ,b)
+			      (set! ,b ,tmp))))
+			
+			(else     ; here either a or b or both are pairs with exprs as "indices"
+			 (let ((a-object (if (pair? a) (car a) a))
+			       (b-object (if (pair? b) (car b) b))
+			       (a-indices (and (pair? a) (cdr a)))
+			       (b-indices (and (pair? b) (cdr b)))
+			       (tmp-a-indices (gensym "swap!-"))
+			       (tmp-b-indices (gensym "swap!-"))
+			       (tmp (gensym "swap!-")))
+			   `(let ((,tmp-a-indices (and (pair? ',a) (map eval ',a-indices))) ; eval once-only in run-time env
+				  (,tmp-b-indices (and (pair? ',b) (map eval ',b-indices))))
+			      (let ((,tmp (if (pair? ',a) 
+					      (apply ,a-object ,tmp-a-indices)
+					      ,a)))
+				(if (pair? ',a)
+				    (if (not (pair? ',b))
+					(set! (,a-object (apply values ,tmp-a-indices)) ,b)
+					(set! (,a-object (apply values ,tmp-a-indices)) (apply ,b-object ,tmp-b-indices)))
+				    (set! ,a (apply ,b-object ,tmp-b-indices)))
+				(if (not (pair? ',b))
+				    (if (pair? ',a)
+					(set! ,b ,tmp))
+				    (set! (,b-object (apply values ,tmp-b-indices)) ,tmp))))))))))
+
+  (define (f4)
+    (do ((k 0)
+	 (i 0 (+ i 1)))
+	((= i 10) k)
+      (swap! i k))) ; caught 84305
+  (test (f4) 9)
+  
+  (define-macro (fmac1 x) `(call/cc (lambda (goto) (goto ,x))))
+  (define (f5)
+    (do ((i 0 (+ i 1)))
+	((= i 10) i)
+      (fmac1 (+ i 1)))) ; 10 caught 84305
+  (test (f5) 10)
+  
+  (define-macro (s2mac y) `(begin (set! x (cons i x))))
+  (define (f6)
+    (let ((x ()))
+      (do ((i 0 (+ i 1)))
+	  ((= i 10) x)  ; >=: '(9 8 7 6 5 4 3 2 1 0), =: '(10 10 10 10 10 10 10 10 10 10) TODO: search macro for stepper
+	(s2mac x))))
+  (test (f6) '(9 8 7 6 5 4 3 2 1 0))
+  
+  (define-macro (s3mac x) `(vector-set! ,x i i))
+  (define (f7)
+    (let ((x (make-vector 10 #f)))
+      (do ((i 0 (+ i 1)))
+	  ((= i 10) x)  ; #(10 10 10 10 10 10 10 10 10 10) -> #(0 1 2 3 4 5 6 7 8 9)
+	(s3mac x))))
+  (test (f7) #(0 1 2 3 4 5 6 7 8 9))
+
+  (define-macro (s4mac y z) `(vector-set! ,y ,z ,z)) ;no stepper refs
+  (define (f8)
+    (let ((x (make-vector 10 #f)))
+      (do ((i 0 (+ i 1)))
+	  ((= i 10) x)  ; was #(10 10 10 10 10 10 10 10 10 10), now caught 84305 #(0 1 2 3 4 5 6 7 8 9)
+	(s4mac x i))))
+  (test (f8) #(0 1 2 3 4 5 6 7 8 9))
+  
+  (define (f9)
+    (let loop ((i 0) (lst ()))
+      (if (= i 4)
+	  lst
+	  (loop (+ i 1) (cons i lst))))) ; ok in all cases because everything is int-optimized
+  (test (f9) '(3 2 1 0))
+)
 
 
 ;;; --------------------------------------------------------------------------------
