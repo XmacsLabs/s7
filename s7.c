@@ -8940,12 +8940,10 @@ static s7_pointer g_symbol_table(s7_scheme *sc, s7_pointer unused_args)
   {
     const s7_pointer vec = make_simple_vector(sc, syms);
     s7_pointer *els = vector_elements(vec);
-    /* begin_temp(sc->y, vec); */ /* what could happen here? */
     set_is_symbol_table(vec);
     for (int32_t i = 0, j = 0; i < SYMBOL_TABLE_SIZE; i++)
       for (s7_pointer x = entries[i]; is_not_null(x); x = cdr(x))
 	els[j++] = car(x);
-    /* end_temp(sc->y); */
     return(vec);
   }
 }
@@ -8977,8 +8975,7 @@ bool s7_for_each_symbol(s7_scheme *sc, bool (*symbol_func)(const char *symbol_na
 static void remove_gensym_from_symbol_table(s7_scheme *sc, s7_pointer sym)
 {
   /* sym is a free cell at this point (we're called after the GC), but the name_cell is still intact */
-  s7_pointer name = symbol_name_cell(sym);
-  uint32_t location = string_hash(name) % SYMBOL_TABLE_SIZE;
+  uint32_t location = string_hash(symbol_name_cell(sym)) % SYMBOL_TABLE_SIZE;
   s7_pointer x = vector_element(sc->symbol_table, location);
   if (car(x) == sym)
     vector_element(sc->symbol_table, location) = cdr(x);
@@ -9002,7 +8999,7 @@ s7_pointer s7_gensym(s7_scheme *sc, const char *prefix)
     s7_int slen = catstrs(name, len, "{", (prefix) ? prefix : "", "}-", pos_int_to_str_direct(sc, sc->gensym_counter++), (char *)NULL);
     uint64_t hash = raw_string_hash((const uint8_t *)name, slen);
     int32_t location = hash % SYMBOL_TABLE_SIZE;
-    s7_pointer x = new_symbol(sc, name, slen, hash, location);  /* not T_GENSYM -- might be called from outside -- what?? (2-Oct-23) */
+    s7_pointer x = new_symbol(sc, name, slen, hash, location);  /* not T_GENSYM -- might be called from outside so should not be GC'd(?) */
     liberate(sc, b);
     return(x);
   }
@@ -9241,11 +9238,8 @@ static s7_pointer g_symbol(s7_scheme *sc, s7_pointer args)
    *   maybe document this: (symbol...) just returns the symbol
    *   (let ((x 3)) (+ (symbol->value (symbol "x")) 1)) -> 4, (let ((x 0)) (apply set! (symbol "x") (list 32)) x) -> 32
    */
-
-  s7_int len = 0, cur_len;
-  s7_pointer p, sym;
-  block_t *b;
-  char *name;
+  s7_int len = 0;
+  s7_pointer p;
 
   for (p = args; is_pair(p); p = cdr(p))
     if (is_string(car(p)))
@@ -9260,21 +9254,24 @@ static s7_pointer g_symbol(s7_scheme *sc, s7_pointer args)
   if (len == 0)
     sole_arg_wrong_type_error_nr(sc, sc->symbol_symbol, car(args), wrap_string(sc, "a non-null string", 17));
 
-  b = mallocate(sc, len + 1);
-  name = (char *)block_data(b);
-  /* can't use catstrs_direct here because it stops at embedded null */
-  for (cur_len = 0, p = args; is_pair(p); p = cdr(p))
-    {
-      s7_pointer str = car(p);
-      if (string_length(str) > 0)
-	{
-	  memcpy((void *)(name + cur_len), (void *)string_value(str), string_length(str));
-	  cur_len += string_length(str);
-	}}
-  name[len] = '\0';
-  sym = mark_as_symbol_from_symbol(inline_make_symbol(sc, name, len));
-  liberate(sc, b);
-  return(sym);
+  { /* can't use catstrs_direct here because it stops at embedded null */
+    block_t *b = mallocate(sc, len + 1);
+    char *name = (char *)block_data(b);
+    s7_int cur_len;
+    s7_pointer sym;
+    for (cur_len = 0, p = args; is_pair(p); p = cdr(p))
+      {
+	s7_pointer str = car(p);
+	if (string_length(str) > 0)
+	  {
+	    memcpy((void *)(name + cur_len), (void *)string_value(str), string_length(str));
+	    cur_len += string_length(str);
+	  }}
+    name[len] = '\0';
+    sym = mark_as_symbol_from_symbol(inline_make_symbol(sc, name, len));
+    liberate(sc, b);
+    return(sym);
+  }
 }
 
 static s7_pointer symbol_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2)
@@ -9940,9 +9937,8 @@ static s7_pointer g_unlet(s7_scheme *sc, s7_pointer unused_args)
   #define H_unlet "(unlet) returns a let that establishes the original bindings of all the predefined functions"
   #define Q_unlet s7_make_signature(sc, 1, sc->is_let_symbol)
 
-  s7_pointer res;
-  begin_temp(sc->y, make_let(sc, sc->curlet));
-  res = sc->y;
+  s7_pointer res = make_let(sc, sc->curlet);
+  begin_temp(sc->y, res);
   set_is_unlet(res);
   if (global_value(sc->else_symbol) != sc->else_symbol)
     add_slot_checked_with_id(sc, res, sc->else_symbol, initial_value(sc->else_symbol));
@@ -10066,7 +10062,7 @@ static void append_let(s7_scheme *sc, s7_pointer new_e, s7_pointer old_e)
       }
     else
       for (s7_pointer x = let_slots(old_e); tis_slot(x); x = next_slot(x))
-	add_slot_checked_with_id(sc, new_e, slot_symbol(x), slot_value(x)); /* not add_slot here because we might run off the free heap end */
+	add_slot_checked_with_id(sc, new_e, slot_symbol(x), slot_value(x)); /* not add_slot here because it might run off the free heap end */
 }
 
 static s7_pointer check_c_object_let(s7_scheme *sc, s7_pointer old_e, s7_pointer caller)
@@ -10118,7 +10114,6 @@ to the let target-let, and returns target-let.  (varlet (curlet) 'a 1) adds 'a t
                        s7_make_signature(sc, 3, sc->is_pair_symbol, sc->is_symbol_symbol, sc->is_let_symbol), \
                          sc->T)
   s7_pointer e = car(args);
-
   if (e != sc->rootlet)
     {
       check_method(sc, e, sc->varlet_symbol, args);
@@ -10204,7 +10199,7 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
   if ((is_immutable_let(e)) || (e == sc->starlet))
     immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->cutlet_symbol, e));
 
-  /* besides removing the slot we have to make sure the symbol_id does not match else
+  /* besides removing the slot we have to make sure the symbol_id does not match, else
    *   let-ref and others will use the old slot!  What's the un-id?  Perhaps the next one?
    *   (let ((b 1)) (let ((b 2)) (cutlet (curlet) 'b)) b)
    */
@@ -10265,8 +10260,7 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
 /* -------------------------------- sublet -------------------------------- */
 static s7_pointer sublet_1(s7_scheme *sc, s7_pointer e, s7_pointer bindings, s7_pointer caller)
 {
-  s7_pointer new_e;
-  new_e = make_let(sc, e);
+  s7_pointer new_e = make_let(sc, e);
   set_all_methods(new_e, e);
 
   if (!is_null(bindings))
@@ -10415,7 +10409,6 @@ static s7_pointer g_simple_inlet(s7_scheme *sc, s7_pointer args)
 static s7_pointer inlet_p_pp(s7_scheme *sc, s7_pointer symbol, s7_pointer value)
 {
   s7_pointer x;
-
   if (!is_symbol(symbol))
     return(sublet_1(sc, sc->rootlet, set_plist_2(sc, symbol, value), sc->inlet_symbol));
   if (is_keyword(symbol))
@@ -10458,6 +10451,7 @@ static s7_pointer internal_inlet(s7_scheme *sc, s7_int num_args, ...)
     }
   va_end(ap);
   end_temp(sc->x);
+
   return(new_e);
 }
 
@@ -10470,8 +10464,7 @@ static bool is_proper_quote(s7_scheme *sc, s7_pointer p)
 
 static s7_pointer inlet_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer expr)
 {
-  if ((args > 0) &&
-      ((args % 2) == 0))
+  if ((args > 0) && ((args % 2) == 0))
     {
       for (s7_pointer p = cdr(expr); is_pair(p); p = cddr(p))
 	{
@@ -10594,9 +10587,8 @@ static s7_pointer g_let_to_list(s7_scheme *sc, s7_pointer args)
 /* -------------------------------- let-ref -------------------------------- */
 static s7_pointer call_let_ref_fallback(s7_scheme *sc, s7_pointer let, s7_pointer symbol)
 {
-  s7_pointer p, val;
+  s7_pointer p, val = find_method(sc, let, sc->let_ref_fallback_symbol);
   /* (let ((x #f)) (let begin ((x 1234)) (begin 1) 2)) -> stack overflow eventually, but should we try to catch it? */
-  val = find_method(sc, let, sc->let_ref_fallback_symbol);
   if (!is_applicable(val)) return(val);
   push_stack_no_let(sc, OP_GC_PROTECT, sc->value, sc->code);
   p = s7_apply_function(sc, val, set_qlist_2(sc, let, symbol));
@@ -11096,7 +11088,8 @@ static s7_pointer g_set_outlet(s7_scheme *sc, s7_pointer args)
 
 /* -------------------------------- symbol lookup -------------------------------- */
 static Inline s7_pointer inline_lookup_from(s7_scheme *sc, const s7_pointer symbol, s7_pointer e)
-{ /* splitting out the no-sc WITH_GCC case made no difference in speed, same if using s7_int id = symbol_id(symbol) */
+{
+  /* splitting out the no-sc WITH_GCC case made no difference in speed, same if using s7_int id = symbol_id(symbol) */
   if (let_id(e) == symbol_id(symbol))
     return(local_value(symbol));
   if (let_id(e) > symbol_id(symbol)) /* let is newer so look back in the outlet chain */
@@ -11328,8 +11321,8 @@ static bool direct_translucent_member(const s7_pointer symbol, s7_pointer symbol
   return(false);
 }
 
-static bool direct_assq(const s7_pointer symbol, s7_pointer symbols)
-{ /* used only below in do_symbol_is_safe */
+static bool direct_assq(const s7_pointer symbol, s7_pointer symbols) /* used only below in do_symbol_is_safe */
+{
   for (s7_pointer x = symbols; is_pair(x); x = cdr(x))
     if (caar(x) == symbol)
       return(true);
@@ -11387,7 +11380,7 @@ static s7_pointer collect_parameters(s7_scheme *sc, s7_pointer lst, s7_pointer e
 {
   /* collect local variable names from lambda arglists (pre-error-check) */
   s7_pointer p;
-  s7_int the_un_id = ++sc->let_number;
+  const s7_int the_un_id = ++sc->let_number;
   if (is_normal_symbol(lst))
     {
       symbol_set_id(lst, the_un_id);
@@ -11680,27 +11673,19 @@ static int32_t tree_is_cyclic_or_has_pairs(s7_scheme *sc, s7_pointer tree)
   while (true)
     {
       if (tree_is_collected(fast)) return(TREE_CYCLIC);
-      if ((!has_pairs) && (is_unquoted_pair(car(fast))))
-	has_pairs = true;
+      if ((!has_pairs) && (is_unquoted_pair(car(fast)))) has_pairs = true;
       fast = cdr(fast);
-      if (!is_pair(fast))
-	{
-	  if (!has_pairs) return(TREE_NOT_CYCLIC);
-	  break;
-	}
+      if (!is_pair(fast)) return((has_pairs) ? TREE_HAS_PAIRS : TREE_NOT_CYCLIC);
+
       if (tree_is_collected(fast)) return(TREE_CYCLIC);
-      if ((!has_pairs) && (is_unquoted_pair(car(fast))))
-	has_pairs = true;
+      if ((!has_pairs) && (is_unquoted_pair(car(fast)))) has_pairs = true;
       fast = cdr(fast);
-      if (!is_pair(fast))
-	{
-	  if (!has_pairs) return(TREE_NOT_CYCLIC);
-	  break;
-	}
+      if (!is_pair(fast)) return((has_pairs) ? TREE_HAS_PAIRS : TREE_NOT_CYCLIC);
+
       slow = cdr(slow);
       if (fast == slow) return(TREE_CYCLIC);
     }
-  return(TREE_HAS_PAIRS);
+  return(TREE_HAS_PAIRS); /* not reached */
 }
 
 /* we can't use shared_info here because tree_is_cyclic may be called in the midst of output that depends on sc->circle_info */
@@ -11725,8 +11710,8 @@ static bool tree_is_cyclic_1(s7_scheme *sc, s7_pointer tree)
       sc->tree_pointers[sc->tree_pointers_top++] = p;
       if (is_unquoted_pair(car(p)))
 	{
-	  int32_t old_top = sc->tree_pointers_top, result;
-	  result = tree_is_cyclic_or_has_pairs(sc, car(p));
+	  int32_t old_top = sc->tree_pointers_top;
+	  int32_t result = tree_is_cyclic_or_has_pairs(sc, car(p));
 	  if ((result == TREE_CYCLIC) || (tree_is_cyclic_1(sc, car(p))))
 	    return(true);
 	  for (int32_t i = old_top; i < sc->tree_pointers_top; i++)
@@ -11802,7 +11787,7 @@ Only the let is searched if ignore-globals is not #f."
 
   if (is_pair(cdr(args)))
     {
-      s7_pointer e = cadr(args), b, x;
+      s7_pointer e = cadr(args), ignore_globals;
       if (!is_let(e))
 	{
 	  e = find_let(sc, e);  /* returns () if none */
@@ -11821,21 +11806,19 @@ Only the let is searched if ignore-globals is not #f."
 	return(make_boolean(sc, starlet_symbol_id(sym) != SL_NO_FIELD));
       if (is_pair(cddr(args)))
 	{
-	  b = caddr(args);
-	  if (!is_boolean(b))
-	    return(method_or_bust(sc, b, sc->is_defined_symbol, args, a_boolean_string, 3));
+	  ignore_globals = caddr(args);
+	  if (!is_boolean(ignore_globals))
+	    return(method_or_bust(sc, ignore_globals, sc->is_defined_symbol, args, a_boolean_string, 3));
 	}
-      else b = sc->F;
+      else ignore_globals = sc->F;
       if (e == sc->rootlet) /* we checked (let? e) above */
 	{
-	  if (b == sc->F)
+	  if (ignore_globals == sc->F)
 	    return(make_boolean(sc, is_slot(global_slot(sym)))); /* new_symbol and gensym initialize global_slot to #<undefined> */
 	  return(sc->F);
 	}
-      x = symbol_to_local_slot(sc, sym, e);
-      if (is_slot(x))
-	return(sc->T);
-      return((b == sc->T) ? sc->F : make_boolean(sc, is_slot(global_slot(sym))));
+      if (is_slot(symbol_to_local_slot(sc, sym, e))) return(sc->T);
+      return((ignore_globals == sc->T) ? sc->F : make_boolean(sc, is_slot(global_slot(sym))));
     }
   return((is_defined_global(sym)) ? sc->T : make_boolean(sc, is_slot(s7_slot(sc, sym))));
 }
@@ -12514,18 +12497,18 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
    *    this was (i > 0), but that goes too far back; perhaps s7 should save the position of the call/cc invocation.
    *    also the two stacks can be different sizes (either can be larger)
    */
-  s7_int top1 = stack_top(sc), top2 = continuation_stack_top(c);
-  for (s7_int i = top1 - 1; (i > 0) && ((i >= top2) || (stack_code(sc->stack, i) != stack_code(continuation_stack(c), i))); i -= 4)
+  const s7_int cc_top = continuation_stack_top(c);
+  for (s7_int i = stack_top(sc) - 1; (i > 0) && ((i >= cc_top) || (stack_code(sc->stack, i) != stack_code(continuation_stack(c), i))); i -= 4)
     {
-      opcode_t op = stack_op(sc->stack, i);
+      const opcode_t op = stack_op(sc->stack, i);
       switch (op)
 	{
 	case OP_DYNAMIC_WIND:
 	case OP_LET_TEMP_DONE:
 	  {
-	    s7_pointer x = stack_code(sc->stack, i);
+	    const s7_pointer x = stack_code(sc->stack, i);
 	    s7_int s_base = 0;
-	    for (s7_int j = 3; j < top2; j += 4)
+	    for (s7_int j = 3; j < cc_top; j += 4)
 	      if (((stack_op(continuation_stack(c), j) == OP_DYNAMIC_WIND) ||
 		   (stack_op(continuation_stack(c), j) == OP_LET_TEMP_DONE)) &&
 		  (x == stack_code(continuation_stack(c), j)))
@@ -12571,12 +12554,12 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
 	  break;
 
 	case OP_BARRIER:
-	  if (i > top2)                       /* otherwise it's some unproblematic outer eval-string? */
+	  if (i > cc_top)                     /* otherwise it's some unproblematic outer eval-string? */
 	    return(false);                    /*    but what if we've already evaluated a dynamic-wind closer? */
 	  break;
 
 	case OP_DEACTIVATE_GOTO:              /* here we're jumping out of an unrelated call-with-exit block */
-	  if (i > top2)
+	  if (i > cc_top)
 	    call_exit_active(stack_args(sc->stack, i)) = false;
 	  break;
 
@@ -12596,9 +12579,9 @@ static bool check_for_dynamic_winds(s7_scheme *sc, s7_pointer c)
 	}}
 
   /* check continuation-stack for dynamic-winds we're jumping into */
-  for (s7_int i = stack_top(sc) - 1; i < top2; i += 4)
+  for (s7_int i = stack_top(sc) - 1; i < cc_top; i += 4)
     {
-      opcode_t op = stack_op(continuation_stack(c), i);
+      const opcode_t op = stack_op(continuation_stack(c), i);
       if (op == OP_DYNAMIC_WIND)
 	{
 	  s7_pointer x = T_Dyn(stack_code(continuation_stack(c), i));
@@ -12843,7 +12826,7 @@ static void call_with_exit(s7_scheme *sc)
 	  pop_stack(sc);
 	  LongJmp(*(sc->goto_start), CALL_WITH_EXIT_JUMP);
 	}
-      for (i = 0; i < quit; i++)
+      for (s7_int i = 0; i < quit; i++)
 	push_stack_op_let(sc, OP_EVAL_DONE);
     }
 }
@@ -14244,7 +14227,6 @@ static no_return void division_by_zero_error_2_nr(s7_scheme *sc, s7_pointer call
 
 static s7_pointer make_ratio(s7_scheme *sc, s7_int a, s7_int b)
 {
-  s7_pointer x;
   if (b < 0)
     {
       if (b == S7_INT64_MIN)
@@ -14290,11 +14272,13 @@ static s7_pointer make_ratio(s7_scheme *sc, s7_int a, s7_int b)
 	}}
   if (b == 1)
     return(make_integer(sc, a));
-
-  new_cell(sc, x, T_RATIO);
-  set_numerator(x, a);
-  set_denominator(x, b);
-  return(x);
+  {
+    s7_pointer x;
+    new_cell(sc, x, T_RATIO);
+    set_numerator(x, a);
+    set_denominator(x, b);
+    return(x);
+  }
 }
 
 /* using make_ratio here is a desperate kludge trying to maintain backwards compatibility; internally we use make_ratio_with_div_check below */
@@ -14867,7 +14851,6 @@ static size_t integer_to_string_any_base(char *p, s7_int n, int32_t radix)  /* c
 
   if ((radix < 2) || (radix > 16))
     return(0);
-
   if (sign)
     {
       if (n == S7_INT64_MIN) /* can't negate this, so do it by hand */
@@ -16187,7 +16170,7 @@ static s7_pointer make_symbol_or_number(s7_scheme *sc, const char *name, int32_t
   block_t *b;
   char *new_name;
   char sep = sc->number_separator;
-  s7_int len, i, j;
+  s7_int len, j = 0;
   s7_pointer res;
 
   if (name[0] == sep)
@@ -16198,7 +16181,7 @@ static s7_pointer make_symbol_or_number(s7_scheme *sc, const char *name, int32_t
   memcpy((void *)new_name, (const void *)name, len);
   new_name[len] = 0;
 
-  for (i = 0, j = 0; i < len; i++)
+  for (s7_int i = 0; i < len; i++)
     if (name[i] != sep)
       {
 	if ((digits[(uint8_t)(name[i])] < radix) || (!t_number_separator_p[(uint8_t)name[i]]))
@@ -17644,10 +17627,8 @@ static s7_pointer g_log(s7_scheme *sc, s7_pointer args)
       if (is_one(y))                                     /* this used to raise an error, but the bignum case is simpler if we return inf */
 	return((is_one(x)) ? real_zero : real_infinity); /* but (log 1.0 1.0) -> 0.0, currently (log 1/0 1) is inf? */
 
-      if ((is_real(x)) &&
-	  (is_real(y)) &&
-	  (is_positive(sc, x)) &&
-	  (is_positive(sc, y)))
+      if ((is_real(x)) && (is_real(y)) &&
+	  (is_positive(sc, x)) && (is_positive(sc, y)))
 	{
 	  if ((is_rational(x)) &&
 	      (is_rational(y)))
@@ -38729,7 +38710,7 @@ static s7_pointer g_tree_memq(s7_scheme *sc, s7_pointer args)
   return(make_boolean(sc, s7_tree_memq(sc, car(args), tree)));
 }
 
-static inline bool tree_memq_2(s7_scheme *sc, s7_pointer sym, s7_pointer tree)    /* sym need not be a symbol */
+static inline bool tree_including_quote_memq(s7_scheme *sc, s7_pointer sym, s7_pointer tree)    /* sym need not be a symbol */
 {
   do {
     if (sym == car(tree))
@@ -38740,7 +38721,7 @@ static inline bool tree_memq_2(s7_scheme *sc, s7_pointer sym, s7_pointer tree)  
 	do {
 	  if (sym == car(cp))
 	    return(true);
-	  if ((is_pair(car(cp))) && (tree_memq_2(sc, sym, car(cp))))
+	  if ((is_pair(car(cp))) && (tree_including_quote_memq(sc, sym, car(cp))))
 	    return(true);
 	  cp = cdr(cp);
 	  if (sym == cp)
@@ -84044,7 +84025,7 @@ static bool all_ints_here(s7_scheme *sc, s7_pointer settee, s7_pointer expr, s7_
     {
       if (tree_memq_1(sc, car(step_vars), expr)) /* TODO: all step_vars? */
 	do_return_false(expr);
-      if (tree_memq_2(sc, car(step_vars), closure_body(func)))
+      if (tree_including_quote_memq(sc, car(step_vars), closure_body(func)))
 	do_return_false(expr);
       return(true);
     }
@@ -84328,7 +84309,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 		    {
 		      if (tree_memq_1(sc, stepper, expr))
 			do_return_false(expr);
-		      if (tree_memq_2(sc, stepper, closure_body(val)))
+		      if (tree_including_quote_memq(sc, stepper, closure_body(val)))
 			do_return_false(expr);
 		      return(true);
 		    }}
@@ -84342,9 +84323,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 
 		if (is_setter(x))
 		  {
-		    /* (hash-table-set! ht i 0) -- caddr is being saved, so this is not safe
-		     *   similarly (vector-set! v 0 i) etc
-		     */
+		    /* (hash-table-set! ht i 0): caddr is being saved, so this is not safe; similarly (vector-set! v 0 i) etc */
 		    /* fprintf(stderr, "x: %s, body: %s\n", display(x), display(body)); */
 		    if ((has_set) &&
 			(!direct_memq(cadr(expr), var_list)) &&   /* non-local is being changed */
@@ -100129,20 +100108,20 @@ static void init_rootlet(s7_scheme *sc)
   /* unsafe example: catch if macro as error handler, (define-macro (m . args) `(apply ,(car args) ',(cadr args))) (catch #t (lambda () (error abs -1)) m) */
   sc->stacktrace_symbol =            defun("stacktrace",	stacktrace,		0, 5, false);
 
-  /* sc->values_symbol = */          unsafe_defun("values",	values,			0, 0, true); /* values_symbol set above for signatures, not semisafe! */
-  set_is_translucent(sc->values_symbol); /* 1-arg */
+  /* sc->values_symbol = */          unsafe_defun("values",	values,			0, 0, true); set_is_saver(sc->values_symbol);
+  /* values_symbol set above for signatures, not semisafe! */
   /* set_immutable(c_function_setter(global_value(sc->values_symbol))); */ /* not needed, I think */
 
   /* quasiquote helper funcs */
 #if WITH_IMMUTABLE_UNQUOTE
-  sc->unquote_symbol =               make_symbol(sc, "<unquote>", 9);
-  set_immutable(sc->unquote_symbol);
+  sc->unquote_symbol =               make_symbol(sc, "<unquote>", 9); set_immutable(sc->unquote_symbol);
 #else
   sc->unquote_symbol =               make_symbol(sc, "unquote", 7);
 #endif
-  sc->qq_append_symbol =             defun("<list*>",           qq_append,		2, 0, false); /* occurs via quasiquote only as #_<list*> */
-  sc->apply_values_symbol =          unsafe_defun("apply-values", apply_values,         0, 1, false);
+  sc->qq_append_symbol =             defun("<list*>",           qq_append,		2, 0, false); set_is_saver(sc->qq_append_symbol); /* occurs via quasiquote as #_<list*> */
+  sc->apply_values_symbol =          unsafe_defun("apply-values", apply_values,         0, 1, false); set_is_saver(sc->apply_values_symbol);
   sc->list_values_symbol =           defun("list-values",       list_values,            0, 0, true); set_is_saver(sc->list_values_symbol);
+  /* are these three names necessary? */
 
   sc->documentation_symbol =         defun("documentation",     documentation,          1, 0, false);
   sc->signature_symbol =             defun("signature",         signature,	        1, 0, false);
@@ -101292,10 +101271,10 @@ int main(int argc, char **argv)
  * mutints: move make_mutable to the point of use and clear afterwards, more use of num_small_ints?
  * call/cc ->call/exit but see b-func in s7test 40699 [cc in rtn val], call/cc_chooser?
  *   mark simple c/ex with safe_call_with_exit bit and skip the stack stuff t852
- *   bit for lambda(etc)+curlet
+ *   bit for lambda(etc)+curlet funclet? outlet?
  * "most complex": optimize_func_two_args, eval, fx_choose, fx_tree_in
  * continue with internal consts/localized vars
  * maybe use /dev/urandom for t725? t852
  * (symbol-table) -- perhaps a map of which entries are in use (add if element currently nil), this could be created when first needed?
- * saver values (values j i) etc [apply-values too]
+ *   same length as symbol-table ints)if fit), -1 filled = stop point
  */
