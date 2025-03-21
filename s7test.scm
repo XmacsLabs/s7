@@ -40964,14 +40964,28 @@ in s7:
        (lambda ()
 	 (go + 32 1)))))
 
+  (define (a1-func)
+    (#_call-with-exit
+     (#_lambda (go)
+       (#_lambda ()
+	 (go + 32 1)))))
+
   (define (b-func)
     (call/cc
      (lambda (go)
        (lambda ()
 	 (go + 32 1)))))
 
+  (define (b1-func)
+    (#_call/cc
+     (#_lambda (go)
+       (#_lambda ()
+	 (go + 32 1)))))
+
   (test ((a-func)) 'error) ;invalid-exit-function
-  (test ((b-func)) 33))
+  (test ((b-func)) 33)
+  (test ((a1-func)) 'error) ;invalid-exit-function
+  (test ((b1-func)) 33))
 
 #|
 (test ((call-with-exit

@@ -2843,6 +2843,12 @@ static s7_pointer clear_is_mutable(s7_pointer p) {clear_mid_type_bit(p, T_MID_MU
 #define has_fn(p)                      has_high_type_bit(T_Pair(p), T_HAS_FN)
 #define clear_has_fn(p)                clear_high_type_bit(T_Pair(p), T_HAS_FN)
 
+#define T_FULL_IS_ESCAPER              T_FULL_HAS_FN
+#define T_IS_ESCAPER                   T_HAS_FN
+#define is_escaper(p)                  ((has_high_type_bit(p, T_IS_ESCAPER)) && (!is_pair(p)))
+#define set_is_escaper_syntax(p)       do {set_high_type_bit(T_Sym(p), T_IS_ESCAPER); set_high_type_bit(T_Syn(global_value(p)), T_IS_ESCAPER);} while (0)
+#define set_is_escaper_function(p)     do {set_high_type_bit(T_Sym(p), T_IS_ESCAPER); set_high_type_bit(T_Fnc(global_value(p)), T_IS_ESCAPER);} while (0)
+
 #define T_UNHEAP                       0x4000000000000000
 #define T_SHORT_UNHEAP                 (1 << 14)
 #define in_heap(p)                     (((T_Pos(p))->tf.bits.high_bits & T_SHORT_UNHEAP) == 0) /* can be slot, make_starlet let_set_slot */
@@ -5016,7 +5022,11 @@ static char *describe_type_bits(s7_scheme *sc, s7_pointer obj)
 							 ((is_syntax(obj)) ? " setter-syntax" :
 							  " ?36?")))) : "",
 	  /* bit 37+24 */
-	  ((full_typ & T_FULL_HAS_FN) != 0) ?    ((is_pair(obj)) ? " has-fn" : " ?37") : "",
+	  ((full_typ & T_FULL_HAS_FN) != 0) ?    ((is_pair(obj)) ? " has-fn" :
+						  ((is_symbol(obj)) ? " escaper-symbol" :
+						   ((is_syntax(obj)) ? " escaper-syntax" :
+						    ((is_c_function(obj)) ? " escaper-c-function" :
+						     " ?37")))) : "",
 	  /* bit 62 */
 	  ((full_typ & T_UNHEAP) != 0) ?         " unheap" : "",
 	  /* bit 63 */
@@ -5128,7 +5138,7 @@ static bool has_odd_bits(s7_pointer obj)
     return(true);
   if (((full_typ & T_CYCLIC) != 0) && (!is_simple_sequence(obj)) && (!t_structure_p[type(obj)]) && (!is_any_closure(obj))) return(true);
   if (((full_typ & T_CYCLIC_SET) != 0) && (!is_simple_sequence(obj)) && (!t_structure_p[type(obj)]) && (!is_any_closure(obj))) return(true);
-  if (((full_typ & T_FULL_HAS_FN) != 0) && (!is_pair(obj))) return(true);
+  if (((full_typ & T_FULL_HAS_FN) != 0) && (!is_pair(obj)) && (!is_symbol(obj)) && (!is_syntax(obj)) && (!is_c_function(obj))) return(true);
   if (((full_typ & T_FULL_TRUE_IS_DONE) != 0) && (!is_pair(obj)) && (!is_symbol(obj)) && (!is_c_function(obj))) return(true);
   if (is_symbol(obj))
     {
@@ -11443,10 +11453,10 @@ static s7_pointer add_profile(s7_scheme *sc, s7_pointer code)
   return(p);
 }
 
-static bool tree_has_definers(s7_scheme *sc, s7_pointer tree)
+static bool tree_has_definer(s7_scheme *sc, s7_pointer tree)
 {
   for (s7_pointer p = tree; is_pair(p); p = cdr(p))
-    if (tree_has_definers(sc, car(p)))
+    if (tree_has_definer(sc, car(p)))
       return(true);
   return((is_symbol(tree)) && (is_definer(tree)));
 }
@@ -11522,7 +11532,7 @@ static s7_pointer make_macro(s7_scheme *sc, opcode_t op, bool named)
 	  slot_set_value_with_hook(mac_slot, mac);
 	}
       else s7_make_slot(sc, sc->curlet, mac_name, mac); /* was current but we've checked immutable already */
-      if (tree_has_definers(sc, body))
+      if (tree_has_definer(sc, body))
 	set_is_definer(mac_name);                       /* (list-values 'define ...) t101-13 */
     }
 
@@ -12655,7 +12665,7 @@ static void call_with_current_continuation(s7_scheme *sc)
 
 static s7_pointer g_call_cc(s7_scheme *sc, s7_pointer args)
 {
-  #define H_call_cc "(call-with-current-continuation (lambda (continuer)...)) is always a mistake!"
+  #define H_call_cc "(call-with-current-continuation (lambda (continuer) ...)) evaluates the body with continuer as a way to goto to the continuation of the body"
   #define Q_call_cc s7_make_signature(sc, 2, sc->values_symbol, sc->is_procedure_symbol)
 
   s7_pointer p = car(args);                  /* this is the procedure passed to call/cc */
@@ -12679,13 +12689,7 @@ static s7_pointer g_call_cc(s7_scheme *sc, s7_pointer args)
   return(sc->nil);
 }
 
-/* we can't naively optimize call/cc to call-with-exit if the continuation is only
- *   used as a function in the call/cc body because it might (for example) be wrapped
- *   in a lambda form that is being exported.  See b-func in s7test for an example.
- *   But we can notice that embedded use?  lambda(*)/m|bacro(*), curlet
- */
-
-static void op_call_cc(s7_scheme *sc)
+static void op_call_cc(s7_scheme *sc) /* OP_CALL_CC in eval via optimize_c_function_one_arg */
 {
   begin_temp(sc->y, s7_make_continuation(sc));
   continuation_name(sc->y) = caar(opt2_pair(sc->code)); /* caadadr(sc->code) */
@@ -35617,7 +35621,7 @@ static s7_pointer find_closure(s7_scheme *sc, s7_pointer closure, s7_pointer cur
       if ((is_funclet(e)) || (is_maclet(e)))
 	{
 	  s7_pointer sym = funclet_function(e);
-	  const s7_pointer f = s7_symbol_local_value(sc, sym, e);
+	  s7_pointer f = s7_symbol_local_value(sc, sym, e);
 	  if (f == closure)
 	    return(sym);
 	}
@@ -35738,7 +35742,7 @@ static s7_pointer pair_append(s7_scheme *sc, s7_pointer a, s7_pointer b)
 
 static void write_closure_readably_1(s7_scheme *sc, s7_pointer obj, s7_pointer arglist, s7_pointer body, s7_pointer port)
 {
-  s7_int old_print_length = sc->print_length;
+  const s7_int old_print_length = sc->print_length;
 
   if (type(obj) == T_CLOSURE_STAR)
     port_write_string(port)(sc, "(lambda* ", 9, port);
@@ -35767,7 +35771,7 @@ static void write_closure_readably_1(s7_scheme *sc, s7_pointer obj, s7_pointer a
 
 static void write_closure_readably(s7_scheme *sc, s7_pointer obj, s7_pointer port, shared_info_t *ci)
 {
-  s7_pointer body = closure_body(obj);
+  const s7_pointer body = closure_body(obj);
   s7_pointer arglist = closure_args(obj);
   s7_pointer pe, local_slots, setter = NULL, obj_slot = NULL;
   s7_int gc_loc;
@@ -36136,10 +36140,9 @@ static void counter_to_port(s7_scheme *sc, s7_pointer unused_obj, s7_pointer por
   port_write_string(port)(sc, "#<counter>", 10, port);
 }
 
-
 static void integer_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t unused_use_write, shared_info_t *unused_ci)
-{ /* killer overhead here; breaking it into named/unnamed funcs helps only slightly -- still ridiculous overhead according to callgrind */
-
+{ 
+  /* killer overhead here; breaking it into named/unnamed funcs helps only slightly -- still ridiculous overhead according to callgrind */
   s7_int num = integer(obj);
   if ((num < 10) && (num >= 0))
     {
@@ -36260,9 +36263,9 @@ static void macro_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_wr
 
 static void c_function_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *unused_ci)
 { /* includes c_function_star, so c_function_symbol can't be used */
-  s7_pointer sym = c_function_name_to_symbol(sc, obj);
-  s7_pointer local_val = lookup_unexamined(sc, sym); /* lookup here really needs the env where sym is defined */
-  s7_int len = c_function_name_length(obj);
+  const s7_pointer sym = c_function_name_to_symbol(sc, obj);
+  const s7_pointer local_val = lookup_unexamined(sc, sym); /* lookup here really needs the env where sym is defined */
+  const s7_int len = c_function_name_length(obj);
 
   if ((!is_global(sym)) &&
       (initial_value(sym) != sc->undefined) &&
@@ -36365,14 +36368,14 @@ static void c_object_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 	  (c_object_set(sc, obj)))
 	{
 	  int32_t href;
-	  s7_pointer old_w = sc->w;
-	  s7_pointer obj_list = ((*(c_object_to_list(sc, obj)))(sc, set_mlist_1(sc, obj)));
-	  s7_pointer p = obj_list;
+	  const s7_pointer old_w = sc->w;
+	  const s7_pointer obj_list = ((*(c_object_to_list(sc, obj)))(sc, set_mlist_1(sc, obj)));
 	  sc->w = obj_list;
 	  if ((ci) &&
 	      (is_cyclic(obj)) &&
 	      ((href = peek_shared_ref(ci, obj)) != 0))
 	    {
+	      s7_pointer p = obj_list;
 	      if (href < 0) href = -href;
 	      if ((ci->defined[href]) || (port == ci->cycle_port))
 		{
@@ -36393,7 +36396,6 @@ static void c_object_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 		      int32_t len = (int32_t)catstrs_direct(buf, "  (set! (<", pos_int_to_str_direct(sc, href), "> ", pos_int_to_str_direct_1(sc, i), ") ", (const char *)NULL);
 		      port_write_string(port)(sc, " #f", 3, port);
 		      port_write_string(ci->cycle_port)(sc, buf, len, ci->cycle_port);
-
 		      symref = peek_shared_ref(ci, val);
 		      if (symref != 0)
 			{
@@ -36415,7 +36417,7 @@ static void c_object_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use
 	    {
 	      port_write_character(port)(sc, '(', port);
 	      c_object_name_to_port(sc, obj, port);
-	      for (p = obj_list; is_pair(p); p = cdr(p))
+	      for (s7_pointer p = obj_list; is_pair(p); p = cdr(p))
 		{
 		  s7_pointer val = car(p);
 		  port_write_character(port)(sc, ' ', port);
@@ -36628,18 +36630,17 @@ static inline s7_pointer object_out(s7_scheme *sc, s7_pointer obj, s7_pointer st
 
 static s7_pointer new_format_port(s7_scheme *sc)
 {
-  s7_pointer x = alloc_pointer(sc);
   s7_int len = FORMAT_PORT_LENGTH;
-  block_t *block, *b;
+  block_t *block = mallocate(sc, len);
+  block_t *b = mallocate_port(sc);
+  s7_pointer x = alloc_pointer(sc);
   set_full_type(x, T_OUTPUT_PORT);
-  b = mallocate_port(sc);
   port_block(x) = b;
   port_port(x) = (port_t *)block_data(b);
   port_type(x) = STRING_PORT;
   port_set_closed(x, false);
   port_data_size(x) = len;
   port_next(x) = NULL;
-  block = mallocate(sc, len);
   port_data(x) = (uint8_t *)(block_data(block));
   port_data_block(x) = block;
   port_data(x)[0] = '\0';
@@ -36730,9 +36731,10 @@ static s7_pointer g_object_to_string(s7_scheme *sc, s7_pointer args)
                                sc->is_string_symbol, sc->T, \
                                s7_make_signature(sc, 2, sc->is_boolean_symbol, sc->is_keyword_symbol), sc->is_integer_symbol)
   use_write_t choice;
-  s7_pointer obj = car(args), strport, res;
+  const s7_pointer obj = car(args);
+  s7_pointer strport, res;
   s7_int out_len, pending_max = S7_INT64_MAX;
-  bool old_openlets = sc->has_openlets;
+  const bool old_openlets = sc->has_openlets;
 
   if (is_not_null(cdr(args)))
     {
@@ -37149,11 +37151,7 @@ static s7_int format_read_integer(s7_int *cur_i, s7_int str_len, const char *str
 
 static void format_number(s7_scheme *sc, format_data_t *fdat, int32_t radix, s7_int width, s7_int precision, char float_choice, char pad, s7_pointer port)
 {
-  char *tmp;
-  block_t *b = NULL;
-  s7_int nlen = 0;
   if (width < 0) width = 0;
-
   /* precision choice depends on float_choice if it's -1 */
   if (precision < 0)
     {
@@ -37170,7 +37168,9 @@ static void format_number(s7_scheme *sc, format_data_t *fdat, int32_t radix, s7_
 
   if (pad != ' ')
     {
-      char *padtmp;
+      char *tmp, *padtmp;
+      block_t *b = NULL;
+      s7_int nlen = 0;
 #if !WITH_GMP
       if (radix == 10)
 	tmp = number_to_string_base_10(sc, car(fdat->args), width, precision, float_choice, &nlen, P_WRITE);
@@ -37187,6 +37187,9 @@ static void format_number(s7_scheme *sc, format_data_t *fdat, int32_t radix, s7_
     }
   else
     {
+      char *tmp;
+      block_t *b = NULL;
+      s7_int nlen = 0;
 #if !WITH_GMP
       if (radix == 10)
 	tmp = number_to_string_base_10(sc, car(fdat->args), width, precision, float_choice, &nlen, P_WRITE);
@@ -37283,7 +37286,6 @@ static s7_int format_n_arg(s7_scheme *sc, const char *str, format_data_t *fdat, 
   if (!s7_is_integer(car(fdat->args)))
     format_error_nr(sc, "~N: integer argument required", 29, str, args, fdat);
   n = s7_integer_clamped_if_gmp(sc, car(fdat->args));
-
   if (n < 0)
     format_error_nr(sc, "~N value is negative?", 21, str, args, fdat);
   if (n > sc->max_string_length)
@@ -37376,7 +37378,6 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
   s7_int i, str_len;
   format_data_t *fdat;
   s7_pointer deferred_port;
-
   if (len <= 0)
     {
       str_len = safe_strlen(str);
@@ -37590,7 +37591,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 	      use_write = P_DISPLAY;
 	    OBJSTR:                        /* object->string */
 	      {
-		s7_pointer obj, strport;
+		s7_pointer obj;
 		if (is_null(fdat->args))
 		  format_error_nr(sc, "missing argument", 16, str, args, fdat);
 		i++;
@@ -37599,6 +37600,7 @@ static s7_pointer format_to_port_1(s7_scheme *sc, s7_pointer port, const char *s
 		    (!has_active_methods(sc, obj)) ||
 		    (!format_method(sc, (const char *)(str + i), fdat, port)))
 		  {
+		    s7_pointer strport;
 		    bool old_openlets = sc->has_openlets;
 		    /* for the column check, we need to know the length of the object->string output */
 		    if (columnized)
@@ -37994,7 +37996,7 @@ static s7_pointer g_format_nr(s7_scheme *sc, s7_pointer args)  /* port == #f, in
 static s7_pointer g_format_just_control_string(s7_scheme *sc, s7_pointer args)
 {
   s7_pointer pt = car(args);
-  s7_pointer str = cadr(args);
+  const s7_pointer str = cadr(args);
   if (pt == sc->F)
     return(str);
 
@@ -38058,7 +38060,7 @@ static s7_pointer format_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_p
   if (args > 1)
     {
       const s7_pointer port = cadr(expr);
-      s7_pointer str_arg = caddr(expr);
+      const s7_pointer str_arg = caddr(expr);
       if (is_string(str_arg))
 	{
 	  if ((args == 2) || (args == 3))
@@ -38205,8 +38207,7 @@ system captures the output as a string and returns it."
 #ifdef __EMSCRIPTEN__
   return s7_nil(sc);
 #else
-  s7_pointer name = car(args);
-
+  const s7_pointer name = car(args);
   if (!is_string(name))
     return(sole_arg_method_or_bust(sc, name, sc->system_symbol, args, sc->type_names[T_STRING]));
 
@@ -38529,7 +38530,6 @@ static inline bool tree_memq_1(s7_scheme *sc, s7_pointer sym, s7_pointer tree)  
   do {
     if (sym == car(tree))
       return(true);
-
     if (is_pair(car(tree)))
       {
 	s7_pointer cp = car(tree);
@@ -38575,7 +38575,7 @@ static s7_pointer g_tree_memq(s7_scheme *sc, s7_pointer args)
   return(make_boolean(sc, s7_tree_memq(sc, car(args), tree)));
 }
 
-static inline bool tree_including_quote_memq(s7_scheme *sc, s7_pointer sym, s7_pointer tree)    /* sym need not be a symbol */
+static /* inline */ bool tree_including_quote_memq(s7_scheme *sc, s7_pointer sym, s7_pointer tree)    /* sym need not be a symbol */
 {
   do {
     if (sym == car(tree))
@@ -38624,7 +38624,7 @@ static inline bool pair_set_memq(s7_scheme *sc, s7_pointer tree)
 
 static bool tree_set_memq_b_7pp(s7_scheme *sc, s7_pointer syms, s7_pointer tree)
 {
-  bool non_symbols = false, result;
+  bool non_symbols = false;
   if (!is_list(syms))
     wrong_type_error_nr(sc, sc->tree_set_memq_symbol, 1, syms, a_list_string);
   if (is_null(syms)) return(false);
@@ -38643,10 +38643,11 @@ static bool tree_set_memq_b_7pp(s7_scheme *sc, s7_pointer syms, s7_pointer tree)
     if (is_symbol(car(p)))
       add_symbol_to_small_symbol_set(sc, car(p));
     else non_symbols = true;
-  result = pair_set_memq(sc, tree);
-  end_small_symbol_set(sc);
-  if (result) return(true);
-
+  {
+    bool result = pair_set_memq(sc, tree);
+    end_small_symbol_set(sc);
+    if (result) return(true);
+  }
   if (non_symbols)
     for (s7_pointer p = syms; is_pair(p); p = cdr(p))
       if ((!is_symbol(car(p))) &&
@@ -38669,7 +38670,6 @@ static s7_pointer g_tree_set_memq(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer tree_set_memq_syms_direct(s7_scheme *sc, s7_pointer syms, s7_pointer tree)
 {
-  bool result;
   if (!is_list(tree))
     wrong_type_error_nr(sc, sc->tree_set_memq_symbol, 2, tree, a_list_string);
   if (is_null(tree)) return(sc->F);
@@ -38679,9 +38679,11 @@ static s7_pointer tree_set_memq_syms_direct(s7_scheme *sc, s7_pointer syms, s7_p
   begin_small_symbol_set(sc);
   for (s7_pointer p = syms; is_pair(p); p = cdr(p))
     add_symbol_to_small_symbol_set(sc, car(p));
-  result = pair_set_memq(sc, tree);
-  end_small_symbol_set(sc);
-  return(make_boolean(sc, result));
+  {
+    bool result = pair_set_memq(sc, tree);
+    end_small_symbol_set(sc);
+    return(make_boolean(sc, result));
+  }
 }
 
 static s7_pointer g_tree_set_memq_syms(s7_scheme *sc, s7_pointer args)
@@ -72337,7 +72339,7 @@ static s7_pointer g_list_values(s7_scheme *sc, s7_pointer args)
 	break;
   if (is_null(x))
     {
-      if (!checked) /* (!tree_has_definers(sc, args)) seems to work, reduces copy_tree calls slightly, but costs more than it saves in tgen */
+      if (!checked) /* (!tree_has_definer(sc, args)) seems to work, reduces copy_tree calls slightly, but costs more than it saves in tgen */
 	{
 	  for (s7_pointer p = args; is_pair(p); p = cdr(p)) /* embedded list can be immutable, so we need to copy (sigh) */
 	    if (is_immutable_pair(p))                       /* immutable if unheaped sometimes! (tset.scm typed-let) */
@@ -73515,6 +73517,23 @@ static inline s7_pointer find_uncomplicated_symbol(s7_scheme *sc, s7_pointer sym
   return(global_slot(symbol)); /* it's no longer global perhaps (local definition now inaccessible) */
 }
 
+static bool tree_has_escaper(s7_scheme *sc, s7_pointer tree, s7_pointer cc)
+{
+  if (is_pair(tree))
+    {
+      if (is_escaper(car(tree))) return(true);
+      if ((is_pair(car(tree))) && (tree_has_escaper(sc, car(tree), cc))) return(true);
+      for (s7_pointer p = cdr(tree); is_pair(p); p = cdr(p))
+	{
+	  if (car(p) == cc) return(true);
+	  if ((is_pair(car(p))) && (tree_has_escaper(sc, car(p), cc))) return(true);
+	}
+    }
+  else
+    if (tree == cc) return(true);
+  return(false);
+}
+
 static bool is_ok_lambda(s7_scheme *sc, s7_pointer arg2)
 {
   return((is_pair(arg2)) &&
@@ -73638,7 +73657,33 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
 		  (!is_probably_constant(caadr(lambda_expr)))) /* (call-with-exit (lambda (pi) ...) */
 		{
 		  if (c_function_call(func) == g_call_cc)
-		    set_unsafe_optimize_op(expr, OP_CALL_CC);
+		    {
+		      set_unsafe_optimize_op(expr, OP_CALL_CC);
+
+		      /* fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(expr)); */
+		      /* (call/cc (lambda (return) (do ((i 0 (+ i 1))) ((= i 10)) (if (= i 3) (return 32))))) */
+#if 1
+		      /* we can't naively optimize call/cc to call-with-exit if the continuation is only
+		       *   used as a function in the call/cc body because it might (for example) be wrapped
+		       *   in a lambda form that is being exported.  See b-func in s7test for an example.
+		       *   But we can notice that embedded use?  lambda(*)/m|bacro(*), curlet
+		       */
+		      {
+			s7_pointer arg_func = cadr(expr);
+			if ((car(arg_func) == sc->lambda_symbol) &&
+			    (is_pair(cdr(arg_func))) && (is_pair(cadr(arg_func))) && (is_normal_symbol(caadr(arg_func))))
+			  {
+			    s7_pointer cc = caadr(arg_func);
+			    if ((!tree_has_escaper(sc, cddr(arg_func), cc)) &&
+				((caddr(arg_func) != cc) || (is_pair(cdddr(arg_func))))) /* (call/cc (lambda (return) return)) */
+			      {
+				set_unsafe_optimize_op(expr, (is_null(cdddr(lambda_expr))) ? OP_CALL_WITH_EXIT_O : OP_CALL_WITH_EXIT);
+				/* fprintf(stderr, "call/exit: %s\n", display(expr)); */
+			      }
+			    /* else fprintf(stderr, "has cc: %s\n", display(cddr(arg_func))); */
+			  }}
+#endif
+		    }
 		  else
 		    if (c_function_call(func) == g_call_with_exit)
 		      set_unsafe_optimize_op(expr, (is_null(cdddr(lambda_expr))) ? OP_CALL_WITH_EXIT_O : OP_CALL_WITH_EXIT);
@@ -76791,10 +76836,10 @@ static body_t wrapped_body_is_safe(s7_scheme *sc, s7_pointer func, s7_pointer bo
   return(result);
 }
 
-static bool tree_has_definers_or_binders(s7_scheme *sc, s7_pointer tree)
+static bool tree_has_definer_or_binder(s7_scheme *sc, s7_pointer tree)
 {
   for (s7_pointer p = tree; is_pair(p); p = cdr(p))
-    if (tree_has_definers_or_binders(sc, car(p)))
+    if (tree_has_definer_or_binder(sc, car(p)))
       return(true);
   return((is_symbol(tree)) &&
 	 (is_definer_or_binder(tree)));
@@ -78083,7 +78128,7 @@ static void optimize_lambda(s7_scheme *sc, bool unstarred_lambda, s7_pointer fun
 		{
 		  happy = false;
 		  if ((result > unsafe_body) &&
-		      (tree_has_definers_or_binders(sc, cadr(par)))) /* if the default has a definer, body is not safe (funclet is not stable) */
+		      (tree_has_definer_or_binder(sc, cadr(par)))) /* if the default has a definer, body is not safe (funclet is not stable) */
 		    result = unsafe_body;
 		  break;
 		}}
@@ -84297,7 +84342,7 @@ static s7_pointer fxify_step_exprs(s7_scheme *sc, s7_pointer code)
   return(code);
 }
 
-static bool do_vector_has_definers(s7_pointer v)
+static bool do_vector_has_definer(s7_pointer v)
 {
   s7_int len = vector_length(v);
   s7_pointer *els = vector_elements(v);
@@ -84309,7 +84354,7 @@ static bool do_vector_has_definers(s7_pointer v)
   return(false);
 }
 
-static /* inline */ bool do_tree_has_definers(s7_scheme *sc, s7_pointer tree, uint32_t depth)
+static /* inline */ bool do_tree_has_definer(s7_scheme *sc, s7_pointer tree, uint32_t depth)
 {
   /* we can't be very fancy here because quote gloms up everything: (cond '(define x 0) ...) etc, and the tree here can
    *   be arbitrarily messed up, and we need to be reasonably fast.  So we accept some false positives: (case ((define)...)...) or '(define...)
@@ -84337,12 +84382,12 @@ static /* inline */ bool do_tree_has_definers(s7_scheme *sc, s7_pointer tree, ui
       else
 	if (is_pair(pp))
 	  {
-	    if (do_tree_has_definers(sc, pp, ++depth))
+	    if (do_tree_has_definer(sc, pp, ++depth))
 	      return(true);
 	  }
 	else
 	  if ((is_applicable(pp)) &&
-	      (((is_t_vector(pp)) && (do_vector_has_definers(pp))) ||
+	      (((is_t_vector(pp)) && (do_vector_has_definer(pp))) ||
 	       ((is_c_function(pp)) && (is_func_definer(pp))) ||
 	       ((is_syntax(pp)) && (is_syntax_definer(pp)))))
 	    return(true);
@@ -84519,7 +84564,7 @@ static s7_pointer check_do(s7_scheme *sc)
 
   if ((sc->safety > NO_SAFETY) && (tree_is_cyclic(sc, form)))
     return(form);
-  if (do_tree_has_definers(sc, form, 0))         /* we don't want definers in body, vars, or end test */
+  if (do_tree_has_definer(sc, form, 0))         /* we don't want definers in body, vars, or end test */
     return(fxify_step_exprs(sc, code));
 
   body = cddr(code);
@@ -99391,6 +99436,13 @@ then returns each var to its original value."
   set_immutable_slot(global_slot(sc->with_let_symbol));
   sc->setter_symbol = make_symbol(sc, "setter", 6);
 
+  set_is_escaper_syntax(sc->lambda_symbol);
+  set_is_escaper_syntax(sc->lambda_star_symbol);
+  set_is_escaper_syntax(sc->macro_symbol);
+  set_is_escaper_syntax(sc->macro_star_symbol);
+  set_is_escaper_syntax(sc->bacro_symbol);
+  set_is_escaper_syntax(sc->bacro_star_symbol);
+
   sc->feed_to_symbol =              make_symbol(sc, "=>", 2);
   sc->body_symbol =                 make_symbol(sc, "body", 4);
   sc->read_error_symbol =           make_symbol(sc, "read-error", 10);
@@ -99555,8 +99607,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->symbol_to_value_symbol =       defun("symbol->value",	symbol_to_value,	1, 1, false);
   sc->symbol_to_dynamic_value_symbol = defun("symbol->dynamic-value", symbol_to_dynamic_value, 1, 0, false);
   sc->symbol_initial_value_symbol =  defun("symbol-initial-value", symbol_initial_value, 1, 0, false);
-  sc->immutable_symbol =             unsafe_defun("immutable!",	immutable,		1, 1, false); /* unsafe 11-Oct-23, added let arg 13-Oct-23 */
-  set_func_is_definer(sc->immutable_symbol);
+  sc->immutable_symbol =             unsafe_defun("immutable!",	immutable,		1, 1, false); set_func_is_definer(sc->immutable_symbol);
   sc->is_immutable_symbol =          defun("immutable?",	is_immutable,		1, 1, false); /* added optional let arg 13-Oct-23 */
   sc->is_constant_symbol =           defun("constant?",	        is_constant,		1, 0, false);
   sc->string_to_keyword_symbol =     defun("string->keyword",	string_to_keyword,      1, 0, false); /* keyword->string is symbol->string */
@@ -99567,16 +99618,15 @@ static void init_rootlet(s7_scheme *sc)
   sc->rootlet_symbol =               defun("rootlet",           rootlet,		0, 0, false);
   sc->curlet_symbol =                unsafe_defun("curlet",     curlet,			0, 0, false); /* (define (f a) (curlet)) exports the funclet, see s7test 50215 */
   set_func_is_definer(sc->curlet_symbol);
+  set_is_escaper_function(sc->curlet_symbol);
   sc->unlet_symbol =                 defun("unlet",		unlet,			0, 0, false);
   set_local_slot(sc->unlet_symbol, global_slot(sc->unlet_symbol)); /* for set_locals */
   set_immutable(sc->unlet_symbol);
   set_immutable_slot(global_slot(sc->unlet_symbol));
   sc->is_funclet_symbol =            defun("funclet?",          is_funclet,             1, 0, false);
   sc->sublet_symbol =                defun("sublet",		sublet,			1, 0, true); set_is_saver(sc->sublet_symbol);
-  sc->varlet_symbol =                semisafe_defun("varlet",	varlet,			2, 0, true); /* was 1,0 13-Aug-22 */
-  set_func_is_definer(sc->varlet_symbol);
-  sc->cutlet_symbol =                semisafe_defun("cutlet",	cutlet,			2, 0, true); /* was 1,0 13-Aug-22 */
-  set_func_is_definer(sc->cutlet_symbol);
+  sc->varlet_symbol =                semisafe_defun("varlet",	varlet,			2, 0, true); set_func_is_definer(sc->varlet_symbol);
+  sc->cutlet_symbol =                semisafe_defun("cutlet",	cutlet,			2, 0, true); set_func_is_definer(sc->cutlet_symbol);
   sc->inlet_symbol =                 defun("inlet",		inlet,			0, 0, true); set_is_saver(sc->inlet_symbol);
   sc->owlet_symbol =                 defun("owlet",		owlet,			0, 0, false);
   sc->coverlet_symbol =              defun("coverlet",		coverlet,		1, 0, false);
@@ -99586,11 +99636,9 @@ static void init_rootlet(s7_scheme *sc)
    *   the stack will have that operator awaiting the next spin through eval: (define (f) (write (vector 1.0) (openlet (inlet 'write for-each)))) (f)
    *   the "f" function is needed to get the optimizer to call fx_c_aa.  This affects fx/opt cases throughout!
    */
-  sc->let_ref_symbol =               defun("let-ref",		let_ref,		2, 0, false);
-  set_immutable(sc->let_ref_symbol);  /* 16-Sep-19 */
+  sc->let_ref_symbol =               defun("let-ref",		let_ref,		2, 0, false); set_immutable(sc->let_ref_symbol);  /* 16-Sep-19 */
   set_immutable_slot(global_slot(sc->let_ref_symbol));
-  sc->let_set_symbol =               defun("let-set!",		let_set,		3, 0, false);
-  set_immutable(sc->let_set_symbol);
+  sc->let_set_symbol =               defun("let-set!",		let_set,		3, 0, false); set_immutable(sc->let_set_symbol);
   set_immutable_slot(global_slot(sc->let_set_symbol));
   sc->let_ref_fallback_symbol = make_symbol(sc, "let-ref-fallback", 16);
   sc->let_set_fallback_symbol = make_symbol(sc, "let-set-fallback", 16); /* was let-set!-fallback until 9-Oct-17 */
@@ -99901,7 +99949,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->vector_dimensions_symbol =     defun("vector-dimensions", vector_dimensions,	1, 0, false);
   sc->vector_rank_symbol =           defun("vector-rank",       vector_rank,	        1, 0, false);
   sc->make_vector_symbol =           defun("make-vector",	make_vector,		1, 2, false); set_is_saver(sc->make_vector_symbol); /* init arg */
-  sc->vector_symbol =                defun("vector",		vector,			0, 0, true); set_is_saver(sc->vector_symbol);
+  sc->vector_symbol =                defun("vector",		vector,			0, 0, true);  set_is_saver(sc->vector_symbol);
   sc->vector_typer_symbol =          defun("vector-typer",      vector_typer,	        1, 0, false);
 
   sc->subvector_symbol =             defun("subvector",         subvector,	        1, 3, false); set_is_saver(sc->subvector_symbol);
@@ -99953,10 +100001,8 @@ static void init_rootlet(s7_scheme *sc)
 
   sc->load_symbol =                  semisafe_defun("load",	load,			1, 1, false);
   sc->autoload_symbol =              defun("autoload",	        autoload,		2, 0, false);
-  sc->eval_symbol =                  semisafe_defun("eval",	eval,			1, 1, false);
-  set_func_is_definer(sc->eval_symbol);
-  sc->eval_string_symbol =           semisafe_defun("eval-string", eval_string,		1, 1, false);
-  set_func_is_definer(sc->eval_string_symbol);
+  sc->eval_symbol =                  semisafe_defun("eval",	eval,			1, 1, false); set_func_is_definer(sc->eval_symbol);
+  sc->eval_string_symbol =           semisafe_defun("eval-string", eval_string,		1, 1, false); set_func_is_definer(sc->eval_string_symbol);
   sc->apply_symbol =                 unsafe_defun("apply",    apply,			1, 0, true); /* not semisafe */
   set_func_is_definer(sc->apply_symbol);
   /* yow... (apply (inlet) (f)) in do body where (f) returns '(define...) -- see s7test.scm under apply
@@ -101133,9 +101179,6 @@ int main(int argc, char **argv)
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  * if we have the function (not its name) it's "safe"(?)
  * mutints: move make_mutable to the point of use and clear afterwards, more use of num_small_ints?
- * call/cc ->call/exit but see b-func in s7test 40699 [cc in rtn val], call/cc_chooser?
- *   mark simple c/ex with safe_call_with_exit bit and skip the stack stuff t852
- *   bit for lambda(etc)+curlet funclet? outlet?
  * "most complex": optimize_func_two_args, eval, fx_choose, fx_tree_in
  * continue with internal consts/localized vars
  * maybe use /dev/urandom for t725? t852
