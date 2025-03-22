@@ -1282,6 +1282,8 @@ int main(int argc, char **argv)
   s7_list_set(sc, p, 1, s7_f(sc));
   if (s7_list_ref(sc, p, 1) != s7_f(sc))
     {fprintf(stderr, "%d: (%s 1) is not #f?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+  if (s7_list_ref(sc, p, 32) != s7_nil(sc))
+    {fprintf(stderr, "%d: (%s 32) is not ()?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
 
   s7_gc_unprotect_at(sc, gc_loc);
 
@@ -1301,6 +1303,8 @@ int main(int argc, char **argv)
     {fprintf(stderr, "%d: (length %s) is not 3?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
   if (s7_integer(s7_list_ref(sc, p, 1)) != 2)
     {fprintf(stderr, "%d: (%s 1) is not 2?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
+  if (s7_list_ref(sc, p, 3) != s7_nil(sc))
+    {fprintf(stderr, "%d: (%s 3) is not ()?\n", __LINE__, s1 = TO_STR(p)); free(s1);}
   s7_gc_unprotect_at(sc, gc_loc);
 
   {
