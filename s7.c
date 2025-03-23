@@ -48400,7 +48400,6 @@ static s7_pointer g_c_object_type(s7_scheme *sc, s7_pointer args)
   s7_pointer p = car(args);
   if (is_c_object(p))
     return(make_integer(sc, c_object_type(p))); /* this is the c_object_types table index = tag */
-
   /* method or bust with only one arg -- sole_arg_method_or_bust? */
   if (!has_active_methods(sc, p))
     sole_arg_wrong_type_error_nr(sc, sc->c_object_type_symbol, p, sc->type_names[T_C_OBJECT]);
@@ -48418,8 +48417,7 @@ static s7_pointer g_c_object_set(s7_scheme *sc, s7_pointer args) /* called in c_
 s7_int s7_make_c_type(s7_scheme *sc, const char *name) /* shouldn't this be s7_make_c_object_type? */
 {
   c_object_t *c_type;
-  s7_int tag = sc->num_c_object_types++;
-
+  const s7_int tag = sc->num_c_object_types++;
   if (tag >= sc->c_object_types_size)
     {
       if (sc->c_object_types_size == 0)
@@ -48512,7 +48510,6 @@ static s7_pointer make_c_object_with_let(s7_scheme *sc, s7_int type, void *value
 {
   s7_pointer x;
   new_cell(sc, x, sc->c_object_types[type]->outer_type);
-
   /* c_object_info(x) = &(sc->c_object_types[type]); */
   /* that won't work because c_object_types can move when it is realloc'd and the old stuff is freed by realloc
    *   and since we're checking (for example) ref_2 existence as not null, we can't use a table of c_object_t's!
@@ -48545,8 +48542,7 @@ s7_pointer s7_c_object_let(s7_pointer obj) {return(c_object_let(obj));}
 
 s7_pointer s7_c_object_set_let(s7_scheme *sc, s7_pointer obj, s7_pointer e)
 {
-  if ((!is_immutable(obj)) &&
-      (is_let(e)))
+  if ((!is_immutable(obj)) && (is_let(e)))
     c_object_set_let(obj, e);
   return(e);
 }
@@ -48577,7 +48573,6 @@ static s7_pointer c_object_type_to_let(s7_scheme *sc, s7_pointer cobj)
 {
   s7_int type = c_object_type(cobj);
   c_object_t *c_type = sc->c_object_types[type];
-
   return(internal_inlet(sc, 6,
 			sc->name_symbol, c_type->scheme_name,
 			make_symbol(sc, "getter", 6), s7_object_to_string(sc, c_type->getter, false),
@@ -48623,7 +48618,6 @@ s7_pointer s7_dilambda_with_environment(s7_scheme *sc, s7_pointer envir,
   s7_pointer get_func, set_func;
   char *internal_set_name;
   s7_int len, name_len;
-
   if (!name) return(sc->F);
   name_len = safe_strlen(name);
   len = 16 + name_len;
@@ -48690,11 +48684,9 @@ static s7_pointer g_dilambda(s7_scheme *sc, s7_pointer args)
   s7_pointer getter = car(args), setter;
   if (!is_any_procedure(getter))
     wrong_type_error_nr(sc, sc->dilambda_symbol, 1, getter, a_procedure_or_a_macro_string);
-
   setter = cadr(args);
   if (!is_any_procedure(setter))
     wrong_type_error_nr(sc, sc->dilambda_symbol, 2, setter, a_procedure_or_a_macro_string);
-
   s7_set_setter(sc, getter, setter);
   return(getter);
 }
@@ -48705,7 +48697,6 @@ static s7_pointer closure_arity_to_cons(s7_scheme *sc, s7_pointer x, s7_pointer 
 {
   /* x_args is unprocessed -- it is exactly the list as used in the closure[*] definition */
   int32_t len;
-
   if (is_symbol(x_args))                    /* any number of args is ok */
     return(cons(sc, int_zero, max_arity));
   if (closure_arity_unknown(x))
@@ -48826,12 +48817,8 @@ static bool closure_is_aritable(s7_scheme *sc, s7_pointer x, s7_pointer x_args, 
 {
   /* x_args is unprocessed -- it is exactly the list as used in the closure definition */
   s7_int len;
-
-  if (args == 0)
-    return(!is_pair(x_args));
-  if (is_symbol(x_args))                /* any number of args is ok */
-    return(true);
-
+  if (args == 0) return(!is_pair(x_args));
+  if (is_symbol(x_args)) return(true); /* any number of args is ok */
   len = closure_arity(x);
   if (len == CLOSURE_ARITY_NOT_SET)
     {
@@ -48857,29 +48844,21 @@ bool s7_is_aritable(s7_scheme *sc, s7_pointer x, s7_int args)
     {
     case T_C_FUNCTION:
       return(c_function_is_aritable(x, args));
-
     case T_C_RST_NO_REQ_FUNCTION:
       if (has_even_args(x)) return((args & 1) == 0);
       return(true);
-
     case T_C_FUNCTION_STAR:
       return(c_function_max_args(x) >= args);
-
     case T_MACRO: case T_BACRO: case T_CLOSURE:
       return(closure_is_aritable(sc, x, closure_args(x), args));
-
     case T_MACRO_STAR: case T_BACRO_STAR: case T_CLOSURE_STAR:
       return(closure_star_is_aritable(sc, x, closure_args(x), args));
-
     case T_C_MACRO:
       return((c_macro_min_args(x) <= args) && (c_macro_max_args(x) >= args));
-
     case T_GOTO: case T_CONTINUATION:
       return(true);
-
     case T_STRING:
       return((args == 1) && (string_length(x) > 0)); /* ("" 0) -> error */
-
     case T_C_OBJECT:
       {
 	s7_pointer func;
@@ -48888,18 +48867,14 @@ bool s7_is_aritable(s7_scheme *sc, s7_pointer x, s7_int args)
 	  return(s7_apply_function(sc, func, set_plist_2(sc, x, make_integer(sc, args))) != sc->F);
 	return((is_safe_procedure(x)) && (args == 1)); /* can we get the arity from x? */
       }
-
     case T_VECTOR: case T_INT_VECTOR: case T_FLOAT_VECTOR: case T_BYTE_VECTOR: case T_COMPLEX_VECTOR:
       return((args > 0) &&
 	     (vector_length(x) > 0) &&   /* (#() 0) -> error */
 	     (args <= vector_rank(x)));
-
     case T_LET: case T_HASH_TABLE: case T_PAIR: /* for hash-table, this refers to the implicit ref (table 'key) */
       return(args == 1);
-
     case T_ITERATOR:
       return(args == 0);
-
     case T_SYNTAX:
       return((args >= syntax_min_args(x)) && (args <= syntax_max_args(x)));
     }
@@ -48913,10 +48888,8 @@ static s7_pointer g_is_aritable(s7_scheme *sc, s7_pointer args)
 
   s7_pointer n = cadr(args);
   s7_int num;
-
   if (!s7_is_integer(n)) /* remember gmp case! */
     return(method_or_bust(sc, n, sc->is_aritable_symbol, args, sc->type_names[T_INTEGER], 2));
-
   num = s7_integer_clamped_if_gmp(sc, n);
   if (num < 0)
     out_of_range_error_nr(sc, sc->is_aritable_symbol, int_two, n, it_is_negative_string);
@@ -48933,18 +48906,14 @@ static int32_t arity_to_int(s7_scheme *sc, s7_pointer x)
     {
     case T_C_FUNCTION: case T_C_FUNCTION_STAR:
       return(c_function_max_args(x));
-
     case T_C_RST_NO_REQ_FUNCTION:
       return(MAX_ARITY);
-
     case T_MACRO: case T_BACRO: case T_CLOSURE:
       args = closure_arity_to_int(sc, x);
       return((args < 0) ? MAX_ARITY : args);
-
     case T_MACRO_STAR: case T_BACRO_STAR: case T_CLOSURE_STAR:
       args = closure_star_arity_to_int(sc, x);
       return((args < 0) ? MAX_ARITY : args);
-
     case T_C_MACRO:  return(c_macro_max_args(x));
     /* case T_C_OBJECT: return(MAX_ARITY); */ /* this currently can't be called */
     /* vectors et al don't make sense here -- this is called only in g_set_setter below where it is restricted to is_any_procedure (type>=T_CLOSURE) */
@@ -49047,7 +49016,7 @@ static s7_pointer lambda_setter(s7_scheme *sc, s7_pointer p)
     return(sc->F);
   if (!closure_no_setter(p))
     {
-      s7_pointer f = funclet_entry(sc, p, sc->local_setter_symbol); /* look for +setter+, save value as closure_setter(p) */
+      const s7_pointer f = funclet_entry(sc, p, sc->local_setter_symbol); /* look for +setter+, save value as closure_setter(p) */
       if (f)
 	{
 	  if (f == sc->F)
@@ -49069,8 +49038,7 @@ static s7_pointer lambda_setter(s7_scheme *sc, s7_pointer p)
 static s7_pointer symbol_setter(s7_scheme *sc, s7_pointer sym, s7_pointer e)
 {
   s7_pointer slot, setter;
-  if (is_keyword(sym))
-    return(sc->F);
+  if (is_keyword(sym)) return(sc->F);
   if (e == sc->rootlet)
     slot = global_slot(sym);
   else
@@ -49097,25 +49065,19 @@ static s7_pointer setter_p_pp(s7_scheme *sc, s7_pointer p, s7_pointer e)
     case T_BACRO:   case T_BACRO_STAR:
     case T_CLOSURE: case T_CLOSURE_STAR:
       return(lambda_setter(sc, p));
-
     case T_C_FUNCTION: case T_C_FUNCTION_STAR: case T_C_RST_NO_REQ_FUNCTION:
       return(c_function_setter(p));
-
     case T_C_MACRO:
       return(c_macro_setter(p));
-
     case T_C_OBJECT:
       check_method(sc, p, sc->setter_symbol, set_plist_2(sc, p, e));
       return((c_object_set(sc, p) == fallback_set) ? sc->F : sc->c_object_set_function); /* for example ((setter obj) obj 0 1.0) if s7test block */
       /* this could wrap the setter as an s7_function giving p's class-name etc */
-
     case T_LET:
       check_method(sc, p, sc->setter_symbol, set_plist_2(sc, p, e));
       return(global_value(sc->let_set_symbol));
-
     case T_ITERATOR:                           /* (set! (iter) val) doesn't fit the other setters */
       return((is_any_closure(iterator_sequence(p))) ? closure_setter(iterator_sequence(p)) : sc->F);
-
     case T_PAIR:         return(global_value(sc->list_set_symbol)); /* or maybe initial-value? */
     case T_HASH_TABLE:   return(global_value(sc->hash_table_set_symbol));
     case T_STRING:       return(global_value(sc->string_set_symbol));
@@ -49125,9 +49087,7 @@ static s7_pointer setter_p_pp(s7_scheme *sc, s7_pointer p, s7_pointer e)
     case T_FLOAT_VECTOR: return(global_value(sc->float_vector_set_symbol));
     case T_COMPLEX_VECTOR: return(global_value(sc->complex_vector_set_symbol));
     case T_SLOT:         return((slot_has_setter(p)) ? slot_setter(p) : sc->F);
-
-    case T_SYMBOL:                             /* (setter symbol let) */
-      return(symbol_setter(sc, p, e));
+    case T_SYMBOL:       return(symbol_setter(sc, p, e)); /* (setter symbol let) */
     }
   /* wrong_type_error_nr(sc, sc->setter_symbol, 1, p, wrap_string(sc, "something that might have a setter", 34)); */ /* this seems unfriendly */
   return(sc->F);
@@ -49153,16 +49113,16 @@ static void protect_setter(s7_scheme *sc, s7_pointer sym, s7_pointer fnc)
   s7_int loc;
   if (sc->protected_setters_size == sc->protected_setters_loc)
     {
-      s7_int size = sc->protected_setters_size;
-      s7_int new_size = 2 * size;
-      block_t *ob = vector_block(sc->protected_setters);
+      const s7_int size = sc->protected_setters_size;
+      const s7_int new_size = 2 * size;
+      block_t *ob = vector_block(sc->protected_setters);       /* ob is liberated by reallocate below */
       block_t *nb = reallocate(sc, ob, new_size * sizeof(s7_pointer));
       block_info(nb) = NULL;
       vector_block(sc->protected_setters) = nb;
       vector_elements(sc->protected_setters) = (s7_pointer *)block_data(nb);
       vector_length(sc->protected_setters) = new_size;
 
-      ob = vector_block(sc->protected_setter_symbols);
+      ob = vector_block(sc->protected_setter_symbols);         /* ob is liberated by reallocate below */
       nb = reallocate(sc, ob, new_size * sizeof(s7_pointer));
       vector_block(sc->protected_setter_symbols) = nb;
       vector_elements(sc->protected_setter_symbols) = (s7_pointer *)block_data(nb);
@@ -49188,7 +49148,7 @@ static s7_pointer symbol_set_setter(s7_scheme *sc, s7_pointer sym, s7_pointer ar
 
   if (is_pair(cddr(args)))
     {
-      s7_pointer e = cadr(args); /* (let ((x 1)) (set! (setter 'x (curlet)) (lambda (s v e) ...))): args is (x (inlet 'x 1) #<lambda (s v ...)>) */
+      const s7_pointer e = cadr(args); /* (let ((x 1)) (set! (setter 'x (curlet)) (lambda (s v e) ...))): args is (x (inlet 'x 1) #<lambda (s v ...)>) */
       func = caddr(args);
       if (e == sc->rootlet)
 	slot = global_slot(sym);
@@ -49236,13 +49196,12 @@ static s7_pointer symbol_set_setter(s7_scheme *sc, s7_pointer sym, s7_pointer ar
 
 static s7_pointer g_set_setter(s7_scheme *sc, s7_pointer args)
 {
-  s7_pointer p = car(args), setter;
-  if (is_symbol(p)) /* has to precede cadr(args) checks, (set! (setter 'x let) ...) where setter is caddr(args) */
-    return(symbol_set_setter(sc, p, args));
-  if (p == sc->starlet)
-    wrong_type_error_nr(sc, wrap_string(sc, "set! setter", 11), 1, p, wrap_string(sc, "something other than *s7*", 25));
+  const s7_pointer obj = car(args), setter = cadr(args);
+  if (is_symbol(obj)) /* has to precede cadr(args) checks, (set! (setter 'x let) ...) where setter is caddr(args) */
+    return(symbol_set_setter(sc, obj, args));
+  if (obj == sc->starlet)
+    wrong_type_error_nr(sc, wrap_string(sc, "set! setter", 11), 1, obj, wrap_string(sc, "something other than *s7*", 25));
 
-  setter = cadr(args);
   if (setter != sc->F)
     {
       if (!is_any_procedure(setter))
@@ -49252,38 +49211,38 @@ static s7_pointer g_set_setter(s7_scheme *sc, s7_pointer args)
 		 set_elist_2(sc, wrap_string(sc, "setter function, ~A, should take at least one argument", 54), setter));
       if (setter == global_value(sc->values_symbol))
 	error_nr(sc, make_symbol(sc, "invalid-setter", 14),
-		 set_elist_2(sc, wrap_string(sc, "~S's setter can't be values", 27), p));
+		 set_elist_2(sc, wrap_string(sc, "~S's setter can't be values", 27), obj));
     }
-  switch (type(p))
+  switch (type(obj))
     {
     case T_MACRO:   case T_MACRO_STAR:
     case T_BACRO:   case T_BACRO_STAR:
     case T_CLOSURE: case T_CLOSURE_STAR:
-      closure_set_setter(p, setter);
+      closure_set_setter(obj, setter);
       if (setter == sc->F)
-	closure_set_no_setter(p);
+	closure_set_no_setter(obj);
       break;
 
     case T_C_FUNCTION: case T_C_FUNCTION_STAR: case T_C_RST_NO_REQ_FUNCTION:
-      if (p == global_value(sc->setter_symbol))      /* (immutable? (setter setter)) is #t, but we aren't checking immutable? here -- maybe we should? */
+      if (obj == global_value(sc->setter_symbol))      /* (immutable? (setter setter)) is #t, but we aren't checking immutable? here -- maybe we should? */
 	immutable_object_error_nr(sc, set_elist_2(sc, wrap_string(sc, "can't set (setter setter) to ~S", 31), setter));
-      if (p == global_value(sc->values_symbol))       /* 6-Oct-23 (set! (setter values) ...) is problematic, see splice_in_values */
+      if (obj == global_value(sc->values_symbol))       /* 6-Oct-23 (set! (setter values) ...) is problematic, see splice_in_values */
 	immutable_object_error_nr(sc, set_elist_2(sc, wrap_string(sc, "can't set (setter values) to ~S", 31), setter));
-      c_function_set_setter(p, setter);
+      c_function_set_setter(obj, setter);
       if ((is_any_closure(setter)) ||
 	  (is_any_macro(setter)))
-	add_setter(sc, p, setter);
+	add_setter(sc, obj, setter);
       break;
 
     case T_C_MACRO:
-      c_macro_set_setter(p, setter);
+      c_macro_set_setter(obj, setter);
       if ((is_any_closure(setter)) ||
 	  (is_any_macro(setter)))
-	add_setter(sc, p, setter);
+	add_setter(sc, obj, setter);
       break;
 
     default:  /* (set! (setter 4) ...) or p==continuation etc */
-      wrong_type_error_nr(sc, wrap_string(sc, "set! setter", 11), 1, p, wrap_string(sc, "a symbol, a procedure, or a macro", 33));
+      wrong_type_error_nr(sc, wrap_string(sc, "set! setter", 11), 1, obj, wrap_string(sc, "a symbol, a procedure, or a macro", 33));
     }
   return(setter);
 }
@@ -49296,7 +49255,7 @@ s7_pointer s7_set_setter(s7_scheme *sc, s7_pointer p, s7_pointer setter)
 	for (s7_int index = 0; index < sc->protected_setters_loc; index++)
 	  if (vector_element(sc->protected_setter_symbols, index) == p)
 	    {
-	      s7_pointer old_func = vector_element(sc->protected_setters, index);
+	      const s7_pointer old_func = vector_element(sc->protected_setters, index);
 	      if ((is_any_procedure(old_func)) && /* i.e. not #f! */
 		  (is_immutable(old_func)))
 		return(setter);
@@ -49842,7 +49801,6 @@ static bool pair_equal(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_info_t 
   else
     if (inline_equal_ref(sc, x, y, ci))
       return(true);
-
   if (!is_equal_1(sc, car(x), car(y), ci)) return(false);
   for (px = cdr(x), py = cdr(y); (is_pair(px)) && (is_pair(py)); px = cdr(px), py = cdr(py))
     {
@@ -49867,7 +49825,6 @@ static bool pair_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_in
   else
     if (inline_equal_ref(sc, x, y, ci))
       return(true);
-
   if (!is_equivalent_1(sc, car(x), car(y), ci)) return(false);
   for (px = cdr(x), py = cdr(y); (is_pair(px)) && (is_pair(py)); px = cdr(px), py = cdr(py))
     {
@@ -49880,7 +49837,6 @@ static bool pair_equivalent(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_in
 static bool vector_rank_match(s7_scheme *sc, s7_pointer x, s7_pointer y)
 {
   s7_int x_dims;
-
   if (!vector_has_dimension_info(x))
     return((!vector_has_dimension_info(y)) || (vector_ndims(y) == 1));
   x_dims = vector_ndims(x);
@@ -49889,7 +49845,6 @@ static bool vector_rank_match(s7_scheme *sc, s7_pointer x, s7_pointer y)
   if ((!vector_has_dimension_info(y)) ||
       (x_dims != vector_ndims(y)))
     return(false);
-
   for (s7_int j = 0; j < x_dims; j++)
     if (vector_dimension(x, j) != vector_dimension(y, j))
       return(false);
@@ -50119,7 +50074,6 @@ static bool iterator_equal_1(s7_scheme *sc, s7_pointer x, s7_pointer y, shared_i
 
   if (x == y) return(true);
   if (!is_iterator(y)) return(false);
-
   x_seq = iterator_sequence(x);
   y_seq = iterator_sequence(y);
 
@@ -50899,7 +50853,7 @@ static s7_pointer hash_table_setter(s7_scheme *sc, s7_pointer e, s7_int loc, s7_
 
 static s7_pointer copy_hash_table(s7_scheme *sc, s7_pointer source)
 {
-  s7_pointer new_hash = s7_make_hash_table(sc, hash_table_size(source));
+  const s7_pointer new_hash = s7_make_hash_table(sc, hash_table_size(source));
   gc_protect_via_stack(sc, new_hash);
   hash_table_checker(new_hash) = hash_table_checker(source);
   if (hash_chosen(source)) hash_set_chosen(new_hash);
@@ -51061,7 +51015,7 @@ static s7_pointer copy_c_object_to_same_type(s7_scheme *sc, s7_pointer dest, s7_
 static s7_pointer copy_to_same_type(s7_scheme *sc, s7_pointer dest, s7_pointer source, s7_int dest_start, s7_int dest_end, s7_int source_start)
 {
   /* types equal, but not a let (handled in s7_copy_1), returns NULL if not copied here */
-  s7_int source_len = dest_end - dest_start;
+  const s7_int source_len = dest_end - dest_start;
   switch (type(source))
     {
     case T_PAIR:
@@ -51123,9 +51077,9 @@ static s7_pointer copy_to_same_type(s7_scheme *sc, s7_pointer dest, s7_pointer s
 
     case T_HASH_TABLE:
       {
-	s7_pointer p;
+	s7_pointer new_hash;
 	gc_protect_via_stack(sc, source);
-	p = hash_table_copy(sc, source, dest, source_start, source_start + source_len);
+	new_hash = hash_table_copy(sc, source, dest, source_start, source_start + source_len);
 	unstack_gc_protect(sc);
 	if ((hash_table_checker(source) != hash_table_checker(dest)) &&
 	    (hash_table_mapper(dest) == default_hash_map))
@@ -51137,7 +51091,7 @@ static s7_pointer copy_to_same_type(s7_scheme *sc, s7_pointer dest, s7_pointer s
 		hash_table_checker(dest) = hash_equal;
 		hash_set_chosen(dest);
 	      }}
-	return(p);
+	return(new_hash);
       }
 
     default:
@@ -51169,7 +51123,8 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
    */
   #define Q_copy s7_make_circular_signature(sc, 3, 4, sc->T, sc->T, sc->T, sc->is_integer_symbol)
 
-  s7_pointer source = car(args), dest;
+  const s7_pointer source = car(args);
+  s7_pointer dest;
   s7_int i, j, dest_len, start, end, source_len;
   s7_pointer (*set)(s7_scheme *sc, s7_pointer obj, s7_int loc, s7_pointer val) = NULL;
   s7_pointer (*get)(s7_scheme *sc, s7_pointer obj, s7_int loc) = NULL;
@@ -51177,21 +51132,17 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 
   if (is_null(cdr(args)))                  /* (copy obj) */
     return(copy_source_no_dest(sc, source, args));
-
   dest = T_Ext(cadr(args));
   if ((dest == sc->readable_keyword) && (!is_pair(source)))
     error_nr(sc, sc->out_of_range_symbol,
 	     set_elist_1(sc, wrap_string(sc, "copy argument 2, :readable, only works if the source is a pair", 62)));
-
   if ((is_immutable(dest)) &&
       (dest != sc->readable_keyword) &&
       (dest != sc->nil))                 /* error_hook copies with cadr(args) :readable, so it's currently NULL */
     wrong_type_error_nr(sc, caller, 2, dest, wrap_string(sc, "a mutable object", 16)); /* so this segfaults if not checking for :readable */
 
   have_indices = (is_pair(cddr(args)));
-  if ((source == dest) && (!have_indices))
-    return(dest);
-
+  if ((source == dest) && (!have_indices)) return(dest);
   /* gc_protect_via_stack(sc, args); */ /* why is this problematic? */
   sc->w = args;
 
@@ -51388,6 +51339,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
       if (res) return(res);
     }
 
+  /* i j probably could be local to these branches */
   switch (type(source))
     {
     case T_PAIR:
@@ -51398,14 +51350,14 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 	  for (i = 0; i < start; i++)
 	    p = cdr(p);
 	/* dest won't be a pair here if source != dest -- the pair->pair case was caught above */
-	if (source == dest) /* here start != 0 (see above) */
-	  for (s7_pointer dp = source /* i = start */; i < end; i++, p = cdr(p), dp = cdr(dp))
+	if (source == dest)
+	  for (s7_pointer dp = source; i < end; i++, p = cdr(p), dp = cdr(dp))
 	    set_car(dp, car(p));
 	else
 	  if (is_string(dest))
 	    {
 	      char *dst = string_value(dest);
-	      for (/* i = start */ j = 0; i < end; i++, j++, p = cdr(p))
+	      for (j = 0; i < end; i++, j++, p = cdr(p))
 		{
 		  if (!is_character(car(p)))
 		    copy_element_error_nr(sc, caller, i + 1, car(p), T_CHARACTER);
@@ -51415,13 +51367,13 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 	    if ((is_t_vector(dest)) && (set != typed_vector_setter))
 	      {
 		s7_pointer *els = vector_elements(dest);
-		for (/* i = start */ j = 0; i < end; i++, j++, p = cdr(p))
+		for (j = 0; i < end; i++, j++, p = cdr(p))
 		  els[j] = car(p);
 	      }
 	    else
 	      {
 		gc_protect_via_stack(sc, source);
-		for (/* i = start */ j = 0; i < end; i++, j++, p = cdr(p))
+		for (j = 0; i < end; i++, j++, p = cdr(p))
 		  set(sc, dest, j, car(p));
 		unstack_gc_protect(sc);
 	      }
@@ -51444,7 +51396,7 @@ static s7_pointer s7_copy_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 	  if (is_pair(dest)) /* (append '(1) *s7* ()) */
 	    {
 	      s7_pointer p;
-	      for (i = start, p = dest; (i < end) && (is_pair(p)); i++, p = cdr(p))
+	      for (i = start, p = dest; (i < end) && (is_pair(p)); i++, p = cdr(p)) /* i = start is redundant? also below */
 		{
 		  s7_pointer val = s7_iterate(sc, iter);
 		  if (iterator_is_at_end(iter)) break;
