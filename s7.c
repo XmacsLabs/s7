@@ -10629,10 +10629,12 @@ static /* inline */ s7_pointer let_ref(s7_scheme *sc, s7_pointer let, s7_pointer
   /* (let ((a 1)) ((curlet) 'a)) or ((rootlet) 'abs) */
   if (!is_let(let))
     {
+      s7_pointer new_let;
       if (let == sc->unlet_disabled) return(initial_value(symbol));
-      let = find_let(sc, let);
-      if (!is_let(let))
+      new_let = find_let(sc, let);
+      if (!is_let(new_let))
 	wrong_type_error_nr(sc, sc->let_ref_symbol, 1, let, a_let_string);
+      let = new_let;
     }
   if (!is_symbol(symbol))
     {
@@ -31739,13 +31741,22 @@ static s7_pointer load_file_1(s7_scheme *sc, const char *filename)
 
 s7_pointer s7_load_with_environment(s7_scheme *sc, const char *filename, s7_pointer e)
 {
-  /* returns either the value of the load or NULL if filename not found */
+  /* returns either the value of the load or NULL if filename not found or if the optional env is *s7* */
   s7_pointer port;
   declare_jump_info();
   TRACK(sc);
   if (e == sc->starlet) return(NULL);
-  if (!is_let(e)) s7_warn(sc, 128, "third argument (the let) to s7_load_with_environment is not a let");
-  /* PERHAPS: find_let here? */
+  /* unlet?? */
+#if 0
+  if (!is_let(e)) s7_warn(sc, 128, "third argument to s7_load_with_environment is not a let");
+#else
+  {
+    s7_pointer obj_e = find_let(sc, e);
+    if (!is_let(obj_e)) 
+      s7_warn(sc, 128, "third argument to s7_load_with_environment is not a let or an object that has a let");
+    else e = obj_e;
+  }
+#endif
 #if WITH_C_LOADER
   port = load_shared_object(sc, filename, e);
   if (port) return(port);
@@ -73253,7 +73264,6 @@ static bool arg_findable(s7_scheme *sc, s7_pointer arg1, s7_pointer e)
 	 (is_slot(s7_slot(sc, arg1))));
 }
 
-#define OPT_DEBUG 0
 static bool symbol_is_safe(s7_scheme *sc, s7_pointer arg, s7_pointer e)
 {
   if (is_symbol(arg)) /* maybe normal here but check clo* key (see below) */
@@ -73261,11 +73271,6 @@ static bool symbol_is_safe(s7_scheme *sc, s7_pointer arg, s7_pointer e)
       if (is_keyword(arg)) return(true);
       if (sc->in_with_let) return(pair_symbol_is_safe(sc, arg, e));
       if (is_slot(global_slot(arg))) return(true);
-#if OPT_DEBUG
-      if (symbol_is_in_big_symbol_set(sc, arg) != arg_findable(sc, arg, e))
-	fprintf(stderr, "%s%s[%d] %s: %d %d\n", (symbol_is_in_big_symbol_set(sc, arg) == 0) ? "  " : "",
-		__func__, __LINE__, display(arg), symbol_is_in_big_symbol_set(sc, arg), arg_findable(sc, arg, e));
-#endif
       if ((!symbol_is_in_big_symbol_set(sc, arg)) &&
 	  (!arg_findable(sc, arg, e)))
 	return(false);
@@ -73411,6 +73416,7 @@ static bool is_ok_lambda(s7_scheme *sc, s7_pointer arg2)
 
 static bool hop_if_constant(s7_scheme *sc, s7_pointer sym)
 {
+  /* "sym" is a symbol here.  c_functions set hop=1 in optimize_expression */
   return(((!sc->in_with_let) &&
 	  (!is_maybe_shadowed(sym)) &&
 	  (is_global(sym))) ? 1 : 0);   /* for with-let, see s7test atanh (77261) */
@@ -73525,14 +73531,13 @@ static opt_t optimize_c_function_one_arg(s7_scheme *sc, s7_pointer expr, s7_poin
 		  if (c_function_call(func) == g_call_cc)
 		    {
 		      set_unsafe_optimize_op(expr, OP_CALL_CC);
-
-		      /* fprintf(stderr, "%s[%d]: %s\n", __func__, __LINE__, display(expr)); */
 		      /* (call/cc (lambda (return) (do ((i 0 (+ i 1))) ((= i 10)) (if (= i 3) (return 32))))) */
 #if 1
 		      /* we can't naively optimize call/cc to call-with-exit if the continuation is only
 		       *   used as a function in the call/cc body because it might (for example) be wrapped
 		       *   in a lambda form that is being exported.  See b-func in s7test for an example.
 		       *   But we can notice that embedded use?  lambda(*)/m|bacro(*), curlet
+		       * But just quitting on lambda seems over enthusiastic -- lambda is used for with-output-*, call/exit, dynwind etc
 		       */
 		      {
 			const s7_pointer arg_func = cadr(expr);
@@ -75070,13 +75075,6 @@ static bool symbols_are_safe(s7_scheme *sc, s7_pointer args, s7_pointer e)
   for (s7_pointer p = args; is_pair(p); p = cdr(p))
     {
       s7_pointer arg = car(p);
-      if ((OPT_DEBUG) && (symbol_is_in_big_symbol_set(sc, arg) != arg_findable(sc, arg, e)))
-	{
-	  fprintf(stderr, "%s%s[%d] %s: %d %d\n", (symbol_is_in_big_symbol_set(sc, arg) == 0) ? "  " : "",
-		  __func__, __LINE__, display(arg), symbol_is_in_big_symbol_set(sc, arg), arg_findable(sc, arg, e));
-	  if (!arg_findable(sc, arg, e))
-	    abort();
-	}
       if ((is_normal_symbol(arg)) &&
 	  (!symbol_is_in_big_symbol_set(sc, arg)) &&
 	  (!arg_findable(sc, arg, e)))
@@ -75281,21 +75279,6 @@ static void cleanup_big_symbol_set(s7_scheme *sc, s7_pointer orig_e, s7_pointer 
 	    symbol_shadows(sym)--;
 	  else set_big_symbol_tag(sym, 0);
 	}}
-  if (OPT_DEBUG)
-    {
-      for (s7_pointer var = orig_e; is_pair(var); var = cdr(var))
-	if ((is_normal_symbol(car(var))) &&
-	    (!symbol_is_in_big_symbol_set(sc, car(var))))
-	  fprintf(stderr, "%s[%d]: %sbig_symbol_set missing %s%s\n", __func__, __LINE__, bold_text, display(car(var)), unbold_text);
-      for (int32_t i = 0; i < SYMBOL_TABLE_SIZE; i++)
-	for (s7_pointer x = vector_element(sc->symbol_table, i); is_not_null(x); x = cdr(x))
-	  if ((symbol_is_in_big_symbol_set(sc, car(x))) &&
-	      (!is_slot(global_slot(car(x)))) &&
-	      (!direct_memq(car(x), orig_e)))
-	    {
-	      fprintf(stderr, "%s[%d]: %se missing: %s %" ld64 "%s\n", __func__, __LINE__, bold_text, display(car(x)), big_symbol_tag(car(x)), unbold_text);
-	      abort();
-	    }}
 }
 
 static opt_t optimize_syntax(s7_scheme *sc, s7_pointer expr, s7_pointer func, int32_t hop, s7_pointer e, bool export_ok)
@@ -83816,8 +83799,19 @@ static bool all_ints_here(s7_scheme *sc, s7_pointer settee, s7_pointer expr, s7_
       if ((v) && ((is_int_vector(v)) || (is_byte_vector(v)))) return(true);
     }
   sig = c_function_signature(func);
+#if 0
   if ((is_pair(sig)) &&
       ((car(sig) == sc->is_integer_symbol) || (car(sig) == sc->is_byte_symbol)))
+#else
+    /* tvect tshoot tbig */
+  if ((is_pair(sig)) &&
+      ((car(sig) == sc->is_integer_symbol) || (car(sig) == sc->is_byte_symbol) ||
+       ((is_pair(car(sig))) &&
+	((direct_memq(sc->is_integer_symbol, car(sig))) || (direct_memq(sc->is_byte_symbol, car(sig)))))))
+    /* maybe make int|byte_vector_ref|set explicit, or check indices=rank? 
+     *   or just use (func == sc->int_vector_ref) etc
+     */
+#endif
     return(true);
   if (!is_all_integer(car(expr)))
     do_return_false(expr);
@@ -99883,6 +99877,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->stacktrace_symbol =            defun("stacktrace",	stacktrace,		0, 5, false);
 
   /* sc->values_symbol = */          unsafe_defun("values",	values,			0, 0, true); set_is_saver(sc->values_symbol);
+  /* calling values a saver rather than translucent slows down tmv.scm by about 6% */
   /* values_symbol set above for signatures, not semisafe! */
   /* set_immutable(c_function_setter(global_value(sc->values_symbol))); */ /* not needed, I think */
 
@@ -100980,7 +100975,7 @@ int main(int argc, char **argv)
  * tlimit      3936   5371   5371   5371   5371    783    776
  * index              1016    973    967    972    988    990
  * tmock              1145   1082   1042   1045   1031   1031
- * tvect       3408   2464   1772   1669   1497   1457   1453  1480 [opt_do_very_simple->opt_dotimes]
+ * tvect       3408   2464   1772   1669   1497   1457   1453
  * thook       7651   ----   2590   2030   2046   1731   1734
  * tauto                     2562   2048   1729   1760   1754
  * texit       1884   1950   1778   1741   1770   1759   1758
@@ -101005,7 +101000,7 @@ int main(int argc, char **argv)
  * tmap               8774   4489   4541   4586   4380   4378
  * tlet        11.0   6974   5609   5980   5965   4470   4466
  * tfft               7729   4755   4476   4536   4538   4568 [do_is_safe 8]
- * tshoot             5447   5183   5055   5034   4833   4774  5361 [op_dox->eval]
+ * tshoot             5447   5183   5055   5034   4833   4774
  * tstar              6705   5834   5278   5177   5059   5055
  * concordance 10.0   6342   5488   5162   5180   5259   5284
  * tnum               6013   5433   5396   5409   5402   5364
@@ -101026,10 +101021,10 @@ int main(int argc, char **argv)
  * tgen               11.4   12.0   12.1   12.2   12.4   12.4 12.5 [do_is_safe 78 called from op_let_temp in do_is_safe??[maybe callgrind is confused] and do_passes...]
  * tall        15.9   15.6   15.6   15.6   15.1   15.1   15.1
  * timp               24.4   20.0   19.6   19.7   15.5   15.5
- * tmv                21.9   21.1   20.7   20.6   16.6   16.6  17.6 [opt_dotimes->eval]
+ * tmv                21.9   21.1   20.7   20.6   16.6   17.6
  * calls              37.5   37.0   37.5   37.1   37.1   37.2
  * sg                        55.9   55.8   55.4   55.3   55.2
- * tbig              175.8  156.5  148.1  146.2  145.5  144.8  145.1 [opy_dotimes->eval]
+ * tbig              175.8  156.5  148.1  146.2  145.5  144.8
  * ------------------------------------------------------------
  *
  * fx_chooser can't depend on is_defined_global because it sees args before possible local bindings, get rid of these if possible
@@ -101040,11 +101035,7 @@ int main(int argc, char **argv)
  *   tc_if_a_z_la et al in tc_cond et al need code merge
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
- * if we have the function (not its name) it's "safe"(?)
  * mutints: move make_mutable to the point of use and clear afterwards, more use of num_small_ints?
- * "most complex": optimize_func_two_args, eval, fx_choose, fx_tree_in
- * maybe use /dev/urandom for t725? t852
- * t854 -> tmisc? or texit? test that unwinds work in call/cc->call/exit, timings above are starting 14-Mar
- * (symbol-table) -- perhaps a map of which entries are in use (add if element currently nil), this could be created when first needed?
- *   same length as symbol-table ints (if fit), -1 filled = stop point
+ * t854 -> tmisc? or texit?
+ * s7test: (load file c-object) and c-pointer etc, see ffitest, other such cases?
  */

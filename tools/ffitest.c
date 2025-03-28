@@ -1719,11 +1719,26 @@ int main(int argc, char **argv)
 
     p = s7_make_c_object_without_gc(sc, dax_type_tag, perm2 = (void *)malloc(sizeof(dax)));
     {
+      s7_pointer port, val;
+      s7_int gc_loc1;
       dax *o;
       o = (dax *)malloc(sizeof(dax));
       o->x = 1.0;
       o->data = s7_nil(sc);
       p = s7_make_c_object_with_let(sc, dax_type_tag, (void *)o, s7_sublet(sc, s7_curlet(sc), s7_nil(sc)));
+      gc_loc = s7_gc_protect(sc, p);
+      port = s7_open_output_file(sc, "ffitest.scm", "w");
+      gc_loc1 = s7_gc_protect(sc, port);
+      s7_display(sc, s7_make_string(sc, "(define c_object_var 23)"), port);
+      s7_newline(sc, port);
+      s7_close_output_port(sc, port);
+      s7_gc_unprotect_at(sc, gc_loc1);
+      s7_load_with_environment(sc, "~/cl/ffitest.scm", p);
+      /* fprintf(stderr, "%s\n", s7_object_to_c_string(sc, s7_c_object_let(p))); */ /* c_object_let is (inlet 'c_object_var 23) */
+      val = s7_let_ref(sc, p, s7_make_symbol(sc, "c_object_var"));
+      if ((!s7_is_integer(val)) || (s7_integer(val) != 23))
+	{fprintf(stderr, "%d: val is %s\n", __LINE__, s1 = TO_STR(val)); free(s1);}
+      s7_gc_unprotect_at(sc, gc_loc);
     }
   }
 

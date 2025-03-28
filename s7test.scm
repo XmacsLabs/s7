@@ -2231,6 +2231,7 @@ void block_init(s7_scheme *sc)
     (test (object->string g :readable) (if (> (*s7* 'safety) 1) "(cycle (immutable! \"123\"))" "(cycle \"123\")"))
     (test (cycle-set! g "321") "321")
     (test (cycle-ref g) "321")
+    (test (defined? 'abs g) #t) ; c-object let defaults to rootlet
     (test (equal? g 21) #f)
     (test (equal? g g) #t)
     (test (equal? g (make-cycle #\a)) #f)
@@ -4807,6 +4808,9 @@ void block_init(s7_scheme *sc)
 (when with-bignums
   (test (c-pointer? (c-pointer (bignum "12341234"))) #t)
   (test (c-pointer (bignum "1.4")) 'error))
+
+(let ((P (c-pointer 123)))
+  (test (defined? 'abs P) #t)) ; c-pointer let defaults to rootlet
 
 (let ((ptr (c-pointer 1 'abc (inlet 'object->string
 				  (lambda (obj . args)
