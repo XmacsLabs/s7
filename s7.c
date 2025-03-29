@@ -6293,8 +6293,8 @@ static const char *type_name_from_type(int32_t typ, article_t article)
 
 static s7_pointer find_let(s7_scheme *sc, s7_pointer obj)
 {
-  if (is_let(obj)) return(obj);
-  if (has_closure_let(obj)) return(closure_let(obj));
+  if ((S7_DEBUGGING) && (is_let(obj))) {fprintf(stderr, "let passed to find_let: %s\n", display(obj)); if (sc->stop_at_error) abort();}
+  if (has_closure_let(obj)) return(closure_let(obj)); /* some of these are immutable -- they hold the parameter names */
   switch (type(obj))
     {
     case T_C_OBJECT:
@@ -6328,7 +6328,8 @@ static s7_pointer find_method(s7_scheme *sc, s7_pointer let, s7_pointer symbol)
 
 static s7_pointer find_method_with_let(s7_scheme *sc, s7_pointer let, s7_pointer symbol)
 {
-  return(find_method(sc, find_let(sc, let), symbol));
+  if (!is_let(let)) let = find_let(sc, let);
+  return(find_method(sc, let, symbol));
 }
 
 static const char *type_name(s7_scheme *sc, s7_pointer arg, article_t article)
@@ -6713,7 +6714,12 @@ static s7_pointer g_is_immutable(s7_scheme *sc, s7_pointer args)
 	{
 	  s7_pointer e = cadr(args);
 	  if (!is_let(e))
-	    wrong_type_error_nr(sc, sc->is_immutable_symbol, 2, e, a_let_string);
+	    {
+	      s7_pointer new_let = find_let(sc, e);
+	      if (!is_let(new_let))
+		wrong_type_error_nr(sc, sc->is_immutable_symbol, 2, e, a_let_string);
+	      e = new_let;
+	    }
 	  if (e == sc->rootlet)
 	    slot = global_slot(p);
 	  else slot = lookup_slot_from((is_keyword(p)) ? keyword_symbol(p) : p, e);
@@ -6761,7 +6767,12 @@ static s7_pointer g_immutable(s7_scheme *sc, s7_pointer args)
 	{
 	  s7_pointer e = cadr(args);
 	  if (!is_let(e))
-	    wrong_type_error_nr(sc, sc->immutable_symbol, 2, e, a_let_string);
+	    {
+	      s7_pointer new_let = find_let(sc, e);
+	      if (!is_let(new_let))
+		wrong_type_error_nr(sc, sc->immutable_symbol, 2, e, a_let_string);
+	      e = new_let;
+	    }
 	  slot = symbol_to_local_slot(sc, (is_keyword(p)) ? keyword_symbol(p) : p, e); /* different from immutable? */
 	}
       else
@@ -10580,15 +10591,12 @@ static s7_pointer g_let_to_list(s7_scheme *sc, s7_pointer args)
   check_method(sc, let, sc->let_to_list_symbol, args);
   if (!is_let(let))
     {
-      if (is_c_object(let))
-	let = c_object_let(let);
-      else
-	if (is_c_pointer(let))
-	  let = c_pointer_info(let);
-      if (let == sc->rootlet) /* don't laboriously expand this! */
-	return(cons(sc, let, sc->nil));
-      if (!is_let(let))
+      s7_pointer new_let = find_let(sc, let);
+      if (new_let == sc->rootlet) /* don't laboriously expand this! */
+	return(cons(sc, new_let, sc->nil));
+      if (!is_let(new_let))
         sole_arg_wrong_type_error_nr(sc, sc->let_to_list_symbol, let, a_let_string);
+      let = new_let;
     }
   return(s7_let_to_list(sc, let));
 }
@@ -31747,8 +31755,9 @@ s7_pointer s7_load_with_environment(s7_scheme *sc, const char *filename, s7_poin
   TRACK(sc);
   if (e == sc->starlet) return(NULL);
   /* unlet?? */
+  if (!is_let(e))
 #if 0
-  if (!is_let(e)) s7_warn(sc, 128, "third argument to s7_load_with_environment is not a let");
+    s7_warn(sc, 128, "third argument to s7_load_with_environment is not a let");
 #else
   {
     s7_pointer obj_e = find_let(sc, e);
@@ -31843,7 +31852,16 @@ defaults to the rootlet.  To load into the current environment instead, pass (cu
     {
       s7_pointer e = cadr(args);
       if (!is_let(e))
+#if 0
 	wrong_type_error_nr(sc, sc->load_symbol, 2, e, a_let_string);
+#else
+      {
+	s7_pointer obj_e = find_let(sc, e);
+	if (!is_let(obj_e)) 
+	  wrong_type_error_nr(sc, sc->load_symbol, 2, e, a_let_string);
+	e = obj_e;
+      }
+#endif
       if (e == sc->starlet)
 	error_nr(sc, sc->wrong_type_arg_symbol,
 		 set_elist_2(sc, wrap_string(sc, "can't load ~S into *s7*", 23), name));
@@ -101001,7 +101019,7 @@ int main(int argc, char **argv)
  * tlet        11.0   6974   5609   5980   5965   4470   4466
  * tfft               7729   4755   4476   4536   4538   4568 [do_is_safe 8]
  * tshoot             5447   5183   5055   5034   4833   4774
- * tstar              6705   5834   5278   5177   5059   5055
+ * tstar              6705   5834   5278   5177   5059   5055  5042
  * concordance 10.0   6342   5488   5162   5180   5259   5284
  * tnum               6013   5433   5396   5409   5402   5364
  * tlist       9219   7546   6558   6240   6300   5770   5785
@@ -101037,5 +101055,6 @@ int main(int argc, char **argv)
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  * mutints: move make_mutable to the point of use and clear afterwards, more use of num_small_ints?
  * t854 -> tmisc? or texit?
- * s7test: (load file c-object) and c-pointer etc, see ffitest, other such cases?
+ * env extension in: varlet cutlet sublet let-set! set_curlet outlet symbol->local_slot
+ *   s7test immutable? immutable! for env extension
  */
