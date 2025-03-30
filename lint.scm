@@ -72,7 +72,7 @@
   (define (let->list e)
     (if (let? e)
 	(reverse! (map values e))
-	(error 'wrong-type-arg "let->list argument should be an environment: ~A" str))))
+	(error 'wrong-type-arg "let->list argument should be a let (an environment): ~A" str))))
 
 
 (format *stderr* "loading lint.scm~%")
@@ -21773,7 +21773,7 @@
 			       (let ((op (return-type (car e) env)))
 				 (and op
 				      (not (return-type-ok? 'let? op))))))  ;  (with-let 123 123)
-		      (lint-format "~A: first argument should be an environment: ~A" 'with-let caller (truncated-list->string form)))
+		      (lint-format "~A: first argument should be a let (an environment): ~A" 'with-let caller (truncated-list->string form)))
 
 		  (if (symbol? e)
 		      (set-ref e caller form env)
