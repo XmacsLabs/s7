@@ -3445,13 +3445,19 @@ s7_set_i_i_function(sc, s7_name_to_value(sc, "plus1"), plus_one);
 </pre>
 <p>s7_define_safe_function defines a Scheme function "plus1",
 telling the optimizer that this function is safe.
-A safe function does not push anything on the s7 stack, and treats the arglist
+A safe function treats the arglist
 passed to it as immutable and temporary (that is, it just grabs the arguments from
 the list).  A few s7_* functions are unsafe, and that makes anything that calls
-them also unsafe.  If the optimizer knows a function is safe, it can use prebuilt
+them also unsafe.  The main one is s7_apply_function, but it is possible that
+s7_eval, s7_eval_c_string, and s7_values are unsafe in some cases.  If your code
+calls a Scheme function from C via s7_apply_function, it is not safe from the
+optimizer's point of view.
+If the optimizer knows a function is safe, it can use prebuilt
 lists to pass the arguments (saving in the GC), and can combine it in various
 ways with other stuff.  If an unsafe function handles its argument list safely,
 declare it with s7_define_semisafe_typed_function.
+</p>
+<p>
 If the safe function knows its return and argument
 types, there is another level of optimization that can call it without
 setting up an arglist or "unboxing" values, basically a direct call in C.

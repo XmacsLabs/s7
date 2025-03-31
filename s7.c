@@ -1407,7 +1407,7 @@ struct s7_scheme {
   s7_pointer  byte_vector_signature, c_object_signature, float_vector_signature, hash_table_signature, int_vector_signature,
              let_signature, pair_signature, string_signature, vector_signature, complex_vector_signature;
   /* common signatures */
-  s7_pointer pcl_bc, pcl_bs, pcl_bt, pcl_c, pcl_e, pcl_f, pcl_i, pcl_n, pcl_r, pcl_s, pcl_v, pl_bc, pl_bn, pl_bt, pl_p, pl_sf, pl_tl, pl_nn;
+  s7_pointer pcl_bc, pcl_bs, pcl_bt, pcl_c, pcl_f, pcl_i, pcl_n, pcl_r, pcl_s, pcl_v, pl_bc, pl_bn, pl_bt, pl_p, pl_sf, pl_tl, pl_nn;
 
   /* optimizer s7_functions */
   s7_pointer add_1x, add_2, add_3, add_4, add_i_random, add_x1, append_2, ash_ic, ash_ii, bv_ref_2, bv_ref_3, bv_set_3,
@@ -3362,7 +3362,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #endif
 #define funclet_function(p)            T_Sym((C_Let(p, L_FUNC))->object.envr.edat.efnc.function)
 #define funclet_set_function(p, F)     (S_Let(p, L_FUNC))->object.envr.edat.efnc.function = T_Sym(F)
-#define set_curlet(Sc, P)              Sc->curlet = T_Let(P)
+#define set_curlet(Sc, P)              Sc->curlet = T_Let(P) /* TODO: should this accept has_lets? (nearly all calls involve make_let) */
 
 #define let_baffle_key(p)              (T_Let(p))->object.envr.edat.key
 #define let_set_baffle_key(p, K)       (T_Let(p))->object.envr.edat.key = K
@@ -6700,6 +6700,7 @@ static s7_pointer is_constant_p_p(s7_scheme *sc, s7_pointer p) {return(make_bool
 /* -------------------------------- immutable? -------------------------------- */
 
 bool s7_is_immutable(s7_pointer p) {return(is_immutable(p));}
+#define has_let_signature(sc) s7_make_signature(sc, 5, sc->is_let_symbol, sc->is_c_object_symbol, sc->is_c_pointer_symbol, sc->is_procedure_symbol, sc->is_macro_symbol)
 
 static s7_pointer g_is_immutable(s7_scheme *sc, s7_pointer args)
 {
@@ -10003,7 +10004,8 @@ s7_pointer s7_openlet(s7_scheme *sc, s7_pointer e)
 static s7_pointer g_openlet(s7_scheme *sc, s7_pointer args)
 {
   #define H_openlet "(openlet e) tells the built-in functions that the let 'e might have an over-riding method."
-  #define Q_openlet sc->pcl_e
+  #define Q_openlet s7_make_circular_signature(sc, 0, 1, s7_make_signature(sc, 4, sc->is_let_symbol, sc->is_procedure_symbol, sc->is_macro_symbol, sc->is_c_object_symbol))
+
 
   s7_pointer e = car(args), elet, func;
   if (!is_let(e))
@@ -10028,7 +10030,7 @@ static s7_pointer g_openlet(s7_scheme *sc, s7_pointer args)
 static s7_pointer g_coverlet(s7_scheme *sc, s7_pointer args)
 {
   #define H_coverlet "(coverlet e) undoes an earlier openlet."
-  #define Q_coverlet sc->pcl_e
+  #define Q_coverlet s7_make_circular_signature(sc, 0, 1, s7_make_signature(sc, 4, sc->is_let_symbol, sc->is_procedure_symbol, sc->is_macro_symbol, sc->is_c_object_symbol))
 
   s7_pointer e = car(args);
   check_method(sc, e, sc->coverlet_symbol, set_plist_1(sc, e));
@@ -10209,7 +10211,7 @@ to the let target-let, and returns target-let.  (varlet (curlet) 'a 1) adds 'a t
 static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
 {
   #define H_cutlet "(cutlet e symbol ...) removes symbols from the let e."
-  #define Q_cutlet s7_make_circular_signature(sc, 2, 3, sc->is_let_symbol, sc->is_let_symbol, sc->is_symbol_symbol)
+  #define Q_cutlet s7_make_circular_signature(sc, 2, 3, sc->is_let_symbol, has_let_signature(sc), sc->is_symbol_symbol)
 
   s7_pointer e = car(args);
   s7_int the_un_id;
@@ -10217,8 +10219,12 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
     {
       check_method(sc, e, sc->cutlet_symbol, args);
       if (!is_let(e))
-	wrong_type_error_nr(sc, sc->cutlet_symbol, 1, e, a_let_string);
-    }
+	{
+	  s7_pointer new_let = find_let(sc, e);
+	  if (!is_let(new_let))
+	    wrong_type_error_nr(sc, sc->cutlet_symbol, 1, e, a_let_string);
+	  e = new_let;
+	}}
   if ((is_immutable_let(e)) || (e == sc->starlet))
     immutable_object_error_nr(sc, set_elist_3(sc, immutable_error_string, sc->cutlet_symbol, e));
 
@@ -10253,7 +10259,6 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
 	  if ((has_let_fallback(e)) &&
 	      ((sym == sc->let_ref_fallback_symbol) || (sym == sc->let_set_fallback_symbol)))
 	    error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "cutlet can't remove ~S", 22), sym));
-
 	  slot = let_slots(e);
 	  if (tis_slot(slot))
 	    {
@@ -11082,7 +11087,7 @@ static s7_pointer g_outlet_unlet(s7_scheme *sc, s7_pointer args) {return(sc->cur
 static s7_pointer g_outlet(s7_scheme *sc, s7_pointer args)
 {
   #define H_outlet "(outlet let) is the environment that contains let."
-  #define Q_outlet s7_make_signature(sc, 2, has_let_signature(sc), has_let_signature(sc))
+  #define Q_outlet s7_make_signature(sc, 2, sc->is_let_symbol, has_let_signature(sc))
   return(outlet_p_p(sc, car(args)));
 }
 
@@ -11195,9 +11200,16 @@ void s7_slot_set_real_value(s7_scheme *sc, s7_pointer slot, s7_double value) {se
 
 static s7_pointer symbol_to_local_slot(s7_scheme *sc, s7_pointer symbol, s7_pointer e)
 {
-  if ((!is_let(e)) || (e == sc->rootlet)) /* e is () if from s7_define */
+  if (!is_let(e)) /* maybe check this before calling */
+    {
+      s7_pointer new_let = find_let(sc, e);
+      if (!is_let(new_let))
+	return(global_slot(symbol)); /* odd, but that's how it was before the find_let was addedd 30-Mar-25 */
+      e = new_let;
+    }
+  if (e == sc->rootlet)
     return(global_slot(symbol));
-  if (!is_global(symbol))
+  if (!is_global(symbol))  /* i.e. rootlet is not the desired let, and the symbol might have a local value */
     for (s7_pointer y = let_slots(e); tis_slot(y); y = next_slot(y))
       if (slot_symbol(y) == symbol)
 	return(y);
@@ -11236,7 +11248,6 @@ s7_pointer s7_symbol_local_value(s7_scheme *sc, s7_pointer sym, s7_pointer let)
 
 /* -------------------------------- symbol->value -------------------------------- */
 #define lookup_global(Sc, Sym) ((is_defined_global(Sym)) ? global_value(Sym) : lookup_checked(Sc, Sym))
-#define has_let_signature(sc) s7_make_signature(sc, 5, sc->is_let_symbol, sc->is_c_object_symbol, sc->is_c_pointer_symbol, sc->is_procedure_symbol, sc->is_macro_symbol)
 
 static s7_pointer g_symbol_to_value(s7_scheme *sc, s7_pointer args)
 {
@@ -58255,7 +58266,7 @@ static s7_pointer fx_c_aa(s7_scheme *sc, s7_pointer arg)
   set_car(sc->t2_1, T_Ext(gc_protected1(sc)));
   set_car(sc->t2_2, gc_protected2(sc));
   res = fn_proc(arg)(sc, sc->t2_1);
-  if (stack_top_op(sc) == OP_GC_PROTECT) unstack_gc_protect(sc); /* added op_gc_protect check 29-Mar-25 */
+  if (stack_top_op(sc) == OP_GC_PROTECT) unstack_gc_protect(sc); /* added op_gc_protect check 29-Mar-25: see t855.scm */
   return(res);
 }
 
@@ -99479,8 +99490,6 @@ static void init_rootlet(s7_scheme *sc)
   sc->pcl_s =  s7_make_circular_signature(sc, 0, 1, sc->is_string_symbol);
   sc->pcl_v =  s7_make_circular_signature(sc, 0, 1, sc->is_vector_symbol);
   sc->pcl_c =  s7_make_circular_signature(sc, 0, 1, sc->is_char_symbol);
-  sc->pcl_e =  s7_make_circular_signature(sc, 0, 1,
-                  s7_make_signature(sc, 4, sc->is_let_symbol, sc->is_procedure_symbol, sc->is_macro_symbol, sc->is_c_object_symbol));
 
   sc->values_symbol = make_symbol(sc, "values", 6);
 
@@ -99495,7 +99504,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->symbol_to_value_symbol =       defun("symbol->value",	symbol_to_value,	1, 1, false);
   sc->symbol_to_dynamic_value_symbol = defun("symbol->dynamic-value", symbol_to_dynamic_value, 1, 0, false);
   sc->symbol_initial_value_symbol =  defun("symbol-initial-value", symbol_initial_value, 1, 0, false);
-  sc->immutable_symbol =             unsafe_defun("immutable!",	immutable,		1, 1, false);  /* was unsafe, 29-Mar-25 */
+  sc->immutable_symbol =             semisafe_defun("immutable!",immutable,		1, 1, false); /* was unsafe 29-Mar-25 */
   set_func_is_definer(sc->immutable_symbol);
   sc->is_immutable_symbol =          defun("immutable?",	is_immutable,		1, 1, false); /* added optional let arg 13-Oct-23 */
   sc->is_constant_symbol =           defun("constant?",	        is_constant,		1, 0, false);
@@ -99505,10 +99514,10 @@ static void init_rootlet(s7_scheme *sc)
 
   sc->outlet_symbol =                defun("outlet",	        outlet,		        1, 0, false);
   sc->rootlet_symbol =               defun("rootlet",           rootlet,		0, 0, false);
-  sc->curlet_symbol =                unsafe_defun("curlet",            curlet,			0, 0, false); /* was unsafe, 29-Mar-25 */
+  sc->curlet_symbol =                semisafe_defun("curlet",   curlet,			0, 0, false); /* was unsafe 29-Mar-25 */
   set_func_is_definer(sc->curlet_symbol);
   set_is_escaper_function(sc->curlet_symbol);
-  set_is_saver(sc->curlet_symbol); /* TODO: is curlet a saver? */
+  set_is_saver(sc->curlet_symbol);
   sc->unlet_symbol =                 defun("unlet",		unlet,			0, 0, false);
   set_local_slot(sc->unlet_symbol, global_slot(sc->unlet_symbol)); /* for set_locals */
   set_immutable(sc->unlet_symbol);
@@ -99519,19 +99528,19 @@ static void init_rootlet(s7_scheme *sc)
   sc->cutlet_symbol =                semisafe_defun("cutlet",	cutlet,			2, 0, true); set_func_is_definer(sc->cutlet_symbol);
   sc->inlet_symbol =                 defun("inlet",		inlet,			0, 0, true); set_is_saver(sc->inlet_symbol);
   sc->owlet_symbol =                 defun("owlet",		owlet,			0, 0, false);
-  sc->coverlet_symbol =              defun("coverlet",		coverlet,		1, 0, false);
-  sc->openlet_symbol =               unsafe_defun("openlet",	        openlet,		1, 0, false); /* was unsafe, 29-Mar-25 */
+  sc->coverlet_symbol =              defun("coverlet",		coverlet,		1, 0, false); set_is_translucent(sc->coverlet_symbol);
+  sc->openlet_symbol =               semisafe_defun("openlet",  openlet,		1, 0, false); set_is_translucent(sc->openlet_symbol);
   /* unsafe here because otherwise it can be optimized, whereupon our gc_protect_via_stack becomes unreliable:
    *   we can't assume the current top-of-stack is the gc_protect in fx_c_aa (for example): if fn_proc hits an openlet method redirect to map or for-each,
    *   the stack will have that operator awaiting the next spin through eval: (define (f) (write (vector 1.0) (openlet (inlet 'write for-each)))) (f)
    *   the "f" function is needed to get the optimizer to call fx_c_aa.  This affects fx/opt cases throughout!
    */
-  sc->let_ref_symbol =               defun("let-ref",		let_ref,		2, 0, false); set_immutable(sc->let_ref_symbol);  /* 16-Sep-19 */
+  sc->let_ref_symbol =               defun("let-ref",		let_ref,		2, 0, false); set_immutable(sc->let_ref_symbol);
   set_immutable_slot(global_slot(sc->let_ref_symbol));
   sc->let_set_symbol =               defun("let-set!",		let_set,		3, 0, false); set_immutable(sc->let_set_symbol);
   set_immutable_slot(global_slot(sc->let_set_symbol));
   sc->let_ref_fallback_symbol = make_symbol(sc, "let-ref-fallback", 16);
-  sc->let_set_fallback_symbol = make_symbol(sc, "let-set-fallback", 16); /* was let-set!-fallback until 9-Oct-17 */
+  sc->let_set_fallback_symbol = make_symbol(sc, "let-set-fallback", 16);
 
   sc->make_iterator_symbol =         defun("make-iterator",	make_iterator,		1, 1, false);
   sc->iterate_symbol =               defun("iterate",		iterate,		1, 0, false);
@@ -99811,7 +99820,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->list_ref_symbol =              defun("list-ref",		list_ref,		2, 0, true);
   sc->list_set_symbol =              defun("list-set!",	        list_set,		3, 0, true);
   sc->list_tail_symbol =             defun("list-tail",	        list_tail,		2, 0, false);
-  sc->make_list_symbol =             defun("make-list",  	make_list,		1, 1, false); set_is_saver(sc->make_list_symbol); /* init arg */
+  sc->make_list_symbol =             defun("make-list",  	make_list,		1, 1, false); set_is_saver(sc->make_list_symbol);
 
   sc->length_symbol =                defun("length",		length,			1, 0, false);
   sc->copy_symbol =                  defun("copy",		copy,			1, 3, false);
@@ -99838,7 +99847,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->vector_dimension_symbol =      defun("vector-dimension",  vector_dimension,	2, 0, false);
   sc->vector_dimensions_symbol =     defun("vector-dimensions", vector_dimensions,	1, 0, false);
   sc->vector_rank_symbol =           defun("vector-rank",       vector_rank,	        1, 0, false);
-  sc->make_vector_symbol =           defun("make-vector",	make_vector,		1, 2, false); set_is_saver(sc->make_vector_symbol); /* init arg */
+  sc->make_vector_symbol =           defun("make-vector",	make_vector,		1, 2, false); set_is_saver(sc->make_vector_symbol);
   sc->vector_symbol =                defun("vector",		vector,			0, 0, true);  set_is_saver(sc->vector_symbol);
   sc->vector_typer_symbol =          defun("vector-typer",      vector_typer,	        1, 0, false);
 
@@ -101007,36 +101016,36 @@ int main(int argc, char **argv)
  * tref        1081    687    463    459    464    412    413
  * tlimit      3936   5371   5371   5371   5371    783    776
  * index              1016    973    967    972    988    990
- * tmock              1145   1082   1042   1045   1031   1031
+ * tmock              1145   1082   1042   1045   1031   1030
  * tvect       3408   2464   1772   1669   1497   1457   1453
- * thook       7651   ----   2590   2030   2046   1731   1734
- * tauto                     2562   2048   1729   1760   1754
+ * thook       7651   ----   2590   2030   2046   1731   1739
+ * tauto                     2562   2048   1729   1760   1762
  * texit       1884   1950   1778   1741   1770   1759   1758
- * s7test             1831   1818   1829   1830   1849   1860
+ * s7test             1831   1818   1829   1830   1849   1862
  * lt          2222   2172   2150   2185   1950   1892   1894
  * dup                3788   2492   2239   2097   2012   1971
- * tread              2421   2419   2408   2405   2241   2249
+ * tread              2421   2419   2408   2405   2241   2248
  * tcopy              5546   2539   2375   2386   2352   2349
  * tload                     3046   2404   2566   2506   2465
  * trclo       8248   2782   2615   2634   2622   2499   2475
- * fbench      2933   2583   2460   2430   2478   2536   2536
- * tmat               3042   2524   2578   2590   2522   2628 [do_is_safe 30]
+ * fbench      2933   2583   2460   2430   2478   2536   2540 [fx_c_aa + 4]
+ * tmat               3042   2524   2578   2590   2522   2620 [do_is_safe 30]
  * tsort       3683   3104   2856   2804   2858   2858   2858
  * titer       4550   3349   3070   2985   2966   2917   2917
- * tio                3752   3683   3620   3583   3127   3135
- * tbit        3836   3305   3245   3261   3264   3181   3163
- * tobj               3970   3828   3577   3508   3434   3434
- * teq                4045   3536   3486   3544   3556   3570
+ * tio                3752   3683   3620   3583   3127   3133
+ * tbit        3836   3305   3245   3261   3264   3181   3174 [fx_c_aa +11]
+ * tobj               3970   3828   3577   3508   3434   3443 [find_let + 8]
+ * teq                4045   3536   3486   3544   3556   3567
  * tmac               4373   ----   4193   4188   4024   3936
  * tcomplex           3869   3804   3844   3888   4215   4192
  * tcase              4793   4439   4430   4439   4376   4378
  * tmap               8774   4489   4541   4586   4380   4378
  * tlet        11.0   6974   5609   5980   5965   4470   4466
  * tfft               7729   4755   4476   4536   4538   4568 [do_is_safe 8]
- * tshoot             5447   5183   5055   5034   4833   4774
- * tstar              6705   5834   5278   5177   5059   5055  5042
- * concordance 10.0   6342   5488   5162   5180   5259   5284
- * tnum               6013   5433   5396   5409   5402   5364
+ * tshoot             5447   5183   5055   5034   4833   4780
+ * tstar              6705   5834   5278   5177   5059   5052 [let_set_2 +10]
+ * concordance 10.0   6342   5488   5162   5180   5259   5287 [fx_c_aa +3]
+ * tnum               6013   5433   5396   5409   5402   5367
  * tlist       9219   7546   6558   6240   6300   5770   5785
  * tari        14.3   12.5   6619   6662   6499   6292   5986
  * trec        19.6   6980   6599   6656   6658   6015   6015
@@ -101048,8 +101057,8 @@ int main(int argc, char **argv)
  * tgc                10.4   7763   7579   7617   7619   7649
  * tlamb                            8003   7941   7920   7900
  * thash              11.7   9734   9479   9526   9283   9273
- * tform                     10.0   9992   9961   9626   9446
- * cb          12.9   11.0   9658   9564   9609   9657   9658
+ * tform                     10.0   9992   9961   9626   9440
+ * cb          12.9   11.0   9658   9564   9609   9657   9665
  * tmap-hash                                      10.3   10.3
  * tgen               11.4   12.0   12.1   12.2   12.4   12.4 12.5 [do_is_safe 78 called from op_let_temp in do_is_safe??[maybe callgrind is confused] and do_passes...]
  * tall        15.9   15.6   15.6   15.6   15.1   15.1   15.1
@@ -101070,14 +101079,17 @@ int main(int argc, char **argv)
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  * mutints: move make_mutable to the point of use and clear afterwards, more use of num_small_ints?
  * t854 -> tmisc? or texit?
- * env extension in: varlet cutlet sublet set_curlet symbol->local_slot
+ * env extension in: openlet coverlet varlet [cutlet -- need s7test] sublet [set_curlet?] [symbol->local_slot -- problematic!]
  *   s7test let-set! outlet(both args)  for env extension
- *   why are curlet, openlet and immutable! unsafe_defuns?
- *     curlet: it should be copied if the current values should be preserved
- *     immutable!: s7test does not turn up any problem, but t101-13 sees immutable slots being set!
- *     openlet: same (can optimizer see non-builtin arg here?)
- *       see t855 for openlet -- being unsafe does not fix the problem mentioned above (segfault!)
+ *   openlet: can optimizer see non-builtin arg here?
+ *     see t855 for openlet -- being unsafe does not fix the problem mentioned above (segfault!)
  *   t101-5|6|13|16 trouble fx_safe_thunk_a opt_p_pp_ff etc if unsafe->semisafe or safe (see 29-mar)
- *   can error/throw be semisafe?  passes s7test and t101-* (tests7)
  * see s7-ffi.html 2631 -- needs rewrite!
+ *   unsafe: apply-values values sort! apply
+ *   unsafe: s7_apply_function s7_values s7_call s7_eval s7_eval_c_string
+ *   see clm2xen et al: Snd uses unsafe for granulate/env/convolve/src/phase_vocoder etc
+ *     what is being called here? s7_apply_function: anything that can call an optimized s7 function from C is unsafe (opts clobber each other I think).
+ *   ffitest examples of unsafe funcs, check has_let_sig -- can't be output
+ * for non-begin_temp temps check for sc->unused at end (before clear) might catch overwrites, or debugging might have set_lock/unlock? but error et al would need to unlock?
+ * stack overflow (c) in mark_fx_treeable [check freeable bit?]
  */

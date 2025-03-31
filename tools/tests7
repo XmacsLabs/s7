@@ -199,7 +199,7 @@ gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
 repl s7test.scm
 
 echo ' '
-echo '-------- disable-file-output --------'
+echo '-------- disable-file-output (compilation only) --------'
 echo ' '
 gcc s7.c -c -I. -DDISABLE_FILE_OUTPUT=1 -g3 -Wall -ldl -lm -Wl,-export-dynamic
 # gcc -o repl repl.c -g3 -Wall s7.o -I. -lm -ldl -Wl,-export-dynamic
