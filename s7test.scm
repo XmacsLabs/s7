@@ -49570,7 +49570,7 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
 (test (signature copy) (let ((L (list #t #t #t 'integer?))) (set-cdr! (cdddr L) (cdddr L)) L))
 (test (signature cos) '(number? number?))
 (test (signature cosh) '(number? number?))
-(test (signature coverlet) (let ((L (list (list 'let? 'procedure? 'macro? 'c-object?)))) (set-cdr! L L) L))
+(test (signature coverlet) '((let? c-object? c-pointer? procedure? macro?) (let? c-object? c-pointer? procedure? macro?)))
 (test (signature curlet) '(let?))
 (test (signature current-error-port) '((output-port? not)))
 (test (signature current-input-port) '(input-port?))
@@ -49699,7 +49699,7 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
 (test (signature open-output-function) '(output-port? (procedure? macro?)))
 (test (signature open-output-file) '(output-port? string? string?))
 (test (signature open-output-string) '(output-port?))
-(test (signature openlet) (let ((L (list (list 'let? 'procedure? 'macro? 'c-object?)))) (set-cdr! L L) L))
+(test (signature openlet) '((let? c-object? c-pointer? procedure? macro?) (let? c-object? c-pointer? procedure? macro?)))
 (test (signature openlet?) '(boolean? #t))
 (test (signature outlet) '(let? (let? c-object? c-pointer? procedure? macro?)))
 (test (signature output-port?) '(boolean? #t))
@@ -49771,7 +49771,7 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
 (test (signature string>=?) (let ((L (list 'boolean? 'string?))) (set-cdr! (cdr L) (cdr L)) L))
 (test (signature string>?) (let ((L (list 'boolean? 'string?))) (set-cdr! (cdr L) (cdr L)) L))
 (test (signature string?) '(boolean? #t))
-(test (signature sublet) (let ((L (list 'let? 'let? '(pair? symbol? let?) #t))) (set-cdr! (cdddr L) (cddr L)) L))
+(test (signature sublet) (let ((L (list 'let? '(let? c-object? c-pointer? procedure? macro?) '(pair? symbol? let?) #t))) (set-cdr! (cdddr L) (cddr L)) L))
 (test (signature substring) '(string? string? integer? integer?))
 (test (signature substring-uncopied) '(string? string? integer? integer?))
 (test (signature subvector) '(subvector? vector? integer? integer? pair?))
@@ -49800,7 +49800,7 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
 (test (signature type-of) '((symbol? not) #t))
 (test (signature unlet) '(let?))
 (test (signature values) (let ((L (list 'values #t))) (set-cdr! (cdr L) (cdr L)) L))
-(test (signature varlet) (let ((L (list 'let? 'let? '(pair? symbol? let?) #t))) (set-cdr! (cdddr L) (cddr L)) L))
+(test (signature varlet) (let ((L (list 'let? '(let? c-object? c-pointer? procedure? macro?) '(pair? symbol? let?) #t))) (set-cdr! (cdddr L) (cddr L)) L))
 (test (signature vector) (let ((L (list 'vector? #t))) (set-cdr! (cdr L) (cdr L)) L))
 (test (signature vector-dimensions) '(pair? vector?))
 (test (signature vector-dimension) '(integer? vector? integer?))
@@ -53806,7 +53806,7 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
    (test (varlet arg) 'error)
    (test (cutlet arg) 'error)
    (test (cutlet (curlet) arg) 'error))
- (list -1 #\a 1 #(1 2 3) 3.14 3/4 1.0+1.0i pi abs macroexpand #<eof> #<unspecified> #f #(()) (list 1 2 3) '(1 . 2) "hi" '((a . 1))))
+ (list -1 #\a 1 #(1 2 3) 3.14 3/4 1.0+1.0i pi macroexpand #<eof> #<unspecified> #f #(()) (list 1 2 3) '(1 . 2) "hi" '((a . 1))))
 
 (test (let ((e (inlet '(a . 1)))) ((lambda (x) (x *)) e)) 'error)
 (test (let ((e (inlet '(a . 1)))) ((lambda (x) (x pi)) e)) 'error)
@@ -54172,6 +54172,7 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
 (test (unlet 'abs) 'error)
 (test (rootlet 'abs) 'error)
 (test (set! (curlet) 1) 'error)
+(test (set! (curlet) (rootlet)) 'error)
 (test (set! (rootlet) 1) 'error)
 (test (set! (unlet) 1) 'error)
 (test (let () (set! unlet 2)) 'error)
@@ -54406,13 +54407,11 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
 (test (sublet) 'error)
 (for-each
  (lambda (arg)
-   (test (sublet arg '(a . 32)) 'error)
-   (test (varlet arg '(a . 32)) 'error))
- (list -1 #\a 1 3.14 3/4 1.0+1.0i "hi" 'hi #() #f _ht_ _undef_ _null_ _c_obj_))
+   (test (sublet arg '(_a_ . 32)) 'error)
+   (test (varlet arg '(_a_ . 32)) 'error))
+ (list -1 #\a 1 3.14 3/4 1.0+1.0i "hi" 'hi #() #f _ht_ _undef_))  ; _null_ _c_obj_))
 
-(let ((e (sublet (curlet)
-			      (cons 'a 32)
-			      (cons 'b 12))))
+(let ((e (sublet (curlet) (cons 'a 32) (cons 'b 12))))
   (test (eval '(+ a b) e) 44)
   (test (eval '(+ a b c) (sublet e (cons 'c 3))) 47)
   (test (eval '(+ a b) (sublet e (cons 'b 3))) 35)
@@ -101347,7 +101346,7 @@ etc
       (test (with-let (inlet *s7*) print-length) 8)))
   (test (*s7* 'print-length) old-pl)
   (test (coverlet *s7*) 'error)
-  (test (openlet *s7*) *s7*)
+  (test (openlet *s7*) 'error) ; changed 31-Mar-25 -- surely this should return the same as thing as (coverlet *s7*)
   (test (*s7* 'print-length) old-pl))
 (test (object->string *s7*) "*s7*")
 (test (object->string *s7* :readable) "*s7*")
@@ -111570,8 +111569,7 @@ etc
   ;(lint-test "(sublet (curlet) 'a 1 'b 2 'a 3)" " sublet: repeated key a in (sublet (curlet) 'a 1 'b 2 'a 3)")
   (lint-test "(sublet (curlet) 'a 1)"           "")
   (lint-test "(sublet 'a 1)"
-	     " sublet: in (sublet 'a 1), sublet's first argument should be a let, but 'a is a symbol?
-               sublet: in (sublet 'a 1), sublet's second argument should be a pair or a symbol, but 1 is an integer?")
+               "sublet: in (sublet 'a 1), sublet's second argument should be a pair or a symbol, but 1 is an integer?")
   (lint-test "(close-output-port (current-output-port))"
 	     " close-output-port: (current-output-port) is the default port for close-output-port: (close-output-port (current-output-port))")
   (lint-test "(string-ref \"\" 0)"              " string-ref: (string-ref \"\" 0) is an error")
@@ -111768,7 +111766,7 @@ etc
   (lint-test "(define (func x) (lambda* (lambda args args) . -1))"  " func: lambda* is messed up in (lambda* (lambda args args) . -1)")
   (lint-test "(define (func x) (if (or . set!) (sublet 2)))"
 	     " func: unexpected dot: (or . set!)
-               func: in (sublet 2), sublet's argument should be a let, but 2 is an integer?")
+               func: in (sublet 2), sublet's argument should be a let or a c-object, but 2 is an integer?")
   (lint-test "(define (func x) (case x ((else) (char>? 11/(setter))) ((-1) (load - -1 3/4)) (else (positive? (format 0(inlet (make-list)))))))"
 	     " func: in (char>? 11/ (setter)),  char>?'s second argument should be a char, but (setter) is #f or a procedure?
                func: setter needs at least 1 argument: (setter)

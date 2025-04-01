@@ -1,6 +1,6 @@
 /* s7 ffi tester
  *
- * gcc -o ffitest ffitest.c -g3 -Wall s7.o -lm -I. -ldl -Wl,-export-dynamic
+ * gcc -o ffitest ffitest.c -g3 -DS7_DEBUGGING=1 -Wall s7.o -lm -I. -ldl -Wl,-export-dynamic
  * gcc -o ffitest ffitest.c -g3 -Wall s7.o -DWITH_GMP -lgmp -lmpfr -lmpc -lm -I. -ldl -Wl,-export-dynamic
  * gcc -o ffitest ffitest.c -fsanitize=address -fsanitize=bounds -fsanitize=pointer-compare -g3 -Wall -lasan -lubsan s7.o -lm -I. -ldl -Wl,-export-dynamic
  * valgrind --leak-check=full --show-reachable=no --suppressions=/home/bil/cl/free.supp ffitest
@@ -49,6 +49,11 @@ static s7_pointer test_hook_function(s7_scheme *sc, s7_pointer args)
       free(s1);
     }
   return(val);
+}
+
+static s7_pointer call_s7f(s7_scheme *sc, s7_pointer args)
+{
+  return(s7_apply_function(sc, s7_name_to_value(sc, "call-s7f-via-c"), s7_nil(sc)));
 }
 
 static char last_c;
@@ -2950,6 +2955,41 @@ int main(int argc, char **argv)
     p = s7_eval_c_string(sc, "(let ((f1 (make-f2 1)) (f2 (make-f2 2))) (list (f1 f1 3) (f2 f2 3) (f1 f1 4)))");
     if (!s7_is_equal(sc, p, s7_list(sc, 3, s7_make_integer(sc, 4), s7_make_integer(sc, 5), s7_make_integer(sc, 5))))
       {fprintf(stderr, "%d: p: %s\n", __LINE__, s1 = s7_object_to_c_string(sc, p)); free(s1);}
+  }
+
+  { /* check s7 calls C calls s7 */
+    s7_pointer port = s7_open_output_file(sc, "ffitest.scm", "w");
+    s7_int gc_loc1 = s7_gc_protect(sc, port);
+    s7_pointer val;
+    s7_define_typed_function(sc, "call-s7f", call_s7f, 1, 0, false, NULL, NULL);
+    s7_display(sc, s7_make_string(sc, "\n\
+(define (s7f x)\n\
+  (+ x 1))\n\
+(define (call-s7f-via-c)\n\
+  (let ((V (int-vector 0)))\n\
+     (do ((i 0 (+ i 1)))\n\
+         ((= i 10) (V 0))\n\
+       (int-vector-set! V 0 (s7f i)))))\n\
+(define (call-call)\n\
+  (let ((V (vector 0)))\n\
+     (do ((i 0 (+ i 1)))\n\
+         ((= i 3) (V 0))\n\
+       (vector-set! V 0 (call-s7f i)))))\n"), port);
+    s7_close_output_port(sc, port);
+    s7_gc_unprotect_at(sc, gc_loc1);
+    s7_load(sc, "ffitest.scm");
+    val = call_s7f(sc, s7_cons(sc, s7_make_integer(sc, 0), s7_nil(sc)));
+    if (!s7_is_equal(sc, val, s7_make_integer(sc, 10)))
+      {fprintf(stderr, "call-s7f: %s\n", s1 = TO_STR(val)); free(s1);}
+    val = s7_eval_c_string(sc, "(call-s7f 0)");
+    if (!s7_is_equal(sc, val, s7_make_integer(sc, 10)))
+      {fprintf(stderr, "s7->call-s7f: %s\n", s1 = TO_STR(val)); free(s1);}
+    val = s7_eval_c_string(sc, "(call-call)");
+    if (!s7_is_equal(sc, val, s7_make_integer(sc, 10)))
+      {fprintf(stderr, "call-call(1): %s\n", s1 = TO_STR(s7_apply_function(sc, s7_name_to_value(sc, "call-call"), s7_nil(sc)))); free(s1);}
+    val = s7_eval_c_string(sc, "(call-call)"); /* try again... */
+    if (!s7_is_equal(sc, val, s7_make_integer(sc, 10)))
+      {fprintf(stderr, "call-call(2): %s\n", s1 = TO_STR(s7_apply_function(sc, s7_name_to_value(sc, "call-call"), s7_nil(sc)))); free(s1);}
   }
 
   { /* check realloc'd large block handling in s7_free */

@@ -2538,7 +2538,7 @@ static s7_pointer clear_is_mutable(s7_pointer p) {clear_mid_type_bit(p, T_MID_MU
 
 #define T_COPY_ARGS                    (1 << (16 + 12))
 #define T_MID_COPY_ARGS                (1 << 12)
-#define needs_copied_args(p)           has_mid_type_bit(T_Ext(p), T_MID_COPY_ARGS) /* set via explicit T_COPY_ARGS, on T_Pos see s7_apply_function */
+#define needs_copied_args(p)           has_mid_type_bit(T_Ext(p), T_MID_COPY_ARGS) /* set via explicit T_COPY_ARGS */
 #define set_needs_copied_args(p)       set_mid_type_bit(T_Pair(p), T_MID_COPY_ARGS)
 #define clear_needs_copied_args(p)     clear_mid_type_bit(T_Pair(p), T_MID_COPY_ARGS)
 /* this marks something that might mess with its argument list, it should not be in the second byte */
@@ -3091,8 +3091,13 @@ static s7_pointer clear_is_mutable(s7_pointer p) {clear_mid_type_bit(p, T_MID_MU
 #define set_class_and_fn_proc(X, f)    do {set_opt1_cfunc(X, f); set_fn_direct(X, c_function_call(f));} while (0)
 
 #if WITH_GCC
+#if S7_DEBUGGING
+#define fx_call(Sc, F)                 ({s7_pointer _P_, _C_, _V_; _P_ = F; _C_ = sc->code; _V_ = fx_proc(_P_)(Sc, car(_P_)); if (sc->code != _C_) fprintf(stderr, "%s%s[%d]: %s clobbered sc-code%s\n", bold_text, __func__, __LINE__, display(_C_), unbold_text); _V_;})
+#define fn_call(Sc, F)                 ({s7_pointer _P_, _C_, _V_; _P_ = F; _C_ = sc->code; _V_ = fn_proc(_P_)(Sc, cdr(_P_)); if (sc->code != _C_) fprintf(stderr, "%s%s[%d]: %s clobbered sc-code%s\n", bold_text, __func__, __LINE__, display(_C_), unbold_text); _V_;})
+#else
 #define fx_call(Sc, F)                 ({s7_pointer _P_; _P_ = F; fx_proc(_P_)(Sc, car(_P_));})
 #define fn_call(Sc, F)                 ({s7_pointer _P_; _P_ = F; fn_proc(_P_)(Sc, cdr(_P_));})
+#endif
 #else
 #define fx_call(Sc, F)                 fx_proc(F)(Sc, car(F))
 #define fn_call(Sc, F)                 fn_proc(F)(Sc, cdr(F))
@@ -3362,7 +3367,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #endif
 #define funclet_function(p)            T_Sym((C_Let(p, L_FUNC))->object.envr.edat.efnc.function)
 #define funclet_set_function(p, F)     (S_Let(p, L_FUNC))->object.envr.edat.efnc.function = T_Sym(F)
-#define set_curlet(Sc, P)              Sc->curlet = T_Let(P) /* TODO: should this accept has_lets? (nearly all calls involve make_let) */
+#define set_curlet(Sc, P)              Sc->curlet = T_Let(P)
 
 #define let_baffle_key(p)              (T_Let(p))->object.envr.edat.key
 #define let_set_baffle_key(p, K)       (T_Let(p))->object.envr.edat.key = K
@@ -9985,7 +9990,7 @@ bool s7_is_openlet(s7_pointer e) {return(has_methods(e));}
 
 static s7_pointer g_is_openlet(s7_scheme *sc, s7_pointer args)
 {
-  #define H_is_openlet "(openlet? obj) returns #t is 'obj' has methods."
+  #define H_is_openlet "(openlet? obj) returns #t if 'obj' has methods."
   #define Q_is_openlet sc->pl_bt
 
   s7_pointer e = car(args);  /* if e is not a let, should this raise an error? -- no, easier to use this way in cond */
@@ -9997,56 +10002,58 @@ static s7_pointer g_is_openlet(s7_scheme *sc, s7_pointer args)
 /* -------------------------------- openlet -------------------------------- */
 s7_pointer s7_openlet(s7_scheme *sc, s7_pointer e)
 {
+  /* PERHAPS: find_let here? */
   set_has_methods(e);
   return(e);
 }
 
 static s7_pointer g_openlet(s7_scheme *sc, s7_pointer args)
 {
-  #define H_openlet "(openlet e) tells the built-in functions that the let 'e might have an over-riding method."
-  #define Q_openlet s7_make_circular_signature(sc, 0, 1, s7_make_signature(sc, 4, sc->is_let_symbol, sc->is_procedure_symbol, sc->is_macro_symbol, sc->is_c_object_symbol))
-
+  #define H_openlet "(openlet e) tells the built-in functions that the let e might have an over-riding method. e is returned."
+  #define Q_openlet s7_make_signature(sc, 2, has_let_signature(sc), has_let_signature(sc))
 
   s7_pointer e = car(args), elet, func;
   if (!is_let(e))
     {
-      elet = find_let(sc, e); /* returns nil if no let found, so has to follow error check above */
+      elet = find_let(sc, e);
       if (!is_let(elet))
 	sole_arg_wrong_type_error_nr(sc, sc->openlet_symbol, e, a_let_string);
     }
   else elet = e;
-  if (elet == sc->rootlet)
-    error_nr(sc, sc->out_of_range_symbol, set_elist_1(sc, wrap_string(sc, "can't openlet rootlet", 21)));
+  if ((elet == sc->rootlet) || (elet == sc->starlet))
+    error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "can't openlet ~S", 17), e));
   if (is_unlet(elet)) /* protect against infinite loop: (let () (define + -) (with-let (unlet) (+ (openlet (unlet)) 2))) */
     error_nr(sc, sc->out_of_range_symbol, set_elist_1(sc, wrap_string(sc, "can't openlet unlet", 19)));
   if ((has_active_methods(sc, e)) &&
       ((func = find_method(sc, elet, sc->openlet_symbol)) != sc->undefined))
     return(s7_apply_function(sc, func, args));
   set_has_methods(e);
-  return(e);
+  return(e); /* openlet and coverlet return their argument */
 }
 
 /* -------------------------------- coverlet -------------------------------- */
 static s7_pointer g_coverlet(s7_scheme *sc, s7_pointer args)
 {
-  #define H_coverlet "(coverlet e) undoes an earlier openlet."
-  #define Q_coverlet s7_make_circular_signature(sc, 0, 1, s7_make_signature(sc, 4, sc->is_let_symbol, sc->is_procedure_symbol, sc->is_macro_symbol, sc->is_c_object_symbol))
+  #define H_coverlet "(coverlet e) undoes an earlier openlet.  e is returned."
+  #define Q_coverlet s7_make_signature(sc, 2, has_let_signature(sc), has_let_signature(sc))
 
-  s7_pointer e = car(args);
-  check_method(sc, e, sc->coverlet_symbol, set_plist_1(sc, e));
-  if ((e == sc->rootlet) || (e == sc->starlet))
-    error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "can't coverlet ~S", 17), e));
-  if ((is_let(e)) && (is_unlet(e)))
-    error_nr(sc, sc->out_of_range_symbol, set_elist_1(sc, wrap_string(sc, "can't coverlet unlet", 20)));
-  if ((is_let(e)) || (has_closure_let(e)) ||
-      ((is_c_object(e)) && (c_object_let(e) != sc->nil)) ||
-      ((is_c_pointer(e)) && (is_let(c_pointer_info(e)))))
+  s7_pointer e = car(args), elet, func;
+  if (!is_let(e))
     {
-      clear_has_methods(e);
-      return(e);
+      elet = find_let(sc, e);
+      if (!is_let(elet))
+	sole_arg_wrong_type_error_nr(sc, sc->openlet_symbol, e, a_let_string);
     }
-  sole_arg_wrong_type_error_nr(sc, sc->coverlet_symbol, e, a_let_string);
-  return(NULL);
+  else elet = e;
+  if ((elet == sc->rootlet) || (elet == sc->starlet))
+    error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "can't coverlet ~S", 17), e));
+  if (is_unlet(elet))
+    error_nr(sc, sc->out_of_range_symbol, set_elist_1(sc, wrap_string(sc, "can't coverlet unlet", 20)));
+  if ((has_active_methods(sc, e)) &&
+      ((func = find_method(sc, elet, sc->coverlet_symbol)) != sc->undefined))
+    return(s7_apply_function(sc, func, args));
+  clear_has_methods(e);
+  return(e); /* mimic openlet in everything */
 }
 
 
@@ -10135,16 +10142,21 @@ static s7_pointer g_varlet(s7_scheme *sc, s7_pointer args)   /* varlet = with-le
 {
   #define H_varlet "(varlet target-let ...) adds its arguments (a let, a cons: symbol . value, or two arguments, the symbol and its value) \
 to the let target-let, and returns target-let.  (varlet (curlet) 'a 1) adds 'a to the current environment with the value 1."
-  #define Q_varlet s7_make_circular_signature(sc, 2, 4, sc->is_let_symbol, sc->is_let_symbol, \
-                       s7_make_signature(sc, 3, sc->is_pair_symbol, sc->is_symbol_symbol, sc->is_let_symbol), \
-                         sc->T)
+  #define Q_varlet s7_make_circular_signature(sc, 2, 4, sc->is_let_symbol, has_let_signature(sc), \
+                     s7_make_signature(sc, 3, sc->is_pair_symbol, sc->is_symbol_symbol, sc->is_let_symbol), sc->T)
   s7_pointer e = car(args);
-  if (e != sc->rootlet)
+  if (!is_let(e))
     {
-      check_method(sc, e, sc->varlet_symbol, args);
-      if (!is_let(e))
-	wrong_type_error_nr(sc, sc->varlet_symbol, 1, e, a_let_string);
+      s7_pointer new_let = find_let(sc, e);
+      if (!is_let(new_let))
+	{
+	  check_method(sc, e, sc->varlet_symbol, args);
+	  wrong_type_error_nr(sc, sc->varlet_symbol, 1, e, a_let_string);
+	}
+      e = new_let;
+      /* TODO: if new_let is rootlet should we just exit? -- user is probably unaware that rootlet is the default associated let for c-pointer/goto/continuation etc */
     }
+      
   if ((is_immutable_let(e)) || (e == sc->starlet))
     immutable_object_error_nr(sc, set_elist_3(sc, wrap_string(sc, "can't (varlet ~{~S~^ ~}), ~S is immutable", 41), args, e));
 
@@ -10358,15 +10370,19 @@ s7_pointer s7_sublet(s7_scheme *sc, s7_pointer e, s7_pointer bindings) {return(s
 
 static s7_pointer g_sublet(s7_scheme *sc, s7_pointer args)
 {
-  #define H_sublet "(sublet lt ...) makes a new let (environment) within the environment 'lt', initializing it with the bindings"
+  #define H_sublet "(sublet lt ...) makes a new let (an environment) within the environment 'lt', initializing it with the bindings"
   #define Q_sublet Q_varlet
 
   s7_pointer e = car(args);
-  if (e != sc->rootlet)
+  if (!is_let(e))
     {
-      check_method(sc, e, sc->sublet_symbol, args);
-      if (!is_let(e))
-	wrong_type_error_nr(sc, sc->sublet_symbol, 1, e, a_let_string);
+      s7_pointer new_let = find_let(sc, e);
+      if (!is_let(new_let))
+	{
+	  check_method(sc, e, sc->sublet_symbol, args);
+	  wrong_type_error_nr(sc, sc->sublet_symbol, 1, e, a_let_string);
+	}
+      e = new_let;
     }
   return(sublet_1(sc, e, cdr(args), sc->sublet_symbol));
 }
@@ -11057,12 +11073,14 @@ static void update_symbol_ids(s7_scheme *sc, s7_pointer e)
 s7_pointer s7_set_curlet(s7_scheme *sc, s7_pointer e)
 {
   s7_pointer old_e = sc->curlet;
-  set_curlet(sc, e);
-  if ((is_let(e)) && (let_id(e) > 0))
+  if (is_let(e))
     {
-      let_set_id(e, ++sc->let_number);
-      update_symbol_ids(sc, e);
-    }
+      set_curlet(sc, e);
+      if (let_id(e) > 0)
+	{
+	  let_set_id(e, ++sc->let_number);
+	  update_symbol_ids(sc, e);
+	}}
   return(old_e);
 }
 
@@ -77965,10 +77983,10 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t pars, s7_pointer ar
 }
 
 static void mark_fx_treeable(s7_scheme *sc, s7_pointer body)
-{ /* it is possible to encounter a cyclic body here -- should we protect against that if safety>0? */
-  if (is_pair(body)) /* slightly faster than the other way of writing this */
+{ /* it is possible to encounter a cyclic body here -- TODO: s7test example! */
+  if ((is_pair(body)) && (!is_fx_treeable(body))) /* slightly faster than the other way of writing this */
     {
-      if (is_pair(car(body)))
+      if ((is_pair(car(body))) && (!is_fx_treeable(car(body))))
 	{
 	  set_is_fx_treeable(body);
 	  mark_fx_treeable(sc, car(body));
@@ -99512,29 +99530,32 @@ static void init_rootlet(s7_scheme *sc)
   sc->symbol_to_keyword_symbol =     defun("symbol->keyword",	symbol_to_keyword,	1, 0, false);
   sc->keyword_to_symbol_symbol =     defun("keyword->symbol",	keyword_to_symbol,	1, 0, false);
 
-  sc->outlet_symbol =                defun("outlet",	        outlet,		        1, 0, false);
-  sc->rootlet_symbol =               defun("rootlet",           rootlet,		0, 0, false);
   sc->curlet_symbol =                semisafe_defun("curlet",   curlet,			0, 0, false); /* was unsafe 29-Mar-25 */
   set_func_is_definer(sc->curlet_symbol);
   set_is_escaper_function(sc->curlet_symbol);
   set_is_saver(sc->curlet_symbol);
+
   sc->unlet_symbol =                 defun("unlet",		unlet,			0, 0, false);
   set_local_slot(sc->unlet_symbol, global_slot(sc->unlet_symbol)); /* for set_locals */
   set_immutable(sc->unlet_symbol);
   set_immutable_slot(global_slot(sc->unlet_symbol));
+
+  sc->outlet_symbol =                defun("outlet",	        outlet,		        1, 0, false);
+  sc->rootlet_symbol =               defun("rootlet",           rootlet,		0, 0, false);
   sc->is_funclet_symbol =            defun("funclet?",          is_funclet,             1, 0, false);
-  sc->sublet_symbol =                defun("sublet",		sublet,			1, 0, true); set_is_saver(sc->sublet_symbol);
-  sc->varlet_symbol =                semisafe_defun("varlet",	varlet,			2, 0, true); set_func_is_definer(sc->varlet_symbol);
-  sc->cutlet_symbol =                semisafe_defun("cutlet",	cutlet,			2, 0, true); set_func_is_definer(sc->cutlet_symbol);
-  sc->inlet_symbol =                 defun("inlet",		inlet,			0, 0, true); set_is_saver(sc->inlet_symbol);
+  sc->sublet_symbol =                defun("sublet",		sublet,			1, 0, true);  set_is_saver(sc->sublet_symbol);
+  sc->varlet_symbol =                semisafe_defun("varlet",	varlet,			2, 0, true);
+  set_func_is_definer(sc->varlet_symbol);
+  set_is_translucent(sc->varlet_symbol);
+  sc->cutlet_symbol =                semisafe_defun("cutlet",	cutlet,			2, 0, true);
+  set_func_is_definer(sc->cutlet_symbol);
+  set_is_translucent(sc->cutlet_symbol);
+  sc->inlet_symbol =                 defun("inlet",		inlet,			0, 0, true);  set_is_saver(sc->inlet_symbol);
   sc->owlet_symbol =                 defun("owlet",		owlet,			0, 0, false);
   sc->coverlet_symbol =              defun("coverlet",		coverlet,		1, 0, false); set_is_translucent(sc->coverlet_symbol);
   sc->openlet_symbol =               semisafe_defun("openlet",  openlet,		1, 0, false); set_is_translucent(sc->openlet_symbol);
-  /* unsafe here because otherwise it can be optimized, whereupon our gc_protect_via_stack becomes unreliable:
-   *   we can't assume the current top-of-stack is the gc_protect in fx_c_aa (for example): if fn_proc hits an openlet method redirect to map or for-each,
-   *   the stack will have that operator awaiting the next spin through eval: (define (f) (write (vector 1.0) (openlet (inlet 'write for-each)))) (f)
-   *   the "f" function is needed to get the optimizer to call fx_c_aa.  This affects fx/opt cases throughout!
-   */
+  /* a bug here, not yet fixed: TODO: (define (f) (write (vector 1.0) (openlet (inlet 'write for-each)))) (f) -> segfault! */
+
   sc->let_ref_symbol =               defun("let-ref",		let_ref,		2, 0, false); set_immutable(sc->let_ref_symbol);
   set_immutable_slot(global_slot(sc->let_ref_symbol));
   sc->let_set_symbol =               defun("let-set!",		let_set,		3, 0, false); set_immutable(sc->let_set_symbol);
@@ -101079,17 +101100,24 @@ int main(int argc, char **argv)
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  * mutints: move make_mutable to the point of use and clear afterwards, more use of num_small_ints?
  * t854 -> tmisc? or texit?
- * env extension in: openlet coverlet varlet [cutlet -- need s7test] sublet [set_curlet?] [symbol->local_slot -- problematic!]
- *   s7test let-set! outlet(both args)  for env extension
+ * env extension in: [symbol->local_slot -- problematic!], check has_let_sig
+ *   s7test let-set! outlet(both args) for env extension, also openlet/coverlet/cutlet/varlet/sublet (and methods) and let-ref?
  *   openlet: can optimizer see non-builtin arg here?
  *     see t855 for openlet -- being unsafe does not fix the problem mentioned above (segfault!)
- *   t101-5|6|13|16 trouble fx_safe_thunk_a opt_p_pp_ff etc if unsafe->semisafe or safe (see 29-mar)
+ *   t101-5|6|13|16 trouble fx_safe_thunk_a opt_p_pp_ff etc if unsafe->semisafe or safe (see 29-Mar)
+ *   varlet: if "let" arg is c-pointer/goto/continuation new let is rootlet -- is this a bug?
+ *     and cutlet: check rootlet arg for locals
+ *   (sublet (bacro....)) printout should just say (rootlet)
  * see s7-ffi.html 2631 -- needs rewrite!
- *   unsafe: apply-values values sort! apply
+ *   unsafe: apply-values values sort! apply [probably because fx* does not protect against values, sc->code change in apply syntax etc]
  *   unsafe: s7_apply_function s7_values s7_call s7_eval s7_eval_c_string
  *   see clm2xen et al: Snd uses unsafe for granulate/env/convolve/src/phase_vocoder etc
  *     what is being called here? s7_apply_function: anything that can call an optimized s7 function from C is unsafe (opts clobber each other I think).
- *   ffitest examples of unsafe funcs, check has_let_sig -- can't be output
+ *   ffitest examples of unsafe funcs: (apply lambda*...) clobbers sc->code during let loop, values because let is unprotected from values?
+ *   hooks are bad because (apply lambda*...) so hidden hook call = sc->code clobbered
+ *   in ffitest.c add s7f_hook -- s7f+hook and call it safe
+ *   so s7_eval_c_string is unsafe? "(apply lambda* ...)"
+ *   check safe env_any granulate src aginst debugging fx_call
  * for non-begin_temp temps check for sc->unused at end (before clear) might catch overwrites, or debugging might have set_lock/unlock? but error et al would need to unlock?
- * stack overflow (c) in mark_fx_treeable [check freeable bit?]
+ * check hardening flags in test/smsg1
  */
