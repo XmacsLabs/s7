@@ -53975,6 +53975,9 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
 (test (let-ref (funclet (let ((a 2)) (lambda (b) (+ a b)))) 'a) 2)
 (test (#_let-ref  (lambda* ((a 1) (b 2)) (+ a b)) else) else)
 
+(test (let ((C (c-pointer 0 1 (inlet 'a 1)))) (let-ref C 'a)) 1)
+(test (let ((C (c-pointer 0 1 (inlet 'a 1)))) (let-set! C 'a 32) (let-ref C 'a)) 32)
+
 (let ((etest (let ((a 2)) (lambda (b) (+ a b)))))
   (let-set! (funclet etest) 'a 32)
   (test (etest 1) 33))

@@ -6308,8 +6308,10 @@ static s7_pointer find_let(s7_scheme *sc, s7_pointer obj)
       if (is_let(c_pointer_info(obj)))
 	return(c_pointer_info(obj));
       return(sc->rootlet);
+#if 0
     case T_CONTINUATION: case T_GOTO:
-      return(sc->rootlet); /* ??? */
+      return(sc->rootlet); /* ??? why  is this included? s7test has no use of it */
+#endif
     case T_C_MACRO: case T_C_FUNCTION_STAR: case T_C_FUNCTION: case T_C_RST_NO_REQ_FUNCTION:
       return(c_function_let(obj));
     }
@@ -10148,13 +10150,14 @@ to the let target-let, and returns target-let.  (varlet (curlet) 'a 1) adds 'a t
   if (!is_let(e))
     {
       s7_pointer new_let = find_let(sc, e);
+      if (new_let == sc->rootlet) /* rootlet would mean the object has no let of its own */
+	wrong_type_error_nr(sc, sc->varlet_symbol, 1, e, a_let_string);
       if (!is_let(new_let))
 	{
 	  check_method(sc, e, sc->varlet_symbol, args);
 	  wrong_type_error_nr(sc, sc->varlet_symbol, 1, e, a_let_string);
 	}
       e = new_let;
-      /* TODO: if new_let is rootlet should we just exit? -- user is probably unaware that rootlet is the default associated let for c-pointer/goto/continuation etc */
     }
       
   if ((is_immutable_let(e)) || (e == sc->starlet))
@@ -10210,11 +10213,11 @@ to the let target-let, and returns target-let.  (varlet (curlet) 'a 1) adds 'a t
 	{
 	  check_let_fallback(sc, sym, e);
 	  add_slot_checked_with_id(sc, e, sym, val);
+	  /* this used to check for sym already defined, and set its value, but that greatly slows down
+	   *   the most common use (adding a slot), and makes it hard to shadow explicitly.  Don't use
+	   *   varlet as a substitute for set!/let-set!.
+	   */
 	}}
-      /* this used to check for sym already defined, and set its value, but that greatly slows down
-       *   the most common use (adding a slot), and makes it hard to shadow explicitly.  Don't use
-       *   varlet as a substitute for set!/let-set!.
-       */
   return(e);
 }
 
@@ -10233,7 +10236,7 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
       if (!is_let(e))
 	{
 	  s7_pointer new_let = find_let(sc, e);
-	  if (!is_let(new_let))
+	  if ((!is_let(new_let)) || (new_let == sc->rootlet))
 	    wrong_type_error_nr(sc, sc->cutlet_symbol, 1, e, a_let_string);
 	  e = new_let;
 	}}
@@ -11218,14 +11221,7 @@ void s7_slot_set_real_value(s7_scheme *sc, s7_pointer slot, s7_double value) {se
 
 static s7_pointer symbol_to_local_slot(s7_scheme *sc, s7_pointer symbol, s7_pointer e)
 {
-  if (!is_let(e)) /* maybe check this before calling */
-    {
-      s7_pointer new_let = find_let(sc, e);
-      if (!is_let(new_let))
-	return(global_slot(symbol)); /* odd, but that's how it was before the find_let was addedd 30-Mar-25 */
-      e = new_let;
-    }
-  if (e == sc->rootlet)
+  if (T_Let(e) == sc->rootlet)
     return(global_slot(symbol));
   if (!is_global(symbol))  /* i.e. rootlet is not the desired let, and the symbol might have a local value */
     for (s7_pointer y = let_slots(e); tis_slot(y); y = next_slot(y))
@@ -11889,7 +11885,7 @@ Only the let is searched if ignore-globals is not #f."
 	    return(make_boolean(sc, is_slot(global_slot(sym)))); /* new_symbol and gensym initialize global_slot to #<undefined> */
 	  return(sc->F);
 	}
-      if (is_slot(symbol_to_local_slot(sc, sym, e))) return(sc->T);
+      if (is_slot(symbol_to_local_slot(sc, sym, T_Let(e)))) return(sc->T);
       return((ignore_globals == sc->T) ? sc->F : make_boolean(sc, is_slot(global_slot(sym))));
     }
   return((is_defined_global(sym)) ? sc->T : make_boolean(sc, is_slot(s7_slot(sc, sym))));
@@ -11948,7 +11944,7 @@ static bool is_defined_b_7pp(s7_scheme *sc, s7_pointer p, s7_pointer e) {return(
 void s7_define(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointer value)
 {
   s7_pointer x;
-  if (let == sc->rootlet) let = sc->shadow_rootlet; /* if symbol is a gensym should we issue a warning? */
+  if (T_Let(let) == sc->rootlet) let = sc->shadow_rootlet; /* if symbol is a gensym should we issue a warning? */
   x = symbol_to_local_slot(sc, symbol, let);        /* x can be #<undefined> */
   if (is_slot(x))
     slot_set_value_with_hook(x, value);
@@ -11981,7 +11977,7 @@ s7_pointer s7_define_variable_with_documentation(s7_scheme *sc, const char *name
 s7_pointer s7_define_constant_with_environment(s7_scheme *sc, s7_pointer envir, const char *name, s7_pointer value)
 {
   s7_pointer sym = make_symbol_with_strlen(sc, name);
-  s7_define(sc, envir, sym, value);
+  s7_define(sc, T_Let(envir), sym, value);
   set_immutable(sym);
   set_possibly_constant(sym);
   set_immutable(global_slot(sym)); /* might also be #<undefined> */
@@ -11991,7 +11987,7 @@ s7_pointer s7_define_constant_with_environment(s7_scheme *sc, s7_pointer envir, 
 
 s7_pointer s7_define_constant(s7_scheme *sc, const char *name, s7_pointer value)
 {
-  return(s7_define_constant_with_environment(sc, sc->nil, name, value));
+  return(s7_define_constant_with_environment(sc, sc->rootlet, name, value));
 }
 
 /* (define (func a) (let ((cvar (+ a 1))) cvar)) (define-constant cvar 23) (func 1) -> ;can't bind an immutable object: cvar
@@ -48696,7 +48692,7 @@ s7_pointer s7_dilambda_with_environment(s7_scheme *sc, s7_pointer envir,
   internal_set_name[0] = '\0';
   catstrs_direct(internal_set_name, "[set-", name, "]", (const char *)NULL);
   get_func = s7_make_safe_function(sc, name, getter, get_req_args, get_opt_args, false, documentation);
-  s7_define(sc, envir, make_symbol(sc, name, name_len), get_func);
+  s7_define(sc, T_Let(envir), make_symbol(sc, name, name_len), get_func);
   set_func = s7_make_safe_function(sc, internal_set_name, setter, set_req_args, set_opt_args, false, documentation);
   c_function_set_setter(get_func, set_func);
   return(get_func);
@@ -48708,7 +48704,7 @@ s7_pointer s7_dilambda(s7_scheme *sc,
 		       s7_pointer (*setter)(s7_scheme *sc, s7_pointer args), s7_int set_req_args, s7_int set_opt_args,
 		       const char *documentation)
 {
-  return(s7_dilambda_with_environment(sc, sc->nil, name, getter, get_req_args, get_opt_args, setter, set_req_args, set_opt_args, documentation));
+  return(s7_dilambda_with_environment(sc, sc->rootlet, name, getter, get_req_args, get_opt_args, setter, set_req_args, set_opt_args, documentation));
 }
 
 s7_pointer s7_typed_dilambda(s7_scheme *sc,
@@ -65880,7 +65876,7 @@ static void check_opc_vector_wraps(opt_info *opc)
 
 static void use_slot_ref(s7_scheme *sc, opt_info *opc, s7_pointer let, s7_pointer symbol)
 {
-  s7_pointer slot = symbol_to_local_slot(sc, symbol, let);
+  s7_pointer slot = symbol_to_local_slot(sc, symbol, T_Let(let));
   if (is_slot(slot))
     {
       opc->v[2].p = slot;
@@ -73059,7 +73055,7 @@ static s7_pointer check_autoload_and_error_hook(s7_scheme *sc, s7_pointer sym)
 		{
 		  result = let_ref_p_pp(sc, e, sym);
 		  if (result != sc->undefined)
-		    s7_define(sc, sc->nil /* current_let */, sym, result); /* as above, was sc->nil -- s7_load above can set sc->curlet to sc->nil */
+		    s7_define(sc, sc->rootlet, sym, result); /* as above, was sc->nil -- s7_load above can set sc->curlet to sc->nil */
 		}}
 #endif
 	  /* check *unbound-variable-hook* */
@@ -100577,15 +100573,14 @@ s7_scheme *s7_init(void)
   init_signatures(sc);      /* depends on procedure symbols */
   sc->starlet = make_starlet(sc);
   s7_set_history_enabled(sc, true);
-
   s7_eval_c_string(sc, "(define make-hook                                                                 \n\
                           (let ((+documentation+ \"(make-hook . pars) returns a new hook (a function) that passes that hook to each function in its function list.\")) \n\
                             (lambda hook-args                                                             \n\
-                              (let ((body ()))   ; list of hook functions                                 \n\
+                              (let ((body ()))   ; list of functions                                      \n\
                                 (apply lambda* hook-args                                                  \n\
                                   '((let ((result #<unspecified>))                                        \n\
                                       (let ((hook (openlet (sublet (curlet) 'let-ref-fallback #<undefined>)))) \n\
-                                        (for-each (lambda (hook-function) (hook-function hook)) body)     \n\
+                                        (for-each (lambda (func) (func hook)) body)                        \n\
                                         result))))))))");
   /* (procedure-source (make-hook 'x 'y)): (lambda* (x y) (let ((result #<unspecified>)) ... result)), see stuff.scm for commentary
    * '((when (pair? body) ...) at start might be a good idea -- depends on how often an empty hook is called
@@ -101100,24 +101095,21 @@ int main(int argc, char **argv)
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  * mutints: move make_mutable to the point of use and clear afterwards, more use of num_small_ints?
  * t854 -> tmisc? or texit?
- * env extension in: [symbol->local_slot -- problematic!], check has_let_sig
- *   s7test let-set! outlet(both args) for env extension, also openlet/coverlet/cutlet/varlet/sublet (and methods) and let-ref?
+ * env extension in: [symbol->local_slot -- should s7_define return if not a let?]
+ *   s7test outlet(both args) for env extension, also openlet/coverlet/cutlet/varlet/sublet (and methods)
  *   openlet: can optimizer see non-builtin arg here?
  *     see t855 for openlet -- being unsafe does not fix the problem mentioned above (segfault!)
  *   t101-5|6|13|16 trouble fx_safe_thunk_a opt_p_pp_ff etc if unsafe->semisafe or safe (see 29-Mar)
- *   varlet: if "let" arg is c-pointer/goto/continuation new let is rootlet -- is this a bug?
- *     and cutlet: check rootlet arg for locals
- *   (sublet (bacro....)) printout should just say (rootlet)
+ *   (sublet (bacro....)) printout should just say (rootlet) -- how did this happen?
+ *   doc ext env
  * see s7-ffi.html 2631 -- needs rewrite!
  *   unsafe: apply-values values sort! apply [probably because fx* does not protect against values, sc->code change in apply syntax etc]
  *   unsafe: s7_apply_function s7_values s7_call s7_eval s7_eval_c_string
  *   see clm2xen et al: Snd uses unsafe for granulate/env/convolve/src/phase_vocoder etc
  *     what is being called here? s7_apply_function: anything that can call an optimized s7 function from C is unsafe (opts clobber each other I think).
  *   ffitest examples of unsafe funcs: (apply lambda*...) clobbers sc->code during let loop, values because let is unprotected from values?
- *   hooks are bad because (apply lambda*...) so hidden hook call = sc->code clobbered
  *   in ffitest.c add s7f_hook -- s7f+hook and call it safe
- *   so s7_eval_c_string is unsafe? "(apply lambda* ...)"
  *   check safe env_any granulate src aginst debugging fx_call
+ *   for-each/map/member/assoc w/o push?
  * for non-begin_temp temps check for sc->unused at end (before clear) might catch overwrites, or debugging might have set_lock/unlock? but error et al would need to unlock?
- * check hardening flags in test/smsg1
  */

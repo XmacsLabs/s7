@@ -1639,7 +1639,7 @@ int main(int argc, char **argv)
 				       s7_make_circular_signature(sc, 0, 1, s7_make_symbol(sc, "real?"))));
 
   s7_define_variable(sc, "dax-data",
-                     s7_dilambda_with_environment(sc, s7_nil(sc), "dax-data", dax_data, 1, 0, set_dax_data, 2, 0, "dax data field"));
+                     s7_dilambda_with_environment(sc, s7_rootlet(sc), "dax-data", dax_data, 1, 0, set_dax_data, 2, 0, "dax data field"));
 
   if (!s7_is_dilambda(s7_name_to_value(sc, "dax-x")))
     {fprintf(stderr, "%d: dax-x is not a pws?\n", __LINE__);}
@@ -3006,7 +3006,7 @@ int main(int argc, char **argv)
       {
 	char buf[128];
 	snprintf(buf, 128, "sym-%d", i);
-	s7_define(sc, s7_nil(sc), s7_make_symbol(sc, (const char *)buf), s7_make_integer(sc, i));
+	s7_define(sc, s7_rootlet(sc), s7_make_symbol(sc, (const char *)buf), s7_make_integer(sc, i));
       }
 
     for (i = 0; i < 10000; i++)   /* stack */
