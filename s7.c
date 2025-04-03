@@ -134,7 +134,7 @@
 #endif
 /* the heap grows as needed, this is its initial size. If the initial heap is small, s7 can run in about 2.5 Mbytes of memory.
  * There are many cases where a bigger heap is faster (but hardware cache size probably matters more).
- * The heap size must be a multiple of 32.  Each object takes 48 bytes.
+ * The heap size must be a multiple of 32.  Each object takes 48 bytes.  s7 is fine with the initial heap size set to 800.
  */
 
 #ifndef SYMBOL_TABLE_SIZE
@@ -6303,15 +6303,15 @@ static s7_pointer find_let(s7_scheme *sc, s7_pointer obj)
   switch (type(obj))
     {
     case T_C_OBJECT:
-      return(c_object_let(obj));
+      if (is_let(c_object_let(obj)))
+	return(c_object_let(obj));
+      return(sc->rootlet);
+
     case T_C_POINTER:
       if (is_let(c_pointer_info(obj)))
 	return(c_pointer_info(obj));
       return(sc->rootlet);
-#if 0
-    case T_CONTINUATION: case T_GOTO:
-      return(sc->rootlet); /* ??? why  is this included? s7test has no use of it */
-#endif
+
     case T_C_MACRO: case T_C_FUNCTION_STAR: case T_C_FUNCTION: case T_C_RST_NO_REQ_FUNCTION:
       return(c_function_let(obj));
     }
@@ -6706,6 +6706,18 @@ static s7_pointer is_constant_p_p(s7_scheme *sc, s7_pointer p) {return(make_bool
 
 /* -------------------------------- immutable? -------------------------------- */
 
+static no_return void find_let_error_nr(s7_scheme *sc, s7_pointer caller, s7_pointer let, s7_pointer new_let, s7_int arg_num, s7_pointer args)
+{
+  if (new_let == sc->rootlet)
+    error_nr(sc, sc->wrong_type_arg_symbol, 
+	     set_elist_5(sc, wrap_string(sc, "(~A~{~^ ~$~}) ~:D argument is ~A, but it does not have its own let", 66),
+			 caller,
+			 args,
+			 (is_small_int(arg_num)) ? small_int(arg_num) : wrap_integer(sc, arg_num),
+			 object_type_name(sc, let)));
+  wrong_type_error_nr(sc, caller, arg_num, s7_list_ref(sc, args, arg_num - 1), wrap_string(sc, "a let or an object that has its own let", 39));
+}
+
 bool s7_is_immutable(s7_pointer p) {return(is_immutable(p));}
 #define has_let_signature(sc) s7_make_signature(sc, 5, sc->is_let_symbol, sc->is_c_object_symbol, sc->is_c_pointer_symbol, sc->is_procedure_symbol, sc->is_macro_symbol)
 
@@ -6724,8 +6736,8 @@ static s7_pointer g_is_immutable(s7_scheme *sc, s7_pointer args)
 	  if (!is_let(e))
 	    {
 	      s7_pointer new_let = find_let(sc, e);
-	      if (!is_let(new_let))
-		wrong_type_error_nr(sc, sc->is_immutable_symbol, 2, e, a_let_string);
+	      if ((!is_let(new_let)) || (new_let == sc->rootlet))
+		find_let_error_nr(sc, sc->is_immutable_symbol, e, new_let, 2, args);
 	      e = new_let;
 	    }
 	  if (e == sc->rootlet)
@@ -6774,11 +6786,11 @@ static s7_pointer g_immutable(s7_scheme *sc, s7_pointer args)
       if (is_pair(cdr(args)))
 	{
 	  s7_pointer e = cadr(args);
-	  if (!is_let(e))
+	  if ((!is_let(e)) || (e == sc->rootlet))
 	    {
 	      s7_pointer new_let = find_let(sc, e);
 	      if (!is_let(new_let))
-		wrong_type_error_nr(sc, sc->immutable_symbol, 2, e, a_let_string);
+		find_let_error_nr(sc, sc->immutable_symbol, e, new_let, 2, args);
 	      e = new_let;
 	    }
 	  slot = symbol_to_local_slot(sc, (is_keyword(p)) ? keyword_symbol(p) : p, e); /* different from immutable? */
@@ -11858,9 +11870,12 @@ Only the let is searched if ignore-globals is not #f."
       s7_pointer e = cadr(args), ignore_globals;
       if (!is_let(e))
 	{
-	  e = find_let(sc, e);  /* returns () if none */
-	  if (!is_let(e))
-	    wrong_type_error_nr(sc, sc->is_defined_symbol, 2, cadr(args), a_let_string); /* not e */
+	  s7_pointer new_let = find_let(sc, e);  /* returns () if none */
+	  if (!is_let(new_let)) 
+	    wrong_type_error_nr(sc, sc->is_defined_symbol, 2, e, a_let_string);
+	  if ((new_let == sc->rootlet) && (is_pair(cddr(args))) && (caddr(args) != sc->F))
+	    return(sc->F);
+	  e = new_let;
 	}
       /* if (is_unlet(e)) return(make_boolean(sc, initial_value(sym) != sc->undefined)); */
       /* this ^ is wrong: (with-let (unlet) (define xx 1) (list (defined? 'xx) (defined? 'xx (curlet)))) should be (#t #t) */
@@ -73022,7 +73037,7 @@ static s7_pointer check_autoload_and_error_hook(s7_scheme *sc, s7_pointer sym)
 		   */
 		  result = let_ref_p_pp(sc, e, sym);  /* add '(sym . result) to current_let (was sc->nil, s7_load can set sc->curlet to sc->nil) */
 		  if (result != sc->undefined)
-		    s7_define(sc, sc->nil /* current_let */, sym, result);
+		    s7_define(sc, sc->rootlet, sym, result);
 		}}}
 #endif
       if (result == sc->undefined)
@@ -101102,14 +101117,15 @@ int main(int argc, char **argv)
  *   t101-5|6|13|16 trouble fx_safe_thunk_a opt_p_pp_ff etc if unsafe->semisafe or safe (see 29-Mar)
  *   (sublet (bacro....)) printout should just say (rootlet) -- how did this happen?
  *   doc ext env
+ *   ext env error msgs [ok: immutable?|!]
+ *   implicit uses of these lets (t856), implicit_let_ref* currently just quits if obj not a let.
  * see s7-ffi.html 2631 -- needs rewrite!
- *   unsafe: apply-values values sort! apply [probably because fx* does not protect against values, sc->code change in apply syntax etc]
+ *   unsafe: apply-values values sort! apply [maybe because fx* does not protect against values, sc->code change in apply syntax etc]
  *   unsafe: s7_apply_function s7_values s7_call s7_eval s7_eval_c_string
- *   see clm2xen et al: Snd uses unsafe for granulate/env/convolve/src/phase_vocoder etc
- *     what is being called here? s7_apply_function: anything that can call an optimized s7 function from C is unsafe (opts clobber each other I think).
+ *   only phase-vocoder is unsafe in clm2xen.c
  *   ffitest examples of unsafe funcs: (apply lambda*...) clobbers sc->code during let loop, values because let is unprotected from values?
- *   in ffitest.c add s7f_hook -- s7f+hook and call it safe
- *   check safe env_any granulate src aginst debugging fx_call
+ *     in ffitest.c add s7f_hook -- s7f+hook and call it safe
  *   for-each/map/member/assoc w/o push?
  * for non-begin_temp temps check for sc->unused at end (before clear) might catch overwrites, or debugging might have set_lock/unlock? but error et al would need to unlock?
+ * how can FFI code set saver/translucent bits et al?  need ffitest.c examples. also all_float|integer, is_definer scope_safe
  */
