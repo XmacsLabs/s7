@@ -84,11 +84,16 @@ end
   (define (list->vector lst) (apply vector lst))
 
   (define (let->list e)
-    (if (let? e)
-	(reverse! (map values e))
-	(error 'wrong-type-arg "let->list argument should be a let (an environment): ~A" e)))
-  ;; this is not a full implementation of let->list -- if "e" is not a let, we need to look for its associated let
-  ;;    c_object_let, c_pointer_info, *s7*?, rootlet is special
+    (let ((L (if (let? e)
+		 e 
+		 (if (c-pointer? e)
+		     (c-pointer-info e)
+		     (if (c-object? e)
+			 (c-object-let e)
+			 (if (procedure? e)
+			     (funclet e)
+			     (error 'wrong-type-arg "let->list argument should be a let (an environment) or something that has its own let: ~A" e)))))))
+      (reverse! (map values L))))
 
   (define* (string->list str (start 0) end)
     (if (and (string? str)
@@ -2312,7 +2317,7 @@ void block_init(s7_scheme *sc)
                   (set! (<3> 0) <1>)
                   (set! (<2> 1) <1>)
                   (c-pointer 1 <4> #f))")))
-  (test (let->list (make-cycle 1)) (list (rootlet)))
+  (test (let->list (make-cycle 1)) 'error)
 
   (let ((b (make-c-tag)))
     (test (eq? b b) #t)
@@ -4720,6 +4725,7 @@ void block_init(s7_scheme *sc)
 ;;; --------------------------------------------------------------------------------
 ;;; c-object?
 ;;; c-object-type
+;;; c-object-let
 ;;; c-pointer
 ;;; c-pointer?
 ;;; c-pointer->list
@@ -4730,6 +4736,7 @@ void block_init(s7_scheme *sc)
 (when with-block
   (test (c-object? (block)) #t)
   (test (integer? (c-object-type (block))) #t)
+  (test (let? (c-object-let (block))) #t)
   (test ((*s7* 'c-types) (c-object-type (block))) "<block>")) ; perhaps return block? instead?
 
 (test (c-pointer? 0) #f)
@@ -43405,8 +43412,7 @@ who says the continuation has to restart the map from the top?
 ;; because (values) -> #<unspecified> but everywhere else ,@x is the same as (apply values x)
 
 (test (make-hook (macroexpand (quasiquote (logeqv (blocks3 (imh)))))) 'error) ; qq #_quote used to avoid is_global check
-
-(test (let-ref quasiquote 'abs) abs) ; from (rootlet)
+(test (let-ref quasiquote 'abs) 'error) ; was abs from rootlet
 
 
 ;;; --------------------------------------------------------------------------------
@@ -47422,6 +47428,7 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
 (test (arity byte-vector-set!)                  (cons 3 *max-arity*))
 (test (arity byte-vector?)                      '(1 . 1))
 (test (arity byte?)                             '(1 . 1))
+(test (arity c-object-let)                      '(1 . 1))
 (test (arity c-object-type)                     '(1 . 1))
 (test (arity c-object?)                         '(1 . 1))
 (test (arity c-pointer)                         '(1 . 5))
@@ -49506,6 +49513,7 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
 (test (signature byte-vector?) '(boolean? #t))
 (test (signature byte-vector->string) '(string? byte-vector?))
 (test (signature c-object?) '(boolean? #t))
+(test (signature c-object-let) '(let? c-object?))
 (test (signature c-object-type) '(integer? c-object?))
 (test (signature c-pointer) (let ((L (list 'c-pointer? 'integer? #t))) (set-cdr! (cddr L) (cddr L)) L))
 (test (signature c-pointer?) '(boolean? #t #t))
@@ -53952,9 +53960,52 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
 (unless pure-s7
   (test (let->list (define (C x y) (+ x y))) '((x) (y)))
   (test (let->list (c-pointer 0 'any (inlet 'a 1))) '((a . 1))))
+
+;; c-pointer let tests
 (test (immutable? 'abs abs) 'error)
 (test (let ((P (c-pointer 0 1 (inlet 'a 1)))) (immutable! 'a P) (immutable? 'a P)) #t)
 (test (let ((P (c-pointer 0 1 (inlet 'a 1)))) (immutable! 'a P) (object->string P :readable)) "(c-pointer 0 1 (let ((a 1)) (immutable! 'a) (curlet)))")
+(test (catch #t (lambda () (let ((P (c-pointer 0))) (immutable? 'abs P))) (lambda (t i) (apply format #f i)))
+      "(immutable? 'abs #<c_pointer (nil)>) second argument is a c-pointer, but it does not have its own let")
+(test (catch #t (lambda () (let ((P 123)) (immutable? 'abs P))) (lambda (t i) (apply format #f i)))
+      "immutable? second argument, 123, is an integer but should be a let or an object that has its own let")
+
+(test (let ((P (c-pointer 0 1 (inlet 'abs (lambda (x) (+ x 1)))))) (openlet P) (openlet? P)) #t)
+(test (let ((P (c-pointer 0))) (openlet P)) 'error)
+(test (let ((P (c-pointer 0 1 (inlet 'abs (lambda (x) (+ x 1)))))) (coverlet P) (openlet? P)) #f)
+(test (let ((P (c-pointer 0))) (coverlet P)) 'error)
+(test (catch #t (lambda () (let ((P (c-pointer 0))) (openlet P))) (lambda (t i) (apply format #f i)))
+      "(openlet #<c_pointer (nil)>) argument is a c-pointer, but it does not have its own let")
+(test (let ((P 123)) (openlet P 'a 1)) 'error)
+
+(test (let ((P (c-pointer 0))) (varlet P 'a 1)) 'error)
+(test (let ((P 123)) (varlet P 'a 1)) 'error)
+(let ((val (let ((P (c-pointer 0 1 (inlet 'b 2)))) (varlet P 'a 1) (let->list P))))
+  (test (or (equal? val '((a . 1) (b . 2))) (equal? val '((b . 2) (a . 1)))) #t))
+(test (let ((P (c-pointer 0))) (cutlet P 'a)) 'error)
+(test (let ((P 123)) (cutlet P 'a)) 'error)
+(test (let ((P (c-pointer 0 1 (inlet 'b 2)))) (cutlet P 'b) (let->list P)) ())
+
+(test (let ((P (c-pointer 0))) (sublet P 'a 1)) 'error)
+(test (let ((P 123)) (sublet P 'a 1)) 'error)
+(test (let ((P (c-pointer 0 1 (inlet 'b 2)))) (let->list (sublet P 'a 1))) '((a . 1)))
+(test (let ((P (c-pointer 0 1 (inlet 'b 2)))) (let->list (outlet (sublet P 'a 1)))) '((b . 2)))
+(test (let ((P (c-pointer 0 1 (inlet 'b 2)))) (outlet P)) (rootlet))
+(test (let ((P (c-pointer 0))) (outlet P)) (rootlet))
+(test (let ((P (c-pointer 0))) (let->list P)) 'error)
+(test (let* ((L (inlet 'a 1)) (P (c-pointer 0 1 (inlet 'b 2)))) (set! (outlet P) L) (list (let-ref P 'a) (let-ref P 'b))) '(1 2))
+
+(test (let ((P (c-pointer 0))) (let-ref P 'a)) 'error)
+(test (let ((P (c-pointer 0 1 (inlet 'a 1)))) (let-ref P 'a)) 1)
+(let ((P (c-pointer 0 1 (inlet))))
+  (call-with-output-file "empty-file" (lambda (p) (display "(define P-var 123)\n" p)))
+  (load "empty-file" P)
+  (test (object->string P :readable) "(c-pointer 0 1 (inlet :P-var 123))")
+  (test (let-ref P 'P-var) 123)
+  (test (defined? 'P-var) #f))
+
+;;; TODO: let-ref let-set! with-let implicit-* symbol->value outlet/set-outlet[in s7.c] (p_pp cases etc)
+
 
 (for-each
  (lambda (arg)
@@ -55723,6 +55774,7 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
     (test (let? (bl 'class)) #t)
     (test ((bl 'class) 'name) "<block>")
     (test (integer? (bl 'c-object-type)) #t)
+    (test (let? (bl 'c-object-let)) #t)
     (test ((b 'empty) b) #f)
     (test (let? (bl 'c-object-let)) #t)
     (test (((bl 'c-object-let) 'empty) b) #f)))

@@ -2,7 +2,7 @@
 #define S7_H
 
 #define S7_VERSION "11.4"
-#define S7_DATE "4-Apr-2025"
+#define S7_DATE "7-Apr-2025"
 #define S7_MAJOR_VERSION 11
 #define S7_MINOR_VERSION 4
 
@@ -948,6 +948,7 @@ bool s7_is_bignum(s7_pointer obj);
  *
  *        s7 changes
  *
+ * 3-Apr:     c-object-let.
  * 10-Mar-24: s7_make_int_vector_wrapper.
  * --------
  * 31-Dec:    s7_function_let as an experiment.

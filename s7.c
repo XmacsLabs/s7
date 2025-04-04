@@ -1334,8 +1334,9 @@ struct s7_scheme {
              imag_part_symbol, immutable_symbol, inexact_to_exact_symbol, inlet_symbol, int_vector_ref_symbol, int_vector_set_symbol, int_vector_symbol,
              integer_decode_float_symbol, integer_to_char_symbol,
              is_aritable_symbol, is_bignum_symbol, is_boolean_symbol, is_byte_symbol, is_byte_vector_symbol,
-             is_c_object_symbol, c_object_type_symbol, is_c_pointer_symbol, is_char_alphabetic_symbol, is_char_lower_case_symbol, is_char_numeric_symbol,
-             is_char_symbol, is_char_upper_case_symbol, is_char_whitespace_symbol, is_complex_symbol, is_complex_vector_symbol, is_constant_symbol,
+             is_c_object_symbol, c_object_let_symbol, c_object_type_symbol, is_c_pointer_symbol,
+             is_char_alphabetic_symbol, is_char_lower_case_symbol, is_char_numeric_symbol, is_char_symbol, is_char_upper_case_symbol, is_char_whitespace_symbol,
+             is_complex_symbol, is_complex_vector_symbol, is_constant_symbol,
              is_continuation_symbol, is_defined_symbol, is_dilambda_symbol, is_eof_object_symbol, is_eq_symbol, is_equal_symbol,
              is_eqv_symbol, is_even_symbol, is_exact_symbol, is_float_vector_symbol, is_funclet_symbol,
              is_gensym_symbol, is_goto_symbol, is_hash_table_symbol, is_immutable_symbol,
@@ -1428,7 +1429,7 @@ struct s7_scheme {
   s7_pointer seed_symbol, carry_symbol;
 
   /* object->let symbols */
-  s7_pointer active_symbol, alias_symbol, at_end_symbol, c_object_let_symbol, c_object_ref_symbol, c_type_symbol, class_symbol, closed_symbol,
+  s7_pointer active_symbol, alias_symbol, at_end_symbol, c_object_ref_symbol, c_type_symbol, class_symbol, closed_symbol,
              current_value_symbol, data_symbol, dimensions_symbol, entries_symbol, file_info_symbol, file_symbol, function_symbol, info_symbol,
              is_mutable_symbol, line_symbol, open_symbol, original_vector_symbol, pointer_symbol, port_type_symbol, position_symbol,
              sequence_symbol, size_symbol, source_symbol, weak_symbol;
@@ -6709,12 +6710,15 @@ static s7_pointer is_constant_p_p(s7_scheme *sc, s7_pointer p) {return(make_bool
 static no_return void find_let_error_nr(s7_scheme *sc, s7_pointer caller, s7_pointer let, s7_pointer new_let, s7_int arg_num, s7_pointer args)
 {
   if (new_let == sc->rootlet)
-    error_nr(sc, sc->wrong_type_arg_symbol, 
-	     set_elist_5(sc, wrap_string(sc, "(~A~{~^ ~$~}) ~:D argument is ~A, but it does not have its own let", 66),
-			 caller,
-			 args,
-			 (is_small_int(arg_num)) ? small_int(arg_num) : wrap_integer(sc, arg_num),
-			 object_type_name(sc, let)));
+    {
+      if ((arg_num > 1) || (is_pair(cdr(args))))
+	error_nr(sc, sc->wrong_type_arg_symbol,
+		 set_elist_5(sc, wrap_string(sc, "(~A~{~^ ~$~}) ~:D argument is ~A, but it does not have its own let", 66),
+			     caller, args, wrap_integer(sc, arg_num), object_type_name(sc, let)));
+      error_nr(sc, sc->wrong_type_arg_symbol,
+	       set_elist_4(sc, wrap_string(sc, "(~A~{~^ ~$~}) argument is ~A, but it does not have its own let", 62),
+			   caller, args, object_type_name(sc, let)));
+    }
   wrong_type_error_nr(sc, caller, arg_num, s7_list_ref(sc, args, arg_num - 1), wrap_string(sc, "a let or an object that has its own let", 39));
 }
 
@@ -6789,7 +6793,7 @@ static s7_pointer g_immutable(s7_scheme *sc, s7_pointer args)
 	  if ((!is_let(e)) || (e == sc->rootlet))
 	    {
 	      s7_pointer new_let = find_let(sc, e);
-	      if (!is_let(new_let))
+	      if ((!is_let(new_let)) || (new_let == sc->rootlet))
 		find_let_error_nr(sc, sc->immutable_symbol, e, new_let, 2, args);
 	      e = new_let;
 	    }
@@ -10016,7 +10020,7 @@ static s7_pointer g_is_openlet(s7_scheme *sc, s7_pointer args)
 /* -------------------------------- openlet -------------------------------- */
 s7_pointer s7_openlet(s7_scheme *sc, s7_pointer e)
 {
-  /* PERHAPS: find_let here? */
+  /* if e is not a let, the openlet bit is still set on it (c-pointer etc) */
   set_has_methods(e);
   return(e);
 }
@@ -10026,20 +10030,20 @@ static s7_pointer g_openlet(s7_scheme *sc, s7_pointer args)
   #define H_openlet "(openlet e) tells the built-in functions that the let e might have an over-riding method. e is returned."
   #define Q_openlet s7_make_signature(sc, 2, has_let_signature(sc), has_let_signature(sc))
 
-  s7_pointer e = car(args), elet, func;
+  s7_pointer e = car(args), new_let, func;
   if (!is_let(e))
     {
-      elet = find_let(sc, e);
-      if (!is_let(elet))
-	sole_arg_wrong_type_error_nr(sc, sc->openlet_symbol, e, a_let_string);
+      new_let = find_let(sc, e);
+      if ((!is_let(new_let)) || (new_let == sc->rootlet))
+	find_let_error_nr(sc, sc->openlet_symbol, e, new_let, 1, args);
     }
-  else elet = e;
-  if ((elet == sc->rootlet) || (elet == sc->starlet))
+  else new_let = e;
+  if ((new_let == sc->rootlet) || (new_let == sc->starlet))
     error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "can't openlet ~S", 17), e));
-  if (is_unlet(elet)) /* protect against infinite loop: (let () (define + -) (with-let (unlet) (+ (openlet (unlet)) 2))) */
+  if (is_unlet(new_let)) /* protect against infinite loop: (let () (define + -) (with-let (unlet) (+ (openlet (unlet)) 2))) */
     error_nr(sc, sc->out_of_range_symbol, set_elist_1(sc, wrap_string(sc, "can't openlet unlet", 19)));
   if ((has_active_methods(sc, e)) &&
-      ((func = find_method(sc, elet, sc->openlet_symbol)) != sc->undefined))
+      ((func = find_method(sc, new_let, sc->openlet_symbol)) != sc->undefined))
     return(s7_apply_function(sc, func, args));
   set_has_methods(e);
   return(e); /* openlet and coverlet return their argument */
@@ -10051,20 +10055,20 @@ static s7_pointer g_coverlet(s7_scheme *sc, s7_pointer args)
   #define H_coverlet "(coverlet e) undoes an earlier openlet.  e is returned."
   #define Q_coverlet s7_make_signature(sc, 2, has_let_signature(sc), has_let_signature(sc))
 
-  s7_pointer e = car(args), elet, func;
+  s7_pointer e = car(args), new_let, func;
   if (!is_let(e))
     {
-      elet = find_let(sc, e);
-      if (!is_let(elet))
-	sole_arg_wrong_type_error_nr(sc, sc->openlet_symbol, e, a_let_string);
+      new_let = find_let(sc, e);
+      if ((!is_let(new_let))  || (new_let == sc->rootlet))
+	find_let_error_nr(sc, sc->coverlet_symbol, e, new_let, 1, args);
     }
-  else elet = e;
-  if ((elet == sc->rootlet) || (elet == sc->starlet))
+  else new_let = e;
+  if ((new_let == sc->rootlet) || (new_let == sc->starlet))
     error_nr(sc, sc->out_of_range_symbol, set_elist_2(sc, wrap_string(sc, "can't coverlet ~S", 17), e));
-  if (is_unlet(elet))
+  if (is_unlet(new_let))
     error_nr(sc, sc->out_of_range_symbol, set_elist_1(sc, wrap_string(sc, "can't coverlet unlet", 20)));
   if ((has_active_methods(sc, e)) &&
-      ((func = find_method(sc, elet, sc->coverlet_symbol)) != sc->undefined))
+      ((func = find_method(sc, new_let, sc->coverlet_symbol)) != sc->undefined))
     return(s7_apply_function(sc, func, args));
   clear_has_methods(e);
   return(e); /* mimic openlet in everything */
@@ -10111,15 +10115,6 @@ static void append_let(s7_scheme *sc, s7_pointer new_e, s7_pointer old_e)
 	add_slot_checked_with_id(sc, new_e, slot_symbol(x), slot_value(x)); /* not add_slot here because it might run off the free heap end */
 }
 
-static s7_pointer check_c_object_let(s7_scheme *sc, s7_pointer old_e, s7_pointer caller)
-{
-  if (is_c_object(old_e))
-    old_e = c_object_let(old_e);
-  if (!is_let(old_e))
-    sole_arg_wrong_type_error_nr(sc, caller, old_e, a_let_string);
-  return(old_e);
-}
-
 s7_pointer s7_varlet(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointer value)
 {
   if (!is_let(let))
@@ -10162,23 +10157,17 @@ to the let target-let, and returns target-let.  (varlet (curlet) 'a 1) adds 'a t
   if (!is_let(e))
     {
       s7_pointer new_let = find_let(sc, e);
-      if (new_let == sc->rootlet) /* rootlet would mean the object has no let of its own */
-	wrong_type_error_nr(sc, sc->varlet_symbol, 1, e, a_let_string);
-      if (!is_let(new_let))
-	{
-	  check_method(sc, e, sc->varlet_symbol, args);
-	  wrong_type_error_nr(sc, sc->varlet_symbol, 1, e, a_let_string);
-	}
+      if ((!is_let(new_let)) || (new_let == sc->rootlet))
+	find_let_error_nr(sc, sc->varlet_symbol, e, new_let, 1, args);
       e = new_let;
     }
-      
   if ((is_immutable_let(e)) || (e == sc->starlet))
     immutable_object_error_nr(sc, set_elist_3(sc, wrap_string(sc, "can't (varlet ~{~S~^ ~}), ~S is immutable", 41), args, e));
 
   for (s7_pointer x = cdr(args); is_pair(x); x = cdr(x))
     {
       s7_pointer sym, val, p = car(x);
-      switch (type(p))
+      switch (type(p))  /* TODO: split out the symbol case at least */
 	{
 	case T_SYMBOL:
 	  sym = (is_keyword(p)) ? keyword_symbol(p) : p;
@@ -10201,12 +10190,15 @@ to the let target-let, and returns target-let.  (varlet (curlet) 'a 1) adds 'a t
 	  break;
 
 	case T_LET: /* (varlet (inlet 'a 1) (rootlet)) is trouble */
+	  /* TODO: how to handle let arg openlet with varlet as entry? (sublet also and others) */
+	  /*   (varlet (openlet (inlet 'a 1 'varlet (lambda args 123))) 'b 2) */
 	  if ((p == sc->rootlet) || (e == sc->starlet)) continue;
-	  append_let(sc, e, check_c_object_let(sc, p, sc->varlet_symbol));
+	  append_let(sc, e, p); /* TODO: is this a good idea? curlet can't cut a let out */
 	  if (has_let_set_fallback(p)) set_has_let_set_fallback(e);
 	  if (has_let_ref_fallback(p)) set_has_let_ref_fallback(e);
 	  continue;
 
+	  /* TODO: c-pointer et al (also sublet) */
 	default:
 	  wrong_type_error_nr(sc, sc->varlet_symbol, position_of(x, args), p, a_symbol_string);
 	}
@@ -10249,7 +10241,7 @@ static s7_pointer g_cutlet(s7_scheme *sc, s7_pointer args)
 	{
 	  s7_pointer new_let = find_let(sc, e);
 	  if ((!is_let(new_let)) || (new_let == sc->rootlet))
-	    wrong_type_error_nr(sc, sc->cutlet_symbol, 1, e, a_let_string);
+	    find_let_error_nr(sc, sc->cutlet_symbol, e, new_let, 1, args);
 	  e = new_let;
 	}}
   if ((is_immutable_let(e)) || (e == sc->starlet))
@@ -10348,7 +10340,7 @@ static s7_pointer sublet_1(s7_scheme *sc, s7_pointer e, s7_pointer bindings, s7_
 
 	    case T_LET:
 	      if ((p == sc->rootlet) || (new_e == sc->starlet)) continue;
-	      append_let(sc, new_e, check_c_object_let(sc, p, caller));
+	      append_let(sc, new_e, p);
 	      if (tis_slot(let_slots(new_e))) /* make sure the end slot (sp) is correct */
 		for (sp = let_slots(new_e); tis_slot(next_slot(sp)); sp = next_slot(sp));
 	      continue;
@@ -10392,11 +10384,8 @@ static s7_pointer g_sublet(s7_scheme *sc, s7_pointer args)
   if (!is_let(e))
     {
       s7_pointer new_let = find_let(sc, e);
-      if (!is_let(new_let))
-	{
-	  check_method(sc, e, sc->sublet_symbol, args);
-	  wrong_type_error_nr(sc, sc->sublet_symbol, 1, e, a_let_string);
-	}
+      if ((!is_let(new_let)) || (new_let == sc->rootlet))
+	find_let_error_nr(sc, sc->sublet_symbol, e, new_let, 1, args);
       e = new_let;
     }
   return(sublet_1(sc, e, cdr(args), sc->sublet_symbol));
@@ -10628,10 +10617,8 @@ static s7_pointer g_let_to_list(s7_scheme *sc, s7_pointer args)
   if (!is_let(let))
     {
       s7_pointer new_let = find_let(sc, let);
-      if (new_let == sc->rootlet) /* don't laboriously expand this! */
-	return(cons(sc, new_let, sc->nil));
-      if (!is_let(new_let))
-        sole_arg_wrong_type_error_nr(sc, sc->let_to_list_symbol, let, a_let_string);
+      if ((!is_let(new_let)) || (new_let == sc->rootlet))
+	find_let_error_nr(sc, sc->let_to_list_symbol, let, new_let, 1, args);
       let = new_let;
     }
   return(s7_let_to_list(sc, let));
@@ -10676,8 +10663,8 @@ static /* inline */ s7_pointer let_ref(s7_scheme *sc, s7_pointer let, s7_pointer
       s7_pointer new_let;
       if (let == sc->unlet_disabled) return(initial_value(symbol));
       new_let = find_let(sc, let);
-      if (!is_let(new_let))
-	wrong_type_error_nr(sc, sc->let_ref_symbol, 1, let, a_let_string);
+      if ((!is_let(new_let)) || (new_let == sc->rootlet))
+	find_let_error_nr(sc, sc->let_ref_symbol, let, new_let, 1, set_mlist_2(sc, let, symbol));
       let = new_let;
     }
   if (!is_symbol(symbol))
@@ -10690,6 +10677,7 @@ static /* inline */ s7_pointer let_ref(s7_scheme *sc, s7_pointer let, s7_pointer
    *   any reference to the let will probably call let-ref somewhere, calling us again, and looping.
    *   This is not a problem in c-objects and funclets because c-object-ref and funclet-ref don't exist.
    *   After much wasted debugging, I decided to make let-ref and let-set! immutable.
+   *   What about other let-as-first-arg funcs?
    */
 
   if (let_id(let) == symbol_id(symbol))
@@ -48454,8 +48442,6 @@ static s7_pointer g_is_c_object(s7_scheme *sc, s7_pointer args)
   return(apply_boolean_method(sc, obj, sc->is_c_object_symbol));
 }
 
-
-/* -------------------------------- c-object-type -------------------------------- */
 static no_return void apply_error_nr(s7_scheme *sc, s7_pointer obj, s7_pointer args)
 {
   error_nr(sc, sc->syntax_error_symbol,
@@ -48472,6 +48458,7 @@ static s7_pointer fallback_ref(s7_scheme *sc, s7_pointer args)   {apply_error_nr
 static s7_pointer fallback_set(s7_scheme *sc, s7_pointer args)   {syntax_error_nr(sc, "attempt to set ~S?", 18, car(args)); return(NULL);}
 static s7_pointer fallback_length(s7_scheme *sc, s7_pointer obj) {return(sc->F);}
 
+/* -------------------------------- c-object-type -------------------------------- */
 s7_int s7_c_object_type(s7_pointer obj) {return((is_c_object(obj)) ? c_object_type(obj) : -1);}
 
 static s7_pointer g_c_object_type(s7_scheme *sc, s7_pointer args)
@@ -48486,14 +48473,6 @@ static s7_pointer g_c_object_type(s7_scheme *sc, s7_pointer args)
   if (!has_active_methods(sc, p))
     sole_arg_wrong_type_error_nr(sc, sc->c_object_type_symbol, p, sc->type_names[T_C_OBJECT]);
   return(find_and_apply_method(sc, p, sc->c_object_type_symbol, args));
-}
-
-static s7_pointer g_c_object_set(s7_scheme *sc, s7_pointer args) /* called in c_object_set_function */
-{
-  s7_pointer obj = car(args);
-  if (!is_c_object(obj))        /* (call/cc (setter (block))) will call c-object-set! with the continuation as the argument! */
-    wrong_type_error_nr(sc, make_symbol(sc, "c-object-set!", 13), 1, obj, sc->type_names[T_C_OBJECT]);
-  return((*(c_object_set(sc, obj)))(sc, args));
 }
 
 s7_int s7_make_c_type(s7_scheme *sc, const char *name) /* shouldn't this be s7_make_c_object_type? */
@@ -48579,6 +48558,50 @@ void s7_c_type_set_setter(s7_scheme *sc, s7_int tag, s7_pointer setter)
   sc->c_object_types[tag]->setter = (setter) ? T_Fnc(setter) : sc->F;
 }
 
+
+/* -------------------------------- c-object-let -------------------------------- */
+s7_pointer s7_c_object_let(s7_pointer obj) {return(c_object_let(obj));}
+
+static s7_pointer g_c_object_let(s7_scheme *sc, s7_pointer args)
+{
+  #define H_c_object_let "(c-object-type obj) returns the c_object's local let, if any."
+  #define Q_c_object_let s7_make_signature(sc, 2, sc->is_let_symbol, sc->is_c_object_symbol)
+
+  s7_pointer p = car(args);
+  if (is_c_object(p)) return(c_object_let(p));
+  if (!has_active_methods(sc, p))
+    sole_arg_wrong_type_error_nr(sc, sc->c_object_let_symbol, p, sc->type_names[T_C_OBJECT]);
+  return(find_and_apply_method(sc, p, sc->c_object_let_symbol, args));
+}
+
+s7_pointer s7_c_object_set_let(s7_scheme *sc, s7_pointer obj, s7_pointer e)
+{
+  if ((!is_immutable(obj)) && (is_let(e)))
+    c_object_set_let(obj, e);
+  return(e);
+}
+
+static s7_pointer g_c_object_set_let(s7_scheme *sc, s7_pointer args)
+{
+  s7_pointer obj = car(args), e = cadr(args);
+  if (is_immutable(obj))
+    immutable_object_error_nr(sc, set_elist_2(sc, wrap_string(sc, "can't set ~S's let: it is immutable", 35), obj));
+  if (!is_let(e))
+    wrong_type_error_nr(sc, make_symbol(sc, "#<c-object-set-let>", 19), 2, e, sc->type_names[T_LET]);    
+  c_object_set_let(obj, e);
+  return(e);
+}
+
+
+/* -------------------------------- c-object-set -------------------------------- */
+static s7_pointer g_c_object_set(s7_scheme *sc, s7_pointer args) /* called in sc->c_object_set_function */
+{
+  s7_pointer obj = car(args);
+  if (!is_c_object(obj))        /* (call/cc (setter (block))) will call c-object-set! with the continuation as the argument! */
+    wrong_type_error_nr(sc, make_symbol(sc, "c-object-set!", 13), 1, obj, sc->type_names[T_C_OBJECT]);
+  return((*(c_object_set(sc, obj)))(sc, args));
+}
+
 void *s7_c_object_value(s7_pointer obj) {return(c_object_value(obj));}
 
 void *s7_c_object_value_checked(s7_pointer obj, s7_int type)
@@ -48618,15 +48641,6 @@ s7_pointer s7_make_c_object(s7_scheme *sc, s7_int type, void *value)
 s7_pointer s7_make_c_object_without_gc(s7_scheme *sc, s7_int type, void *value)
 {
   return(make_c_object_with_let(sc, type, value, sc->rootlet, false));
-}
-
-s7_pointer s7_c_object_let(s7_pointer obj) {return(c_object_let(obj));}
-
-s7_pointer s7_c_object_set_let(s7_scheme *sc, s7_pointer obj, s7_pointer e)
-{
-  if ((!is_immutable(obj)) && (is_let(e)))
-    c_object_set_let(obj, e);
-  return(e);
 }
 
 static s7_pointer c_object_length(s7_scheme *sc, s7_pointer obj)
@@ -52980,10 +52994,7 @@ static s7_pointer c_object_to_let(s7_scheme *sc, s7_pointer obj)
   s7_pointer let;
   const s7_pointer clet = c_object_let(obj);
   if (!sc->class_symbol)
-    {
-      sc->class_symbol = make_symbol(sc, "class", 5);
-      sc->c_object_let_symbol = make_symbol(sc, "c-object-let", 12);
-    }
+    sc->class_symbol = make_symbol(sc, "class", 5);
   let = internal_inlet(sc, 8, sc->value_symbol, obj,
 		       sc->type_symbol, sc->is_c_object_symbol,
 		       sc->c_object_type_symbol, make_integer(sc, c_object_type(obj)),
@@ -81688,8 +81699,12 @@ static s7_pointer fx_with_let_s(s7_scheme *sc, s7_pointer arg)
     {
       e = find_let(sc, e);
       if (!is_let(e))
-	error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "with-let takes a let (an environment) argument: ~A", 50), car(code)));
-    }
+	{
+	  s7_pointer new_let = find_let(sc, e);
+	  if ((!is_let(new_let)) || (new_let == sc->rootlet))
+	    find_let_error_nr(sc, sc->with_let_symbol, e, new_let, 1, set_mlist_1(sc, e));
+	  e = new_let;
+	}}
   /* e here if mock-hash can be (for example) (inlet 'value (hash-table 'b 2) 'mock-type mock-hash-table?)
    *   mock-hash has let-ref-fallback which calls (#_hash-table-ref (e 'value) sym) -> (e 'value) is a hash-table, so returns #f if not in table
    *   we go directly to this function in check_with_let to avoid this ambiguity
@@ -81770,8 +81785,8 @@ static void activate_with_let(s7_scheme *sc, s7_pointer e)
 {
   if (!is_let(e)) /* (with-let . "hi") */
     {
-      s7_pointer new_e = find_let(sc, e); /* sc->nil here means no let found */
-      if ((!is_let(new_e)) && (!has_closure_let(e)))
+      s7_pointer new_e = find_let(sc, e); /* sc->nil/rootlet here means no let found */
+      if ((!is_let(new_e)) && (!has_closure_let(e))) /* TODO: why closure_let? */
 	error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "with-let takes a let (an environment) argument: ~A", 50), e));
       e = new_e;
     }
@@ -99585,6 +99600,9 @@ static void init_rootlet(s7_scheme *sc)
   sc->is_defined_symbol =            defun("defined?",		is_defined,		1, 2, false);
 
   sc->c_object_type_symbol =         defun("c-object-type",     c_object_type,		1, 0, false);
+  sc->c_object_let_symbol =          defun("c-object-let",      c_object_let,		1, 0, false); /* added 3-Apr-25 */
+  s7_set_setter(sc, sc->c_object_let_symbol, s7_make_safe_function(sc, "#<c-object-set-let>", g_c_object_set_let, 2, 0, false, "c-object-let setter"));
+
   sc->c_pointer_symbol =             defun("c-pointer",	        c_pointer,		1, 4, false);
   sc->c_pointer_info_symbol =        defun("c-pointer-info",    c_pointer_info,		1, 0, false);
   sc->c_pointer_type_symbol =        defun("c-pointer-type",    c_pointer_type,		1, 0, false);
@@ -101111,14 +101129,17 @@ int main(int argc, char **argv)
  * mutints: move make_mutable to the point of use and clear afterwards, more use of num_small_ints?
  * t854 -> tmisc? or texit?
  * env extension in: [symbol->local_slot -- should s7_define return if not a let?]
- *   s7test outlet(both args) for env extension, also openlet/coverlet/cutlet/varlet/sublet (and methods)
+ *   s7test outlet(both args) for env extension, also cutlet/sublet (and methods) 53966
+ *     c-pointer cases -> implicit -> c-object/closure/local c_func?
  *   openlet: can optimizer see non-builtin arg here?
  *     see t855 for openlet -- being unsafe does not fix the problem mentioned above (segfault!)
  *   t101-5|6|13|16 trouble fx_safe_thunk_a opt_p_pp_ff etc if unsafe->semisafe or safe (see 29-Mar)
- *   (sublet (bacro....)) printout should just say (rootlet) -- how did this happen?
+ *   (sublet (bacro....)) printout should just say (rootlet) -- how did this happen? t718
  *   doc ext env
- *   ext env error msgs [ok: immutable?|!]
- *   implicit uses of these lets (t856), implicit_let_ref* currently just quits if obj not a let.
+ *   ext env error msgs
+ *   implicit uses of these lets (t856), implicit_let_ref* currently just quits if obj not a let. see op_implicit switch -- needs cases for c-object etc
+ *   see varlet todo's
+ *   tests for c-object-let, setter
  * see s7-ffi.html 2631 -- needs rewrite!
  *   unsafe: apply-values values sort! apply [maybe because fx* does not protect against values, sc->code change in apply syntax etc]
  *   unsafe: s7_apply_function s7_values s7_call s7_eval s7_eval_c_string
