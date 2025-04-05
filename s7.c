@@ -10149,7 +10149,7 @@ static int32_t position_of(const s7_pointer p, s7_pointer args)
 
 static s7_pointer g_varlet(s7_scheme *sc, s7_pointer args)   /* varlet = with-let + define */
 {
-  #define H_varlet "(varlet target-let ...) adds its arguments (a let, a cons: symbol . value, or two arguments, the symbol and its value) \
+  #define H_varlet "(varlet target-let ...) adds its arguments (a let, a cons: (symbol . value), or two arguments, the symbol and its value) \
 to the let target-let, and returns target-let.  (varlet (curlet) 'a 1) adds 'a to the current environment with the value 1."
   #define Q_varlet s7_make_circular_signature(sc, 2, 4, sc->is_let_symbol, has_let_signature(sc), \
                      s7_make_signature(sc, 3, sc->is_pair_symbol, sc->is_symbol_symbol, sc->is_let_symbol), sc->T)
@@ -10167,41 +10167,39 @@ to the let target-let, and returns target-let.  (varlet (curlet) 'a 1) adds 'a t
   for (s7_pointer x = cdr(args); is_pair(x); x = cdr(x))
     {
       s7_pointer sym, val, p = car(x);
-      switch (type(p))  /* TODO: split out the symbol case at least */
+      if (is_symbol(p))
 	{
-	case T_SYMBOL:
 	  sym = (is_keyword(p)) ? keyword_symbol(p) : p;
 	  if (!is_pair(cdr(x)))
-	    error_nr(sc, sc->syntax_error_symbol,
-		     set_elist_3(sc, wrap_string(sc, "varlet: symbol ~S, but no value: ~S", 35), p, args));
+	    error_nr(sc, sc->syntax_error_symbol, set_elist_3(sc, wrap_string(sc, "varlet: symbol ~S, but no value: ~S", 35), p, args));
 	  if (is_constant_symbol(sc, sym))
 	    wrong_type_error_nr(sc, sc->varlet_symbol, position_of(x, args), sym, a_non_constant_symbol_string);
 	  x = cdr(x);
 	  val = car(x);
-	  break;
-
-	case T_PAIR:
-	  sym = car(p);
-	  if (!is_symbol(sym))
-	    wrong_type_error_nr(sc, sc->varlet_symbol, position_of(x, args), p, a_symbol_string);
-	  if (is_constant_symbol(sc, sym))
-	    wrong_type_error_nr(sc, sc->varlet_symbol, position_of(x, args), sym, a_non_constant_symbol_string);
-	  val = cdr(p);
-	  break;
-
-	case T_LET: /* (varlet (inlet 'a 1) (rootlet)) is trouble */
-	  /* TODO: how to handle let arg openlet with varlet as entry? (sublet also and others) */
-	  /*   (varlet (openlet (inlet 'a 1 'varlet (lambda args 123))) 'b 2) */
-	  if ((p == sc->rootlet) || (e == sc->starlet)) continue;
-	  append_let(sc, e, p); /* TODO: is this a good idea? curlet can't cut a let out */
-	  if (has_let_set_fallback(p)) set_has_let_set_fallback(e);
-	  if (has_let_ref_fallback(p)) set_has_let_ref_fallback(e);
-	  continue;
-
-	  /* TODO: c-pointer et al (also sublet) */
-	default:
-	  wrong_type_error_nr(sc, sc->varlet_symbol, position_of(x, args), p, a_symbol_string);
 	}
+      else
+	if (is_let(p))
+	  {
+	    if ((p != sc->rootlet) && (e != sc->starlet))   /* (varlet (inlet 'a 1) (rootlet)) is trouble */
+	      {
+		append_let(sc, e, p);
+		if (has_let_set_fallback(p)) set_has_let_set_fallback(e);
+		if (has_let_ref_fallback(p)) set_has_let_ref_fallback(e);
+	      }
+	    continue;
+	  }
+	else
+	  if (is_pair(p))
+	    {
+	      sym = car(p);
+	      if (!is_symbol(sym))
+		wrong_type_error_nr(sc, sc->varlet_symbol, position_of(x, args), p, a_symbol_string);
+	      if (is_constant_symbol(sc, sym))
+		wrong_type_error_nr(sc, sc->varlet_symbol, position_of(x, args), sym, a_non_constant_symbol_string);
+	      val = cdr(p);
+	    }
+	  else wrong_type_error_nr(sc, sc->varlet_symbol, position_of(x, args), p, wrap_string(sc, "a symbol, let, or cons", 22));
+      
       if (e == sc->rootlet)
 	{
 	  s7_pointer gslot = global_slot(sym);
@@ -10368,6 +10366,7 @@ static s7_pointer sublet_1(s7_scheme *sc, s7_pointer e, s7_pointer bindings, s7_
 	    }
 	  check_let_fallback(sc, sym, new_e);
 	}
+      if ((S7_DEBUGGING) && (sc->temp3 != new_e)) fprintf(stderr, "%s[%d]: temp3: %s\n", __func__, __LINE__, display(sc->temp3));
       sc->temp3 = sc->unused;
     }
   return(new_e);
@@ -11855,14 +11854,19 @@ Only the let is searched if ignore-globals is not #f."
 
   if (is_pair(cdr(args)))
     {
-      s7_pointer e = cadr(args), ignore_globals;
+      s7_pointer e = cadr(args);
+      const s7_pointer ignore_globals = (is_pair(cddr(args))) ? caddr(args) : sc->F;
       if (!is_let(e))
 	{
 	  s7_pointer new_let = find_let(sc, e);  /* returns () if none */
 	  if (!is_let(new_let)) 
 	    wrong_type_error_nr(sc, sc->is_defined_symbol, 2, e, a_let_string);
-	  if ((new_let == sc->rootlet) && (is_pair(cddr(args))) && (caddr(args) != sc->F))
-	    return(sc->F);
+	  if ((new_let == sc->rootlet) && (is_pair(cddr(args))) && (ignore_globals != sc->F))
+	    {
+	      if (ignore_globals != sc->T) /* signature claims this should be a boolean */
+		return(method_or_bust(sc, ignore_globals, sc->is_defined_symbol, args, a_boolean_string, 3));
+	      return(sc->F);
+	    }
 	  e = new_let;
 	}
       /* if (is_unlet(e)) return(make_boolean(sc, initial_value(sym) != sc->undefined)); */
@@ -11875,13 +11879,8 @@ Only the let is searched if ignore-globals is not #f."
 	}
       if (e == sc->starlet)
 	return(make_boolean(sc, starlet_symbol_id(sym) != SL_NO_FIELD));
-      if (is_pair(cddr(args)))
-	{
-	  ignore_globals = caddr(args);
-	  if (!is_boolean(ignore_globals))
-	    return(method_or_bust(sc, ignore_globals, sc->is_defined_symbol, args, a_boolean_string, 3));
-	}
-      else ignore_globals = sc->F;
+      if (!is_boolean(ignore_globals))
+	return(method_or_bust(sc, ignore_globals, sc->is_defined_symbol, args, a_boolean_string, 3));
       if (e == sc->rootlet) /* we checked (let? e) above */
 	{
 	  if (ignore_globals == sc->F)
@@ -28340,11 +28339,11 @@ end: (substring-uncopied \"01234\" 1 2) -> \"1\".  substring-uncopied does not G
   s7_int start = 0, end;
 
   if (!is_string(str))
-    return(method_or_bust(sc, str, sc->substring_symbol, args, sc->type_names[T_STRING], 1));
+    return(method_or_bust(sc, str, sc->substring_uncopied_symbol, args, sc->type_names[T_STRING], 1));
   end = string_length(str);
   if (!is_null(cdr(args)))
     {
-      s7_pointer x = start_and_end(sc, sc->substring_symbol, args, 2, cdr(args), &start, &end);
+      s7_pointer x = start_and_end(sc, sc->substring_uncopied_symbol, args, 2, cdr(args), &start, &end);
       if (x != sc->unused) return(x);
     }
   return(wrap_string(sc, (char *)(string_value(str) + start), end - start));
@@ -28354,9 +28353,9 @@ static s7_pointer substring_uncopied_p_pii(s7_scheme *sc, s7_pointer str, s7_int
 {
   /* is_string arg1 checked in opt */
   if ((end < start) || (end > string_length(str)))
-    out_of_range_error_nr(sc, sc->substring_symbol, int_three, wrap_integer(sc, end), (end < start) ? it_is_too_small_string : it_is_too_large_string);
+    out_of_range_error_nr(sc, sc->substring_uncopied_symbol, int_three, wrap_integer(sc, end), (end < start) ? it_is_too_small_string : it_is_too_large_string);
   if (start < 0)
-    out_of_range_error_nr(sc, sc->substring_symbol, int_two, wrap_integer(sc, start), it_is_negative_string);
+    out_of_range_error_nr(sc, sc->substring_uncopied_symbol, int_two, wrap_integer(sc, start), it_is_negative_string);
   return(wrap_string(sc, (char *)(string_value(str) + start), end - start));
 }
 
@@ -48564,7 +48563,7 @@ s7_pointer s7_c_object_let(s7_pointer obj) {return(c_object_let(obj));}
 
 static s7_pointer g_c_object_let(s7_scheme *sc, s7_pointer args)
 {
-  #define H_c_object_let "(c-object-type obj) returns the c_object's local let, if any."
+  #define H_c_object_let "(c-object-let obj) returns the c_object's local let, if any."
   #define Q_c_object_let s7_make_signature(sc, 2, sc->is_let_symbol, sc->is_c_object_symbol)
 
   s7_pointer p = car(args);
@@ -70511,6 +70510,7 @@ static s7_pointer make_iterators(s7_scheme *sc, s7_pointer caller, s7_pointer ar
       if (!is_mappable(iter)) wrong_type_error_nr(sc, caller, i, iter, a_sequence_string);
       sc->z = (is_iterator(iter)) ? cons(sc, iter, sc->z) : cons(sc, s7_make_iterator(sc, iter), sc->z);
     }
+  if ((S7_DEBUGGING) && (sc->temp3 != args)) fprintf(stderr, "%s[%d]: temp3: %s\n", __func__, __LINE__, display(sc->temp3));
   sc->temp3 = sc->unused;
   p = proper_list_reverse_in_place(sc, sc->z);
   sc->z = sc->unused;
@@ -73957,6 +73957,9 @@ static opt_t optimize_func_one_arg(s7_scheme *sc, s7_pointer expr, s7_pointer fu
       break;
 
     case T_LET:
+      /* implicit function/c-object -> (f 'a) if f is a function is a function call, not a funclet or c-object-let reference, ((funclet f) 'a).
+       *   c-pointer might work, but it's too similar to c-object, and you can always use ((c-pointer-info p) 'a).
+       */
       if (((quotes == 1) && (is_symbol(cadr(arg1)))) || /* (e 'a) or (e ':a) */
 	  (is_symbol_and_keyword(arg1)))                /* (e :a) */
 	{
@@ -86728,7 +86731,10 @@ static goto_t op_safe_do(s7_scheme *sc)
       s7_pointer old_let = sc->curlet;
       sc->temp7 = old_let;
       if (opt_dotimes(sc, cddr(sc->code), sc->code, false))
-	return(goto_safe_do_end_clauses);
+	{
+	  sc->temp7 = sc->unused;
+	  return(goto_safe_do_end_clauses);
+	}
       set_curlet(sc, old_let);  /* apparently s7_optimize can step on sc->curlet? */
       sc->temp7 = sc->unused;
     }
@@ -99580,7 +99586,6 @@ static void init_rootlet(s7_scheme *sc)
   sc->owlet_symbol =                 defun("owlet",		owlet,			0, 0, false);
   sc->coverlet_symbol =              defun("coverlet",		coverlet,		1, 0, false); set_is_translucent(sc->coverlet_symbol);
   sc->openlet_symbol =               semisafe_defun("openlet",  openlet,		1, 0, false); set_is_translucent(sc->openlet_symbol);
-  /* a bug here, not yet fixed: TODO: (define (f) (write (vector 1.0) (openlet (inlet 'write for-each)))) (f) -> segfault! */
 
   sc->let_ref_symbol =               defun("let-ref",		let_ref,		2, 0, false); set_immutable(sc->let_ref_symbol);
   set_immutable_slot(global_slot(sc->let_ref_symbol));
@@ -99601,7 +99606,7 @@ static void init_rootlet(s7_scheme *sc)
 
   sc->c_object_type_symbol =         defun("c-object-type",     c_object_type,		1, 0, false);
   sc->c_object_let_symbol =          defun("c-object-let",      c_object_let,		1, 0, false); /* added 3-Apr-25 */
-  s7_set_setter(sc, sc->c_object_let_symbol, s7_make_safe_function(sc, "#<c-object-set-let>", g_c_object_set_let, 2, 0, false, "c-object-let setter"));
+  c_function_set_setter(global_value(sc->c_object_let_symbol), s7_make_safe_function(sc, "#<c-object-set-let>", g_c_object_set_let, 2, 0, false, "c-object-let setter"));
 
   sc->c_pointer_symbol =             defun("c-pointer",	        c_pointer,		1, 4, false);
   sc->c_pointer_info_symbol =        defun("c-pointer-info",    c_pointer_info,		1, 0, false);
@@ -101068,7 +101073,7 @@ int main(int argc, char **argv)
  * tmock              1145   1082   1042   1045   1031   1030
  * tvect       3408   2464   1772   1669   1497   1457   1453
  * thook       7651   ----   2590   2030   2046   1731   1739
- * tauto                     2562   2048   1729   1760   1762
+ * tauto                     2562   2048   1729   1760   1756
  * texit       1884   1950   1778   1741   1770   1759   1758
  * s7test             1831   1818   1829   1830   1849   1862
  * lt          2222   2172   2150   2185   1950   1892   1894
@@ -101128,18 +101133,12 @@ int main(int argc, char **argv)
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  * mutints: move make_mutable to the point of use and clear afterwards, more use of num_small_ints?
  * t854 -> tmisc? or texit?
+ * openlet: can optimizer see non-builtin arg here? (define (f) (write (vector 1.0) (openlet (inlet 'write for-each)))) (f) -> segfault
  * env extension in: [symbol->local_slot -- should s7_define return if not a let?]
  *   s7test outlet(both args) for env extension, also cutlet/sublet (and methods) 53966
- *     c-pointer cases -> implicit -> c-object/closure/local c_func?
- *   openlet: can optimizer see non-builtin arg here?
- *     see t855 for openlet -- being unsafe does not fix the problem mentioned above (segfault!)
- *   t101-5|6|13|16 trouble fx_safe_thunk_a opt_p_pp_ff etc if unsafe->semisafe or safe (see 29-Mar)
- *   (sublet (bacro....)) printout should just say (rootlet) -- how did this happen? t718
  *   doc ext env
- *   ext env error msgs
- *   implicit uses of these lets (t856), implicit_let_ref* currently just quits if obj not a let. see op_implicit switch -- needs cases for c-object etc
- *   see varlet todo's
- *   tests for c-object-let, setter
+ *   openlet args: (immutable? (openlet (immutable! (inlet 'immutable? (lambda (x) #f))))) -- should we waste runtime to support this? [currently returns #t]
+ *     (varlet (openlet (inlet 'a 1 'varlet (lambda args 123))) 'b 2), also sublet etc
  * see s7-ffi.html 2631 -- needs rewrite!
  *   unsafe: apply-values values sort! apply [maybe because fx* does not protect against values, sc->code change in apply syntax etc]
  *   unsafe: s7_apply_function s7_values s7_call s7_eval s7_eval_c_string
@@ -101147,6 +101146,8 @@ int main(int argc, char **argv)
  *   ffitest examples of unsafe funcs: (apply lambda*...) clobbers sc->code during let loop, values because let is unprotected from values?
  *     in ffitest.c add s7f_hook -- s7f+hook and call it safe
  *   for-each/map/member/assoc w/o push?
- * for non-begin_temp temps check for sc->unused at end (before clear) might catch overwrites, or debugging might have set_lock/unlock? but error et al would need to unlock?
+ *   t101-5|6|13|16 trouble fx_safe_thunk_a opt_p_pp_ff etc if unsafe->semisafe or safe (see 29-Mar)
+ * for non-begin_temp temps check for sc->unused at end (before clear) might catch overwrites [added a few]
  * how can FFI code set saver/translucent bits et al?  need ffitest.c examples. also all_float|integer, is_definer scope_safe
+ * s7+xm/motif example (snd repl)
  */

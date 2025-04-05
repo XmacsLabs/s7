@@ -53799,6 +53799,19 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
   (test (f1 3) 4)
   (test (f2 3) 6))
 
+(let ()
+  (define f1
+    (let ((x 0))
+      (lambda ()
+	(if (and (defined? 'x-state (funclet f1))
+		 (eq? ((funclet f1) 'x-state) 'stop))
+	    x
+	    (set! x (+ x 1))))))
+  (test (f1) 1)
+  (test (f1) 2)
+  (varlet (funclet f1) 'x-state 'stop)
+  (test (f1) 2))
+
 (test (null? (let->list (rootlet))) #f)
 
 (test (let? (inlet)) #t)
@@ -54002,9 +54015,37 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
   (load "empty-file" P)
   (test (object->string P :readable) "(c-pointer 0 1 (inlet :P-var 123))")
   (test (let-ref P 'P-var) 123)
-  (test (defined? 'P-var) #f))
+  (test (defined? 'P-var) #f)
+  (test ((c-pointer-info P) 'P-var) 123))
 
-;;; TODO: let-ref let-set! with-let implicit-* symbol->value outlet/set-outlet[in s7.c] (p_pp cases etc)
+;;; c-object tests
+(when with-block
+  (test (let ((P (make-cycle 0))) (set! (c-object-let P) (inlet 'a 1)) (immutable! 'a P) (immutable? 'a P)) #t)
+  (test (let ((P (make-cycle 0))) (set! (c-object-let P) (inlet 'abs (lambda (x) (+ x 1)))) (openlet P) (openlet? P)) #t)
+  (test (let ((P (make-cycle 0))) (openlet P)) 'error)
+  (test (let ((P (make-cycle 0))) (set! (c-object-let P) (inlet 'abs (lambda (x) (+ x 1)))) (coverlet P) (openlet? P)) #f)
+  (test (let ((P (make-cycle 0))) (coverlet P)) 'error)
+  (test (let ((P (make-cycle 0))) (varlet P 'a 1)) 'error)
+  (test (let ((P 123)) (varlet P 'a 1)) 'error)
+  (let ((val (let ((P (make-cycle 0))) (set! (c-object-let P) (inlet 'b 2)) (varlet P 'a 1) (let->list P))))
+    (test (or (equal? val '((a . 1) (b . 2))) (equal? val '((b . 2) (a . 1)))) #t))
+  (test (let ((P (make-cycle 0))) (cutlet P 'a)) 'error)
+  (test (let ((P (make-cycle 0))) (set! (c-object-let P) (inlet 'b 2)) (cutlet P 'b) (let->list P)) ())
+  (test (let ((P (make-cycle 0))) (sublet P 'a 1)) 'error)
+  (test (let ((P (make-cycle 0))) (set! (c-object-let P) (inlet 'b 2)) (let->list (sublet P 'a 1))) '((a . 1)))
+  (test (let ((P (make-cycle 0))) (set! (c-object-let P) (inlet 'b 2)) (let->list (outlet (sublet P 'a 1)))) '((b . 2)))
+  (test (let ((P (make-cycle 0))) (outlet P)) (rootlet))
+  (test (let ((P (make-cycle 0))) (let->list P)) 'error)
+  (test (let ((P (make-cycle 0))) (let-ref P 'a)) 'error)
+  (test (let ((P (make-cycle 0))) (set! (c-object-let P) (inlet 'a 1)) (let-ref P 'a)) 1)
+  (let ((P (make-cycle 0)))
+    (set! (c-object-let P) (inlet))
+    (call-with-output-file "empty-file" (lambda (p) (display "(define P-var 123)\n" p)))
+    (load "empty-file" P)
+    (test (let-ref P 'P-var) 123)
+    (test ((c-object-let P) 'P-var) 123)))
+
+;;; TODO: let-ref let-set! with-let symbol->value outlet/set-outlet[in s7.c] (p_pp cases etc)
 
 
 (for-each

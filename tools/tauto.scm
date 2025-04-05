@@ -17,10 +17,10 @@
 		  *unbound-variable-hook* *load-hook* *rootlet-redefinition-hook* *missing-close-paren-hook* *read-error-hook*
 		  tree-count ; signature is kinda silly here
 		  c-define-1 apropos map-values trace-in profile-in
-		  define-expansion substring-uncopied ; this because errmsg has "substring" not "substring-uncopied"
+		  define-expansion ;substring-uncopied
 		  heap-scan heap-analyze heap-holders heap-holder
 		  check check-funcs type-ok
-		  show-stack trace-in profile-in apply call-with-exit
+		  show-stack trace-in apply call-with-exit
 		  define-expansion call-with-current-continuation 
 		  vector-append append ; append gets uninteresting type conversion complaints
 		  call/cc call-with-output-string open-input-function open-output-function

@@ -114,7 +114,7 @@
 	      begin boolean? byte-vector byte-vector-ref byte-vector?
 	      caaaar caaadr caaar caadar caaddr caadr caar cadaar cadadr cadar caddar cadddr caddr cadr
 	      call-with-input-string call-with-input-file
-	      c-pointer c-pointer? c-object? c-object-type call-with-exit car case catch
+	      c-pointer c-pointer? c-object? c-object-type c-object-let call-with-exit car case catch
 	      cdaaar cdaadr cdaar cdadar cdaddr cdadr cdar cddaar cddadr
 	      cddar cdddar cddddr cdddr cddr cdr ceiling char->integer char-alphabetic? char-ci<=?
 	      char-ci<? char-ci=? char-ci>=? char-ci>? char-downcase char-lower-case? char-numeric?
@@ -163,7 +163,7 @@
 			      (for-each
 			       (lambda (op)
 				 (set! (ht op) #t))
-			       '(symbol? gensym? keyword? let? openlet? iterator? macro? c-pointer? c-object? c-object-type constant? subvector?
+			       '(symbol? gensym? keyword? let? openlet? iterator? macro? c-pointer? c-object? c-object-type c-object-let constant? subvector?
 			         input-port? output-port? eof-object? integer? number? real? complex? complex-vector? rational? random-state?
 			         char? string? list? pair? vector? float-vector? int-vector? byte-vector? hash-table?
 			         continuation? procedure? dilambda? boolean? float? proper-list? sequence? null? gensym
@@ -986,7 +986,7 @@
 				     abs acos acosh and angle append aritable? arity ash asin asinh assoc assq assv atan atanh
 				     begin boolean? byte? byte-vector byte-vector?
 				     caaaar caaadr caaar caadar caaddr caadr caar cadaar cadadr cadar caddar cadddr caddr cadr
-				     c-pointer c-pointer? c-object? c-object-type car case cdaaar cdaadr cdaar cdadar cdaddr cdadr cdar cddaar cddadr
+				     c-pointer c-pointer? c-object? c-object-type c-object-let car case cdaaar cdaadr cdaar cdadar cdaddr cdadr cdar cddaar cddadr
 				     cddar cdddar cddddr cdddr cddr cdr ceiling char->integer char-alphabetic? char-ci<=?
 				     char-ci<? char-ci=? char-ci>=? char-ci>? char-downcase char-lower-case? char-numeric?
 				     char-position char-upcase char-upper-case? char-whitespace? char<=? char<?

@@ -5972,6 +5972,7 @@ name can normally only be handled by the <a href="#weirdsymbols">symbol</a> func
 <pre class="indented">
 (<em class=def id="cobject">c-object?</em> obj)
 (<em class=def id="cobjecttypew">c-object-type</em> obj)
+(<em class=def id="cobjectletw">c-object-let</em> obj)
 
 (<em class=def id="cpointer">c-pointer?</em> obj)
 (<em class=def id="cpoint">c-pointer</em> int type info weak1 weak2)
@@ -5986,6 +5987,7 @@ c-object? returns #t is its argument is a c-object.
 c-object-type returns the object's type tag (otherwise #f of course).  This tag is also the position
 of the object's type in the (*s7* 'c-types) list.
 (*s7* 'c-types) returns a list of the types created by s7_make_c_type.
+c-object-let returns the c-object's local let.
 </p>
 <p>
 You can wrap up raw C pointers and
