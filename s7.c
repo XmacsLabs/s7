@@ -3689,7 +3689,7 @@ static s7_pointer slot_expression(s7_pointer p)    \
 #define c_object_type(p)               (T_Obj(p))->object.c_obj.type
 #define c_object_let(p)                T_Let((T_Obj(p))->object.c_obj.e)
 #define c_object_set_let(p, L)         (T_Obj(p))->object.c_obj.e = T_Let(L)
-#define c_object_s7(p)                 (T_Obj(p))->object.c_obj.sc
+#define c_object_sc(p)                 (T_Obj(p))->object.c_obj.sc
 
 #define c_object_info(Sc, p)           Sc->c_object_types[c_object_type(T_Obj(p))]
 #define c_object_free(Sc, p)           c_object_info(Sc, p)->free
@@ -7581,9 +7581,10 @@ static void mark_int_or_float_vector_possibly_shared(s7_pointer p) /* also compl
 static void mark_c_object(s7_pointer p)
 {
   set_mark(p);
-  if (c_object_gc_mark(c_object_s7(p), p))
-    (*(c_object_gc_mark(c_object_s7(p), p)))(c_object_s7(p), p);
-  else (*(c_object_mark(c_object_s7(p), p)))(c_object_value(p));
+  mark_let(c_object_let(p));  /* I think this is guaranteed to be a let, added 5-Apr-25 */
+  if (c_object_gc_mark(c_object_sc(p), p))  /* c_object_sc = s7_scheme pointer */
+    (*(c_object_gc_mark(c_object_sc(p), p)))(c_object_sc(p), p);
+  else (*(c_object_mark(c_object_sc(p), p)))(c_object_value(p));
 }
 
 static void mark_catch(s7_pointer p)
@@ -10199,7 +10200,7 @@ to the let target-let, and returns target-let.  (varlet (curlet) 'a 1) adds 'a t
 	      val = cdr(p);
 	    }
 	  else wrong_type_error_nr(sc, sc->varlet_symbol, position_of(x, args), p, wrap_string(sc, "a symbol, let, or cons", 22));
-      
+
       if (e == sc->rootlet)
 	{
 	  s7_pointer gslot = global_slot(sym);
@@ -10618,6 +10619,7 @@ static s7_pointer g_let_to_list(s7_scheme *sc, s7_pointer args)
       s7_pointer new_let = find_let(sc, let);
       if ((!is_let(new_let)) || (new_let == sc->rootlet))
 	find_let_error_nr(sc, sc->let_to_list_symbol, let, new_let, 1, args);
+      /* this is not (let->list (rootlet)) but (say) (let->list func) which defaults in find_let to rootlet */
       let = new_let;
     }
   return(s7_let_to_list(sc, let));
@@ -10873,7 +10875,7 @@ static s7_pointer let_set_2(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7
     {
       s7_pointer new_let = find_let(sc, let);
       if (!is_let(new_let))
-	wrong_type_error_nr(sc, sc->let_set_symbol, 1, let, a_let_string);
+	find_let_error_nr(sc, sc->let_set_symbol, let, new_let, 1, set_plist_3(sc, let, symbol, value));
       let = new_let;
     }
   if (!is_symbol(symbol))
@@ -10916,7 +10918,7 @@ static s7_pointer g_cdr_let_set(s7_scheme *sc, s7_pointer args)
     {
       s7_pointer new_let = find_let(sc, lt);
       if (!is_let(new_let))
-	wrong_type_error_nr(sc, sc->let_set_symbol, 1, lt, a_let_string);
+	find_let_error_nr(sc, sc->let_set_symbol, lt, new_let, 1, args);
       lt = new_let;
     }
   if (lt != sc->rootlet)
@@ -11096,7 +11098,7 @@ static s7_pointer outlet_p_p(s7_scheme *sc, s7_pointer let)
     {
       s7_pointer new_let = find_let(sc, let);
       if (!is_let(new_let))
-	sole_arg_wrong_type_error_nr(sc, sc->outlet_symbol, let, a_let_string); /* not a method call here! */
+	find_let_error_nr(sc, sc->outlet_symbol, let, new_let, 1, set_mlist_1(sc, let));
       let = new_let;
     }
   return((let == sc->rootlet) ? sc->rootlet : let_outlet(let)); /* rootlet check is needed(!) */
@@ -11130,7 +11132,7 @@ static s7_pointer g_set_outlet(s7_scheme *sc, s7_pointer args)
     {
       s7_pointer new_let = find_let(sc, let);
       if (!is_let(new_let))
-	wrong_type_error_nr(sc, wrap_string(sc, "set! outlet", 11), 1, let, sc->type_names[T_LET]);
+	find_let_error_nr(sc, wrap_string(sc, "set! outlet", 11), let, new_let, 1, args);
       let = new_let;
     }
   if (let == sc->starlet)
@@ -11142,7 +11144,7 @@ static s7_pointer g_set_outlet(s7_scheme *sc, s7_pointer args)
     {
       s7_pointer new_let = find_let(sc, new_outer);
       if (!is_let(new_let))
-	wrong_type_error_nr(sc, wrap_string(sc, "set! outlet", 11), 2, new_outer, sc->type_names[T_LET]);
+	find_let_error_nr(sc, wrap_string(sc, "set! outlet", 11), new_outer, new_let, 2, args);
       new_outer = new_let;
     }
   if (let != sc->rootlet)
@@ -11859,8 +11861,8 @@ Only the let is searched if ignore-globals is not #f."
       if (!is_let(e))
 	{
 	  s7_pointer new_let = find_let(sc, e);  /* returns () if none */
-	  if (!is_let(new_let)) 
-	    wrong_type_error_nr(sc, sc->is_defined_symbol, 2, e, a_let_string);
+	  if (!is_let(new_let))
+	    find_let_error_nr(sc, sc->is_defined_symbol, e, new_let, 2, args);
 	  if ((new_let == sc->rootlet) && (is_pair(cddr(args))) && (ignore_globals != sc->F))
 	    {
 	      if (ignore_globals != sc->T) /* signature claims this should be a boolean */
@@ -31806,7 +31808,7 @@ s7_pointer s7_load_with_environment(s7_scheme *sc, const char *filename, s7_poin
   if (!is_let(e))
     {
       s7_pointer obj_e = find_let(sc, e);
-      if (!is_let(obj_e)) 
+      if (!is_let(obj_e))
 	s7_warn(sc, 128, "third argument to s7_load_with_environment is not a let or an object that has a let");
       else e = obj_e;
     }
@@ -31897,10 +31899,10 @@ defaults to the rootlet.  To load into the current environment instead, pass (cu
       s7_pointer e = cadr(args);
       if (!is_let(e))
 	{
-	  s7_pointer obj_e = find_let(sc, e);
-	  if (!is_let(obj_e)) 
-	    wrong_type_error_nr(sc, sc->load_symbol, 2, e, a_let_string);
-	  e = obj_e;
+	  s7_pointer new_let = find_let(sc, e);
+	  if (!is_let(new_let))
+	    find_let_error_nr(sc, sc->load_symbol, e, new_let, 2, args);
+	  e = new_let;
 	}
       if (e == sc->starlet)
 	error_nr(sc, sc->wrong_type_arg_symbol,
@@ -32329,7 +32331,7 @@ s7_pointer s7_eval_c_string(s7_scheme *sc, const char *str) {return(s7_eval_c_st
 static s7_pointer g_eval_string(s7_scheme *sc, s7_pointer args)
 {
   #define H_eval_string "(eval-string str (let (curlet))) returns the result of evaluating the string str as Scheme code"
-  #define Q_eval_string s7_make_signature(sc, 3, sc->values_symbol, sc->is_string_symbol, sc->is_let_symbol)
+  #define Q_eval_string s7_make_signature(sc, 3, sc->values_symbol, sc->is_string_symbol, has_let_signature(sc))
 
   s7_pointer port, str = car(args);
   if (!is_string(str))
@@ -32340,7 +32342,12 @@ static s7_pointer g_eval_string(s7_scheme *sc, s7_pointer args)
     {
       s7_pointer e = cadr(args);
       if (!is_let(e))
- 	wrong_type_error_nr(sc, sc->eval_string_symbol, 2, e, a_let_string);
+	{
+	  s7_pointer new_let = find_let(sc, e);
+	  if (!is_let(new_let))
+	    find_let_error_nr(sc, sc->eval_string_symbol, e, new_let, 2, args);
+	  e = new_let;
+	}
       set_curlet(sc, e);
     }
   begin_temp(sc->temp6, sc->args); /* see t101-17.scm */
@@ -36210,7 +36217,7 @@ static void counter_to_port(s7_scheme *sc, s7_pointer unused_obj, s7_pointer por
 }
 
 static void integer_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t unused_use_write, shared_info_t *unused_ci)
-{ 
+{
   /* killer overhead here; breaking it into named/unnamed funcs helps only slightly -- still ridiculous overhead according to callgrind */
   s7_int num = integer(obj);
   if ((num < 10) && (num >= 0))
@@ -47643,7 +47650,7 @@ static s7_pointer let_to_function(s7_scheme *sc, s7_pointer e)
   return(funclet_function(e));
 }
 
-static s7_pointer g_function(s7_scheme *sc, s7_pointer args)
+static s7_pointer g_function(s7_scheme *sc, s7_pointer args) /* does the env parameter make any sense? */
 {
   #define H_function "(*function* env field) returns the current function.  (*function*) is like __func__ in C. \
 If 'env is specified, *function* looks for the current function in the environment 'e.  If 'field (a symbol) is given \
@@ -47651,7 +47658,7 @@ a function-specific value is returned.  The fields are 'name (the name of the cu
  'documentation, 'value (the function itself), 'line and 'file (the function's definition location), 'funclet, 'source, \
 and 'arglist. (define (func x y) (*function* (curlet) 'arglist)) (func 1 2): '(x y)"
 
-  #define Q_function s7_make_signature(sc, 3, sc->T, sc->is_let_symbol, sc->is_symbol_symbol)
+  #define Q_function s7_make_signature(sc, 3, sc->T, has_let_signature(sc), sc->is_symbol_symbol)
 
   s7_pointer e, sym = NULL, fname, fval;
   if (is_null(args))                /* (*function*) is akin to __func__ in C */
@@ -47663,7 +47670,12 @@ and 'arglist. (define (func x y) (*function* (curlet) 'arglist)) (func 1 2): '(x
     }
   e = car(args);
   if (!is_let(e))
-    sole_arg_wrong_type_error_nr(sc, sc->_function__symbol, e, sc->type_names[T_LET]);
+    {
+      s7_pointer new_let = find_let(sc, e); /* ?? not sure this makes sense */
+      if (!is_let(new_let))
+	find_let_error_nr(sc, sc->_function__symbol, e, new_let, 1, args);
+      e = new_let;
+    }
   if (is_pair(cdr(args)))
     {
       sym = cadr(args);
@@ -48586,7 +48598,7 @@ static s7_pointer g_c_object_set_let(s7_scheme *sc, s7_pointer args)
   if (is_immutable(obj))
     immutable_object_error_nr(sc, set_elist_2(sc, wrap_string(sc, "can't set ~S's let: it is immutable", 35), obj));
   if (!is_let(e))
-    wrong_type_error_nr(sc, make_symbol(sc, "#<c-object-set-let>", 19), 2, e, sc->type_names[T_LET]);    
+    wrong_type_error_nr(sc, make_symbol(sc, "#<c-object-set-let>", 19), 2, e, sc->type_names[T_LET]);
   c_object_set_let(obj, e);
   return(e);
 }
@@ -48621,8 +48633,8 @@ static s7_pointer make_c_object_with_let(s7_scheme *sc, s7_int type, void *value
    */
   c_object_type(x) = type;
   c_object_value(x) = value;
-  c_object_set_let(x, let);
-  c_object_s7(x) = sc;
+  c_object_set_let(x, T_Let(let));
+  c_object_sc(x) = sc;
   if (with_gc) add_c_object(sc, x);
   return(x);
 }
@@ -49152,27 +49164,37 @@ static s7_pointer symbol_setter(s7_scheme *sc, s7_pointer sym, s7_pointer e)
 static s7_pointer setter_p_pp(s7_scheme *sc, s7_pointer p, s7_pointer e)
 {
   if (!is_let(e))
-    wrong_type_error_nr(sc, sc->setter_symbol, 2, e, sc->type_names[T_LET]); /* need to check this in case let arg is bogus */
-
+    {
+      s7_pointer new_let = find_let(sc, e);
+      if ((!is_let(new_let)) || (new_let == sc->rootlet))
+	find_let_error_nr(sc, sc->setter_symbol, e, new_let, 2, set_mlist_2(sc, p, e));
+      e = new_let;
+    }
   switch (type(p))
     {
     case T_MACRO:   case T_MACRO_STAR:
     case T_BACRO:   case T_BACRO_STAR:
     case T_CLOSURE: case T_CLOSURE_STAR:
-      return(lambda_setter(sc, p));
+      return(lambda_setter(sc, p)); /* TODO: does this need to know about the let? */
+
     case T_C_FUNCTION: case T_C_FUNCTION_STAR: case T_C_RST_NO_REQ_FUNCTION:
       return(c_function_setter(p));
+
     case T_C_MACRO:
       return(c_macro_setter(p));
+
     case T_C_OBJECT:
       check_method(sc, p, sc->setter_symbol, set_plist_2(sc, p, e));
       return((c_object_set(sc, p) == fallback_set) ? sc->F : sc->c_object_set_function); /* for example ((setter obj) obj 0 1.0) if s7test block */
       /* this could wrap the setter as an s7_function giving p's class-name etc */
+
     case T_LET:
       check_method(sc, p, sc->setter_symbol, set_plist_2(sc, p, e));
       return(global_value(sc->let_set_symbol));
+
     case T_ITERATOR:                           /* (set! (iter) val) doesn't fit the other setters */
       return((is_any_closure(iterator_sequence(p))) ? closure_setter(iterator_sequence(p)) : sc->F);
+
     case T_PAIR:         return(global_value(sc->list_set_symbol)); /* or maybe initial-value? */
     case T_HASH_TABLE:   return(global_value(sc->hash_table_set_symbol));
     case T_STRING:       return(global_value(sc->string_set_symbol));
@@ -49191,8 +49213,7 @@ static s7_pointer setter_p_pp(s7_scheme *sc, s7_pointer p, s7_pointer e)
 static s7_pointer g_setter(s7_scheme *sc, s7_pointer args)
 {
   #define H_setter "(setter obj let) returns the setter associated with obj"
-  #define Q_setter s7_make_signature(sc, 3, s7_make_signature(sc, 2, \
-                     sc->not_symbol, sc->is_procedure_symbol), sc->T, s7_make_signature(sc, 2, sc->is_let_symbol, sc->is_null_symbol))
+  #define Q_setter s7_make_signature(sc, 3, s7_make_signature(sc, 2, sc->not_symbol, sc->is_procedure_symbol), sc->T, has_let_signature(sc))
   return(setter_p_pp(sc, car(args), (is_pair(cdr(args))) ? cadr(args) : sc->curlet));
 }
 
@@ -49243,14 +49264,19 @@ static s7_pointer symbol_set_setter(s7_scheme *sc, s7_pointer sym, s7_pointer ar
 
   if (is_pair(cddr(args)))
     {
-      const s7_pointer e = cadr(args); /* (let ((x 1)) (set! (setter 'x (curlet)) (lambda (s v e) ...))): args is (x (inlet 'x 1) #<lambda (s v ...)>) */
+      s7_pointer e = cadr(args); /* (let ((x 1)) (set! (setter 'x (curlet)) (lambda (s v e) ...))): args is (x (inlet 'x 1) #<lambda (s v ...)>) */
       func = caddr(args);
       if (e == sc->rootlet)
 	slot = global_slot(sym);
       else
 	{
 	  if (!is_let(e))
-	    wrong_type_error_nr(sc, wrap_string(sc, "set! setter", 11), 2, e, sc->type_names[T_LET]);
+	    {
+	      s7_pointer new_let = find_let(sc, e);
+	      if ((!is_let(new_let)) || (new_let == sc->rootlet))
+		find_let_error_nr(sc, wrap_string(sc, "set! setter", 11), e, new_let, 2, args);
+	      e = new_let;
+	    }
 	  slot = lookup_slot_with_let(sc, sym, e);
 	}}
   else
@@ -53185,7 +53211,7 @@ static s7_pointer object_to_let_p_p(s7_scheme *sc, s7_pointer obj)
     case T_HASH_TABLE:   return(hash_table_to_let(sc, obj));
     case T_LET:          return(let_to_let(sc, obj));
     case T_C_OBJECT:     return(c_object_to_let(sc, obj));
-    case T_INPUT_PORT: 
+    case T_INPUT_PORT:
     case T_OUTPUT_PORT:  return(port_to_let(sc, obj));
 
     case T_INTEGER: case T_BIG_INTEGER: return(internal_inlet(sc, 4, sc->value_symbol, obj, sc->type_symbol, sc->is_integer_symbol));
@@ -53302,7 +53328,7 @@ static char *stacktrace_walker(s7_scheme *sc, s7_pointer code, s7_pointer e, cha
 	      const bool old_short_print = sc->short_print;
 	      const s7_int old_len = sc->print_length;
 	      s7_int objlen;
-	      
+
 	      if (notes_start_col < 0) notes_start_col = 50;
 	      if (notes_start_col > total_cols) notes_start_col = 0;
 	      notes_max = total_cols - notes_start_col;
@@ -55674,13 +55700,18 @@ pass (rootlet):\n\
     (eval 'x (rootlet)))\n\
 \n\
   returns 32"
-  #define Q_eval s7_make_signature(sc, 3, sc->values_symbol, sc->T, sc->is_let_symbol)
+  #define Q_eval s7_make_signature(sc, 3, sc->values_symbol, sc->T, has_let_signature(sc))
 
   if (is_not_null(cdr(args)))
     {
       s7_pointer e = cadr(args);
       if (!is_let(e))
-	wrong_type_error_nr(sc, sc->eval_symbol, 2, e, a_let_string);
+	{
+	  s7_pointer new_let = find_let(sc, e);
+	  if (!is_let(new_let))
+	    find_let_error_nr(sc, sc->eval_symbol, e, new_let, 2, args);
+	  e = new_let;
+	}
       set_curlet(sc, e);
     }
   sc->code = car(args);
@@ -58306,6 +58337,7 @@ static s7_pointer fx_c_aa(s7_scheme *sc, s7_pointer arg)
   set_car(sc->t2_2, gc_protected2(sc));
   res = fn_proc(arg)(sc, sc->t2_1);
   if (stack_top_op(sc) == OP_GC_PROTECT) unstack_gc_protect(sc); /* added op_gc_protect check 29-Mar-25: see t855.scm */
+  /* TODO: find this somehow during optimization! */
   return(res);
 }
 
@@ -78009,9 +78041,9 @@ static bool check_tc(s7_scheme *sc, s7_pointer name, int32_t pars, s7_pointer ar
 
 static void mark_fx_treeable(s7_scheme *sc, s7_pointer body)
 { /* it is possible to encounter a cyclic body here -- TODO: s7test example! */
-  if ((is_pair(body)) && (!is_fx_treeable(body))) /* slightly faster than the other way of writing this */
+  if (is_pair(body)) /* slightly faster than the other way of writing this, checking treeable (to catch cyclic trees) slows us down by a lot! */
     {
-      if ((is_pair(car(body))) && (!is_fx_treeable(car(body))))
+      if (is_pair(car(body)))
 	{
 	  set_is_fx_treeable(body);
 	  mark_fx_treeable(sc, car(body));
@@ -83897,7 +83929,7 @@ static bool all_ints_here(s7_scheme *sc, s7_pointer settee, s7_pointer expr, s7_
       ((car(sig) == sc->is_integer_symbol) || (car(sig) == sc->is_byte_symbol) ||
        ((is_pair(car(sig))) &&
 	((direct_memq(sc->is_integer_symbol, car(sig))) || (direct_memq(sc->is_byte_symbol, car(sig)))))))
-    /* maybe make int|byte_vector_ref|set explicit, or check indices=rank? 
+    /* maybe make int|byte_vector_ref|set explicit, or check indices=rank?
      *   or just use (func == sc->int_vector_ref) etc
      */
 #endif
@@ -84163,7 +84195,7 @@ static bool do_is_safe(s7_scheme *sc, s7_pointer body, s7_pointer stepper, s7_po
 
 		{ /* if a macro check both expr and the macro body for the stepper */
 		  s7_pointer val = (is_symbol(x)) ? lookup_unexamined(sc, x) : x; /* x is car(expr) 200 lines back (!) */
-		  if ((val) && (is_either_macro(val)) && (!is_setter(val))) 
+		  if ((val) && (is_either_macro(val)) && (!is_setter(val)))
 		    {
 		      if (tree_memq_1(sc, stepper, expr))
 			do_return_false(expr);
@@ -99585,7 +99617,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->inlet_symbol =                 defun("inlet",		inlet,			0, 0, true);  set_is_saver(sc->inlet_symbol);
   sc->owlet_symbol =                 defun("owlet",		owlet,			0, 0, false);
   sc->coverlet_symbol =              defun("coverlet",		coverlet,		1, 0, false); set_is_translucent(sc->coverlet_symbol);
-  sc->openlet_symbol =               semisafe_defun("openlet",  openlet,		1, 0, false); set_is_translucent(sc->openlet_symbol);
+  sc->openlet_symbol =               semisafe_defun("openlet",    openlet,		1, 0, false); set_is_translucent(sc->openlet_symbol);
 
   sc->let_ref_symbol =               defun("let-ref",		let_ref,		2, 0, false); set_immutable(sc->let_ref_symbol);
   set_immutable_slot(global_slot(sc->let_ref_symbol));
@@ -101073,7 +101105,7 @@ int main(int argc, char **argv)
  * tmock              1145   1082   1042   1045   1031   1030
  * tvect       3408   2464   1772   1669   1497   1457   1453
  * thook       7651   ----   2590   2030   2046   1731   1739
- * tauto                     2562   2048   1729   1760   1756
+ * tauto                     2562   2048   1729   1760   1764
  * texit       1884   1950   1778   1741   1770   1759   1758
  * s7test             1831   1818   1829   1830   1849   1862
  * lt          2222   2172   2150   2185   1950   1892   1894
@@ -101094,27 +101126,27 @@ int main(int argc, char **argv)
  * tcomplex           3869   3804   3844   3888   4215   4192
  * tcase              4793   4439   4430   4439   4376   4378
  * tmap               8774   4489   4541   4586   4380   4378
- * tlet        11.0   6974   5609   5980   5965   4470   4466
+ * tlet        11.0   6974   5609   5980   5965   4470   4462
  * tfft               7729   4755   4476   4536   4538   4568 [do_is_safe 8]
  * tshoot             5447   5183   5055   5034   4833   4780
- * tstar              6705   5834   5278   5177   5059   5052 [let_set_2 +10]
+ * tstar              6705   5834   5278   5177   5059   5064 [let_set_2 +10, setter_p_pp +12]
  * concordance 10.0   6342   5488   5162   5180   5259   5287 [fx_c_aa +3]
  * tnum               6013   5433   5396   5409   5402   5367
  * tlist       9219   7546   6558   6240   6300   5770   5785
  * tari        14.3   12.5   6619   6662   6499   6292   5986
  * trec        19.6   6980   6599   6656   6658   6015   6015
  * tgsl               7802   6373   6282   6208   6208   6216
- * tset                             6260   6364   6278   6290
+ * tset                             6260   6364   6278   6304 [setter_p_pp +7]
  * tleft       12.2   9753   7537   7331   7331   6393   6393
  * tmisc                            7614   7115   7130   7098
  * tclo               8025   7645   8809   7770   7627   7640
  * tgc                10.4   7763   7579   7617   7619   7649
  * tlamb                            8003   7941   7920   7900
  * thash              11.7   9734   9479   9526   9283   9273
- * tform                     10.0   9992   9961   9626   9440
+ * tform                     10.0   9992   9961   9626   9437
  * cb          12.9   11.0   9658   9564   9609   9657   9665
  * tmap-hash                                      10.3   10.3
- * tgen               11.4   12.0   12.1   12.2   12.4   12.4 12.5 [do_is_safe 78 called from op_let_temp in do_is_safe??[maybe callgrind is confused] and do_passes...]
+ * tgen               11.4   12.0   12.1   12.2   12.4   12.4 12.6 [do_is_safe 78 called from op_let_temp in do_is_safe? mark_fx_treeable +100]
  * tall        15.9   15.6   15.6   15.6   15.1   15.1   15.1
  * timp               24.4   20.0   19.6   19.7   15.5   15.5
  * tmv                21.9   21.1   20.7   20.6   16.6   17.6
@@ -101133,21 +101165,17 @@ int main(int argc, char **argv)
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  * mutints: move make_mutable to the point of use and clear afterwards, more use of num_small_ints?
  * t854 -> tmisc? or texit?
- * openlet: can optimizer see non-builtin arg here? (define (f) (write (vector 1.0) (openlet (inlet 'write for-each)))) (f) -> segfault
+ * openlet: optimizer? t855.
  * env extension in: [symbol->local_slot -- should s7_define return if not a let?]
- *   s7test outlet(both args) for env extension, also cutlet/sublet (and methods) 53966
- *   doc ext env
  *   openlet args: (immutable? (openlet (immutable! (inlet 'immutable? (lambda (x) #f))))) -- should we waste runtime to support this? [currently returns #t]
  *     (varlet (openlet (inlet 'a 1 'varlet (lambda args 123))) 'b 2), also sublet etc
+ *   test methods in local lets
  * see s7-ffi.html 2631 -- needs rewrite!
  *   unsafe: apply-values values sort! apply [maybe because fx* does not protect against values, sc->code change in apply syntax etc]
- *   unsafe: s7_apply_function s7_values s7_call s7_eval s7_eval_c_string
- *   only phase-vocoder is unsafe in clm2xen.c
- *   ffitest examples of unsafe funcs: (apply lambda*...) clobbers sc->code during let loop, values because let is unprotected from values?
- *     in ffitest.c add s7f_hook -- s7f+hook and call it safe
+ *   unsafe: s7_apply_function s7_values s7_call s7_eval s7_eval_c_string, only phase-vocoder is unsafe in clm2xen.c
+ *   ffitest examples of unsafe funcs
  *   for-each/map/member/assoc w/o push?
  *   t101-5|6|13|16 trouble fx_safe_thunk_a opt_p_pp_ff etc if unsafe->semisafe or safe (see 29-Mar)
  * for non-begin_temp temps check for sc->unused at end (before clear) might catch overwrites [added a few]
  * how can FFI code set saver/translucent bits et al?  need ffitest.c examples. also all_float|integer, is_definer scope_safe
- * s7+xm/motif example (snd repl)
  */

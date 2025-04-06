@@ -93,6 +93,8 @@ end
 			 (if (procedure? e)
 			     (funclet e)
 			     (error 'wrong-type-arg "let->list argument should be a let (an environment) or something that has its own let: ~A" e)))))))
+      (if (and (eq? L (rootlet)) (not (eq? e (rootlet))))
+	  (error 'wrong-type-arg "let->list argument should be a let (an environment) or something that has its own let: ~A" e))
       (reverse! (map values L))))
 
   (define* (string->list str (start 0) end)
@@ -917,6 +919,7 @@ static s7_pointer g_blocks_are_equal(s7_scheme *sc, s7_pointer args)
 static s7_pointer g_block_gc_mark(s7_scheme *sc, s7_pointer p)
 {
   /* nothing to mark because we protect g_block_methods below, and all blocks get the same let */
+  /*   this comment is out-of-date -- s7 now protects the let */
   return(p);
 }
 
@@ -49611,8 +49614,8 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
 (test (signature equal?) (let ((L (list 'boolean? #t))) (set-cdr! (cdr L) (cdr L)) L))
 (test (signature eqv?) (let ((L (list 'boolean? #t))) (set-cdr! (cdr L) (cdr L)) L))
 (test (signature error) (let ((L (list 'values #t))) (set-cdr! (cdr L) (cdr L)) L))
-(test (signature eval) '(values #t let?))
-(test (signature eval-string) '(values string? let?))
+(test (signature eval) '(values #t (let? c-object? c-pointer? procedure? macro?)))
+(test (signature eval-string) '(values string? (let? c-object? c-pointer? procedure? macro?)))
 (test (signature even?) '(boolean? integer?))
 (test (signature exp) '(number? number?))
 (test (signature expt) (let ((L (list 'number?))) (set-cdr! L L) L))
@@ -49760,11 +49763,11 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
 (test (signature reverse) '(sequence? sequence?))
 (test (signature rootlet) '(let?))
 (test (signature round) '(integer? real?))
-(test (signature *function*) '(#t let? symbol?))
+(test (signature *function*) '(#t (let? c-object? c-pointer? procedure? macro?) symbol?))
 (test (signature sequence?) '(boolean? #t))
 (test (signature set-car!) '(#t pair? #t))
 (test (signature set-cdr!) '(#t pair? #t))
-(test (signature setter) '((not procedure?) #t (let? null?)))
+(test (signature setter) '((not procedure?) #t (let? c-object? c-pointer? procedure? macro?)))
 (test (signature signature) '((pair? boolean?) #t))
 (test (signature sin) '(number? number?))
 (test (signature sinh) '(number? number?))
@@ -50255,7 +50258,7 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
 (for-each
  (lambda (arg)
    (test (*function* arg) 'error))
- (list -1 #\a 1 #f _ht_ _goto_ _cc_ _cv_ _undef_ #(1 2 3) 3.14 3/4 1.0+1.0i () 'hi abs #(()) (list 1 2 3) '(1 . 2) "hi" (lambda () 1)))
+ (list -1 #\a 1 #f _ht_ _goto_ _cc_ _cv_ _undef_ #(1 2 3) 3.14 3/4 1.0+1.0i () 'hi #(()) (list 1 2 3) '(1 . 2) "hi"))
 
 (let () (define (f) (*function* (inlet 'a 1) #f)) (test (f) 'error))
 
@@ -50530,7 +50533,7 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
 (for-each
  (lambda (arg)
    (test (eval-string "(+ 1 2)" arg) 'error))
- (list -1 0 1 512 #\a #(1 2 3) 3.14 2/3 1.5+0.3i 1+i 'hi abs "hi" :hi #(()) (lambda () 1)))
+ (list -1 0 1 512 #\a #(1 2 3) 3.14 2/3 1.5+0.3i 1+i 'hi "hi" :hi #(())))
 
 
 (test (let () (define-macro (hiho a) `(+ ,a 1)) (hiho 3)) 4)
@@ -54016,7 +54019,11 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
   (test (object->string P :readable) "(c-pointer 0 1 (inlet :P-var 123))")
   (test (let-ref P 'P-var) 123)
   (test (defined? 'P-var) #f)
-  (test ((c-pointer-info P) 'P-var) 123))
+  (test ((c-pointer-info P) 'P-var) 123)
+  (test (eval-string "(integer? P-var)" P) #t)
+  (test (eval '(integer? P-var) P) #t)
+  (set! (setter 'P-var P) (lambda (x y) (set! P-var x)))
+  (test (procedure? (setter 'P-var P)) #t))
 
 ;;; c-object tests
 (when with-block
@@ -54043,7 +54050,11 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
     (call-with-output-file "empty-file" (lambda (p) (display "(define P-var 123)\n" p)))
     (load "empty-file" P)
     (test (let-ref P 'P-var) 123)
-    (test ((c-object-let P) 'P-var) 123)))
+    (test ((c-object-let P) 'P-var) 123)
+    (test (eval-string "(integer? P-var)" P) #t)
+    (test (eval '(integer? P-var) P) #t)
+    (set! (setter 'P-var P) (lambda (x y) (set! P-var x)))
+    (test (procedure? (setter 'P-var P)) #t)))
 
 ;;; TODO: let-ref let-set! with-let symbol->value outlet/set-outlet[in s7.c] (p_pp cases etc)
 
