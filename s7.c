@@ -11220,7 +11220,7 @@ s7_pointer s7_slot_set_value(s7_scheme *sc, s7_pointer slot, s7_pointer value) {
 
 void s7_slot_set_real_value(s7_scheme *sc, s7_pointer slot, s7_double value) {set_real(slot_value(slot), value);}
 
-static s7_pointer symbol_to_local_slot(s7_scheme *sc, s7_pointer symbol, s7_pointer e)
+static s7_pointer symbol_to_local_slot(s7_scheme *sc, s7_pointer symbol, s7_pointer e) /* assumes e is a let */
 {
   if (T_Let(e) == sc->rootlet)
     return(global_slot(symbol));
@@ -11945,7 +11945,7 @@ static bool is_defined_b_7p(s7_scheme *sc, s7_pointer p)
 static bool is_defined_b_7pp(s7_scheme *sc, s7_pointer p, s7_pointer e) {return(g_is_defined(sc, set_plist_2(sc, p, e)) != sc->F);}
 
 
-void s7_define(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointer value)
+void s7_define(s7_scheme *sc, s7_pointer let, s7_pointer symbol, s7_pointer value) /* assumes let is a let */
 {
   s7_pointer x;
   if (T_Let(let) == sc->rootlet) let = sc->shadow_rootlet; /* if symbol is a gensym should we issue a warning? */
@@ -13111,7 +13111,7 @@ static s7_pointer g_nan(s7_scheme *sc, s7_pointer args)
   if (is_null(args)) return(real_NaN);    /* payload defaults to 0 */
   x = car(args);
   if (!is_t_integer(x))
-    sole_arg_wrong_type_error_nr(sc, sc->nan_symbol, x, sc->type_names[T_INTEGER]);
+    return(method_or_bust_p(sc, x, sc->nan_symbol, sc->type_names[T_INTEGER]));
   if (integer(x) < 0)
     sole_arg_out_of_range_error_nr(sc, sc->nan_symbol, set_elist_1(sc, x), it_is_negative_string);
   if (integer(x) >= NAN_PAYLOAD_LIMIT)
@@ -13131,7 +13131,9 @@ static s7_pointer g_nan_payload(s7_scheme *sc, s7_pointer args)
   #define H_nan_payload "(nan-payload x) returns the payload associated with the NaN x"
   #define Q_nan_payload s7_make_signature(sc, 2, sc->is_integer_symbol, sc->is_real_symbol)
   s7_pointer x = car(args);
-  if ((!is_t_real(x)) || (!is_NaN(real(x)))) /* for complex case, use real-part etc (see s7test.scm) */
+  if (!is_t_real(x))
+    return(method_or_bust_p(sc, x, sc->nan_payload_symbol, sc->type_names[T_REAL]));
+  if (!is_NaN(real(x))) /* for complex case, use real-part etc (see s7test.scm) */
     sole_arg_wrong_type_error_nr(sc, sc->nan_payload_symbol, x, wrap_string(sc, "a NaN", 5));
   return(make_integer(sc, nan_payload(real(x))));
 }
@@ -29201,7 +29203,7 @@ in the port's data where the next read will take place."
 
   s7_pointer port = car(args);
   if (!is_input_port(port))
-    sole_arg_wrong_type_error_nr(sc, sc->port_position_symbol, port, sc->type_names[T_INPUT_PORT]);
+    return(method_or_bust_p(sc, port, sc->port_position_symbol, sc->type_names[T_INPUT_PORT]));
   if (port_is_closed(port))
     sole_arg_wrong_type_error_nr(sc, sc->port_position_symbol, port, an_open_input_port_string);
   if (is_string_port(port))
@@ -29250,9 +29252,8 @@ static s7_pointer g_port_file(s7_scheme *sc, s7_pointer args)
   #define Q_port_file s7_make_signature(sc, 2, sc->is_c_pointer_symbol, s7_make_signature(sc, 2, sc->is_input_port_symbol, sc->is_output_port_symbol))
 
   s7_pointer port = car(args);
-  if ((!is_input_port(port)) &&
-      (!is_output_port(port)))
-    sole_arg_wrong_type_error_nr(sc, sc->port_file_symbol, port, wrap_string(sc, "a port", 6));
+  if ((!is_input_port(port)) && (!is_output_port(port)))
+    return(method_or_bust_p(sc, port, sc->port_file_symbol, wrap_string(sc, "a port", 6)));
   if (port_is_closed(port))
     sole_arg_wrong_type_error_nr(sc, sc->port_file_symbol, port, wrap_string(sc, "an open port", 12));
 #if !MS_WINDOWS
@@ -36996,7 +36997,7 @@ static s7_pointer display_p_pp(s7_scheme *sc, s7_pointer x, s7_pointer port)
 }
 
 static s7_pointer g_display(s7_scheme *sc, s7_pointer args)
-{
+{ /* infinite loop: (display (openlet (inlet 'display display))) -- not specific to display of course */
   #define H_display "(display obj (port (current-output-port))) prints obj"
   #define Q_display s7_make_signature(sc, 3, sc->T, sc->T, s7_make_signature(sc, 2, sc->is_output_port_symbol, sc->not_symbol))
   return(display_p_pp(sc, car(args), (is_pair(cdr(args))) ? cadr(args) : current_output_port(sc)));
@@ -38646,8 +38647,12 @@ static s7_pointer g_tree_memq(s7_scheme *sc, s7_pointer args)
   #define H_tree_memq "(tree-memq obj tree) is a tree-oriented version of memq, but returning #t if the object is in the tree."
   #define Q_tree_memq s7_make_signature(sc, 3, sc->is_boolean_symbol, sc->T, sc->is_list_symbol)
   s7_pointer tree = cadr(args);
-  if (!is_list(tree))
-    wrong_type_error_nr(sc, sc->tree_memq_symbol, 2, tree, a_list_string);
+  if (!is_list(tree)) /* arg2 */
+    {
+      if (!has_active_methods(sc, tree))
+	wrong_type_error_nr(sc, sc->tree_memq_symbol, 2, tree, a_list_string);
+      return(find_and_apply_method(sc, tree, sc->tree_memq_symbol, args));
+    }
   return(make_boolean(sc, s7_tree_memq(sc, car(args), tree)));
 }
 
@@ -38741,7 +38746,15 @@ static s7_pointer g_tree_set_memq(s7_scheme *sc, s7_pointer args)
 {
   #define H_tree_set_memq "(tree-set-memq symbols tree) returns #t if any of the list of symbols is in the tree"
   #define Q_tree_set_memq s7_make_signature(sc, 3, sc->is_boolean_symbol, sc->is_list_symbol, sc->is_list_symbol)
-  return(make_boolean(sc, tree_set_memq_b_7pp(sc, car(args), cadr(args))));
+  s7_pointer syms = car(args);
+  if (!is_list(syms)) /* tree_set_memq_b_7pp returns bool, so we have to check car(args) for an openlet first */
+    {
+      if (!has_active_methods(sc, syms))
+	wrong_type_error_nr(sc, sc->tree_set_memq_symbol, 1, syms, a_list_string);
+      return(find_and_apply_method(sc, syms, sc->tree_set_memq_symbol, args));
+    }
+  /* TODO: tree (cadr(args)) is not checked for openlet */
+  return(make_boolean(sc, tree_set_memq_b_7pp(sc, syms, cadr(args))));
 }
 
 static s7_pointer tree_set_memq_syms_direct(s7_scheme *sc, s7_pointer syms, s7_pointer tree)
@@ -46691,8 +46704,11 @@ static s7_pointer g_make_weak_hash_table(s7_scheme *sc, s7_pointer args)
 						   s7_make_signature(sc, 3, sc->is_procedure_symbol, sc->is_pair_symbol, sc->not_symbol), \
 						   s7_make_signature(sc, 2, sc->is_pair_symbol, sc->not_symbol))
   s7_pointer table = g_make_hash_table_1(sc, args, sc->make_weak_hash_table_symbol);
-  set_weak_hash_table(table);
-  weak_hash_iters(table) = 0;
+  if (is_hash_table(table)) /* (make-weak-hash-table (openlet (inlet 'make-weak-hash-table list))) ! */
+    {
+      set_weak_hash_table(table);
+      weak_hash_iters(table) = 0;
+    }
   return(table);
 }
 
@@ -48478,12 +48494,13 @@ static s7_pointer g_c_object_type(s7_scheme *sc, s7_pointer args)
   #define Q_c_object_type s7_make_signature(sc, 2, sc->is_integer_symbol, sc->is_c_object_symbol)
 
   s7_pointer p = car(args);
-  if (is_c_object(p))
-    return(make_integer(sc, c_object_type(p))); /* this is the c_object_types table index = tag */
-  /* method or bust with only one arg -- sole_arg_method_or_bust? */
-  if (!has_active_methods(sc, p))
-    sole_arg_wrong_type_error_nr(sc, sc->c_object_type_symbol, p, sc->type_names[T_C_OBJECT]);
-  return(find_and_apply_method(sc, p, sc->c_object_type_symbol, args));
+  if (!is_c_object(p))
+    {
+      if (!has_active_methods(sc, p))
+	sole_arg_wrong_type_error_nr(sc, sc->c_object_type_symbol, p, sc->type_names[T_C_OBJECT]);
+      return(find_and_apply_method(sc, p, sc->c_object_type_symbol, args));
+    }
+  return(make_integer(sc, c_object_type(p))); /* this is the c_object_types table index = tag */
 }
 
 s7_int s7_make_c_type(s7_scheme *sc, const char *name) /* shouldn't this be s7_make_c_object_type? */
@@ -48579,10 +48596,13 @@ static s7_pointer g_c_object_let(s7_scheme *sc, s7_pointer args)
   #define Q_c_object_let s7_make_signature(sc, 2, sc->is_let_symbol, sc->is_c_object_symbol)
 
   s7_pointer p = car(args);
-  if (is_c_object(p)) return(c_object_let(p));
-  if (!has_active_methods(sc, p))
-    sole_arg_wrong_type_error_nr(sc, sc->c_object_let_symbol, p, sc->type_names[T_C_OBJECT]);
-  return(find_and_apply_method(sc, p, sc->c_object_let_symbol, args));
+  if (!is_c_object(p))
+    {
+      if (!has_active_methods(sc, p))
+	sole_arg_wrong_type_error_nr(sc, sc->c_object_let_symbol, p, sc->type_names[T_C_OBJECT]);
+      return(find_and_apply_method(sc, p, sc->c_object_let_symbol, args));
+    }
+  return(c_object_let(p));
 }
 
 s7_pointer s7_c_object_set_let(s7_scheme *sc, s7_pointer obj, s7_pointer e)
@@ -99617,7 +99637,7 @@ static void init_rootlet(s7_scheme *sc)
   sc->inlet_symbol =                 defun("inlet",		inlet,			0, 0, true);  set_is_saver(sc->inlet_symbol);
   sc->owlet_symbol =                 defun("owlet",		owlet,			0, 0, false);
   sc->coverlet_symbol =              defun("coverlet",		coverlet,		1, 0, false); set_is_translucent(sc->coverlet_symbol);
-  sc->openlet_symbol =               semisafe_defun("openlet",    openlet,		1, 0, false); set_is_translucent(sc->openlet_symbol);
+  sc->openlet_symbol =               semisafe_defun("openlet",  openlet,		1, 0, false); set_is_translucent(sc->openlet_symbol);
 
   sc->let_ref_symbol =               defun("let-ref",		let_ref,		2, 0, false); set_immutable(sc->let_ref_symbol);
   set_immutable_slot(global_slot(sc->let_ref_symbol));
@@ -101165,11 +101185,13 @@ int main(int argc, char **argv)
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  * mutints: move make_mutable to the point of use and clear afterwards, more use of num_small_ints?
  * t854 -> tmisc? or texit?
- * openlet: optimizer? t855.
- * env extension in: [symbol->local_slot -- should s7_define return if not a let?]
- *   openlet args: (immutable? (openlet (immutable! (inlet 'immutable? (lambda (x) #f))))) -- should we waste runtime to support this? [currently returns #t]
- *     (varlet (openlet (inlet 'a 1 'varlet (lambda args 123))) 'b 2), also sublet etc
- *   test methods in local lets
+ * openlet:
+ *   optimizer? t855.  [symbol is local thereafter]
+ *   float? read open-input-function open-output-function tree-leaves
+ *     [bool: positive? zero? bignum? infinite? directory? file-exists?:  these go to bool procs hence possible method val is lost (and others probably)]
+ *     but new func matches old sig?  So in tree-set-memq non-bool result -> bool is correct? what is "the right thing" here?
+ *       this isn't enforced in either direction
+ *   2nd arg: tree-count get-output-string sort! tree-count
  * see s7-ffi.html 2631 -- needs rewrite!
  *   unsafe: apply-values values sort! apply [maybe because fx* does not protect against values, sc->code change in apply syntax etc]
  *   unsafe: s7_apply_function s7_values s7_call s7_eval s7_eval_c_string, only phase-vocoder is unsafe in clm2xen.c

@@ -103874,6 +103874,7 @@ etc
 		    (err ((*libc* 'errno))))
 		(list type filename ((*libc* 'strerror) err))))))
 
+	(test (eq? *libc* (outlet (sublet isalnum))) #t) ; surely there's a simpler way?
 	(test (open-file "!asdf!") (list 'io-error "!asdf!" "No such file or directory"))
 	(test (string? (getcwd (make-string 1024 #\space) 1024)) #t)
 	(test (string? (get-environment-variable "HOME")) #t)
