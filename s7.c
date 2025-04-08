@@ -25543,11 +25543,15 @@ static s7_pointer g_is_float(s7_scheme *sc, s7_pointer args)
 {
   #define H_is_float "(float? x) returns #t is x is real and not rational."
   #define Q_is_float sc->pl_bt
-  s7_pointer p = car(args);
+  /* s7_pointer p = car(args); */
 #if WITH_GMP
-  return(make_boolean(sc, (is_t_real(p)) || (is_t_big_real(p)))); /* (float? pi) */
+  /* return(make_boolean(sc, (is_t_real(p)) || (is_t_big_real(p)))); *//* (float? pi) */
+  #define is_t_float(P) (is_t_real(P) || (is_t_big_real(P)))
+  check_boolean_method(sc, is_t_float, sc->is_float_symbol, args);
 #else
-  return(make_boolean(sc, is_t_real(p)));
+  /* (float? (openlet (inlet 'x 0.0 'float? (lambda (obj) (and (real? (obj 'x)) (not (exact? (obj 'x)))))))) */
+  check_boolean_method(sc, is_t_real, sc->is_float_symbol, args);
+  /* return(make_boolean(sc, is_t_real(p))); */
 #endif
 }
 
@@ -25614,7 +25618,7 @@ static bool is_infinite_b_7p(s7_scheme *sc, s7_pointer x)
 
 static s7_pointer g_is_infinite(s7_scheme *sc, s7_pointer args)
 {
-  #define H_is_infinite "(infinite? obj) returns #t if obj is an infinite real"
+  #define H_is_infinite "(infinite? obj) returns #t if obj has an infinite real or imaginary part"
   #define Q_is_infinite sc->pl_bt
   return(make_boolean(sc, is_infinite_b_7p(sc, car(args))));
 }
@@ -31023,7 +31027,7 @@ static s7_pointer g_open_input_function(s7_scheme *sc, s7_pointer args)
 
   s7_pointer port, func = car(args);
   if (!is_any_procedure(func)) /* is_procedure is too lenient: we need to flag (open-input-function (block)) for example */
-    sole_arg_wrong_type_error_nr(sc, sc->open_input_function_symbol, func, a_procedure_string);
+    return(method_or_bust_p(sc, func, sc->open_input_function_symbol, a_procedure_string));
   if (!s7_is_aritable(sc, func, 1))
     error_nr(sc, sc->wrong_type_arg_symbol,
 	     set_elist_2(sc, wrap_string(sc, "input-function-port function, ~A, should take one argument", 58), func));
@@ -31077,7 +31081,7 @@ static s7_pointer g_open_output_function(s7_scheme *sc, s7_pointer args)
 
   s7_pointer port, func = car(args);
   if (!is_any_procedure(func))
-    sole_arg_wrong_type_error_nr(sc, sc->open_output_function_symbol, func, a_procedure_string);
+    return(method_or_bust_p(sc, func, sc->open_output_function_symbol, a_procedure_string));
   if (!s7_is_aritable(sc, func, 1))
     error_nr(sc, sc->wrong_type_arg_symbol,
 	     set_elist_2(sc, wrap_string(sc, "output-function-port function, ~A, should take one argument", 59), func));
@@ -38579,7 +38583,7 @@ static inline s7_int tree_len(s7_scheme *sc, s7_pointer p)
 
 static s7_int tree_leaves_i_7p(s7_scheme *sc, s7_pointer p)
 {
-  if (!is_list(p))
+  if (!is_list(p)) /* perhaps method? */
     sole_arg_wrong_type_error_nr(sc, sc->tree_leaves_symbol, p, a_list_string);
   if ((sc->safety > NO_SAFETY) && (tree_is_cyclic(sc, p)))
     error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "tree-leaves: tree is cyclic: ~S", 31), p));
@@ -38588,7 +38592,13 @@ static s7_int tree_leaves_i_7p(s7_scheme *sc, s7_pointer p)
 
 static s7_pointer tree_leaves_p_p(s7_scheme *sc, s7_pointer tree)
 {
-  return(make_integer(sc, tree_leaves_i_7p(sc, tree)));
+  if (is_list(tree))
+    {
+      if ((sc->safety > NO_SAFETY) && (tree_is_cyclic(sc, tree)))
+	error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "tree-leaves: tree is cyclic: ~S", 31), tree));
+      return(make_integer(sc, tree_len(sc, tree)));
+    }
+  return(method_or_bust_p(sc, tree, sc->tree_leaves_symbol, a_list_string));
 }
 
 static s7_pointer g_tree_leaves(s7_scheme *sc, s7_pointer args)
@@ -96826,14 +96836,18 @@ static s7_pointer g_show_stack(s7_scheme *sc, s7_pointer args)
 void s7_show_op_stack(s7_scheme *sc);
 void s7_show_op_stack(s7_scheme *sc)
 {
-  fprintf(stderr, "op_stack:\n");
-  for (s7_pointer *p = sc->op_stack, *tp = sc->op_stack_now; (p < tp); p++)
-    fprintf(stderr, "  %s\n", display(*p));
+  if (sc->op_stack < sc->op_stack_now)
+    {
+      fprintf(stderr, "op_stack:\n");
+      for (s7_pointer *p = sc->op_stack, *tp = sc->op_stack_now; (p < tp); p++)
+	fprintf(stderr, "  %s\n", display(*p));
+    }
+  else fprintf(stderr, "op_stack is empty\n");
 }
 
 static s7_pointer g_show_op_stack(s7_scheme *sc, s7_pointer args)
 {
-  #define H_show_op_stack "no help"
+  #define H_show_op_stack "(show-op-stack) displays the current op_stack"
   #define Q_show_op_stack s7_make_signature(sc, 1, sc->not_symbol)
   s7_show_op_stack(sc);
   return(sc->F);
@@ -96841,7 +96855,7 @@ static s7_pointer g_show_op_stack(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer g_is_op_stack(s7_scheme *sc, s7_pointer args)
 {
-  #define H_is_op_stack "no help"
+  #define H_is_op_stack "(op-stack?) returns #t if there are entries in the op_stack"
   #define Q_is_op_stack s7_make_signature(sc, 1, sc->is_boolean_symbol)
   return(make_boolean(sc, (sc->op_stack < sc->op_stack_now)));
 }
@@ -101185,18 +101199,11 @@ int main(int argc, char **argv)
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  * mutints: move make_mutable to the point of use and clear afterwards, more use of num_small_ints?
  * t854 -> tmisc? or texit?
- * openlet:
- *   optimizer? t855.  [symbol is local thereafter]
- *   float? read open-input-function open-output-function tree-leaves
- *     [bool: positive? zero? bignum? infinite? directory? file-exists?:  these go to bool procs hence possible method val is lost (and others probably)]
- *     but new func matches old sig?  So in tree-set-memq non-bool result -> bool is correct? what is "the right thing" here?
- *       this isn't enforced in either direction
- *   2nd arg: tree-count get-output-string sort! tree-count
+ * openlet: optimizer? t855 [symbol is local thereafter]
  * see s7-ffi.html 2631 -- needs rewrite!
  *   unsafe: apply-values values sort! apply [maybe because fx* does not protect against values, sc->code change in apply syntax etc]
  *   unsafe: s7_apply_function s7_values s7_call s7_eval s7_eval_c_string, only phase-vocoder is unsafe in clm2xen.c
- *   ffitest examples of unsafe funcs
- *   for-each/map/member/assoc w/o push?
+ *   ffitest examples of unsafe funcs, for-each/map/member/assoc w/o push?
  *   t101-5|6|13|16 trouble fx_safe_thunk_a opt_p_pp_ff etc if unsafe->semisafe or safe (see 29-Mar)
  * for non-begin_temp temps check for sc->unused at end (before clear) might catch overwrites [added a few]
  * how can FFI code set saver/translucent bits et al?  need ffitest.c examples. also all_float|integer, is_definer scope_safe

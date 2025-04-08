@@ -66908,6 +66908,7 @@ hi6: (string-app...
 (test (float? pi) #t)
 (test (float? 1e-308) #t)
 (when with-bignums (test (float? (bignum "1.0")) #t))
+(test (float? (openlet (inlet 'x 0.0 'float? (lambda (obj) (and (real? (obj 'x)) (not (exact? (obj 'x)))))))) #t)
 
 ;;; byte?
 
@@ -99445,6 +99446,7 @@ etc
   (test (null? (openlet (inlet 'c () 'null? (baser-method null?)))) #t)
   (test (keyword? (openlet (inlet 'c ':key 'keyword? (baser-method keyword?)))) #t)
   (test (real? (openlet (inlet 'c 1/9223372036854775807 'real? (baser-method real?)))) #t)
+  (test (float? (openlet (inlet 'c 1.0 'float? (baser-method float?)))) #t)
   (test (length (openlet (inlet 'c () 'length (baser-method length)))) 0)
   (test (pair? (openlet (inlet 'c '(1) 'pair? (baser-method pair?)))) #t)
   (test (number? (openlet (inlet 'c 1/9223372036854775807 'number? (baser-method number?)))) #t)
@@ -99512,6 +99514,7 @@ etc
     (test (let ((x (openlet (inlet 'c -1 '- (baser-method -))))) (- x 1)) -2)
     (test (let ((x (openlet (inlet 'c 1.0 '- (baser-method -))))) (- 1.0 x)) 0.0)
     (test (* 3.0 (openlet (inlet 'c 2.0 '* (baser-method *))) 2.0) 12.0))
+  (test (tree-leaves (openlet (inlet 'tree-leaves (lambda (p) 0)))) 0)
   (test (symbol->string (openlet (inlet 'c 'a 'symbol->string (baser-method symbol->string)))) "a")
   (test (let? (outlet (openlet (inlet 'c (curlet) 'outlet (baser-method outlet)))) ) #t)
   (test (c-pointer? (c-pointer (openlet (inlet 'c 0 'c-pointer (baser-method c-pointer))))) #t))
