@@ -16,7 +16,7 @@
     (memb 'd '(a b c))
     (memb 'b '(a b c))))
 
-(membtest)
+(membtest) ; 174, eval 71, op_dox 32, fx_c_s_car_s 19, resize_heap_to 12, call_with_exit 8
 
 
 (define (find-if f sequence)
@@ -72,6 +72,20 @@
       #f))
 
 (dwfib 28)
+
+(define (fcall)
+  (call/cc
+   (lambda (return)
+     (do ((i 0 (+ i 1)))
+	 ((= i 10))
+       (if (= i 3)
+	   (return 32)))))) ; check call/cc -> call-with-exit opt
+
+(define (test-fcall)
+  (do ((k 0 (+ k 1)))
+      ((= k size))
+    (fcall)))
+(test-fcall)
 
 
 (define lsize 100000)

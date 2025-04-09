@@ -2458,9 +2458,13 @@ static void init_types(void)
 #define is_mutable(p)                  has_mid_type_bit(p, T_MID_MUTABLE)
 #define is_mutable_number(p)           has_mid_type_bit(T_Num(p), T_MID_MUTABLE)
 #define is_mutable_integer(p)          has_mid_type_bit(T_Int(p), T_MID_MUTABLE)
+#if S7_DEBUGGING
+#define clear_mutable_number(p)        do {check_mutable_bit(p); clear_mid_type_bit(T_Num(p), T_MID_MUTABLE);} while (0)
+#define clear_mutable_integer(p)       do {check_mutable_bit(p); clear_mid_type_bit(T_Int(p), T_MID_MUTABLE);} while (0)
+#else
 #define clear_mutable_number(p)        clear_mid_type_bit(T_Num(p), T_MID_MUTABLE)
 #define clear_mutable_integer(p)       clear_mid_type_bit(T_Int(p), T_MID_MUTABLE)
-static s7_pointer clear_is_mutable(s7_pointer p) {clear_mid_type_bit(p, T_MID_MUTABLE); return(p);}
+#endif
 /* used for mutable numbers, can occur with T_IMMUTABLE (outside view vs inside) */
 
 #define T_HAS_KEYWORD                  T_MID_MUTABLE
@@ -3814,6 +3818,12 @@ const char *display(s7_pointer obj)
 #define display_truncated(Obj) string_value(object_to_string_truncated(sc, Obj))
 
 #if S7_DEBUGGING
+static void check_mutable_bit(s7_pointer p)
+{
+  if (!is_mutable(p))
+    fprintf(stderr, "%s[%d]: mutable cleared already?\n", p->gc_func, p->gc_line);
+}
+
 static void set_type_1(s7_pointer p, uint64_t f, const char *func, int32_t line)
 {
   p->alloc_line = line;
@@ -32824,6 +32834,7 @@ static s7_pointer float_vector_iterate_carried(s7_scheme *sc, s7_pointer obj)
       set_real(iterator_carrier(obj), float_vector(iterator_sequence(obj), iterator_position(obj)++));
       return(iterator_carrier(obj));
     }
+  clear_mutable_number(iterator_carrier(obj));
   return(iterator_quit(obj));
 }
 
@@ -38756,15 +38767,15 @@ static s7_pointer g_tree_set_memq(s7_scheme *sc, s7_pointer args)
 {
   #define H_tree_set_memq "(tree-set-memq symbols tree) returns #t if any of the list of symbols is in the tree"
   #define Q_tree_set_memq s7_make_signature(sc, 3, sc->is_boolean_symbol, sc->is_list_symbol, sc->is_list_symbol)
-  s7_pointer syms = car(args);
-  if (!is_list(syms)) /* tree_set_memq_b_7pp returns bool, so we have to check car(args) for an openlet first */
+  s7_pointer symbols = car(args);
+  if (!is_list(symbols)) /* tree_set_memq_b_7pp returns bool, so we have to check car(args) for an openlet first */
     {
-      if (!has_active_methods(sc, syms))
-	wrong_type_error_nr(sc, sc->tree_set_memq_symbol, 1, syms, a_list_string);
-      return(find_and_apply_method(sc, syms, sc->tree_set_memq_symbol, args));
+      if (!has_active_methods(sc, symbols))
+	wrong_type_error_nr(sc, sc->tree_set_memq_symbol, 1, symbols, a_list_string);
+      return(find_and_apply_method(sc, symbols, sc->tree_set_memq_symbol, args));
     }
   /* TODO: tree (cadr(args)) is not checked for openlet */
-  return(make_boolean(sc, tree_set_memq_b_7pp(sc, syms, cadr(args))));
+  return(make_boolean(sc, tree_set_memq_b_7pp(sc, symbols, cadr(args))));
 }
 
 static s7_pointer tree_set_memq_syms_direct(s7_scheme *sc, s7_pointer syms, s7_pointer tree)
@@ -58367,7 +58378,7 @@ static s7_pointer fx_c_aa(s7_scheme *sc, s7_pointer arg)
   set_car(sc->t2_2, gc_protected2(sc));
   res = fn_proc(arg)(sc, sc->t2_1);
   if (stack_top_op(sc) == OP_GC_PROTECT) unstack_gc_protect(sc); /* added op_gc_protect check 29-Mar-25: see t855.scm */
-  /* TODO: find this somehow during optimization! */
+  /* TODO: find this somehow during optimization! is_openlet? unmatched sigs? */
   return(res);
 }
 
@@ -81851,7 +81862,7 @@ static void activate_with_let(s7_scheme *sc, s7_pointer e)
   if (!is_let(e)) /* (with-let . "hi") */
     {
       s7_pointer new_e = find_let(sc, e); /* sc->nil/rootlet here means no let found */
-      if ((!is_let(new_e)) && (!has_closure_let(e))) /* TODO: why closure_let? */
+      if (!is_let(new_e))
 	error_nr(sc, sc->wrong_type_arg_symbol, set_elist_2(sc, wrap_string(sc, "with-let takes a let (an environment) argument: ~A", 50), e));
       e = new_e;
     }
@@ -86236,7 +86247,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool loo
 		      if ((o->v[0].fd == opt_d_7pid_ssc) &&
 			  (o->v[4].d_7pid_f == float_vector_set_d_7pid_direct) &&
 			  (stepper == slot_value(o->v[2].p)))
-			s7_fill(sc, set_plist_4(sc, slot_value(o->v[1].p), wrap_real(sc, o->v[3].x), clear_is_mutable(stepper), wrap_integer(sc, end))); /* wrapped 16-Nov-23 */
+			s7_fill(sc, set_plist_4(sc, slot_value(o->v[1].p), wrap_real(sc, o->v[3].x), stepper, wrap_integer(sc, end))); /* wrapped 16-Nov-23 */
 		      else
 			{ /* (do ((i 0 (+ i 1))) ((= i 2) fv) (float-vector-set! fv (+ i 0) (+ i 1) (* 2.0 3.0))) */
 			  s7_int end4 = end - 4;
@@ -86253,7 +86264,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool loo
 		      ((o->v[3].p_pip_f == string_set_p_pip_direct) ||
 		       (o->v[3].p_pip_f == t_vector_set_p_pip_direct) ||
 		       (o->v[3].p_pip_f == list_set_p_pip_unchecked)))
-		    s7_fill(sc, set_plist_4(sc, slot_value(o->v[1].p), o->v[4].p, clear_is_mutable(stepper), wrap_integer(sc, end)));  /* wrapped 16-Nov-23 */
+		    s7_fill(sc, set_plist_4(sc, slot_value(o->v[1].p), o->v[4].p, stepper, wrap_integer(sc, end)));  /* wrapped 16-Nov-23 */
 		  else
 		    if (fp == opt_if_bp)
 		      {      /* (do ((i 0 (+ i 1))) ((= i 3) y) (if (= (+ z 1) 2.2) (display (+ z 1)))) */
@@ -86281,7 +86292,7 @@ static bool opt_dotimes(s7_scheme *sc, s7_pointer code, s7_pointer scc, bool loo
 		opt_info *o = sc->opts[0];
 		s7_int (*fi)(opt_info *o) = o->v[0].fi;
 		if ((fi == opt_i_7pii_ssc) && (stepper == slot_value(o->v[2].p)) && (o->v[3].i_7pii_f == int_vector_set_i_7pii_direct))
-		  s7_fill(sc, set_plist_4(sc, slot_value(o->v[1].p), wrap_integer(sc, o->v[4].i), clear_is_mutable(stepper), wrap_integer(sc, end)));  /* wrapped 16-Nov-23 */
+		  s7_fill(sc, set_plist_4(sc, slot_value(o->v[1].p), wrap_integer(sc, o->v[4].i), stepper, wrap_integer(sc, end)));  /* wrapped 16-Nov-23 */
 		else
 		  if ((o->v[3].i_7pii_f == int_vector_set_i_7pii_direct) && (o->v[5].fi == opt_i_pi_ss_ivref) && (o->v[2].p == o->v[4].o1->v[2].p))
 		    copy_to_same_type(sc, slot_value(o->v[1].p), slot_value(o->v[4].o1->v[1].p), integer(stepper), end, integer(stepper));
@@ -86830,7 +86841,7 @@ static goto_t op_safe_do(s7_scheme *sc)
 	      sc->code = cdadr(code);
 	      return(goto_safe_do_end_clauses);
 	    }}}
-  clear_is_mutable(slot_value(let_dox_slot1(sc->curlet)));
+  clear_mutable_number(slot_value(let_dox_slot1(sc->curlet)));
   sc->code = cddr(code);
   set_unsafe_do(sc->code);
   set_opt2_pair(code, sc->code);
@@ -89357,6 +89368,8 @@ static bool op_tc_if_a_z_l2a(s7_scheme *sc, s7_pointer code)
 			    set_real(val2, fd2(o2));
 			    set_real(val1, x1);
 			  }
+		      clear_mutable_number(val1);
+		      clear_mutable_number(val2);
 		      return(op_tc_z(sc, if_done));
 		    }}}}
       set_no_bool_opt(code);
@@ -101140,7 +101153,7 @@ int main(int argc, char **argv)
  * tvect       3408   2464   1772   1669   1497   1457   1453
  * thook       7651   ----   2590   2030   2046   1731   1739
  * tauto                     2562   2048   1729   1760   1764
- * texit       1884   1950   1778   1741   1770   1759   1758
+ * texit                     2912   3094   3104   3093   1824
  * s7test             1831   1818   1829   1830   1849   1862
  * lt          2222   2172   2150   2185   1950   1892   1894
  * dup                3788   2492   2239   2097   2012   1971
@@ -101180,7 +101193,7 @@ int main(int argc, char **argv)
  * tform                     10.0   9992   9961   9626   9437
  * cb          12.9   11.0   9658   9564   9609   9657   9665
  * tmap-hash                                      10.3   10.3
- * tgen               11.4   12.0   12.1   12.2   12.4   12.4 12.6 [do_is_safe 78 called from op_let_temp in do_is_safe? mark_fx_treeable +100]
+ * tgen               11.4   12.0   12.1   12.2   12.4   12.4 12.5 [do_is_safe 78 called from op_let_temp in do_is_safe?]
  * tall        15.9   15.6   15.6   15.6   15.1   15.1   15.1
  * timp               24.4   20.0   19.6   19.7   15.5   15.5
  * tmv                21.9   21.1   20.7   20.6   16.6   17.6
@@ -101198,8 +101211,8 @@ int main(int argc, char **argv)
  *   recur_if_a_a_if_a_a_la_la needs the 3 other choices (true_quits etc) and combined
  *   op_recur_if_a_a_opa_la_laq op_recur_if_a_a_opla_la_laq can use existing if_and_cond blocks, need cond cases
  * mutints: move make_mutable to the point of use and clear afterwards, more use of num_small_ints?
- * t854 -> tmisc? or texit?
- * openlet: optimizer? t855 [symbol is local thereafter]
+ * openlet: optimizer? t855 [symbol is local thereafter -- also arg has_methods (is_openlet) if L or openlet -- i.e. mark openlet pair as has_methods too]
+ *   activate_with_let find_let s7test
  * see s7-ffi.html 2631 -- needs rewrite!
  *   unsafe: apply-values values sort! apply [maybe because fx* does not protect against values, sc->code change in apply syntax etc]
  *   unsafe: s7_apply_function s7_values s7_call s7_eval s7_eval_c_string, only phase-vocoder is unsafe in clm2xen.c
@@ -101207,4 +101220,6 @@ int main(int argc, char **argv)
  *   t101-5|6|13|16 trouble fx_safe_thunk_a opt_p_pp_ff etc if unsafe->semisafe or safe (see 29-Mar)
  * for non-begin_temp temps check for sc->unused at end (before clear) might catch overwrites [added a few]
  * how can FFI code set saver/translucent bits et al?  need ffitest.c examples. also all_float|integer, is_definer scope_safe
+ *   can cload use these, or how can user now warn the optimizer? -- use "unsafe"
+ * c-pointer implicit?
  */
