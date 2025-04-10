@@ -12785,7 +12785,7 @@ static void pop_input_port(s7_scheme *sc);
 
 static void call_with_exit(s7_scheme *sc)
 {
-  s7_int i, new_stack_top, quit = 0;
+  s7_int old_top, new_stack_top, quit = 0;
 
   if (!call_exit_active(sc->code))
     error_nr(sc, sc->invalid_exit_function_symbol,
@@ -12798,16 +12798,16 @@ static void call_with_exit(s7_scheme *sc)
   sc->op_stack_now = (s7_pointer *)(sc->op_stack + call_exit_op_loc(sc->code));
 
   /* look for dynamic-wind in the stack section that we are jumping out of */
-  i = stack_top(sc) - 1;
+  old_top = stack_top(sc) - 1;
   /* op is entirely op_deactivate_goto tgc, for_each_2|3 tcase, dox_step_o texit, lots of ops s7test.scm */
-  /* if (stack_op(sc->stack, i) == OP_DEACTIVATE_GOTO) {call_exit_active(stack_args(sc->stack, i)) = false; goto SET_VALUE;} saves >54 in tgc */
+  /* if (stack_op(sc->stack, old_top) == OP_DEACTIVATE_GOTO) {call_exit_active(stack_args(sc->stack, old_top)) = false; goto SET_VALUE;} saves >54 in tgc */
 
   do {
-    switch (stack_op(sc->stack, i)) /* the hit rate here is good; exiters[op] slowed us down! (see tmp) tgc/texit slower, tcase faster */
+    switch (stack_op(sc->stack, old_top)) /* the hit rate here is good; exiters[op] slowed us down! (see tmp) tgc/texit slower, tcase faster */
       {
       case OP_DYNAMIC_WIND:
 	{
-	  s7_pointer lx = T_Dyn(stack_code(sc->stack, i));
+	  s7_pointer lx = T_Dyn(stack_code(sc->stack, old_top));
 	  if (dynamic_wind_state(lx) == DWIND_BODY)
 	    {
 	      dynamic_wind_state(lx) = DWIND_FINISH;
@@ -12822,8 +12822,8 @@ static void call_with_exit(s7_scheme *sc)
 
       case OP_DYNAMIC_UNWIND:
       case OP_DYNAMIC_UNWIND_PROFILE:
-	set_stack_op(sc->stack, i, OP_GC_PROTECT);
-	dynamic_unwind(sc, stack_code(sc->stack, i), stack_args(sc->stack, i));
+	set_stack_op(sc->stack, old_top, OP_GC_PROTECT);
+	dynamic_unwind(sc, stack_code(sc->stack, old_top), stack_args(sc->stack, old_top));
 	break;
 
       case OP_EVAL_STRING:
@@ -12835,45 +12835,45 @@ static void call_with_exit(s7_scheme *sc)
 	goto SET_VALUE;
 
       case OP_DEACTIVATE_GOTO:        /* here we're jumping into an unrelated call-with-exit block */
-	call_exit_active(stack_args(sc->stack, i)) = false;
+	call_exit_active(stack_args(sc->stack, old_top)) = false;
 	break;
 
       case OP_LET_TEMP_DONE:
 	{
 	  s7_pointer old_args = sc->args;
-	  let_temp_done(sc, stack_args(sc->stack, i), T_Let(stack_let(sc->stack, i)));
+	  let_temp_done(sc, stack_args(sc->stack, old_top), T_Let(stack_let(sc->stack, old_top)));
 	  sc->args = old_args;
 	}
 	break;
 
       case OP_LET_TEMP_UNWIND:
-	let_temp_unwind(sc, stack_code(sc->stack, i), stack_args(sc->stack, i));
+	let_temp_unwind(sc, stack_code(sc->stack, old_top), stack_args(sc->stack, old_top));
 	break;
 
       case OP_LET_TEMP_S7_UNWIND:
-	starlet_set_1(sc, T_Sym(stack_code(sc->stack, i)), stack_args(sc->stack, i));
+	starlet_set_1(sc, T_Sym(stack_code(sc->stack, old_top)), stack_args(sc->stack, old_top));
 	break;
 
       case OP_LET_TEMP_S7_OPENLETS_UNWIND:
-	sc->has_openlets = (stack_args(sc->stack, i) != sc->F);
+	sc->has_openlets = (stack_args(sc->stack, old_top) != sc->F);
 	break;
 
 	/* call/cc does not close files, but I think call-with-exit should */
       case OP_GET_OUTPUT_STRING:
       case OP_UNWIND_OUTPUT:
 	{
-	  s7_pointer x = T_Pro(stack_code(sc->stack, i));  /* "code" = port that we opened */
+	  s7_pointer x = T_Pro(stack_code(sc->stack, old_top));  /* "code" = port that we opened */
 	  s7_close_output_port(sc, x);
-	  x = stack_args(sc->stack, i);                    /* "args" = port that we shadowed, if not #<unused> */
+	  x = stack_args(sc->stack, old_top);                    /* "args" = port that we shadowed, if not #<unused> */
 	  if (x != sc->unused)
 	    set_current_output_port(sc, x);
 	}
 	break;
 
       case OP_UNWIND_INPUT:
-	s7_close_input_port(sc, T_Pri(stack_code(sc->stack, i))); /* "code" = port that we opened */
-	if (stack_args(sc->stack, i) != sc->unused)
-	  set_current_input_port(sc, stack_args(sc->stack, i));   /* "args" = port that we shadowed */
+	s7_close_input_port(sc, T_Pri(stack_code(sc->stack, old_top))); /* "code" = port that we opened */
+	if (stack_args(sc->stack, old_top) != sc->unused)
+	  set_current_input_port(sc, stack_args(sc->stack, old_top));   /* "args" = port that we shadowed */
 	break;
 
       case OP_EVAL_DONE: /* goto called in a method -- put off the inner eval return(s) until we clean up the stack */
@@ -12881,11 +12881,11 @@ static void call_with_exit(s7_scheme *sc)
 	break;
 
       default:
-	if ((S7_DEBUGGING) && (stack_op(sc->stack, i) == OP_MAP_UNWIND)) fprintf(stderr, "%s[%d]: unwind %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr);
+	if ((S7_DEBUGGING) && (stack_op(sc->stack, old_top) == OP_MAP_UNWIND)) fprintf(stderr, "%s[%d]: unwind %" ld64 "\n", __func__, __LINE__, sc->map_call_ctr);
 	break;
       }
-    i -= 4;
-  } while (i > new_stack_top);
+    old_top -= 4;
+  } while (old_top > new_stack_top);
 
  SET_VALUE:
   sc->stack_end = (s7_pointer *)(sc->stack_start + new_stack_top);
@@ -15296,7 +15296,7 @@ static block_t *number_to_string_with_radix(s7_scheme *sc, s7_pointer obj, int32
 	s7_int real_len = 0, imag_len = 0;
 	block_t *n = number_to_string_with_radix(sc, wrap_real(sc, real_part(obj)), radix, 0, precision, float_choice, &real_len); /* include floatify */
 	block_t *d = number_to_string_with_radix(sc, wrap_real(sc, imag_part(obj)), radix, 0, precision, float_choice, &imag_len);
-	char *dp = (char *)block_data(d);
+	const char *dp = (const char *)block_data(d);
 	b = inline_mallocate(sc, 512);
 	p = (char *)block_data(b);
 	pt = p;
@@ -41642,6 +41642,7 @@ static s7_pointer g_vector_append(s7_scheme *sc, s7_pointer args)
 		    set_car(v, car(y));
 		  v = g_vector_append(sc, sc->temp7);
 		  y = s7_apply_function(sc, func, set_ulist_1(sc, v, p));
+		  if ((S7_DEBUGGING) && (!is_pair(sc->temp7))) fprintf(stderr, "%s[%d]: temp7: %s\n", __func__, __LINE__, display(sc->temp7));
 		  sc->temp7 = sc->unused;
 		  return(y);
 		}}
@@ -41655,6 +41656,7 @@ static s7_pointer vector_append_p_pp(s7_scheme *sc, s7_pointer p1, s7_pointer p2
   s7_pointer val;
   sc->temp7 = list_2(sc, p1, p2); /* ideally this list would be gc_protected, avoiding temp7 (method call above) */
   val = g_vector_append(sc, sc->temp7);
+  if ((S7_DEBUGGING) && (!is_pair(sc->temp7))) fprintf(stderr, "%s[%d]: temp7: %s\n", __func__, __LINE__, display(sc->temp7));
   sc->temp7 = sc->unused;
   return(val);
 }
@@ -41664,6 +41666,7 @@ static s7_pointer vector_append_p_ppp(s7_scheme *sc, s7_pointer p1, s7_pointer p
   s7_pointer val;
   sc->temp7 = list_3(sc, p1, p2, p3);
   val = g_vector_append(sc, sc->temp7);
+  if ((S7_DEBUGGING) && (!is_pair(sc->temp7))) fprintf(stderr, "%s[%d]: temp7: %s\n", __func__, __LINE__, display(sc->temp7));
   sc->temp7 = sc->unused;
   return(val);
 }
@@ -42181,6 +42184,7 @@ static s7_pointer g_list_to_vector(s7_scheme *sc, s7_pointer args)
   if (!s7_is_proper_list(sc, p))
     return(method_or_bust_p(sc, p, sc->list_to_vector_symbol, a_proper_list_string));
   p = g_vector(sc, p);
+  if ((S7_DEBUGGING) && (!is_pair(sc->temp3))) fprintf(stderr, "%s[%d]: temp3: %s\n", __func__, __LINE__, display(sc->temp3));
   sc->temp3 = sc->unused;
   return(p);
 }
@@ -48754,6 +48758,8 @@ static s7_pointer fx_implicit_c_object_ref_a(s7_scheme *sc, s7_pointer arg)
   return((*(c_object_ref(sc, c)))(sc, sc->t2_1));
 }
 
+/* We could add implicit c-pointer ref/set referring to its let, but that seems confusing -- c-object-ref|set! would be different */
+
 
 /* -------- dilambda -------- */
 
@@ -49443,7 +49449,7 @@ s7_pointer s7_set_setter(s7_scheme *sc, s7_pointer p, s7_pointer setter)
 }
 
 /* (let () (define xxx 23) (define (hix) (set! xxx 24)) (hix) (set! (setter 'xxx) (lambda (sym val) (format *stderr* "val: ~A~%" val) val)) (hix))
- *    so set setter before use!
+ *    which does not call the setter presumably because the set! has been optimized to ignore it -- set the setter before use!
  */
 
 static s7_pointer call_c_function_setter(s7_scheme *sc, s7_pointer func, s7_pointer symbol, s7_pointer new_value)
@@ -49462,6 +49468,7 @@ static s7_pointer call_setter(s7_scheme *sc, s7_pointer slot, s7_pointer new_val
     return(new_value);
   sc->temp9 = (has_let_arg(func)) ? list_3(sc, slot_symbol(slot), new_value, sc->curlet) : list_2(sc, slot_symbol(slot), new_value);
   /* safe lists here are much slower -- the setters are called more often for some reason (see tset.scm) */
+  /*  the following s7_call can clobber the temp var (perhaps setter is calling implicit set!?) */
   result = s7_call(sc, func, sc->temp9);
   sc->temp9 = sc->unused;
   return(result);
@@ -53873,7 +53880,7 @@ static s7_pointer profile_info_out(s7_scheme *sc)
   for (i = 0; i < pd->top; i++) if (pd->funcs[i]) clear_match_symbol(pd->funcs[i]);
   memcpy((void *)int_vector_ints(vl), (void *)pd->lines, pd->top * sizeof(s7_int));
   memcpy((void *)int_vector_ints(vi), (void *)pd->timing_data, pd->top * pd_block_size * sizeof(s7_int));
-  set_car(sc->elist_7, sc->F);
+  set_car(sc->elist_7, sc->unused);
   return(p);
 }
 
@@ -54652,7 +54659,10 @@ static no_return void error_nr(s7_scheme *sc, s7_pointer type, s7_pointer info)
   sc->v = sc->unused;
   sc->x = sc->unused;
   sc->y = sc->unused;
+  sc->temp3 = sc->unused;
   sc->temp6 = sc->unused;
+  sc->temp7 = sc->unused;
+  sc->temp9 = sc->unused;
 #endif
   sc->value = info;               /* feeble GC protection (otherwise info is sometimes freed in this function), throw also protects type */
 
@@ -55468,6 +55478,7 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
       check_stack_size(sc);
       sc->temp9 = indices; /* (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices; */ /* s7_call copies and this is safe? 2-Oct-22 (and below) */
       sc->value = s7_call(sc, obj, sc->temp9);
+      if ((S7_DEBUGGING) && (!is_pair(sc->temp9))) fprintf(stderr, "%s[%d]: temp9: %s\n", __func__, __LINE__, display(sc->temp9));
       sc->temp9 = sc->unused;
       if ((S7_DEBUGGING) && (is_multiple_value(sc->value))) fprintf(stderr, "mv: %s %s %s\n", display(obj), display(indices), display(sc->value));
       /* if mv: sc->value = splice_in_values(sc, multiple_value(sc->value)); */
@@ -55483,6 +55494,7 @@ static s7_pointer implicit_index(s7_scheme *sc, s7_pointer obj, s7_pointer indic
       if (!is_applicable(obj)) /* (#2d((0 0)(0 0)) 0 0 0) */
 	apply_error_nr(sc, obj, indices);
       sc->temp9 = indices; /* (needs_copied_args(obj)) ? copy_proper_list(sc, indices) : indices; */ /* do not use sc->args here! */
+      /*  the following s7_call can clobber the temp var */
       sc->value = s7_call(sc, obj, sc->temp9);
       sc->temp9 = sc->unused;
       if (is_multiple_value(sc->value))
@@ -58377,8 +58389,14 @@ static s7_pointer fx_c_aa(s7_scheme *sc, s7_pointer arg)
   set_car(sc->t2_1, T_Ext(gc_protected1(sc)));
   set_car(sc->t2_2, gc_protected2(sc));
   res = fn_proc(arg)(sc, sc->t2_1);
-  if (stack_top_op(sc) == OP_GC_PROTECT) unstack_gc_protect(sc); /* added op_gc_protect check 29-Mar-25: see t855.scm */
-  /* TODO: find this somehow during optimization! is_openlet? unmatched sigs? */
+  unstack_gc_protect(sc);
+  /* (define (f0) (write (vector 1.0) (openlet (inlet 'write for-each)))) or worse, 
+   *   (define L (openlet (inlet 'write for-each))) (define (f) (write (vector 1.0) L))
+   *   will segfault (probably) because the for-each pushes an operator on the stack, expecting to continue in eval, but
+   *   write is a safe function that the optimizer thinks can ignore such stuff.  s7.html warns about this -- the signatures should be compatible.
+   *   Maybe openlet (or inlet?) should warn about for-each, map, member, and assoc.
+   * We could check first that stack_top_op == OP_GC_PROTECT and not unstack if it isn't, but there is nothing special to fx_c_aa in that regard.
+   */
   return(res);
 }
 
@@ -100065,7 +100083,7 @@ static void init_rootlet(s7_scheme *sc)
 #endif
   sc->qq_append_symbol =             defun("<list*>",           qq_append,		2, 0, false); set_is_saver(sc->qq_append_symbol); /* occurs via quasiquote as #_<list*> */
   sc->apply_values_symbol =          unsafe_defun("apply-values", apply_values,         0, 1, false); set_is_saver(sc->apply_values_symbol);
-  sc->list_values_symbol =           defun("list-values",       list_values,            0, 0, true); set_is_saver(sc->list_values_symbol);
+  sc->list_values_symbol =           defun("list-values",       list_values,            0, 0, true);  set_is_saver(sc->list_values_symbol);
   /* are these three names necessary? */
 
   sc->documentation_symbol =         defun("documentation",     documentation,          1, 0, false);
@@ -101218,8 +101236,6 @@ int main(int argc, char **argv)
  *   unsafe: s7_apply_function s7_values s7_call s7_eval s7_eval_c_string, only phase-vocoder is unsafe in clm2xen.c
  *   ffitest examples of unsafe funcs, for-each/map/member/assoc w/o push?
  *   t101-5|6|13|16 trouble fx_safe_thunk_a opt_p_pp_ff etc if unsafe->semisafe or safe (see 29-Mar)
- * for non-begin_temp temps check for sc->unused at end (before clear) might catch overwrites [added a few]
  * how can FFI code set saver/translucent bits et al?  need ffitest.c examples. also all_float|integer, is_definer scope_safe
  *   can cload use these, or how can user now warn the optimizer? -- use "unsafe"
- * c-pointer implicit?
  */
