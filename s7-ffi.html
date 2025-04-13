@@ -3449,7 +3449,7 @@ A safe function treats the arglist
 passed to it as immutable and temporary (that is, it just grabs the arguments from
 the list).  A few s7_* functions are unsafe, and that makes anything that calls
 them also unsafe.  The main one is s7_apply_function, but it is possible that
-s7_eval, s7_eval_c_string, and s7_values are unsafe in some cases.  If your code
+s7_eval, s7_eval_c_string, s7_call, and s7_values are unsafe in some cases.  If your code
 calls a Scheme function from C via s7_apply_function, it is not safe from the
 optimizer's point of view.
 If the optimizer knows a function is safe, it can use prebuilt

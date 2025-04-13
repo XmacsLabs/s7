@@ -5231,7 +5231,7 @@ static void complain(s7_scheme *sc, const char *complaint, s7_pointer p, const c
 static char *show_debugger_bits(s7_pointer p)
 {
   char *bits_str = (char *)Malloc(512);
-  s7_int bits = p->debugger_bits;
+  const s7_int bits = p->debugger_bits;
   snprintf(bits_str, 512, " %s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s%s",
 	   ((bits & OPT1_SET) != 0) ? " opt1_set" : "",
 	   ((bits & OPT1_FAST) != 0) ? " opt1_fast" : "",
@@ -5498,7 +5498,7 @@ static void print_gc_info(s7_scheme *sc, s7_pointer obj, const char *func, int32
       fprintf(stderr, "%s from %s[%d]: %p type is %d?\n", __func__, func, line, obj, unchecked_type(obj));
     else
       {
-	s7_int free_type = full_type(obj);
+	const s7_int free_type = full_type(obj);
 	char *bits;
 	char fline[128];
 	full_type(obj) = obj->alloc_type; /* not set_full_type here!  it clobbers existing alloc/free info */
@@ -5942,7 +5942,7 @@ static void print_debugging_state(s7_scheme *sc, s7_pointer obj, s7_pointer port
 {
   /* show current state, current allocated state */
   char *allocated_bits, *str;
-  s7_int save_full_type = full_type(obj);
+  const s7_int save_full_type = full_type(obj);
   s7_int len, nlen;
   const char *excl_name = (is_free(obj)) ? "free cell!" : "unknown object!";
   block_t *b;
@@ -6225,8 +6225,9 @@ static s7_pointer set_ulist_1(s7_scheme *sc, s7_pointer x1, s7_pointer x2)
 /* ---------------- error handlers ---------------- */
 static const char *make_type_name(s7_scheme *sc, const char *name, article_t article)
 {
-  s7_int i, slen = safe_strlen(name);
-  s7_int len = slen + 8;
+  s7_int i;
+  const s7_int slen = safe_strlen(name);
+  const s7_int len = slen + 8;
   if (len > sc->typnam_len)
     {
       if (sc->typnam) free(sc->typnam);
@@ -6250,7 +6251,7 @@ static const char *make_type_name(s7_scheme *sc, const char *name, article_t art
 static const char *type_name_from_type(int32_t typ, article_t article)
 {
   /* if the type enum never changed, this could just be an array lookup, but it doesn't matter -- this function isn't called much */
-  bool no_article = (article == NO_ARTICLE);
+  const bool no_article = (article == NO_ARTICLE);
   switch (typ)
     {
     case T_BACRO:           return((no_article) ? "bacro"             : "a bacro");
@@ -6793,7 +6794,7 @@ static s7_pointer g_immutable(s7_scheme *sc, s7_pointer args)
 {
   #define H_immutable "(immutable! obj (env (curlet))) declares that the object obj (or obj in the environment env) can't be changed. obj is returned."
   #define Q_immutable s7_make_signature(sc, 3, sc->T, sc->T, has_let_signature(sc))
-  s7_pointer p = car(args);
+  const s7_pointer p = car(args);
   if (is_symbol(p))
     {
       s7_pointer slot;
@@ -6857,9 +6858,9 @@ static s7_int gc_protect_2(s7_scheme *sc, s7_pointer x, int32_t line)
 
 static void resize_gc_protect(s7_scheme *sc)
 {
-  s7_int size = sc->protected_objects_size;
+  const s7_int size = sc->protected_objects_size;
   block_t *ob = vector_block(sc->protected_objects);
-  s7_int new_size = 2 * size;
+  const s7_int new_size = 2 * size;
   block_t *nb = reallocate(sc, ob, new_size * sizeof(s7_pointer));
   block_info(nb) = NULL;
   vector_block(sc->protected_objects) = nb;
@@ -7323,7 +7324,7 @@ static void add_setter(s7_scheme *sc, s7_pointer p, s7_pointer setter)
       sc->setters_size *= 2;
       sc->setters = (s7_pointer *)Realloc(sc->setters, sc->setters_size * sizeof(s7_pointer));
     }
-  sc->setters[sc->setters_loc++] = semipermanent_cons(sc, p, setter, T_PAIR | T_IMMUTABLE);
+  sc->setters[sc->setters_loc++] = semipermanent_cons(sc, p, T_Clo(setter), T_PAIR | T_IMMUTABLE);
 }
 
 
@@ -7623,7 +7624,7 @@ static void mark_hash_table(s7_pointer p)
     }
   if (hash_table_entries(p) > 0)
     {
-      s7_int len = hash_table_size(p);
+      const s7_int len = hash_table_size(p);
       hash_entry_t **entries = hash_table_elements(p);
       hash_entry_t **last = (hash_entry_t **)(entries + len);
 
@@ -8032,8 +8033,8 @@ static void resize_heap_to_1(s7_scheme *sc, s7_int size, const char *func, int l
 static void resize_heap_to(s7_scheme *sc, s7_int size)
 #endif
 {
-  s7_int old_size = sc->heap_size;
-  s7_int old_free = sc->free_heap_top - sc->free_heap;
+  const s7_int old_size = sc->heap_size;
+  const s7_int old_free = sc->free_heap_top - sc->free_heap;
   s7_cell *cells;
   s7_cell **cp;
   heap_block_t *hp;
@@ -8403,8 +8404,8 @@ static void initialize_op_stack(s7_scheme *sc)
 
 static void resize_op_stack(s7_scheme *sc)
 {
-  uint32_t new_size = sc->op_stack_size * 2;
-  uint32_t loc = (uint32_t)(sc->op_stack_now - sc->op_stack);
+  const uint32_t new_size = sc->op_stack_size * 2;
+  const uint32_t loc = (uint32_t)(sc->op_stack_now - sc->op_stack);
   if (new_size > sc->max_stack_size)
 #if S7_DEBUGGING
     {
@@ -8654,8 +8655,8 @@ static void stack_reset(s7_scheme *sc)
 
 static uint32_t resize_stack_unchecked(s7_scheme *sc)
 {
-  uint64_t loc = stack_top(sc);
-  uint32_t new_size = sc->stack_size * 2;
+  const uint64_t loc = stack_top(sc);
+  const uint32_t new_size = sc->stack_size * 2;
   block_t *ob = stack_block(sc->stack);
   block_t *nb = reallocate(sc, ob, new_size * sizeof(s7_pointer));
   block_info(nb) = NULL;
@@ -45026,9 +45027,9 @@ static s7_pointer g_sort(s7_scheme *sc, s7_pointer args)
 	len = vector_length(data);
 	if (len < 2)
 	  return(data);
-	if (is_c_function(lessp))
+	if ((is_c_function(lessp)) && (!is_complex_vector(data))) /* < and > make no sense in the complex case */
 	  {
-	    if (sc->sort_f == lt_b_7pp) /* this makes no sense in the complex case */
+	    if (sc->sort_f == lt_b_7pp)
 	      {
 		if (is_float_vector(data))
 		  qsort((void *)float_vector_floats(data), len, sizeof(s7_double), dbl_less);
@@ -45689,8 +45690,9 @@ static hash_entry_t *hash_number_equivalent(s7_scheme *sc, s7_pointer table, s7_
   /* first try loc from hash_loc, then get key-floor(key) [with abs], and check against
    *   epsilon: diff < eps call find big in bin-1, diff > 1.0-eps call same in bin+1
    */
-  s7_int loc1, hash_mask = hash_table_mask(table);
-  s7_int loc = hash_loc(sc, table, key);
+  s7_int loc1;
+  const s7_int hash_mask = hash_table_mask(table);
+  const s7_int loc = hash_loc(sc, table, key);
   s7_int hash_loc = loc & hash_mask;
   hash_entry_t *i1 = find_number_in_bin(sc, hash_table_element(table, hash_loc), key);
   if (i1) return(i1);
@@ -46992,7 +46994,7 @@ static s7_pointer remove_from_hash_table(s7_scheme *sc, s7_pointer table, hash_e
 
 static void cull_weak_hash_table(s7_scheme *sc, s7_pointer table)
 {
-  s7_int len = hash_table_size(table);
+  const s7_int len = hash_table_size(table);
   hash_entry_t **entries = hash_table_elements(table);
   for (s7_int i = 0; i < len; i++)
     {
@@ -47079,7 +47081,7 @@ static void check_hash_types(s7_scheme *sc, s7_pointer table, s7_pointer key, s7
 	}}
   else
     {
-      s7_pointer vf = hash_table_value_typer(table);
+      const s7_pointer vf = hash_table_value_typer(table);
       if (vf != sc->T)
 	{
 	  s7_pointer type_ok;
@@ -47221,15 +47223,13 @@ static s7_pointer hash_table_set_chooser(s7_scheme *sc, s7_pointer f, int32_t ar
 /* -------------------------------- hash-table -------------------------------- */
 static inline s7_pointer hash_table_add(s7_scheme *sc, s7_pointer table, s7_pointer key, s7_pointer value)
 {
-  s7_int hash, hash_mask, loc;
+  const s7_int hash_mask = hash_table_mask(table);
+  const s7_int hash = hash_loc(sc, table, key);
+  const s7_int loc = hash & hash_mask;
   hash_entry_t *p;
 
   if (!hash_chosen(table))
     hash_table_set_default_checker(table, type(key)); /* raw_hash value (hash_loc(sc, table, key)) does not change via hash_table_set_default_checker etc */
-
-  hash_mask = hash_table_mask(table);
-  hash = hash_loc(sc, table, key);
-  loc = hash & hash_mask;
 
   for (hash_entry_t *x = hash_table_element(table, loc); x; x = hash_entry_next(x))
     if ((hash_entry_raw_hash(x) == hash) &&
@@ -47310,7 +47310,7 @@ static s7_pointer hash_table_chooser(s7_scheme *sc, s7_pointer f, int32_t args, 
 static void check_old_hash(s7_scheme *sc, s7_pointer old_hash, s7_pointer new_hash, s7_int start, s7_int end)
 {
   s7_int count = 0;
-  s7_int old_len = hash_table_size(old_hash);
+  const s7_int old_len = hash_table_size(old_hash);
   hash_entry_t **old_lists = hash_table_elements(old_hash);
   for (s7_int i = 0; i < old_len; i++)
     for (hash_entry_t *x = old_lists[i]; x; x = hash_entry_next(x))
@@ -47324,14 +47324,14 @@ static void check_old_hash(s7_scheme *sc, s7_pointer old_hash, s7_pointer new_ha
 
 static s7_pointer hash_table_copy(s7_scheme *sc, s7_pointer old_hash, s7_pointer new_hash, s7_int start, s7_int end)
 {
-  s7_int old_len, new_mask, count = 0;
+  const s7_int old_len = hash_table_size(old_hash);
+  const s7_int new_mask = hash_table_mask(new_hash);
+  s7_int count = 0;
   hash_entry_t **old_lists, **new_lists;
 
   if (is_typed_hash_table(new_hash))
     check_old_hash(sc, old_hash, new_hash, start, end);
 
-  old_len = hash_table_size(old_hash);
-  new_mask = hash_table_mask(new_hash);
   old_lists = hash_table_elements(old_hash);
   new_lists = hash_table_elements(new_hash);
 
@@ -47479,7 +47479,7 @@ static s7_pointer hash_table_fill(s7_scheme *sc, s7_pointer args)
 
 static s7_pointer hash_table_reverse(s7_scheme *sc, s7_pointer old_hash)
 {
-  s7_int len = hash_table_size(old_hash);
+  const s7_int len = hash_table_size(old_hash);
   hash_entry_t **old_lists = hash_table_elements(old_hash);
   s7_pointer new_hash = s7_make_hash_table(sc, len);
   gc_protect_via_stack(sc, new_hash);
@@ -47860,8 +47860,8 @@ s7_pointer s7_make_function_star(s7_scheme *sc, const char *name, s7_function fn
 {
   s7_pointer func, local_args;
   char *internal_arglist;
-  s7_int n_args, len = safe_strlen(arglist);
-  s7_int gc_loc;
+  const s7_int len = safe_strlen(arglist);
+  s7_int gc_loc, n_args;
   block_t *b = inline_mallocate(sc, len + 4);
 
   internal_arglist = (char *)block_data(b);
@@ -98215,7 +98215,6 @@ static bool is_decodable(s7_scheme *sc, const s7_pointer p)
 	    ((is_defined_global(sym)) && (p == global_value(sym))))
 	  return(true);
       }
-
   for (int32_t i = 0; i < NUM_CHARS; i++) if (p == chars[i]) return(true);
   for (int32_t i = 0; i < NUM_SMALL_INTS; i++) if (p == small_ints[i]) return(true);
 
@@ -98295,7 +98294,7 @@ const char *s7_decode_bt(s7_scheme *sc)
 				i = k - 1;
 				if (s7_is_valid(sc, p))
 				  {
-				    s7_pointer strp = object_to_string_truncated(sc, p);
+				    const s7_pointer strp = object_to_string_truncated(sc, p);
 				    if (dname) fprintf(stdout, " ");
 				    fprintf(stdout, "%s%s%s", bold_text, string_value(strp), unbold_text);
 				    if ((is_pair(p)) &&
@@ -100830,14 +100829,13 @@ void s7_free(s7_scheme *sc)
    * valgrind --leak-check=full --show-reachable=no --suppressions=/home/bil/cl/free.supp repl s7test.scm
    * valgrind --leak-check=full --show-reachable=yes --gen-suppressions=all --error-limit=no --log-file=raw.log repl s7test.scm
    */
-  s7_int i;
   gc_list_t *gp;
 
   /* g_gc(sc, sc->nil); */ /* probably not needed (my simple tests work fine if the gc call is omitted) */ /* removed 14-Apr-22 */
   /* s7_quit(sc);       */ /* not always needed -- will clean up the C stack if we haven't returned to the top level */
 
   gp = sc->c_objects;  /* do this first since they might involve gc_unprotect etc */
-  for (i = 0; i < gp->loc; i++)
+  for (s7_int i = 0; i < gp->loc; i++)
     {
       s7_pointer s1 = gp->list[i];
       if (c_object_gc_free(sc, s1))
@@ -100847,20 +100845,20 @@ void s7_free(s7_scheme *sc)
   gc_list_free(gp);
 
   gp = sc->vectors;
-  for (i = 0; i < gp->loc; i++)
+  for (s7_int i = 0; i < gp->loc; i++)
     if (block_index(unchecked_vector_block(gp->list[i])) == TOP_BLOCK_LIST)
       free(block_data(unchecked_vector_block(gp->list[i])));
   gc_list_free(gp);
   gc_list_free(sc->multivectors); /* I assume vector_dimension_info won't need 131072 bytes */
 
   gp = sc->strings;
-  for (i = 0; i < gp->loc; i++)
+  for (s7_int i = 0; i < gp->loc; i++)
     if (block_index(unchecked_string_block(gp->list[i])) == TOP_BLOCK_LIST)
       free(block_data(unchecked_string_block(gp->list[i])));
   gc_list_free(gp);
 
   gp = sc->output_ports;
-  for (i = 0; i < gp->loc; i++)
+  for (s7_int i = 0; i < gp->loc; i++)
     {
       if ((unchecked_port_data_block(gp->list[i])) &&
 	  (block_index(unchecked_port_data_block(gp->list[i])) == TOP_BLOCK_LIST))
@@ -100872,7 +100870,7 @@ void s7_free(s7_scheme *sc)
   gc_list_free(gp);
 
   gp = sc->input_ports;
-  for (i = 0; i < gp->loc; i++)
+  for (s7_int i = 0; i < gp->loc; i++)
     if ((unchecked_port_data_block(gp->list[i])) &&
 	(block_index(unchecked_port_data_block(gp->list[i])) == TOP_BLOCK_LIST))
       free(block_data(unchecked_port_data_block(gp->list[i])));    /* the file contents, port_block is other stuff */
@@ -100880,7 +100878,7 @@ void s7_free(s7_scheme *sc)
   gc_list_free(sc->input_string_ports); /* port_data_block is null, port_block is the const char *data, so I assume it is handled elsewhere */
 
   gp = sc->hash_tables;
-  for (i = 0; i < gp->loc; i++)
+  for (s7_int i = 0; i < gp->loc; i++)
     if (block_index(unchecked_hash_table_block(gp->list[i])) == TOP_BLOCK_LIST)
       free(block_data(unchecked_hash_table_block(gp->list[i])));
   gc_list_free(gp);
@@ -100893,23 +100891,23 @@ void s7_free(s7_scheme *sc)
   {bigcmp *p, *np; for (p = sc->bigcmps; p; p = np) {mpc_clear(p->z); np = p->nxt; free(p);}}
 
   gp = sc->big_integers;
-  for (i = 0; i < gp->loc; i++) {bigint *p; p = big_integer_bgi(gp->list[i]); mpz_clear(p->n); free(p);}
+  for (s7_int i = 0; i < gp->loc; i++) {bigint *p; p = big_integer_bgi(gp->list[i]); mpz_clear(p->n); free(p);}
   gc_list_free(gp);
 
   gp = sc->big_ratios;
-  for (i = 0; i < gp->loc; i++) {bigrat *p; p = big_ratio_bgr(gp->list[i]); mpq_clear(p->q); free(p);}
+  for (s7_int i = 0; i < gp->loc; i++) {bigrat *p; p = big_ratio_bgr(gp->list[i]); mpq_clear(p->q); free(p);}
   gc_list_free(gp);
 
   gp = sc->big_reals;
-  for (i = 0; i < gp->loc; i++) {bigflt *p; p = big_real_bgf(gp->list[i]); mpfr_clear(p->x); free(p);}
+  for (s7_int i = 0; i < gp->loc; i++) {bigflt *p; p = big_real_bgf(gp->list[i]); mpfr_clear(p->x); free(p);}
   gc_list_free(gp);
 
   gp = sc->big_complexes;
-  for (i = 0; i < gp->loc; i++) {bigcmp *p; p = big_complex_bgc(gp->list[i]); mpc_clear(p->z); free(p);}
+  for (s7_int i = 0; i < gp->loc; i++) {bigcmp *p; p = big_complex_bgc(gp->list[i]); mpc_clear(p->z); free(p);}
   gc_list_free(gp);
 
   gp = sc->big_random_states;
-  for (i = 0; i < gp->loc; i++) gmp_randclear(random_gmp_state(gp->list[i]));
+  for (s7_int i = 0; i < gp->loc; i++) gmp_randclear(random_gmp_state(gp->list[i]));
   gc_list_free(gp);
 
   gmp_randclear(random_gmp_state(sc->default_random_state));
@@ -100926,7 +100924,7 @@ void s7_free(s7_scheme *sc)
 
   free(undefined_name(sc->undefined));
   gp = sc->undefineds;
-  for (i = 0; i < gp->loc; i++)
+  for (s7_int i = 0; i < gp->loc; i++)
     free(undefined_name(gp->list[i]));
   gc_list_free(gp);
 
@@ -100944,7 +100942,7 @@ void s7_free(s7_scheme *sc)
   if (sc->autoload_names_sizes) free(sc->autoload_names_sizes);
   if (sc->autoloaded_already)
     {
-      for (i = 0; i < sc->autoload_names_loc; i++)
+      for (s7_int i = 0; i < sc->autoload_names_loc; i++)
 	if (sc->autoloaded_already[i]) free(sc->autoloaded_already[i]);
       free(sc->autoloaded_already);
     }
@@ -100954,7 +100952,7 @@ void s7_free(s7_scheme *sc)
 
   big_block_free(sc, stack_block(sc->stack));
   big_block_free(sc, vector_block(sc->protected_objects));
-  for (i = 0; i < sc->saved_pointers_loc; i++)
+  for (s7_int i = 0; i < sc->saved_pointers_loc; i++)
     free(sc->saved_pointers[i]);
   free(sc->saved_pointers);
 
@@ -100983,7 +100981,7 @@ void s7_free(s7_scheme *sc)
   free(sc->input_port_stack);
   if (sc->typnam) free(sc->typnam);
 
-  for (i = 0; i < sc->num_fdats; i++)
+  for (s7_int i = 0; i < sc->num_fdats; i++)
     if (sc->fdats[i])                 /* init val is NULL */
       {
 	if (sc->fdats[i]->curly_str)
@@ -101004,7 +101002,7 @@ void s7_free(s7_scheme *sc)
     }
   if (sc->c_object_types)
     {
-      for (i = 0; i < sc->num_c_object_types; i++)
+      for (s7_int i = 0; i < sc->num_c_object_types; i++)
 	{
 	  c_object_t *c_type = sc->c_object_types[i];
 	  if (c_type->scheme_name) {free(c_type->scheme_name); c_type->scheme_name = NULL;}
@@ -101062,10 +101060,10 @@ void s7_repl(s7_scheme *sc)
    *   otherwise repl.scm will try to load libc.scm which will try to build libc_s7.so locally, but that requires s7.h
    */
   bool repl_loaded = false;
-  s7_pointer e = s7_inlet(sc, set_clist_2(sc, make_symbol(sc, "init_func", 9), make_symbol(sc, "libc_s7_init", 12)));
-  s7_int gc_loc = gc_protect_1(sc, e);
-  s7_pointer old_e = s7_set_curlet(sc, e);   /* e is now (curlet) so loaded names from libc will be placed there, not in (rootlet) */
-  s7_pointer val = s7_load_with_environment(sc, "libc_s7.so", e);
+  const s7_pointer e = s7_inlet(sc, set_clist_2(sc, make_symbol(sc, "init_func", 9), make_symbol(sc, "libc_s7_init", 12)));
+  const s7_int gc_loc = gc_protect_1(sc, e);
+  const s7_pointer old_e = s7_set_curlet(sc, e);   /* e is now (curlet) so loaded names from libc will be placed there, not in (rootlet) */
+  const s7_pointer val = s7_load_with_environment(sc, "libc_s7.so", e);
   if (val)
     {
       s7_pointer libs = global_slot(sc->libraries_symbol);
@@ -101073,7 +101071,6 @@ void s7_repl(s7_scheme *sc)
       s7_define(sc, sc->rootlet, new_symbol(sc, "*libc*", 6, hash, hash % SYMBOL_TABLE_SIZE), e);
       slot_set_value(libs, cons(sc, cons(sc, s7_make_semipermanent_string(sc, "libc.scm"), e), slot_value(libs)));
     }
-
   s7_set_curlet(sc, old_e);       /* restore incoming (curlet) */
   s7_gc_unprotect_at(sc, gc_loc);
 
@@ -101251,6 +101248,5 @@ int main(int argc, char **argv)
  *   ffitest examples of unsafe funcs, for-each/map/member/assoc w/o push?
  *   t101-5|6|13|16 trouble fx_safe_thunk_a opt_p_pp_ff etc if unsafe->semisafe or safe (see 29-Mar)
  * how can FFI code set saver/translucent bits et al?  need ffitest.c examples. also all_float|integer, is_definer scope_safe
- *   can cload use these, or how can user now warn the optimizer? -- use "unsafe"
- * openlet safety>0 warning if sigs don't match?
+ *   can cload use these, or how can user now warn the optimizer? -- use "unsafe", how to explain these bits?
  */
