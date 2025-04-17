@@ -25,7 +25,7 @@
 		  vector-append append ; append gets uninteresting type conversion complaints
 		  call/cc call-with-output-string open-input-function open-output-function
 		  set-current-input-port ;set-current-output-port
-		  set-current-error-port))
+		  set-current-error-port show-op-stack))
 
 (let ((max-args 3))
   (define-constant one 1)
