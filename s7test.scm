@@ -25928,15 +25928,12 @@ c"
 	  "(sublet (sublet (inlet :ok #t)) :b (let ((a 1)) (lambda (c) (+ c a))) :a 1)")))
 
 (test (string? (object->string (let ((lst (list 1))) (set-cdr! lst lst) (make-iterator lst)) :readable)) #t)
+(test (object->string (inlet 'a (call-with-exit (lambda (return) return))) :readable) "(inlet :a return)")
+(test (object->string (inlet 'a (call/cc (lambda (return) return))) :readable) "(inlet :a return)")
 
-;;; these are not readable:
-(test (object->string (inlet 'a (call-with-exit (lambda (return) return))) :readable) "(inlet :a #<goto return>)")
-(test (object->string (inlet 'a (call/cc (lambda (return) return))) :readable) "(inlet :a #<continuation return>)")
-
-;;; these are incorrect:
-;(test (object->string (let () (define-constant a 32) (curlet)) :readable) "(inlet :a 32)")
-;(test (object->string #('1)) "(vector '1)")
-;(test (object->string (inlet 'a ''()) :readable) "(inlet :a '())")
+(test (object->string (let () (define-constant a 32) (curlet)) :readable) "(let ((a 32)) (immutable! 'a) (curlet))")
+(test (object->string #('1)) "#('1)")
+(test (object->string (inlet 'a ''()) :readable) "(inlet :a (list #_quote ()))")
 (test (object->string (c-pointer 1234) :readable) "(c-pointer 1234)")
 
 (test (string? (catch 'out-of-range
