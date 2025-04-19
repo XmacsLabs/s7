@@ -25928,8 +25928,8 @@ c"
 	  "(sublet (sublet (inlet :ok #t)) :b (let ((a 1)) (lambda (c) (+ c a))) :a 1)")))
 
 (test (string? (object->string (let ((lst (list 1))) (set-cdr! lst lst) (make-iterator lst)) :readable)) #t)
-(test (object->string (inlet 'a (call-with-exit (lambda (return) return))) :readable) "(inlet :a return)")
-(test (object->string (inlet 'a (call/cc (lambda (return) return))) :readable) "(inlet :a return)")
+(test (object->string (inlet 'a (call-with-exit (lambda (return) return))) :readable) "(inlet :a #<goto return>)")
+(test (object->string (inlet 'a (call/cc (lambda (return) return))) :readable) "(inlet :a #<continuation return>)")
 
 (test (object->string (let () (define-constant a 32) (curlet)) :readable) "(let ((a 32)) (immutable! 'a) (curlet))")
 (test (object->string #('1)) "#('1)")
@@ -53992,8 +53992,11 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
 (test (immutable? 'abs abs) 'error)
 (test (let ((P (c-pointer 0 1 (inlet 'a 1)))) (immutable! 'a P) (immutable? 'a P)) #t)
 (test (let ((P (c-pointer 0 1 (inlet 'a 1)))) (immutable! 'a P) (object->string P :readable)) "(c-pointer 0 1 (let ((a 1)) (immutable! 'a) (curlet)))")
-(test (catch #t (lambda () (let ((P (c-pointer 0))) (immutable? 'abs P))) (lambda (t i) (apply format #f i)))
-      "(immutable? 'abs #<c_pointer (nil)>) second argument is a c-pointer, but it does not have its own let")
+
+(test (let ((str (catch #t (lambda () (let ((P (c-pointer 0))) (immutable? 'abs P))) (lambda (t i) (apply format #f i)))))
+        (or (string=? str "(immutable? 'abs #<c_pointer (nil)>) second argument is a c-pointer, but it does not have its own let")
+            (string=? str "(immutable? 'abs #<c_pointer 0x0>) second argument is a c-pointer, but it does not have its own let")))
+      #t) ; gcc = first, clang = second case
 (test (catch #t (lambda () (let ((P 123)) (immutable? 'abs P))) (lambda (t i) (apply format #f i)))
       "immutable? second argument, 123, is an integer but should be a let or an object that has its own let")
 
@@ -54001,8 +54004,10 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
 (test (let ((P (c-pointer 0))) (openlet P)) 'error)
 (test (let ((P (c-pointer 0 1 (inlet 'abs (lambda (x) (+ x 1)))))) (coverlet P) (openlet? P)) #f)
 (test (let ((P (c-pointer 0))) (coverlet P)) 'error)
-(test (catch #t (lambda () (let ((P (c-pointer 0))) (openlet P))) (lambda (t i) (apply format #f i)))
-      "(openlet #<c_pointer (nil)>) argument is a c-pointer, but it does not have its own let")
+(test (let ((str (catch #t (lambda () (let ((P (c-pointer 0))) (openlet P))) (lambda (t i) (apply format #f i)))))
+        (or (string=? str "(openlet #<c_pointer (nil)>) argument is a c-pointer, but it does not have its own let")
+            (string=? str "(openlet #<c_pointer 0x0>) argument is a c-pointer, but it does not have its own let")))
+      #t)
 (test (let ((P 123)) (openlet P 'a 1)) 'error)
 
 (test (let ((P (c-pointer 0))) (varlet P 'a 1)) 'error)

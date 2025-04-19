@@ -26366,7 +26366,7 @@ static s7_int c_ash(s7_scheme *sc, s7_int arg1, s7_int arg2)
   if (arg2 < 0)
     {
       if (arg2 < -S7_INT_BITS)
-	return((arg1 < 0) ? -1 : 0);        /* (ash -31 -100) */
+	return((arg1 < 0) ? -1 : 0);      /* (ash -31 -100) */
       return(arg1 >> -arg2);
     }
   /* (ash 9223372036854775807 1) -> -2, anyone using ash must know something about bits */
@@ -36427,38 +36427,30 @@ static void c_macro_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_
   else port_write_string(port)(sc, "#<c-macro>", 10, port);
 }
 
-/* (object->string (call-with-exit (lambda (go) go)) :readable) -> "go" and similarly for call/cc so that the returned
- *   string is readable (normally causing an unbound variable error).  If we return "#<goto go>" we get a read-error
- *   (i.e the returned string is not readable via eval-string): eval-string trailing junk: "go>".  We could also notice
- *   these cases below and return an undefined object without an embedded space, but all such subterfuges look silly.
+/* (object->string (call-with-exit (lambda (go) go)) :readable) -> "<goto go>" and similarly for call/cc mean that the
+ *   returned string is not readable (we get a read-error from eval-string because of the space), but returning "go" instead
+ *   causes other problems, and would get unbound variable anyway.  We could also notice these cases below and return an
+ *   undefined object without an embedded space: #<goto::go>?  t101-35.scm.
  */
-static void continuation_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *unused_ci)
+static void continuation_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t unused_use_write, shared_info_t *unused_ci)
 {
   if (is_symbol(continuation_name(obj)))
     {
-      if (use_write == P_READABLE)
-	symbol_to_port(sc, continuation_name(obj), port, P_DISPLAY, NULL);
-      else
-	{
-	  port_write_string(port)(sc, "#<continuation ", 15, port);
-	  symbol_to_port(sc, continuation_name(obj), port, P_DISPLAY, NULL);
-	  port_write_character(port)(sc, '>', port);
-	}}
+      port_write_string(port)(sc, "#<continuation ", 15, port);
+      symbol_to_port(sc, continuation_name(obj), port, P_DISPLAY, NULL);
+      port_write_character(port)(sc, '>', port);
+    }
   else port_write_string(port)(sc, "#<continuation>", 15, port);
 }
 
-static void goto_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t use_write, shared_info_t *unused_ci)
+static void goto_to_port(s7_scheme *sc, s7_pointer obj, s7_pointer port, use_write_t unused_use_write, shared_info_t *unused_ci)
 {
   if (is_symbol(call_exit_name(obj)))
     {
-      if (use_write == P_READABLE)
-	symbol_to_port(sc, call_exit_name(obj), port, P_DISPLAY, NULL);
-      else
-	{
-	  port_write_string(port)(sc, "#<goto ", 7, port);
-	  symbol_to_port(sc, call_exit_name(obj), port, P_DISPLAY, NULL);
-	  port_write_character(port)(sc, '>', port);
-	}}
+      port_write_string(port)(sc, "#<goto ", 7, port);
+      symbol_to_port(sc, call_exit_name(obj), port, P_DISPLAY, NULL);
+      port_write_character(port)(sc, '>', port);
+    }
   else port_write_string(port)(sc, "#<goto>", 7, port);
 }
 
@@ -88928,8 +88920,9 @@ static /* inline */ void op_closure_ns(s7_scheme *sc) /* called once in eval, lg
   begin_temp(sc->y, e);
   add_slot_unchecked(sc, e, car(p), lookup(sc, car(args)), id);
   last_slot = let_slots(e);
-  for (p = cdr(p), args = cdr(args); is_pair(p); p = cdr(p), args = cdr(args))
-    last_slot = add_slot_at_end(sc, id, last_slot, car(p), lookup(sc, car(args))); /* main such call in lt (fx_s is 1/2, this is 1/5 of all calls) */
+  args = cdr(args);
+  for (s7_pointer p1 = cdr(p); is_pair(p1); p1 = cdr(p1), args = cdr(args))
+    last_slot = add_slot_at_end(sc, id, last_slot, car(p1), lookup(sc, car(args))); /* main such call in lt (fx_s is 1/2, this is 1/5 of all calls) */
   set_curlet(sc, e);
   end_temp(sc->y);
   sc->code = T_Pair(closure_body(f));
@@ -89013,10 +89006,10 @@ static void op_closure_4a(s7_scheme *sc) /* sass */
 
 static void op_closure_na(s7_scheme *sc)
 {
-  s7_pointer exprs = cdr(sc->code);         /* "n" = opt3_arglen(exprs), mostly 5 in lt, 6 in tlet */
+  const s7_pointer exprs = cdr(sc->code);         /* "n" = opt3_arglen(exprs), mostly 5 in lt, 6 in tlet */
   const s7_pointer func = opt1_lambda(sc->code);
-  s7_pointer slot, last_slot, pars = closure_args(func);
-  s7_int id;
+  const s7_pointer pars = closure_args(func);
+  s7_pointer slot, last_slot;
   s7_pointer e = inline_make_let(sc, closure_let(func));
   sc->z = e;
   sc->value = fx_call(sc, exprs);
@@ -89024,11 +89017,11 @@ static void op_closure_na(s7_scheme *sc)
   slot_set_symbol_and_value(last_slot, car(pars), sc->value);
   slot_set_next(last_slot, let_slots(e));   /* i.e. slot_end */
   let_set_slots(e, last_slot);
-  for (pars = cdr(pars), exprs = cdr(exprs); is_pair(pars); pars = cdr(pars), exprs = cdr(exprs))
+  for (s7_pointer par = cdr(pars), expr = cdr(exprs); is_pair(par); par = cdr(par), expr = cdr(expr))
     {
-      sc->value = fx_call(sc, exprs);       /* before new_cell since it might call the GC */
+      sc->value = fx_call(sc, expr);        /* before new_cell since it might call the GC */
       new_cell(sc, slot, T_SLOT);           /* args < GC_TRIGGER checked in optimizer, but we're calling fx_call? */
-      slot_set_symbol_and_value(slot, car(pars), sc->value);
+      slot_set_symbol_and_value(slot, car(par), sc->value);
       /* setting up the let might use unrelated-but-same-name symbols, so wait to set the symbol ids */
       slot_set_next(slot, slot_end);
       slot_set_next(last_slot, slot);
@@ -89037,10 +89030,10 @@ static void op_closure_na(s7_scheme *sc)
   set_curlet(sc, e);
   sc->z = sc->unused;
   let_set_id(e, ++sc->let_number);
-  for (id = let_id(e), slot = let_slots(e); tis_slot(slot); slot = next_slot(slot))
+  for (s7_pointer slot1 = let_slots(e); tis_slot(slot1); slot1 = next_slot(slot1))
     {
-      symbol_set_local_slot(slot_symbol(slot), id, slot);
-      set_local(slot_symbol(slot));
+      symbol_set_local_slot(slot_symbol(slot1), let_id(e), slot1);
+      set_local(slot_symbol(slot1));
     }
   sc->code = T_Pair(closure_body(func));
   if_pair_set_up_begin(sc);
@@ -90226,10 +90219,10 @@ static s7_pointer op_tc_let_when_l2a(s7_scheme *sc, s7_pointer code)
       else
 	while (true)
 	  {
-	    p = fx_call(sc, if_test);
-	    if (when) {if (p == sc->F) break;} else {if (p != sc->F) break;}
-	    for (p = if_true; is_pair(cdr(p)); p = cdr(p))
-	      fx_call(sc, p);
+	    s7_pointer p2 = fx_call(sc, if_test);
+	    if (when) {if (p2 == sc->F) break;} else {if (p2 != sc->F) break;}
+	    for (s7_pointer p1 = if_true; is_pair(cdr(p1)); p1 = cdr(p1))
+	      fx_call(sc, p1);
 	    set_curlet(sc, outer_let);
 	    slot_set_value(let_slot, fx_call(sc, let_var));
 	    set_curlet(sc, inner_let);
@@ -90240,10 +90233,10 @@ static s7_pointer op_tc_let_when_l2a(s7_scheme *sc, s7_pointer code)
       s7_pointer l2a_slot = next_slot(la_slot);
       while (true)
 	{
-	  p = fx_call(sc, if_test);
-	  if (when) {if (p == sc->F) break;} else {if (p != sc->F) break;}
-	  for (p = if_true; is_pair(cdr(p)); p = cdr(p))
-	    fx_call(sc, p);
+	  s7_pointer p2 = fx_call(sc, if_test);
+	  if (when) {if (p2 == sc->F) break;} else {if (p2 != sc->F) break;}
+	  for (s7_pointer p1 = if_true; is_pair(cdr(p1)); p1 = cdr(p1))
+	    fx_call(sc, p1);
 	  sc->rec_p1 = fx_call(sc, la);
 	  slot_set_value(l2a_slot, fx_call(sc, l2a));
 	  slot_set_value(la_slot, sc->rec_p1);
@@ -90256,7 +90249,7 @@ static s7_pointer op_tc_let_when_l2a(s7_scheme *sc, s7_pointer code)
 
 static bool op_tc_if_a_z_let_if_a_z_l2a(s7_scheme *sc, s7_pointer code)
 {
-  s7_pointer if1_test = cdr(code), endp, outer_let = sc->curlet, slot, var, la_slot = let_slots(sc->curlet);
+  s7_pointer if1_test = cdr(code), endp, outer_let = sc->curlet, slot, la_slot = let_slots(sc->curlet);
   s7_pointer if1_true = cdr(if1_test);  /*   cddr(code) */
   s7_pointer let_expr = cadr(if1_true); /* cadddr(code) */
   s7_pointer let_vars = cadr(let_expr);
@@ -90274,7 +90267,7 @@ static bool op_tc_if_a_z_let_if_a_z_l2a(s7_scheme *sc, s7_pointer code)
   slot_set_next(slot, slot_end);
   let_set_slots(inner_let, slot);
   symbol_set_local_slot_unincremented(caar(let_vars), let_id(inner_let), slot);
-  for (var = cdr(let_vars); is_pair(var); var = cdr(var))
+  for (s7_pointer var = cdr(let_vars); is_pair(var); var = cdr(var))
     slot = add_slot_at_end(sc, let_id(inner_let), slot, caar(var), sc->F);
 
   while (true)
@@ -90283,8 +90276,8 @@ static bool op_tc_if_a_z_let_if_a_z_l2a(s7_scheme *sc, s7_pointer code)
       slot = let_slots(inner_let);
       slot_set_value(slot, fx_call(sc, cdar(let_vars)));
       set_curlet(sc, inner_let);
-      for (var = cdr(let_vars), slot = next_slot(slot); is_pair(var); var = cdr(var), slot = next_slot(slot))
-	slot_set_value(slot, fx_call(sc, cdar(var)));
+      for (s7_pointer var = cdr(let_vars), slot1 = next_slot(slot); is_pair(var); var = cdr(var), slot1 = next_slot(slot1))
+	slot_set_value(slot1, fx_call(sc, cdar(var)));
 
       if (fx_call(sc, if2_test) != sc->F) {endp = if2_true; break;}
       sc->rec_p1 = fx_call(sc, la);
@@ -92269,7 +92262,7 @@ static void op_any_closure_np(s7_scheme *sc)
 
 static void op_any_closure_np_end(s7_scheme *sc)
 {
-  s7_pointer x, z, f;
+  s7_pointer z, f;
   s7_int id;
 
   sc->args = proper_list_reverse_in_place(sc, sc->args); /* needed in either case -- closure_args(f) is not reversed */
@@ -92278,16 +92271,17 @@ static void op_any_closure_np_end(s7_scheme *sc)
 
   if (is_safe_closure(f))
     {
+      s7_pointer slot;
       id = ++sc->let_number;
       set_curlet(sc, closure_let(f));
       let_set_id(sc->curlet, id);
-      for (x = let_slots(sc->curlet), z = sc->args; tis_slot(x); x = next_slot(x), z = cdr(z))
+      for (slot = let_slots(sc->curlet), z = sc->args; tis_slot(slot); slot = next_slot(slot), z = cdr(z))
 	{
-	  slot_set_value(x, car(z));
-	  symbol_set_local_slot(slot_symbol(x), id, x);
+	  slot_set_value(slot, car(z));
+	  symbol_set_local_slot(slot_symbol(slot), id, slot);
 	  /* don't free sc->args -- it might be needed in the error below */
 	}
-      if (tis_slot(x))
+      if (tis_slot(slot))
 	error_nr(sc, sc->wrong_number_of_args_symbol, set_elist_3(sc, not_enough_arguments_string, sc->code, sc->args));
     }
   else
@@ -96992,9 +96986,8 @@ static void add_symbol_table(s7_scheme *sc, s7_pointer mu_let)
   s7_pointer *els = vector_elements(sc->symbol_table);
   for (s7_int i = 0; i < SYMBOL_TABLE_SIZE; i++)
     {
-      s7_pointer x;
       s7_int k = 0;
-      for (x = els[i]; is_not_null(x); x = cdr(x), k++)
+      for (s7_pointer x = els[i]; is_not_null(x); x = cdr(x), k++)
 	{
 	  syms++;
 	  if (is_gensym(car(x))) gens++;
@@ -101308,4 +101301,6 @@ int main(int argc, char **argv)
  *   t101-5|6|13|16 trouble fx_safe_thunk_a opt_p_pp_ff etc if unsafe->semisafe or safe (see 29-Mar)
  * how can FFI code set saver/translucent bits et al?  need ffitest.c examples. also all_float|integer, is_definer scope_safe
  *   can cload use these, or how can user now warn the optimizer? -- use "unsafe", how to explain these bits?
+ * let_slots rename to slot, outlet to let etc
+ * goto printout as #<goto::go>?
  */
