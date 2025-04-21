@@ -240,7 +240,8 @@ echo '-------- fsanitize=undefined --------'
 echo ' '
 gcc s7.c -c -I. -g3 -DS7_ALIGNED=1 -Wall -ldl -lm -Wl,-export-dynamic -fsanitize=undefined
 gcc -o repl repl.c -g3 -Wall s7.o -DS7_ALIGNED=1 -I. -lm -ldl -Wl,-export-dynamic -fsanitize=undefined
-repl -e '(define asan-flags "-fsanitize=undefined")' s7test.scm
+# repl -e '(define asan-flags "-fsanitize=undefined")' s7test.scm
+repl -e '(begin (define asan-flags "-fsanitize=undefined") (define full-s7test #t))' s7test.scm
 # repl -e '(define asan-flags "-fsanitize=undefined -fno-sanitize-recover")' s7test.scm
 
 echo ' '
@@ -248,7 +249,8 @@ echo '-------- fsanitize=address --------'
 echo ' '
 gcc s7.c -c -I. -g3 -Wall -ldl -lm -Wl,-export-dynamic -fsanitize=address
 gcc -o repl repl.c -g3 -Wall s7.o -DS7_ALIGNED=1 -I. -lm -ldl -Wl,-export-dynamic -fsanitize=address
-repl -e '(define asan-flags "-fsanitize=address")' s7test.scm
+# repl -e '(define asan-flags "-fsanitize=address")' s7test.scm
+repl -e '(begin (define asan-flags "-fsanitize=address") (define full-s7test #t))' s7test.scm
 
 echo ' '
 echo '-------- threads --------'
