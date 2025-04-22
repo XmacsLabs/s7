@@ -25928,8 +25928,8 @@ c"
 	  "(sublet (sublet (inlet :ok #t)) :b (let ((a 1)) (lambda (c) (+ c a))) :a 1)")))
 
 (test (string? (object->string (let ((lst (list 1))) (set-cdr! lst lst) (make-iterator lst)) :readable)) #t)
-(test (object->string (inlet 'a (call-with-exit (lambda (return) return))) :readable) "(inlet :a #<goto return>)")
-(test (object->string (inlet 'a (call/cc (lambda (return) return))) :readable) "(inlet :a #<continuation return>)")
+(test (object->string (inlet 'a (call-with-exit (lambda (return) return))) :readable) "(inlet :a #<goto::return>)")
+(test (object->string (inlet 'a (call/cc (lambda (return) return))) :readable) "(inlet :a #<continuation::return>)")
 
 (test (object->string (let () (define-constant a 32) (curlet)) :readable) "(let ((a 32)) (immutable! 'a) (curlet))")
 (test (object->string #('1)) "#('1)")
@@ -40746,6 +40746,8 @@ in s7:
  (list "hi" '(1 2) (integer->char 65) 1 'a-symbol #(0 1 2) abs _ht_ _cc_ _cv_ _undef_ _null_ _c_obj_ quasiquote macroexpand 1/0 (log 0)
        3.14 3/4 1.0+1.0i #\f (lambda (a) (+ a 1)) :hi #<unspecified> #<eof> #<undefined>))
 
+(test (call-with-exit abs 12) 'error)
+
 (test (+ 2 (call-with-exit (lambda (k) (* 5 (k 4))))) 6)
 (test (+ 2 (call-with-exit (lambda (k) (* 5 (k 4 5 6))))) 17)
 (test (+ 2 (call-with-exit (lambda (k) (* 5 (k (values 4 5 6)))))) 17)
@@ -53435,6 +53437,10 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
 (test (let? (sublet (curlet))) #t) ; no bindings is like (let () ...)
 ;(test (varlet (rootlet) '(quote . 1)) 'error)
 ;(test (varlet (rootlet) 'if 3) 'error)
+(test (varlet 3 'a 1) 'error)
+(test (varlet (curlet) 3 1) 'error)
+(test (varlet (rootlet) 'pi 3) 'error)
+(test (cutlet (rootlet) 'pi) 'error)
 ;(test (let-set! (rootlet) 'if 3) 'error)
 (test (inlet 'let-set! (lambda (a b c) c)) 'error) ; currently immutable
 (test (inlet 'let-ref (lambda (a b c) c)) 'error) ; currently immutable
@@ -53467,7 +53473,11 @@ or better (define-macro (prog vars . body) `(call-with-exit (lambda (return) (ta
 ;(display (object->string (rootlet))) (newline)         ; (rootlet)
 ;(display (let->list (rootlet))) (newline)              ; ... tons of output
 (test (coverlet (rootlet)) 'error)                      ; error: out-of-range ("can't coverlet rootlet")
+(test (coverlet (unlet)) 'error)
 (test (openlet (rootlet)) 'error)                       ; error: out-of-range ("can't openlet rootlet")
+(test (fill! (rootlet) #f) 'error)
+(test (fill! *s7* #f) 'error)
+(test (fill! (funclet ok?) #f) 'error)
 ;(display (varlet (rootlet) 'a 1)) (newline)            ; (rootlet)
 ;(display (cutlet (rootlet) 'abs)) (newline)            ; (rootlet)
 (test (eval '(abs -1) (rootlet)) 1)
@@ -94134,6 +94144,8 @@ etc
   (test (bignum "1/2/3") 'error)
 
   (test (bignum "1.0") (bignum 1.0)))
+
+(test (bignum 1.0 2.0) 'error)
 
 
 ;;; coverage tests for relops

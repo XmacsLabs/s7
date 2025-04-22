@@ -9782,7 +9782,10 @@ static s7_pointer let_fill(s7_scheme *sc, s7_pointer args)
   if (e == sc->starlet)
     out_of_range_error_nr(sc, sc->fill_symbol, int_one, e, wrap_string(sc, "can't fill! *s7*", 16));
   if (e == sc->owlet)                 /* (owlet) copies sc->owlet, so this probably can't happen */
-    out_of_range_error_nr(sc, sc->fill_symbol, int_one, e, wrap_string(sc, "can't fill! owlet", 17));
+    {
+      if (S7_DEBUGGING) fprintf(stderr, "%s[%d]: fill! owlet hit!?\n", __func__, __LINE__);
+      out_of_range_error_nr(sc, sc->fill_symbol, int_one, e, wrap_string(sc, "can't fill! owlet", 17));
+    }
   if (is_funclet(e))
     out_of_range_error_nr(sc, sc->fill_symbol, int_one, e, wrap_string(sc, "can't fill! a funclet", 21));
   val = cadr(args);
@@ -12550,7 +12553,7 @@ s7_pointer s7_make_continuation(s7_scheme *sc)
   temp_stack_top(stack) = loc;
   begin_temp(sc->x, stack);
   copy_stack(sc, stack, sc->stack, loc);
-  
+
   new_cell(sc, x, T_CONTINUATION);
   block = mallocate_block(sc);
 #if S7_DEBUGGING
@@ -39318,7 +39321,7 @@ static s7_pointer list_increment_p_pip_unchecked(opt_info *o)
   return(p2);
 }
 
-static s7_pointer list_set_p_pip(s7_scheme *sc, s7_pointer p1, s7_int i1, s7_pointer p2)  /* this may be uncallable now -- opt'd away in every case? */
+static s7_pointer list_set_p_pip(s7_scheme *sc, s7_pointer p1, s7_int i1, s7_pointer p2) /* called in t101-12|14... */
 {
   if (!is_pair(p1))
     wrong_type_error_nr(sc, sc->list_set_symbol, 1, p1, sc->type_names[T_PAIR]);
@@ -40749,11 +40752,7 @@ static s7_pointer g_list_0(s7_scheme *sc, s7_pointer args) {return(sc->nil);}
 static s7_pointer g_list_1(s7_scheme *sc, s7_pointer args) {return(list_1(sc, car(args)));}
 static s7_pointer g_list_2(s7_scheme *sc, s7_pointer args) {return(list_2(sc, car(args), cadr(args)));}
 static s7_pointer g_list_3(s7_scheme *sc, s7_pointer args) {return(list_3(sc, car(args), cadr(args), caddr(args)));}
-static s7_pointer g_list_4(s7_scheme *sc, s7_pointer args)
-{
-  s7_pointer p = cddr(args);
-  return(list_4(sc, car(args), cadr(args), car(p), cadr(p)));
-}
+static s7_pointer g_list_4(s7_scheme *sc, s7_pointer args) {s7_pointer p = cddr(args); return(list_4(sc, car(args), cadr(args), car(p), cadr(p)));}
 
 static s7_pointer list_chooser(s7_scheme *sc, s7_pointer f, int32_t args, s7_pointer unused_expr)
 {
@@ -40899,7 +40898,8 @@ static s7_pointer g_list_append(s7_scheme *sc, s7_pointer args)
   gc_protect_via_stack(sc, args);
   for (s7_pointer y = args; is_pair(y); y = cdr(y)) /* arglist so not dotted */
     {
-      s7_pointer p = car(y), func;
+      const s7_pointer p = car(y);
+      s7_pointer func;
       if ((has_active_methods(sc, p)) &&
 	  ((func = find_method_with_let(sc, p, sc->append_symbol)) != sc->undefined))
 	{
@@ -40960,7 +40960,7 @@ static s7_pointer g_list_append(s7_scheme *sc, s7_pointer args)
 	    }
 	  else
 	    {
-	      s7_int len = sequence_length(sc, p);
+	      const s7_int len = sequence_length(sc, p);
 	      if (len > 0)
 		{
 		  if (is_null(tp))
@@ -41432,7 +41432,7 @@ s7_pointer s7_make_complex_vector_wrapper(s7_scheme *sc, s7_int len, s7_complex 
 /* -------------------------------- vector-fill! -------------------------------- */
 static Vectorized void float_vector_fill(s7_pointer vec, s7_double x)
 {
-  s7_int len = vector_length(vec);
+  const s7_int len = vector_length(vec);
   if (len == 0) return;
   if (x == 0.0)
     {
@@ -41453,7 +41453,7 @@ static Vectorized void float_vector_fill(s7_pointer vec, s7_double x)
 
 static Vectorized void int_vector_fill(s7_pointer vec, s7_int k)
 {
-  s7_int len = vector_length(vec);
+  const s7_int len = vector_length(vec);
   if (len == 0) return;
   if (k == 0)
     {
@@ -41474,7 +41474,7 @@ static Vectorized void int_vector_fill(s7_pointer vec, s7_int k)
 
 static void byte_vector_fill(s7_pointer vec, uint8_t byte)
 {
-  s7_int len = vector_length(vec);
+  const s7_int len = vector_length(vec);
   if (len == 0) return;
   if (byte > 0)
     local_memset((void *)(byte_vector_bytes(vec)), byte, len);
@@ -41486,7 +41486,7 @@ static void byte_vector_fill(s7_pointer vec, uint8_t byte)
 
 static void complex_vector_fill(s7_pointer vec, s7_complex x)
 {
-  s7_int len = vector_length(vec);
+  const s7_int len = vector_length(vec);
   if (len == 0) return;
   if (x == 0.0)
     {
@@ -41537,7 +41537,8 @@ void s7_vector_fill(s7_scheme *sc, s7_pointer vec, s7_pointer obj)
 
 static s7_pointer g_vector_fill_1(s7_scheme *sc, s7_pointer caller, s7_pointer args)
 {
-  s7_pointer x = car(args), fill;
+  const s7_pointer x = car(args);
+  s7_pointer fill;
   s7_int start = 0, end;
 
   if (!is_any_vector(x))
@@ -41605,7 +41606,7 @@ static s7_pointer g_vector_fill_1(s7_scheme *sc, s7_pointer caller, s7_pointer a
       else
 	if (is_float_vector(x))
 	  {
-	    s7_double y = s7_real(fill);
+	    const s7_double y = s7_real(fill);
 	    if (y == 0.0)
 	      memclr((void *)(float_vector_floats(x) + start), (end - start) * sizeof(s7_double));
 	    else
@@ -41621,7 +41622,7 @@ static s7_pointer g_vector_fill_1(s7_scheme *sc, s7_pointer caller, s7_pointer a
 	else
 	  if (is_byte_vector(x))
 	    {
-	      uint8_t k = (uint8_t)s7_integer_clamped_if_gmp(sc, fill);
+	      const uint8_t k = (uint8_t)s7_integer_clamped_if_gmp(sc, fill);
 	      if (k == 0)
 		memclr((void *)(byte_vector_bytes(x) + start), end - start);
 	      else local_memset((void *)(byte_vector_bytes(x) + start), k, end - start);
@@ -41790,7 +41791,8 @@ s7_int s7_vector_offsets(s7_pointer vec, s7_int *offs, s7_int offs_size)
 
 static s7_int flatten_multivector_indices(s7_scheme *sc, s7_pointer vector, s7_int indices, va_list ap)
 {
-  s7_int index, rank = vector_rank(vector);
+  s7_int index;
+  const s7_int rank = vector_rank(vector);
   if (rank != indices)
     {
       va_end(ap);
@@ -41910,8 +41912,7 @@ static s7_pointer g_vector_to_list(s7_scheme *sc, s7_pointer args)
   end = vector_length(vec);
   if (!is_null(cdr(args)))
     {
-      s7_pointer p;
-      p = start_and_end(sc, sc->vector_to_list_symbol, args, 2, cdr(args), &start, &end);
+      s7_pointer p = start_and_end(sc, sc->vector_to_list_symbol, args, 2, cdr(args), &start, &end);
       if (p != sc->unused) return(p);
       if (start == end) return(sc->nil);
     }
@@ -42042,7 +42043,7 @@ static s7_pointer g_float_vector(s7_scheme *sc, s7_pointer args)
   #define Q_float_vector s7_make_circular_signature(sc, 1, 2, sc->is_float_vector_symbol, sc->is_real_symbol)
 
   s7_pointer vec, b;
-  s7_int len = proper_list_length_with_end(args, &b);
+  const s7_int len = proper_list_length_with_end(args, &b);
   if (!is_null(b))
     error_nr(sc, sc->read_error_symbol, set_elist_1(sc, wrap_string(sc, "float-vector contents list is not a proper list", 47)));
   if (len > sc->max_vector_length)
@@ -42099,7 +42100,7 @@ static s7_pointer g_int_vector(s7_scheme *sc, s7_pointer args)
 
   s7_int i = 0;
   s7_pointer vec, b;
-  s7_int len = proper_list_length_with_end(args, &b);
+  const s7_int len = proper_list_length_with_end(args, &b);
   if (!is_null(b))
     error_nr(sc, sc->read_error_symbol, set_elist_1(sc, wrap_string(sc, "int-vector contents list is not a proper list", 45)));
   if (len > sc->max_vector_length)
@@ -42145,7 +42146,7 @@ static s7_pointer g_byte_vector(s7_scheme *sc, s7_pointer args)
   s7_int i = 0;
   s7_pointer vec, end;
   uint8_t *str;
-  s7_int len = proper_list_length_with_end(args, &end);
+  const s7_int len = proper_list_length_with_end(args, &end);
   if (!is_null(end))
     error_nr(sc, sc->read_error_symbol, set_elist_1(sc, wrap_string(sc, "byte-vector contents list is not a proper list", 46)));
   if (len > sc->max_vector_length)
@@ -42190,7 +42191,7 @@ static s7_pointer g_complex_vector(s7_scheme *sc, s7_pointer args)
   #define Q_complex_vector s7_make_circular_signature(sc, 1, 2, sc->is_complex_vector_symbol, sc->is_complex_symbol)
 
   s7_pointer vec, b;
-  s7_int len = proper_list_length_with_end(args, &b);
+  const s7_int len = proper_list_length_with_end(args, &b);
   if (!is_null(b))
     error_nr(sc, sc->read_error_symbol, set_elist_1(sc, wrap_string(sc, "complex-vector contents list is not a proper list", 49)));
   if (len > sc->max_vector_length)
@@ -42351,7 +42352,7 @@ static inline vdims_t *list_to_dims(s7_scheme *sc, s7_pointer x)
 {
   s7_pointer y = x;
   s7_int *ds, *os;
-  s7_int len = proper_list_length(x);
+  const s7_int len = proper_list_length(x);
   vdims_t *v = (vdims_t *)inline_mallocate(sc, len * 2 * sizeof(s7_int));
   vdims_rank(v) = len;
   vdims_offsets(v) = (s7_int *)(vdims_dims(v) + len);
@@ -42491,7 +42492,7 @@ static s7_pointer vector_ref_1(s7_scheme *sc, s7_pointer vect, s7_pointer indice
       for (x = indices, i = 0; (is_not_null(x)) && (i < vector_ndims(vect)); x = cdr(x), i++)
 	{
 	  s7_int n;
-	  s7_pointer p = car(x);
+	  const s7_pointer p = car(x);
 	  if (!s7_is_integer(p))
 	    return(method_or_bust(sc, p, sc->vector_ref_symbol, set_ulist_1(sc, vect, indices), sc->type_names[T_INTEGER], i + 2));
           n = s7_integer_clamped_if_gmp(sc, p);
@@ -42610,19 +42611,16 @@ static s7_pointer g_vector_ref_2(s7_scheme *sc, s7_pointer args) {return(vector_
 
 static s7_pointer g_vector_ref_3(s7_scheme *sc, s7_pointer args)
 {
-  s7_pointer vec = car(args), i1, i2;
+  const s7_pointer vec = car(args);
+  s7_pointer i1, i2;
   s7_int ix, iy;
 
-  if (!is_any_vector(vec))
-    return(g_vector_ref(sc, args));
-  if (vector_rank(vec) != 2)
-    return(g_vector_ref(sc, args));
+  if (!is_any_vector(vec)) return(g_vector_ref(sc, args));
+  if (vector_rank(vec) != 2) return(g_vector_ref(sc, args));
   i1 = cadr(args);
-  if (!s7_is_integer(i1))
-    return(g_vector_ref(sc, args));
+  if (!s7_is_integer(i1)) return(g_vector_ref(sc, args));
   i2 = caddr(args);
-  if (!s7_is_integer(i2))
-    return(g_vector_ref(sc, args));
+  if (!s7_is_integer(i2)) return(g_vector_ref(sc, args));
   ix = s7_integer_clamped_if_gmp(sc, i1);
   iy = s7_integer_clamped_if_gmp(sc, i2);
   if ((ix >= 0) && (iy >= 0) &&
@@ -42648,7 +42646,8 @@ static s7_pointer g_vector_set(s7_scheme *sc, s7_pointer args)
   #define H_vector_set "(vector-set! v i ... value) sets the i-th element of vector v to value."
   #define Q_vector_set s7_make_circular_signature(sc, 3, 4, sc->T, sc->is_vector_symbol, sc->is_integer_symbol, sc->is_integer_or_any_at_end_symbol)
 
-  s7_pointer vec = car(args), val;
+  const s7_pointer vec = car(args);
+  s7_pointer val;
   s7_int index;
 
   if (!is_any_vector(vec))
@@ -42666,13 +42665,12 @@ static s7_pointer g_vector_set(s7_scheme *sc, s7_pointer args)
       for (x = cdr(args), i = 0; (is_not_null(cdr(x))) && (i < vector_ndims(vec)); x = cdr(x), i++)
 	{
 	  s7_int n;
-	  s7_pointer p = car(x);
+	  const s7_pointer p = car(x);
 	  if (!s7_is_integer(p))
 	    return(method_or_bust(sc, p, sc->vector_set_symbol, args, sc->type_names[T_INTEGER], i + 2));
           n = s7_integer_clamped_if_gmp(sc, p);
 	  if ((n < 0) || (n >= vector_dimension(vec, i)))
 	    out_of_range_error_nr(sc, sc->vector_set_symbol, wrap_integer(sc, i + 2), p, (n < 0) ? it_is_negative_string : it_is_too_large_string);
-
 	  index += n * vector_offset(vec, i);
 	}
       if (is_not_null(cdr(x)))
@@ -42700,7 +42698,7 @@ static s7_pointer g_vector_set(s7_scheme *sc, s7_pointer args)
 
       if (is_not_null(cdddr(args)))
 	{
-	  s7_pointer v = vector_getter(vec)(sc, vec, index);
+	  const s7_pointer v = vector_getter(vec)(sc, vec, index);
 	  if (!is_any_vector(v))
 	    wrong_number_of_arguments_error_nr(sc, "too many arguments for vector-set!: ~S", 38, args);
 	  return(g_vector_set(sc, set_ulist_1(sc, v, cddr(args))));
@@ -42755,7 +42753,7 @@ static s7_pointer vector_set_p_piip(s7_scheme *sc, s7_pointer v, s7_int i1, s7_i
 
 static s7_pointer vector_set_p_piip_direct(s7_scheme *sc, s7_pointer v, s7_int i1, s7_int i2, s7_pointer p)
 {
-  /* normal untyped vector, rank == 2, uncallable? */
+  /* normal untyped vector, rank == 2 */
   if ((i1 < 0) || (i2 < 0) ||
       (i1 >= vector_dimension(v, 0)) || (i2 >= vector_dimension(v, 1)))
     return(g_vector_set(sc, set_plist_4(sc, v, make_integer(sc, i1), make_integer_unchecked(sc, i2), p)));
@@ -42873,7 +42871,8 @@ static s7_pointer vector_set_chooser(s7_scheme *sc, s7_pointer f, int32_t args, 
 /* -------------------------------- make-vector -------------------------------- */
 static s7_int multivector_length(s7_scheme *sc, s7_pointer x, s7_pointer caller)
 {
-  s7_int len = 1, dims = s7_list_length(sc, x);
+  s7_int len = 1;
+  const s7_int dims = s7_list_length(sc, x);
   if (dims <= 0)                /* 0 if circular, negative if dotted */
     wrong_type_error_nr(sc, caller, 1, x, a_proper_list_string);
   if (dims > sc->max_vector_dimensions)
@@ -42921,7 +42920,8 @@ static inline s7_pointer make_multivector(s7_scheme *sc, s7_pointer vec, s7_poin
 static s7_pointer g_make_vector_1(s7_scheme *sc, s7_pointer args, s7_pointer caller)
 {
   s7_int len;
-  s7_pointer x = car(args), fill = sc->unspecified, vec, typf = sc->T;
+  const s7_pointer x = car(args);
+  s7_pointer fill = sc->unspecified, vec, typf = sc->T;
   int32_t result_type = T_VECTOR;
 
   if (s7_is_integer(x))
@@ -44019,6 +44019,7 @@ static inline s7_double float_vector_ref_d_7pii(s7_scheme *sc, s7_pointer v, s7_
 
 static s7_double float_vector_ref_d_7piii(s7_scheme *sc, s7_pointer v, s7_int i1, s7_int i2, s7_int i3)
 { /* uncallable? */
+  if (S7_DEBUGGING) fprintf(stderr, "%s called?\n", __func__);
   if ((i1 < 0) || (i1 >= vector_dimension(v, 0)))
     out_of_range_error_nr(sc, sc->float_vector_ref_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
   if ((i2 < 0) || (i2 >= vector_dimension(v, 1)))
@@ -44134,6 +44135,7 @@ static s7_double float_vector_set_d_7piid(s7_scheme *sc, s7_pointer v, s7_int i1
 
 static s7_double float_vector_set_d_7piiid(s7_scheme *sc, s7_pointer v, s7_int i1, s7_int i2, s7_int i3, s7_double x)
 { /* uncallable? */
+  if (S7_DEBUGGING) fprintf(stderr, "%s called?\n", __func__);
   if ((i1 < 0) || (i1 >= vector_dimension(v, 0)))
     out_of_range_error_nr(sc, sc->float_vector_set_symbol, int_two, wrap_integer(sc, i1), (i1 < 0) ? it_is_negative_string : it_is_too_large_string);
   if ((i2 < 0) || (i2 >= vector_dimension(v, 1)))
@@ -44470,6 +44472,7 @@ static s7_int byte_vector_set_i_7pii_direct(s7_scheme *unused_sc, s7_pointer p1,
 
 static s7_pointer byte_vector_set_p_pip_direct(s7_scheme *unused_sc, s7_pointer p1, s7_int i1, s7_pointer p2)
 { /* uncallable */
+  if (S7_DEBUGGING) fprintf(stderr, "%s called?\n", __func__);
   byte_vector(p1, i1) = (uint8_t)s7_integer(p2); return(p2);
 }
 
@@ -45352,7 +45355,7 @@ static void free_hash_table(s7_scheme *sc, s7_pointer table)
   if (hash_table_entries(table) > 0)
     {
       hash_entry_t **entries = hash_table_elements(table);
-      s7_int len = hash_table_size(table);
+      const s7_int len = hash_table_size(table);
       for (s7_int i = 0; i < len; i++)
 	{
 	  hash_entry_t *n;
@@ -45496,7 +45499,7 @@ static void check_hash_table_typer(s7_scheme *sc, s7_pointer caller, s7_pointer 
 
 static s7_pointer g_set_hash_table_key_typer(s7_scheme *sc, s7_pointer args)
 {
-  s7_pointer h = car(args), typer = cadr(args);
+  const s7_pointer h = car(args), typer = cadr(args);
 
   if (!is_hash_table(h))
     wrong_type_error_nr(sc, wrap_string(sc, "set! hash_table-key-typer", 25), 1, h, sc->type_names[T_HASH_TABLE]);
@@ -47003,7 +47006,7 @@ static s7_pointer hash_table_ref_chooser(s7_scheme *sc, s7_pointer f, int32_t ar
 
 
 /* -------------------------------- hash-table-set! -------------------------------- */
-static s7_pointer remove_from_hash_table(s7_scheme *sc, s7_pointer table, hash_entry_t *p)
+static s7_pointer remove_from_hash_table(s7_scheme *sc, s7_pointer table, const hash_entry_t *p)
 {
   hash_entry_t *x;
   s7_int hash_mask, loc;
@@ -53824,7 +53827,7 @@ static s7_pointer g_profile_in(s7_scheme *sc, s7_pointer args) /* only external 
   s7_pointer e;
   const s7_int pos = integer(car(args));
   if (sc->profile == 0) return(sc-> F);
-  
+
   e = find_funclet(sc, cadr(args));
   if ((is_let(e)) &&
       (is_symbol(funclet_function(e))))
@@ -58445,7 +58448,7 @@ static s7_pointer fx_c_aa(s7_scheme *sc, s7_pointer arg)
   set_car(sc->t2_2, gc_protected2(sc));
   res = fn_proc(arg)(sc, sc->t2_1);
   unstack_gc_protect(sc);
-  /* (define (f0) (write (vector 1.0) (openlet (inlet 'write for-each)))) or worse, 
+  /* (define (f0) (write (vector 1.0) (openlet (inlet 'write for-each)))) or worse,
    *   (define L (openlet (inlet 'write for-each))) (define (f) (write (vector 1.0) L))
    *   will segfault (probably) because the for-each pushes an operator on the stack, expecting to continue in eval, but
    *   write is a safe function that the optimizer thinks can ignore such stuff.  s7.html warns about this -- the signatures should be compatible.
@@ -68927,9 +68930,9 @@ static s7_pointer opt_do_any(opt_info *o)
 	    o1 = steps->v[k].o1;
 	    slot_simply_set_pending_value(slot, o1->v[0].fp(o1));
 	  }
-      for (s7_pointer slot = let_slots(sc->curlet); tis_slot(slot); slot = next_slot(slot))
-	if (has_stepper(slot))
-	  slot_set_value(slot, slot_pending_value(slot));
+      for (s7_pointer slot1 = let_slots(sc->curlet); tis_slot(slot1); slot1 = next_slot(slot1))
+	if (has_stepper(slot1))
+	  slot_set_value(slot1, slot_pending_value(slot1));
     }
   /* result */
   result = sc->T;
@@ -69614,7 +69617,7 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
 			slot_set_value(slot, make_mutable_integer(sc, integer(slot_value(slot))));
 			set_loop_end(slot, lim);
 		      }}}
-	    
+
 	    if (!set_stop)
 	      {
 		const s7_pointer slot2 = opt_integer_symbol(sc, cadr(stop));
@@ -69787,13 +69790,13 @@ static bool opt_cell_do(s7_scheme *sc, s7_pointer car_x, int32_t len)
     do_stepper_init(opc) = sc->opts[init_pc];
     do_any_test(opc) = sc->opts[end_test_pc];
     do_any_steps(opc) = sc->opts[step_pc];
-    
+
     if ((is_pair(end)) &&                      /* (= i len|100) */
 	(cadr(end) == ind) &&
 	(is_pair(ind_step)))                   /* (+ i 1) */
       {
 	/* we can't use loop_end_possible here yet (not set except for op_dox?) */
-	
+
 	if (((car(end) == sc->num_eq_symbol) || (car(end) == sc->geq_symbol)) &&
 	    ((is_symbol(caddr(end))) || (is_t_integer(caddr(end)))) &&
 	    (is_null(cdddr(end))) &&
@@ -75413,7 +75416,7 @@ static opt_t optimize_func_many_args(s7_scheme *sc, s7_pointer expr, s7_pointer 
 	    return(OPT_F);
 	  }
 	if (is_immutable(func)) hop = 1;
-	
+
 	if (fx_count(sc, expr) == args)
 	  {
 	    const bool safe_case = is_safe_closure(func);
@@ -75422,7 +75425,7 @@ static opt_t optimize_func_many_args(s7_scheme *sc, s7_pointer expr, s7_pointer 
 	    fx_annotate_args(sc, cdr(expr), e);
 	    set_opt3_arglen(cdr(expr), args);
 	    set_opt1_lambda_add(expr, func);
-	    
+
 	    if ((symbols == args) &&
 		(symbols_are_safe(sc, cdr(expr), e)))
 	      {
@@ -75437,13 +75440,13 @@ static opt_t optimize_func_many_args(s7_scheme *sc, s7_pointer expr, s7_pointer 
 	  return(set_any_closure_np(sc, func, expr, e, 4, hop + OP_ANY_CLOSURE_4P));
 	return(set_any_closure_np(sc, func, expr, e, args, hop + OP_ANY_CLOSURE_NP));
       }
-    
+
     if ((is_closure_star(func)) &&
 	((!lambda_has_simple_defaults(func)) ||
 	 (closure_star_arity_to_int(sc, func) == 0) ||
 	 (closure_star_arity_to_int(sc, func) == 1)))
       return(OPT_F);
-    
+
     if ((is_c_function_star(func)) &&
 	(fx_count(sc, expr) == args) &&
 	(c_function_max_args(func) >= (args / 2)))
@@ -92967,11 +92970,13 @@ static token_t read_sharp(s7_scheme *sc, s7_pointer pt)
       }
       break;
 
+#if !DISABLE_DEPRECATED
     case ':':  /* turn #: into : -- this is for compatibility with Guile, sigh. I just noticed that Rick is using this --
 		* I'll just leave it alone, but that means : readers need to handle this case specially.
 		*/
       sc->strbuf[0] = ':';
       return(TOKEN_ATOM);
+#endif
 
     case '!':  /*  I don't think #! is special anymore -- maybe remove this code? */
       return(read_excl_comment(sc, pt));
@@ -93129,7 +93134,8 @@ static s7_pointer read_string_constant(s7_scheme *sc, s7_pointer pt)
   if (is_string_port(pt))
     {
       /* try the most common case first */
-      char *s, *end, *start = (char *)(port_data(pt) + port_position(pt));
+      char *s, *end;
+      char *start = (char *)(port_data(pt) + port_position(pt)); /* not const: C++ */
       if (*start == '"')
 	{
 	  port_position(pt)++;
@@ -99132,6 +99138,9 @@ static void init_features(s7_scheme *sc)
 #if !DISABLE_AUTOLOAD
   s7_provide(sc, "autoload");
 #endif
+#if !DISABLE_DEPRECATED
+  s7_provide(sc, "deprecated");
+#endif
 #if S7_ALIGNED
   s7_provide(sc, "aligned");
 #endif
@@ -101312,4 +101321,5 @@ int main(int argc, char **argv)
  *   t101-5|6|13|16 trouble fx_safe_thunk_a opt_p_pp_ff etc if unsafe->semisafe or safe (see 29-Mar)
  * how can FFI code set saver/translucent bits et al?  need ffitest.c examples. also all_float|integer, is_definer scope_safe
  *   can cload use these, or how can user now warn the optimizer? -- use "unsafe", how to explain these bits?
+ * names to fix: x y z (if not nums) lt
  */
