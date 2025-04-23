@@ -85,7 +85,7 @@ end
 
   (define (let->list e)
     (let ((L (if (let? e)
-		 e 
+		 e
 		 (if (c-pointer? e)
 		     (c-pointer-info e)
 		     (if (c-object? e)
@@ -20464,7 +20464,7 @@ i" (lambda (p) (eval (read p)))) pi)
 
 
 ;;; --------------------------------------------------------------------------------
-;;; load 
+;;; load
 (for-each
  (lambda (arg)
    (test (load arg) 'error))
@@ -29298,7 +29298,7 @@ in s7:
 	(if (> (lst i) (lst j))
 	    (swap! (lst i) (lst j)))))
     (test lst '(6 5 4 3 2 1)))
-  
+
   (define (simple-sort! seq func)
     (let ((dims #f))
       (when (and (vector? seq)
@@ -29315,7 +29315,7 @@ in s7:
 	(if dims
 	    (subvector seq 0 len dims)
 	    seq))))
-  
+
   (test (simple-sort! (list 4 2 6 3 1 5) >) '(6 5 4 3 2 1))
   (test (simple-sort! (vector 4 2 6 3 1 5) >) #(6 5 4 3 2 1))
   (test (simple-sort! (int-vector 4 2 6 3 1 5) >) #i(6 5 4 3 2 1))
@@ -29324,7 +29324,7 @@ in s7:
   (test (simple-sort! (block 4 2 6 3 1 5) >) (block 6.000 5.000 4.000 3.000 2.000 1.000))
   (test (simple-sort! (string #\a #\f #\! #\z #\b) char<?) "!abfz")
   (test (simple-sort! #2d((2 1) (4 6) (3 3)) >) #2d((6 4) (3 3) (2 1)))
-  
+
   (for-each
    (lambda (obj val)
      (let ((vars ())
@@ -31912,9 +31912,9 @@ in s7:
 	(do ((j 0 (+ j 1)))
 	    ((= j 4))
 	  (set! val (cons (list i j) val))))))
-  
+
   (test (f1) '((2 3) (2 2) (2 1) (2 0) (1 3) (1 2) (1 1) (1 0) (0 3) (0 2) (0 1) (0 0)))
-  
+
   (define (f2)
     (let ((val ()))
       (do ((i 0 (+ i 1)))
@@ -31922,9 +31922,9 @@ in s7:
 	(do ((j 0 (+ j 1)))
 	    ((= j 4))
 	  (set! val (cons (list (+ i 0) j) val))))))
-  
+
   (test (f2) '((2 3) (2 2) (2 1) (2 0) (1 3) (1 2) (1 1) (1 0) (0 3) (0 2) (0 1) (0 0)))
-  
+
   (define (f3)
     (let ((val ()))
       (do ((i 0 (+ i 1)))
@@ -31932,9 +31932,9 @@ in s7:
 	(do ((j 0 (+ j 1)))
 	    ((= j 4))
 	  (set! val (cons (list (+ i 0) (+ j 0)) val))))))
-  
+
   (test (f3) '((2 3) (2 2) (2 1) (2 0) (1 3) (1 2) (1 1) (1 0) (0 3) (0 2) (0 1) (0 0)))
-  
+
   (define (f4)
     (let ((val ()))
       (do ((i 0 (+ i 1)))
@@ -31942,9 +31942,9 @@ in s7:
 	(do ((j 0 (+ j 1)))
 	    ((= j 4))
 	  (set! val (cons (vector i j) val))))))
-  
+
   (test (f4) '(#(2 3) #(2 2) #(2 1) #(2 0) #(1 3) #(1 2) #(1 1) #(1 0) #(0 3) #(0 2) #(0 1) #(0 0)))
-  
+
   (define (f5)
     (let ((val ()))
       (do ((i 0 (+ i 1)))
@@ -31952,9 +31952,9 @@ in s7:
 	(do ((j 0 (+ j 1)))
 	    ((= j 2))
 	  (set! val (cons (hash-table 'a i 'b j) val))))))
-  
+
   (test (f5) (list (hash-table 'a 1 'b 1) (hash-table 'a 1 'b 0) (hash-table 'a 0 'b 1) (hash-table 'a 0 'b 0)))
-  
+
   (define (f6)
     (let ((val ()))
       (do ((i 0 (+ i 1)))
@@ -31962,9 +31962,9 @@ in s7:
 	(do ((j 0 (+ j 1)))
 	    ((= j 2))
 	  (set! val (cons (inlet 'a i 'b j) val))))))
-  
+
   (test (f6) (list (inlet 'a 1 'b 1) (inlet 'a 1 'b 0) (inlet 'a 0 'b 1) (inlet 'a 0 'b 0)))
-  
+
   (define (f7)
     (let ((val ())
 	  (lst list))
@@ -31973,7 +31973,7 @@ in s7:
 	(do ((j 0 (+ j 1)))
 	    ((= j 2))
 	  (set! val (cons (lst i j) val))))))
-  
+
   (test (f7) '((1 1) (1 0) (0 1) (0 0)))
 
   (define (f8)
@@ -31984,9 +31984,9 @@ in s7:
 	(do ((j 0 (+ j 1)))
 	    ((= j 2))
 	  (set! val (cons (lst i j) val))))))
-  
+
   (test (f8) '((1 1) (1 0) (0 1) (0 0)))
-  
+
   (define (f9)
     (let ((val ()))
       (do ((i 0 (+ i 1)))
@@ -31994,9 +31994,9 @@ in s7:
 	(do ((j 0 (+ j 1)))
 	    ((= j 2))
 	  (set! val (cons (list (abs i) (floor j)) val))))))
-  
+
   (test (f9) '((1 1) (1 0) (0 1) (0 0)))
-  
+
   (define (f10)
     (let ((val ()))
       (do ((i 0 (+ i 1)))
@@ -32004,9 +32004,9 @@ in s7:
 	(do ((j 0 (+ j 1)))
 	    ((= j 2))
 	  (set! val (cons (list (/ i 1) (floor j)) val))))))
-  
+
   (test (f10) '((1 1) (1 0) (0 1) (0 0)))
-  
+
   (define (f11)
     (let ((val ()))
       (do ((i 0 (+ i 1)))
@@ -32014,9 +32014,9 @@ in s7:
 	(do ((j 0 (+ j 1)))
 	    ((= j 2))
 	  (set! val (cons (list (/ i 1) (abs j)) val))))))
-  
+
   (test (f11) '((1 1) (1 0) (0 1) (0 0)))
-  
+
   (define (f12)
     (let ((val ()))
       (do ((i 0 (+ i 1)))
@@ -32024,9 +32024,9 @@ in s7:
 	(do ((j 0 (+ j 1)))
 	    ((= j 2))
 	  (set! val (list i j val))))))
-  
+
   (test (f12) '(1 1 (1 0 (0 1 (0 0 ())))))
-  
+
   (define (f13)
     (let ((val (make-vector 4 #f)))
       (do ((i 0 (+ i 1)))
@@ -32034,9 +32034,9 @@ in s7:
 	(do ((j 0 (+ j 1)))
 	    ((= j 2))
 	  (vector-set! val (+ i j) (list i j))))))
-  
+
   (test (f13) #((0 0) (1 0) (1 1) #f))
-  
+
   (define (f14)
     (let ((val (make-vector 4 #f)))
       (do ((i 0 (+ i 1)))
@@ -32044,9 +32044,9 @@ in s7:
 	(do ((j 0 (+ j 1)))
 	    ((= j 2))
 	  (vector-set! val (+ i j) i)))))
-  
+
   (test (f14) #(0 1 1 #f))
-  
+
   (define (f15)
     (let ((val (make-vector 4 #f)))
       (do ((i 0 (+ i 1)))
@@ -32054,9 +32054,9 @@ in s7:
 	(do ((j 0 (+ j 1)))
 	    ((= j 2))
 	  (vector-set! val (+ i j) j))))) ; int-vector et al should be ok
-  
+
   (test (f15) #(0 0 1 #f))
-  
+
   (define (f16)
     (let ((val (make-vector '(3 3 3) #f)))
       (do ((i 0 (+ i 1)))
@@ -32066,9 +32066,9 @@ in s7:
 	  (do ((k 0 (+ k 1)))
 	      ((= k 3))
 	    (vector-set! val i j k j))))))
-  
+
   (test (f16) #3d(((0 0 0) (1 1 1) (2 2 2)) ((0 0 0) (1 1 1) (2 2 2)) ((0 0 0) (1 1 1) (2 2 2))))
-  
+
   (define (f17)
     (let ((val (make-vector 4 #f)))
       (do ((i 0 (+ i 1)))
@@ -32076,7 +32076,7 @@ in s7:
 	(do ((j 0 (+ j 1)))
 	    ((= j 2))
 	  (vector-set! val (+ i j) (abs j)))))) ; int-vector et al should be ok
-  
+
   (test (f17) #(0 0 1 #f))
 
   (define (f18)
@@ -32086,7 +32086,7 @@ in s7:
 	(do ((j 0 (+ j 1)))
 	    ((= j 4))
 	  (set! val (#_cons (#_list i j) val))))))
-  
+
   (test (f18) '((2 3) (2 2) (2 1) (2 0) (1 3) (1 2) (1 1) (1 0) (0 3) (0 2) (0 1) (0 0)))
 
   (define (f19)
@@ -32108,7 +32108,7 @@ in s7:
       (do ((j 0 (+ j 1)))
 	  ((= j 2))
 	(set! val (cons (lst i j) val)))))
-  
+
   (test (f20) '((1 1) (1 0) (0 1) (0 0)))
 
   (define (f21)
@@ -32118,7 +32118,7 @@ in s7:
 	(do ((j 0 (+ j 1/3)))
 	    ((>= j 2/3))
 	  (set! val (cons (list i j) val))))))
-  
+
   (test (f21) '((3/2 1/3) (3/2 0) (1 1/3) (1 0) (1/2 1/3) (1/2 0) (0 1/3) (0 0)))
 
   (define (f22)
@@ -32128,7 +32128,7 @@ in s7:
 	(do ((j 0.0 (+ j 1.0)))
 	    ((>= j 2.0))
 	  (set! val (cons (list i j) val))))))
-  
+
   (test (f22) '((1.0 1.0) (1.0 0.0) (0.0 1.0) (0.0 0.0)))
 
   (define (f23)
@@ -32138,30 +32138,30 @@ in s7:
 	(do ((j 0.0 (+ j 1.0-1.0i)))
 	    ((= j 2.0-2.0i))
 	  (set! val (cons (list i j) val))))))
-  
+
   (test (f23) '((1.0+1.0i 1.0-1.0i) (1.0+1.0i 0.0) (0.0 1.0-1.0i) (0.0 0.0)))
 
   ;; from timp.scm
   (define size 5)
-  
+
   (define (f23a) ; [134] opt'd
     (let ((sum 0.0)
   	  (L (inlet 'multiply  *)))
       (do ((i 0 (+ i 1)))
   	  ((= i size) sum)
         (set! sum (+ sum ((let-ref L 'multiply) i 0.0001))))))
-  
+
   (test (f23a) 0.001)
-  
+
   (define (f24) ; [605] -> [134 opt'd]
     (let ((sum 0.0)
   	  (L (inlet 'multiply  *)))
       (do ((i 0 (+ i 1)))
   	  ((= i size) sum)
         (set! sum (+ sum ((L 'multiply) i 0.0001))))))
-  
+
   (test (f24) 0.001)
-  
+
   (define (f24a) ; [690]
     (let ((sum 0.0)
   	  (L (inlet 'multiply  *))
@@ -32170,9 +32170,9 @@ in s7:
   	  ((= i size) sum)
         (set! sum (+ sum ((L 'multiply) i 0.0001)))
         (set! L H)))) ; apparently this blocks the optimizer -> op_x_aa etc
-  
+
   (test (f24a) 10.0004)
-  
+
   (define (f24b) ; [577]
     (let ((sum 0.0)
   	  (L (inlet 'multiply  *))
@@ -32181,12 +32181,12 @@ in s7:
   	  ((= i size) sum)
         (set! sum (+ sum ((L 'multiply) i 0.0001)))
         (set! L L1)))) ; same as above
-  
+
   (test (f24b) 10.0004)
-  
+
   (define (setL L)
     (set! (L 'multiply) floor))
-  
+
   (define (f24c-1) ; floor: too many arguments
     (let ((sum 0.0)
   	  (L (inlet 'multiply  *)))
@@ -32194,10 +32194,10 @@ in s7:
   	  ((= i 3) sum)
         (set! sum (+ sum ((L 'multiply) i 0.0001)))
         (setL L))))
-  
+
   (define (f24c) (catch #t f24c-1 (lambda args 'error)))
   (test (catch #t f24c-1 (lambda args 'error)) 'error)
-  
+
   (define (f24d-1) ; same error as above
     (let ((sum 0.0)
   	  (L (inlet 'multiply  *)))
@@ -32205,10 +32205,10 @@ in s7:
   	  ((= i 3) sum)
         (set! sum (+ sum ((L 'multiply) i 0.0001)))
         (let-set! L 'multiply floor))))
-  
+
   (define (f24d) (catch #t f24d-1 (lambda args 'error)))
   (test (catch #t f24d-1 (lambda args 'error)) 'error)
-  
+
   (define (f25) ; [638]
     (let ((sum 0.0)
   	  (L (inlet 'multiply  *)))
@@ -32216,7 +32216,7 @@ in s7:
   	  ((= i size) sum)
         (set! sum (+ sum ((L 'multiply) i 0.0001)))
         (let-set! L 'multiply +))))
-  
+
   (test (f25) 10.0004)
 
   (define (f26)
@@ -32225,7 +32225,7 @@ in s7:
         ((= i 2) val)
       (do ((j 0 (+ j 1)))
 	  ((= j 2))
-	(if (= j 1) 
+	(if (= j 1)
 	    (set! val (make-list 1 j))))))
   ;; (vector j) -> #(1), (make-vector 1 j) -> #(1), (make-list 1 j) -> '(1), (values j) -> 1
   (test (f26) '(1))
@@ -32236,8 +32236,8 @@ in s7:
         ((= i 2) val)
       (do ((j 0 (+ j 1)))
 	  ((= j 2))
-	(if (= j 1) 
-	    (set! val (values j)))))) 
+	(if (= j 1)
+	    (set! val (values j))))))
   (test (f26a) 1)
 
   (define (f26b)
@@ -32246,7 +32246,7 @@ in s7:
         ((= i 2) val)
       (do ((j 0 (+ j 1)))
 	  ((= j 2))
-	(if (= j 1) 
+	(if (= j 1)
 	    (vector-set! val (values 0 j))))))
   (test (f26b) #(1))
 
@@ -32256,7 +32256,7 @@ in s7:
         ((= i 2) val)
       (do ((j 0 (+ j 1)))
 	  ((= j 2))
-	(if (= j 1) 
+	(if (= j 1)
 	    (vector-set! val (apply-values (list 0 j)))))))
   (test (f26c) #(1))
   )
@@ -32269,21 +32269,21 @@ in s7:
 	((>= i 10) i)
       (set! i (fmac i))))
   (test (f1) 11.17)
-  
+
   (define-macro (smac x) `(set! ,x (+ ,x 1.234)))
   (define (f2)
     (do ((i 0 (+ i 1)))
 	((>= i 10) i)
       (smac i)))
   (test (f2) 11.17)
-  
+
   (define-macro (s1mac x) `(begin (set! i (+ i 1.234))))
   (define (f3)
     (do ((i 0 (+ i 1)))
 	((>= i 10) i)
       (s1mac (+ i 1))))
   (test (f3) 11.17)
-  
+
   (define swap! (letrec ((no-pairs? (lambda (lst) ; see s7test.scm for swap! examples
 				      (or (null? lst)
 				          (and (not (pair? (car lst)))
@@ -32291,16 +32291,16 @@ in s7:
 	        (macro (a b)
 		  (cond ((not (or (symbol? a) (pair? a)))
 			 (error 'wrong-type-arg "can't (swap! ~A ~A): ~A is not a symbol or a pair" a b a))
-			
+
 			((not (or (symbol? b) (pair? b)))
 			 (error 'wrong-type-arg "can't (swap! ~A ~A): ~A is not a symbol or a pair" a b b))
 
 			((and (symbol? a) (immutable? a))
 			 (error 'wrong-type-args "can't (swap! ~A ~A): ~A is immutable" a b a))
-			
+
 			((and (symbol? b) (immutable? b))
 			 (error 'wrong-type-args "can't (swap! ~A ~A): ~A is immutable" a b b))
-			
+
 			((and (or (symbol? a) (hash-table? a) (let? a) (no-pairs? (cdr a)))
 			      (or (symbol? b) (hash-table? b) (let? b) (no-pairs? (cdr b))))
 			 ;; we assume above hash-tables and lets don't use expressions for the key/variable names
@@ -32308,7 +32308,7 @@ in s7:
 			   `(let ((,tmp ,a))
 			      (set! ,a ,b)
 			      (set! ,b ,tmp))))
-			
+
 			(else     ; here either a or b or both are pairs with exprs as "indices"
 			 (let ((a-object (if (pair? a) (car a) a))
 			       (b-object (if (pair? b) (car b) b))
@@ -32319,7 +32319,7 @@ in s7:
 			       (tmp (gensym "swap!-")))
 			   `(let ((,tmp-a-indices (and (pair? ',a) (map eval ',a-indices))) ; eval once-only in run-time env
 				  (,tmp-b-indices (and (pair? ',b) (map eval ',b-indices))))
-			      (let ((,tmp (if (pair? ',a) 
+			      (let ((,tmp (if (pair? ',a)
 					      (apply ,a-object ,tmp-a-indices)
 					      ,a)))
 				(if (pair? ',a)
@@ -32338,14 +32338,14 @@ in s7:
 	((= i 10) k)
       (swap! i k))) ; caught 84305
   (test (f4) 9)
-  
+
   (define-macro (fmac1 x) `(call/cc (lambda (goto) (goto ,x))))
   (define (f5)
     (do ((i 0 (+ i 1)))
 	((= i 10) i)
       (fmac1 (+ i 1)))) ; 10 caught 84305
   (test (f5) 10)
-  
+
   (define-macro (s2mac y) `(begin (set! x (cons i x))))
   (define (f6)
     (let ((x ()))
@@ -32353,7 +32353,7 @@ in s7:
 	  ((= i 10) x)  ; >=: '(9 8 7 6 5 4 3 2 1 0), =: '(10 10 10 10 10 10 10 10 10 10) TODO: search macro for stepper
 	(s2mac x))))
   (test (f6) '(9 8 7 6 5 4 3 2 1 0))
-  
+
   (define-macro (s3mac x) `(vector-set! ,x i i))
   (define (f7)
     (let ((x (make-vector 10 #f)))
@@ -32369,7 +32369,7 @@ in s7:
 	  ((= i 10) x)  ; was #(10 10 10 10 10 10 10 10 10 10), now caught 84305 #(0 1 2 3 4 5 6 7 8 9)
 	(s4mac x i))))
   (test (f8) #(0 1 2 3 4 5 6 7 8 9))
-  
+
   (define (f9)
     (let loop ((i 0) (lst ()))
       (if (= i 4)
@@ -43840,23 +43840,23 @@ who says the continuation has to restart the map from the top?
 		       (if (or (not (pair? v))
 			       (call-with-exit
 				(lambda (return)
-				  (for-each (lambda (arg) 
+				  (for-each (lambda (arg)
 					      (if (not (integer? arg))
 						  (return #t)))
 					    v)
 				  #f)))
-			   (error 'wrong-type-arg 
+			   (error 'wrong-type-arg
 				  (if (not (pair? v))
 				      "(set! ~S ...) new value, ~S, should be a pair"
 				      "(set! ~S ~S), each element of the new list should be an integer")
 				  s v))
                        v))
-  (test (catch 'wrong-type-arg 
-          (lambda () (set! lst 123))                          
+  (test (catch 'wrong-type-arg
+          (lambda () (set! lst 123))
           (lambda (type info) (apply format #f info)))
         "(set! lst ...) new value, 123, should be a pair")
-  (test (catch 'wrong-type-arg 
-          (lambda () (set! lst (list "asdf")))                
+  (test (catch 'wrong-type-arg
+          (lambda () (set! lst (list "asdf")))
           (lambda (type info) (apply format #f info)))
         "(set! lst (\"asdf\")), each element of the new list should be an integer")
   (catch 'wrong-type-arg
