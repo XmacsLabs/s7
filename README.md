@@ -25,6 +25,8 @@ s7 is a Scheme interpreter.
 
 [radium] (https://users.notam02.no/~kjetism/radium/) (Kjetil Matheussen)
 
+[Csound s7] (https://github.com/vlazzarini/cs-s7) (Victor Lazzarini)
+
 [SchemeMosaic] (http://xelf.me/scheme-mosaic.html) (David O'Toole)
 
 [libs7] (https://github.com/obazl/libs7/) (Gregg Reynolds)
